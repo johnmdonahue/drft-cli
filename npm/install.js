@@ -8,7 +8,8 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 
-const VERSION = require("./package.json").version;
+const pkg = require("./package.json");
+const VERSION = pkg.binaryVersion || pkg.version;
 const REPO = "johnmdonahue/drft-cli";
 
 const PLATFORMS = {
