@@ -30,3 +30,8 @@ notify-debouncer-mini = "0.5"
 
 [dev-dependencies]
 tempfile = "3"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
