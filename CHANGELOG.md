@@ -2,7 +2,7 @@
 
 All notable changes to drft are documented here.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-03-28)
 
 Initial release.
 
@@ -12,7 +12,9 @@ Initial release.
 - `drft lock --check` -- verify lockfile is current (CI)
 - `drft check` -- validate graph against rules
 - `drft graph` -- export dependency graph (JSON Graph Format, DOT)
+- `drft impact` -- show transitive dependents of given files
 - `--recursive` flag for lock, check, and graph
+- `--max-depth` flag to limit recursive depth
 - `--watch` flag for check
 
 ### Rules
@@ -35,5 +37,11 @@ Initial release.
 - Per-rule path ignores (`[ignore-rules]`)
 - Custom rules via external scripts (`[custom-rules]`)
 - Colored terminal output (`--color`)
-- JSON diagnostics with `fix` field for LLM workflows
+- JSON diagnostics with `fix` field and summary envelope for LLM workflows
 - JSON Graph Format output for graph export
+- Lockfile version checking (forward-compatible)
+
+### Distribution
+- Cargo: `cargo install drft-cli`
+- npm: `npm install drft-cli`
+- GitHub Releases: prebuilt binaries for macOS, Linux, and Windows

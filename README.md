@@ -5,8 +5,11 @@ A structural integrity checker for markdown directories. drft treats a directory
 ## Install
 
 ```bash
-cargo install drft-cli
+cargo install drft-cli    # via Cargo
+npm install -g drft-cli   # via npm
 ```
+
+Or download a prebuilt binary from [GitHub Releases](https://github.com/johnmdonahue/drft-cli/releases).
 
 The binary is called `drft`.
 
