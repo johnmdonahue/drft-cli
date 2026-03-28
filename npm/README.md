@@ -7,7 +7,7 @@ This is the npm distribution of [drft](https://github.com/johnmdonahue/drft-cli)
 ## Install
 
 ```bash
-npm install drft
+npm install drft-cli
 ```
 
 ## Usage
