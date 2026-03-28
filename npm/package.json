@@ -1,6 +1,6 @@
 {
   "name": "drft-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A structural integrity checker for markdown directories",
   "license": "MIT",
   "repository": {

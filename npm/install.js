@@ -64,13 +64,16 @@ async function main() {
     process.exit(0); // Don't fail the install — just won't have the binary
   }
 
-  const binDir = path.join(__dirname, "bin");
-  const binPath = path.join(binDir, process.platform === "win32" ? "drft.exe" : "drft");
+  const nativeDir = path.join(__dirname, "native");
+  const binaryName = process.platform === "win32" ? "drft.exe" : "drft";
+  const binPath = path.join(nativeDir, binaryName);
 
   // Skip if binary already exists (e.g., reinstall)
   if (fs.existsSync(binPath)) {
     return;
   }
+
+  fs.mkdirSync(nativeDir, { recursive: true });
 
   const url = getDownloadUrl(assetName);
   console.log(`drft: downloading ${platformKey} binary...`);
@@ -79,14 +82,14 @@ async function main() {
     const data = await download(url);
 
     // Write archive to temp file
-    const tmpFile = path.join(binDir, assetName);
+    const tmpFile = path.join(nativeDir, assetName);
     fs.writeFileSync(tmpFile, data);
 
     // Extract
     if (assetName.endsWith(".tar.xz")) {
-      execSync(`tar xf "${tmpFile}" -C "${binDir}" --strip-components=1`, { stdio: "pipe" });
+      execSync(`tar xf "${tmpFile}" -C "${nativeDir}" --strip-components=1`, { stdio: "pipe" });
     } else if (assetName.endsWith(".zip")) {
-      execSync(`unzip -o "${tmpFile}" -d "${binDir}"`, { stdio: "pipe" });
+      execSync(`unzip -o "${tmpFile}" -d "${nativeDir}"`, { stdio: "pipe" });
     }
 
     // Clean up archive

@@ -7,11 +7,11 @@ const path = require("path");
 const fs = require("fs");
 
 const ext = process.platform === "win32" ? ".exe" : "";
-const binPath = path.join(__dirname, `drft${ext}`);
+const binPath = path.join(__dirname, "..", "native", `drft${ext}`);
 
 if (!fs.existsSync(binPath)) {
   console.error(
-    "drft: binary not found. Run `npm rebuild drft` or install from source: cargo install drft-cli"
+    "drft: binary not found. Run `npm rebuild drft-cli` or install from source: cargo install drft-cli"
   );
   process.exit(2);
 }
