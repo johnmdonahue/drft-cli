@@ -1,0 +1,26 @@
+{
+  "name": "drft",
+  "version": "0.1.0",
+  "description": "A structural integrity checker for markdown directories",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnmdonahue/drft-cli"
+  },
+  "homepage": "https://github.com/johnmdonahue/drft-cli",
+  "keywords": ["markdown", "linter", "dependency-graph", "documentation"],
+  "bin": {
+    "drft": "bin/drft"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md"
+  ]
+}

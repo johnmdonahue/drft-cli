@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+
+// Thin wrapper that exec's the downloaded drft binary.
+
+const { execFileSync } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+
+const ext = process.platform === "win32" ? ".exe" : "";
+const binPath = path.join(__dirname, `drft${ext}`);
+
+if (!fs.existsSync(binPath)) {
+  console.error(
+    "drft: binary not found. Run `npm rebuild drft` or install from source: cargo install drft-cli"
+  );
+  process.exit(2);
+}
+
+try {
+  execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+} catch (err) {
+  process.exit(err.status || 1);
+}
