@@ -1,0 +1,6 @@
+ignore = ["drafts/*"]
+
+[rules]
+broken-link = "error"
+cycle = "error"
+orphan = "warn"

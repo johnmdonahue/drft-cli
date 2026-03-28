@@ -1,0 +1,8 @@
+/target
+.scratch/
+.claude/*
+!.claude/settings.json
+*.swp
+*.swo
+*~
+.DS_Store

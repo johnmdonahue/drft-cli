@@ -1,0 +1,59 @@
+lockfile_version = 1
+
+[nodes."README.md"]
+type = "document"
+hash = "b3:d3dc331fffce50dad63b5606e3f6bc4ff2f34aa8373cbd92939cbb74dd444ac1"
+
+[nodes."docs/architecture.md"]
+type = "document"
+hash = "b3:33b64e15f2ed5b9e297d6266c19ab8dbccbe09c731c4af7065d3aa76622c450e"
+
+[nodes."docs/overview.md"]
+type = "document"
+hash = "b3:f116d530190009c4909d4b7f15251389c65981f6dd15a3042ceaec2ff72dc965"
+
+[nodes."projects/alpha/"]
+type = "frontier"
+hash = "b3:ee170ed7b9eec78c0731a3b0d777dfd47516ff63c012e1f5136167ff15da630c"
+
+[nodes."projects/alpha/index.md"]
+type = "virtual"
+hash = "b3:6269623b605353fe5aaf62cc92c3c817363ee1d73dd048a38ad0f85e2aa19d54"
+
+[nodes."projects/beta/"]
+type = "frontier"
+hash = "b3:821e313ae1e3be68dc97975e81d64c5b9c503bdf3627d0943803abe4b8d14c42"
+
+[nodes."projects/beta/index.md"]
+type = "virtual"
+hash = "b3:58ae2247fe46fac10e152e2465ac709f5cc5077c06f33815e1897c9dde301362"
+
+[[edges]]
+source = "README.md"
+target = "docs/overview.md"
+type = "inline"
+
+[[edges]]
+source = "README.md"
+target = "projects/alpha/index.md"
+type = "inline"
+
+[[edges]]
+source = "README.md"
+target = "projects/beta/index.md"
+type = "inline"
+
+[[edges]]
+source = "docs/overview.md"
+target = "docs/architecture.md"
+type = "inline"
+
+[[edges]]
+source = "projects/alpha/index.md"
+target = "projects/alpha/"
+type = "inline"
+
+[[edges]]
+source = "projects/beta/index.md"
+target = "projects/beta/"
+type = "inline"

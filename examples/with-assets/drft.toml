@@ -1,0 +1,15 @@
+# drft.toml
+
+# Glob patterns for files to exclude from discovery
+ignore = []
+
+# Rules: "error", "warn", or "off"
+[rules]
+broken-link = "warn"
+containment = "warn"
+cycle = "warn"
+directory-link = "warn"
+encapsulation = "warn"
+indirect-link = "off"
+orphan = "off"
+stale = "warn"
