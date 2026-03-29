@@ -1,3 +1,5 @@
+use crate::analysis::Analysis;
+use crate::analysis::edge_classification::{EdgeClassification, EdgeStatus};
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;
@@ -11,49 +13,37 @@ impl Rule for BrokenLinkRule {
     }
 
     fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+        let result = EdgeClassification.run(graph, root);
 
-        for edge in &graph.edges {
-            // External URLs are not checked for existence
-            if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
-                continue;
-            }
-
-            // Skip edges to known nodes (they exist and are in the graph)
-            if graph.nodes.contains_key(&edge.target) {
-                continue;
-            }
-
-            let target_path = root.join(&edge.target);
-            if target_path.exists() {
-                // File exists on disk but is not in the graph — excluded by ignore pattern
-                diagnostics.push(Diagnostic {
-                    rule: "broken-link".into(),
-                    message: "file excluded by ignore pattern".into(),
-                    source: Some(edge.source.clone()),
-                    target: Some(edge.target.clone()),
-                    fix: Some(format!(
-                        "{} exists but is excluded by an ignore pattern — either remove the link from {} or update the ignore config",
-                        edge.target, edge.source
-                    )),
-                    ..Default::default()
-                });
-            } else {
-                diagnostics.push(Diagnostic {
+        result
+            .edges
+            .iter()
+            .filter_map(|e| match &e.status {
+                EdgeStatus::Broken => Some(Diagnostic {
                     rule: "broken-link".into(),
                     message: "file not found".into(),
-                    source: Some(edge.source.clone()),
-                    target: Some(edge.target.clone()),
+                    source: Some(e.source.clone()),
+                    target: Some(e.target.clone()),
                     fix: Some(format!(
-                        "{} does not exist — either create it or update the link in {}",
-                        edge.target, edge.source
+                        "{} does not exist \u{2014} either create it or update the link in {}",
+                        e.target, e.source
                     )),
                     ..Default::default()
-                });
-            }
-        }
-
-        diagnostics
+                }),
+                EdgeStatus::Excluded => Some(Diagnostic {
+                    rule: "broken-link".into(),
+                    message: "file excluded by ignore pattern".into(),
+                    source: Some(e.source.clone()),
+                    target: Some(e.target.clone()),
+                    fix: Some(format!(
+                        "{} exists but is excluded by an ignore pattern \u{2014} either remove the link from {} or update the ignore config",
+                        e.target, e.source
+                    )),
+                    ..Default::default()
+                }),
+                _ => None,
+            })
+            .collect()
     }
 }
 
@@ -68,7 +58,6 @@ mod tests {
     fn detects_broken_link() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "").unwrap();
-        // gone.md does not exist
 
         let mut graph = Graph::new();
         graph.add_node(Node {

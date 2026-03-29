@@ -1,3 +1,5 @@
+use crate::analysis::Analysis;
+use crate::analysis::edge_classification::{EdgeClassification, EdgeStatus};
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;
@@ -11,34 +13,26 @@ impl Rule for IndirectLinkRule {
     }
 
     fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+        let result = EdgeClassification.run(graph, root);
 
-        for edge in &graph.edges {
-            if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
-                continue;
-            }
-
-            let target_path = root.join(&edge.target);
-            if target_path.is_symlink() {
-                let resolved = match std::fs::read_link(&target_path) {
-                    Ok(p) => p.to_string_lossy().to_string(),
-                    Err(_) => "unknown".to_string(),
-                };
-                diagnostics.push(Diagnostic {
+        result
+            .edges
+            .iter()
+            .filter_map(|e| match &e.status {
+                EdgeStatus::SymlinkTarget { resolved } => Some(Diagnostic {
                     rule: "indirect-link".into(),
                     message: format!("target is a symlink to {resolved}"),
-                    source: Some(edge.source.clone()),
-                    target: Some(edge.target.clone()),
+                    source: Some(e.source.clone()),
+                    target: Some(e.target.clone()),
                     fix: Some(format!(
-                        "{} is a symlink to {resolved} — consider linking to the actual file directly in {}",
-                        edge.target, edge.source
+                        "{} is a symlink to {resolved} \u{2014} consider linking to the actual file directly in {}",
+                        e.target, e.source
                     )),
                     ..Default::default()
-                });
-            }
-        }
-
-        diagnostics
+                }),
+                _ => None,
+            })
+            .collect()
     }
 }
 

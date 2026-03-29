@@ -3,6 +3,7 @@ pub mod bridges;
 pub mod connected_components;
 pub mod degree;
 pub mod depth;
+pub mod edge_classification;
 pub mod graph_stats;
 pub mod pagerank;
 pub mod scc;

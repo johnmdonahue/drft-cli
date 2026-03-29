@@ -168,6 +168,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
     use analysis::depth::Depth as DepthAnalysis;
+    use analysis::edge_classification::{EdgeClassification, EdgeStatus};
     use analysis::graph_stats::GraphStats;
     use analysis::pagerank::PageRank;
     use analysis::scc::StronglyConnectedComponents;
@@ -179,6 +180,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
         "connected-components",
         "degree",
         "depth",
+        "edge-classification",
         "graph-stats",
         "pagerank",
         "scc",
@@ -329,6 +331,46 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                     }
                     if let Some(d) = current_depth {
                         flush(d, &current_nodes, current_has_cycle);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "edge-classification") {
+        let ec = EdgeClassification;
+        let result = ec.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(ec.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== edge-classification ===");
+                let mut counts = std::collections::HashMap::new();
+                for e in &result.edges {
+                    let label = match &e.status {
+                        EdgeStatus::Valid => "valid",
+                        EdgeStatus::Broken => "broken",
+                        EdgeStatus::Excluded => "excluded",
+                        EdgeStatus::DirectoryTarget => "directory",
+                        EdgeStatus::SymlinkTarget { .. } => "symlink",
+                        EdgeStatus::External => "external",
+                    };
+                    *counts.entry(label).or_insert(0usize) += 1;
+                }
+                let total = result.edges.len();
+                println!("{total} edges");
+                for label in &[
+                    "valid",
+                    "broken",
+                    "excluded",
+                    "directory",
+                    "symlink",
+                    "external",
+                ] {
+                    if let Some(&count) = counts.get(label) {
+                        println!("  {label}: {count}");
                     }
                 }
             }

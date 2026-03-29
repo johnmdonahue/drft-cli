@@ -12,6 +12,7 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 | [Bridges / articulation points](bridges.md) | `drft report --analysis bridges` | Structural single points of failure |
 | [Connected components](connected-components.md) | `drft report --analysis connected-components` | Finds disconnected clusters |
 | [Degree distribution](degree.md) | `drft report --analysis degree` | In-degree and out-degree per node |
+| [Edge classification](edge-classification.md) | `drft report --analysis edge-classification` | Link health: valid, broken, excluded, directory, symlink |
 | [Topological depth](depth.md) | `drft report --analysis depth` | Layer assignment from roots |
 | [Graph stats](graph-stats.md) | `drft report --analysis graph-stats` | Density, diameter, average path length |
 | [PageRank](pagerank.md) | `drft report --analysis pagerank` | Structural importance ranking |
