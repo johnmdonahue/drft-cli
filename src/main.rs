@@ -165,6 +165,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::Analysis;
     use analysis::betweenness::Betweenness;
     use analysis::bridges::Bridges as BridgesAnalysis;
+    use analysis::change_propagation::ChangePropagation;
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
     use analysis::depth::Depth as DepthAnalysis;
@@ -178,6 +179,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let known_analyses = [
         "betweenness",
         "bridges",
+        "change-propagation",
         "connected-components",
         "degree",
         "depth",
@@ -258,6 +260,35 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                     }
                     for b in &result.bridges {
                         println!("bridge: {} \u{2194} {}", b.source, b.target);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "change-propagation") {
+        let cp = ChangePropagation;
+        let result = cp.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(cp.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== change-propagation ===");
+                if !result.has_lockfile {
+                    println!("no lockfile");
+                } else if result.directly_changed.is_empty() && result.boundary_changes.is_empty() {
+                    println!("no changes since last lock");
+                } else {
+                    for c in &result.directly_changed {
+                        println!("{}: {}", c.node, c.reason);
+                    }
+                    for s in &result.transitively_stale {
+                        println!("{}: stale via {}", s.node, s.via);
+                    }
+                    for b in &result.boundary_changes {
+                        println!("{}: {}", b.node, b.reason);
                     }
                 }
             }

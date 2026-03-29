@@ -1,5 +1,6 @@
 pub mod betweenness;
 pub mod bridges;
+pub mod change_propagation;
 pub mod connected_components;
 pub mod degree;
 pub mod depth;
