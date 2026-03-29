@@ -1,5 +1,5 @@
-use super::{Analysis, Metric, MetricKind};
-use crate::analysis::scc::StronglyConnectedComponents;
+use super::Analysis;
+use crate::analyses::scc::StronglyConnectedComponents;
 use crate::graph::Graph;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -129,15 +129,6 @@ impl Analysis for Depth {
         nodes.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.node.cmp(&b.node)));
 
         DepthResult { max_depth, nodes }
-    }
-
-    fn metrics(&self, output: &DepthResult, _graph: &Graph) -> Vec<Metric> {
-        vec![Metric {
-            name: "max_depth".into(),
-            value: output.max_depth as f64,
-            kind: MetricKind::Count,
-            dimension: "consistency".into(),
-        }]
     }
 }
 

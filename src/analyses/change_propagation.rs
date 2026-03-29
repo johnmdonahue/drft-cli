@@ -1,4 +1,4 @@
-use super::{Analysis, Metric, MetricKind};
+use super::Analysis;
 use crate::discovery::find_child_scopes;
 use crate::graph::{Graph, NodeType, hash_bytes};
 use crate::lockfile::read_lockfile;
@@ -154,33 +154,6 @@ impl Analysis for ChangePropagation {
             transitively_stale,
             boundary_changes,
         }
-    }
-
-    fn metrics(&self, output: &ChangePropagationResult, _graph: &Graph) -> Vec<Metric> {
-        if !output.has_lockfile {
-            return vec![];
-        }
-
-        vec![
-            Metric {
-                name: "directly_changed_count".into(),
-                value: output.directly_changed.len() as f64,
-                kind: MetricKind::Count,
-                dimension: "timeliness".into(),
-            },
-            Metric {
-                name: "transitively_stale_count".into(),
-                value: output.transitively_stale.len() as f64,
-                kind: MetricKind::Count,
-                dimension: "timeliness".into(),
-            },
-            Metric {
-                name: "boundary_change_count".into(),
-                value: output.boundary_changes.len() as f64,
-                kind: MetricKind::Count,
-                dimension: "timeliness".into(),
-            },
-        ]
     }
 }
 

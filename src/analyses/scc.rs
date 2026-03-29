@@ -1,4 +1,4 @@
-use super::{Analysis, Metric, MetricKind};
+use super::Analysis;
 use crate::graph::Graph;
 use std::collections::HashMap;
 use std::path::Path;
@@ -99,33 +99,6 @@ impl Analysis for StronglyConnectedComponents {
             sccs,
             node_scc,
         }
-    }
-
-    fn metrics(&self, output: &SccResult, graph: &Graph) -> Vec<Metric> {
-        let v = graph.nodes.keys().filter(|p| graph.is_real_node(p)).count();
-        let e = graph
-            .edges
-            .iter()
-            .filter(|e| graph.is_real_node(&e.source) && graph.is_real_node(&e.target))
-            .count();
-        let c = output.scc_count;
-        // Cyclomatic complexity: E - V + 2*C
-        let cyclomatic = (e as i64) - (v as i64) + 2 * (c as i64);
-
-        vec![
-            Metric {
-                name: "nontrivial_scc_count".into(),
-                value: output.nontrivial_count as f64,
-                kind: MetricKind::Count,
-                dimension: "consistency".into(),
-            },
-            Metric {
-                name: "cyclomatic_complexity".into(),
-                value: cyclomatic.max(0) as f64,
-                kind: MetricKind::Count,
-                dimension: "consistency".into(),
-            },
-        ]
     }
 }
 

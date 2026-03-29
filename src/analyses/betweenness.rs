@@ -1,4 +1,4 @@
-use super::{Analysis, Metric, MetricKind};
+use super::Analysis;
 use crate::graph::Graph;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -129,47 +129,6 @@ impl Analysis for Betweenness {
 
         BetweennessResult { nodes }
     }
-
-    fn metrics(&self, output: &BetweennessResult, _graph: &Graph) -> Vec<Metric> {
-        if output.nodes.is_empty() {
-            return vec![];
-        }
-        let max = output.nodes.iter().map(|n| n.score).fold(0.0f64, f64::max);
-        let gini = gini_coefficient(&output.nodes.iter().map(|n| n.score).collect::<Vec<_>>());
-
-        vec![
-            Metric {
-                name: "max_betweenness".into(),
-                value: max,
-                kind: MetricKind::Score,
-                dimension: "consistency".into(),
-            },
-            Metric {
-                name: "betweenness_gini".into(),
-                value: gini,
-                kind: MetricKind::Ratio,
-                dimension: "consistency".into(),
-            },
-        ]
-    }
-}
-
-fn gini_coefficient(values: &[f64]) -> f64 {
-    let n = values.len();
-    if n == 0 {
-        return 0.0;
-    }
-    let mut sorted = values.to_vec();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let sum: f64 = sorted.iter().sum();
-    if sum == 0.0 {
-        return 0.0;
-    }
-    let mut numerator = 0.0;
-    for (i, &v) in sorted.iter().enumerate() {
-        numerator += (2.0 * (i + 1) as f64 - n as f64 - 1.0) * v;
-    }
-    numerator / (n as f64 * sum)
 }
 
 #[cfg(test)]

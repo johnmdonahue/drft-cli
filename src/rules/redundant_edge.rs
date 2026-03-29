@@ -1,6 +1,6 @@
 use super::Rule;
-use crate::analysis::Analysis;
-use crate::analysis::transitive_reduction::TransitiveReduction;
+use crate::analyses::Analysis;
+use crate::analyses::transitive_reduction::TransitiveReduction;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use std::path::Path;

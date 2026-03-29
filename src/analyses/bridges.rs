@@ -1,4 +1,4 @@
-use super::{Analysis, Metric, MetricKind};
+use super::Analysis;
 use crate::graph::Graph;
 use std::collections::HashMap;
 use std::path::Path;
@@ -111,23 +111,6 @@ impl Analysis for Bridges {
             cut_vertices: cut_vertices.into_iter().map(|s| s.to_string()).collect(),
             bridges,
         }
-    }
-
-    fn metrics(&self, output: &BridgesResult, _graph: &Graph) -> Vec<Metric> {
-        vec![
-            Metric {
-                name: "cut_vertex_count".into(),
-                value: output.cut_vertices.len() as f64,
-                kind: MetricKind::Count,
-                dimension: "consistency".into(),
-            },
-            Metric {
-                name: "bridge_count".into(),
-                value: output.bridges.len() as f64,
-                kind: MetricKind::Count,
-                dimension: "consistency".into(),
-            },
-        ]
     }
 }
 

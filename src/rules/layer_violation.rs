@@ -1,6 +1,6 @@
 use super::Rule;
-use crate::analysis::Analysis;
-use crate::analysis::depth::Depth;
+use crate::analyses::Analysis;
+use crate::analyses::depth::Depth;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use std::collections::HashMap;

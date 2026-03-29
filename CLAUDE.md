@@ -42,4 +42,5 @@ cargo run -- check    # runs as `drft check`
 - Hashes use BLAKE3 with `b3:` prefix
 - Edges store source type: `inline`, `reference`, `autolink`, `image`, `frontmatter`, `wikilink`
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
-- Keep modules focused: one file per concern (discovery, parsing, graph, rules, lockfile, config, cli)
+- Keep modules focused: one file per concern (discovery, parsing, graph, analyses, metrics, rules, lockfile, config, cli)
+- Three-layer evaluation: `src/analyses/` (compute) → `src/metrics/` (extract scalars) → `src/rules/` (emit diagnostics). See ARCHITECTURE.md.

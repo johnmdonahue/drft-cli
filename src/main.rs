@@ -1,10 +1,11 @@
-mod analysis;
+mod analyses;
 mod cli;
 mod config;
 mod diagnostic;
 mod discovery;
 mod graph;
 mod lockfile;
+mod metrics;
 mod parsing;
 mod rules;
 
@@ -168,19 +169,19 @@ stale = "warn"
 }
 
 fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
-    use analysis::Analysis;
-    use analysis::betweenness::Betweenness;
-    use analysis::bridges::Bridges as BridgesAnalysis;
-    use analysis::change_propagation::ChangePropagation;
-    use analysis::connected_components::ConnectedComponents;
-    use analysis::degree::Degree;
-    use analysis::depth::Depth as DepthAnalysis;
-    use analysis::edge_classification::{EdgeClassification, EdgeStatus};
-    use analysis::graph_stats::GraphStats;
-    use analysis::pagerank::PageRank;
-    use analysis::scc::StronglyConnectedComponents;
-    use analysis::scope_boundaries::ScopeBoundaries;
-    use analysis::transitive_reduction::TransitiveReduction;
+    use analyses::Analysis;
+    use analyses::betweenness::Betweenness;
+    use analyses::bridges::Bridges as BridgesAnalysis;
+    use analyses::change_propagation::ChangePropagation;
+    use analyses::connected_components::ConnectedComponents;
+    use analyses::degree::Degree;
+    use analyses::depth::Depth as DepthAnalysis;
+    use analyses::edge_classification::{EdgeClassification, EdgeStatus};
+    use analyses::graph_stats::GraphStats;
+    use analyses::pagerank::PageRank;
+    use analyses::scc::StronglyConnectedComponents;
+    use analyses::scope_boundaries::ScopeBoundaries;
+    use analyses::transitive_reduction::TransitiveReduction;
 
     let known_analyses = [
         "betweenness",
@@ -582,48 +583,42 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
 }
 
 fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
-    use analysis::Analysis;
-    use analysis::Metric;
-    use analysis::betweenness::Betweenness;
-    use analysis::bridges::Bridges as BridgesAnalysis;
-    use analysis::change_propagation::ChangePropagation;
-    use analysis::connected_components::ConnectedComponents;
-    use analysis::degree::Degree;
-    use analysis::depth::Depth as DepthAnalysis;
-    use analysis::edge_classification::EdgeClassification;
-    use analysis::graph_stats::GraphStats;
-    use analysis::pagerank::PageRank;
-    use analysis::scc::StronglyConnectedComponents;
-    use analysis::scope_boundaries::ScopeBoundaries;
-    use analysis::transitive_reduction::TransitiveReduction;
+    use analyses::Analysis;
+    use analyses::betweenness::Betweenness;
+    use analyses::bridges::Bridges as BridgesAnalysis;
+    use analyses::change_propagation::ChangePropagation;
+    use analyses::connected_components::ConnectedComponents;
+    use analyses::degree::Degree;
+    use analyses::depth::Depth as DepthAnalysis;
+    use analyses::edge_classification::EdgeClassification;
+    use analyses::graph_stats::GraphStats;
+    use analyses::pagerank::PageRank;
+    use analyses::scc::StronglyConnectedComponents;
+    use analyses::scope_boundaries::ScopeBoundaries;
+    use analyses::transitive_reduction::TransitiveReduction;
 
     let scope_root = find_scope_root(root);
     let config = Config::load(&scope_root)?;
     let graph = build_graph(&scope_root, &config)?;
 
-    let mut all_metrics: Vec<Metric> = Vec::new();
+    // Run all analyses
+    let results = metrics::AnalysisResults {
+        betweenness: &Betweenness.run(&graph, &scope_root),
+        bridges: &BridgesAnalysis.run(&graph, &scope_root),
+        change_propagation: &ChangePropagation.run(&graph, &scope_root),
+        connected_components: &ConnectedComponents.run(&graph, &scope_root),
+        degree: &Degree.run(&graph, &scope_root),
+        depth: &DepthAnalysis.run(&graph, &scope_root),
+        edge_classification: &EdgeClassification.run(&graph, &scope_root),
+        graph_stats: &GraphStats.run(&graph, &scope_root),
+        pagerank: &PageRank.run(&graph, &scope_root),
+        scc: &StronglyConnectedComponents.run(&graph, &scope_root),
+        scope_boundaries: &ScopeBoundaries.run(&graph, &scope_root),
+        transitive_reduction: &TransitiveReduction.run(&graph, &scope_root),
+        graph: &graph,
+    };
 
-    // Run each analysis and extract metrics
-    macro_rules! collect_metrics {
-        ($analysis:expr) => {{
-            let a = $analysis;
-            let output = a.run(&graph, &scope_root);
-            all_metrics.extend(a.metrics(&output, &graph));
-        }};
-    }
-
-    collect_metrics!(Betweenness);
-    collect_metrics!(BridgesAnalysis);
-    collect_metrics!(ChangePropagation);
-    collect_metrics!(ConnectedComponents);
-    collect_metrics!(Degree);
-    collect_metrics!(DepthAnalysis);
-    collect_metrics!(EdgeClassification);
-    collect_metrics!(GraphStats);
-    collect_metrics!(PageRank);
-    collect_metrics!(StronglyConnectedComponents);
-    collect_metrics!(ScopeBoundaries);
-    collect_metrics!(TransitiveReduction);
+    let all_metrics = metrics::collect_all(&results);
 
     match format {
         OutputFormat::Json => {
@@ -632,18 +627,18 @@ fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
         }
         _ => {
             // Group by dimension
-            let mut by_dimension: std::collections::BTreeMap<&str, Vec<&Metric>> =
+            let mut by_dimension: std::collections::BTreeMap<&str, Vec<&metrics::Metric>> =
                 std::collections::BTreeMap::new();
             for m in &all_metrics {
                 by_dimension.entry(&m.dimension).or_default().push(m);
             }
 
             println!("=== metrics ===");
-            for (dimension, metrics) in &by_dimension {
+            for (dimension, dim_metrics) in &by_dimension {
                 println!("{dimension}");
-                for m in metrics {
+                for m in dim_metrics {
                     match m.kind {
-                        analysis::MetricKind::Count => {
+                        metrics::MetricKind::Count => {
                             println!("  {}: {}", m.name, m.value as i64);
                         }
                         _ => {

@@ -1,5 +1,5 @@
-use crate::analysis::Analysis;
-use crate::analysis::scope_boundaries::ScopeBoundaries;
+use crate::analyses::Analysis;
+use crate::analyses::scope_boundaries::ScopeBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;

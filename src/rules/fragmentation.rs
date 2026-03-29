@@ -1,6 +1,6 @@
 use super::Rule;
-use crate::analysis::Analysis;
-use crate::analysis::connected_components::ConnectedComponents;
+use crate::analyses::Analysis;
+use crate::analyses::connected_components::ConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use std::path::Path;

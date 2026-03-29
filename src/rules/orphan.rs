@@ -1,5 +1,5 @@
-use crate::analysis::Analysis;
-use crate::analysis::degree::Degree;
+use crate::analyses::Analysis;
+use crate::analyses::degree::Degree;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;

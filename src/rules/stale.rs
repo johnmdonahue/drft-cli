@@ -1,5 +1,5 @@
-use crate::analysis::Analysis;
-use crate::analysis::change_propagation::ChangePropagation;
+use crate::analyses::Analysis;
+use crate::analyses::change_propagation::ChangePropagation;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;

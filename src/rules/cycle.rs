@@ -1,5 +1,5 @@
-use crate::analysis::Analysis;
-use crate::analysis::scc::StronglyConnectedComponents;
+use crate::analyses::Analysis;
+use crate::analyses::scc::StronglyConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;

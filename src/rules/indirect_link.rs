@@ -1,5 +1,5 @@
-use crate::analysis::Analysis;
-use crate::analysis::edge_classification::{EdgeClassification, EdgeStatus};
+use crate::analyses::Analysis;
+use crate::analyses::edge_classification::{EdgeClassification, EdgeStatus};
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;
