@@ -23,7 +23,7 @@ When you push a version tag (`v*`):
 Set these in GitHub repo settings (Settings > Secrets > Actions):
 
 - **`CARGO_REGISTRY_TOKEN`** — from https://crates.io/settings/tokens (needs publish-update scope)
-- **`NPM_TOKEN`** — from https://www.npmjs.com/settings/tokens (needs publish scope, automation type to bypass 2FA)
+- **`NPM_TOKEN`** — from https://www.npmjs.com/settings/tokens (create an **Automation** token — this bypasses 2FA for CI)
 
 ## Version numbers
 
