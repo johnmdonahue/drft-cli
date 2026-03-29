@@ -12,3 +12,7 @@ severity = "warn"
 [custom-rules.required-frontmatter]
 command = "./scripts/required-frontmatter.sh"
 severity = "warn"
+
+[custom-rules.max-depth]
+command = "./scripts/max-depth.sh"
+severity = "warn"
