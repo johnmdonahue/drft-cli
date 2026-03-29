@@ -1,5 +1,7 @@
+use crate::analyses::Analysis;
+use crate::analyses::edge_classification::{EdgeClassification, EdgeStatus};
 use crate::diagnostic::Diagnostic;
-use crate::graph::{Graph, NodeType};
+use crate::graph::Graph;
 use crate::rules::Rule;
 use std::path::Path;
 
@@ -11,33 +13,27 @@ impl Rule for DirectoryLinkRule {
     }
 
     fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+        let result = EdgeClassification.run(graph, root);
 
-        for edge in &graph.edges {
-            // Skip edges to frontier nodes (implicit virtual→frontier)
-            if let Some(target_node) = graph.nodes.get(&edge.target) {
-                if target_node.node_type == NodeType::Frontier {
-                    continue;
-                }
-            }
-            let target_path = root.join(&edge.target);
-            if target_path.is_dir() {
-                diagnostics.push(Diagnostic {
+        result
+            .edges
+            .iter()
+            .filter_map(|e| match &e.status {
+                EdgeStatus::DirectoryTarget => Some(Diagnostic {
                     rule: "directory-link".into(),
                     message: "links to directory, not file".into(),
-                    source: Some(edge.source.clone()),
-                    target: Some(edge.target.clone()),
+                    source: Some(e.source.clone()),
+                    target: Some(e.target.clone()),
                     fix: Some(format!(
-                        "{}/ is a directory — link to the specific file (e.g., {}/README.md)",
-                        edge.target.trim_end_matches('/'),
-                        edge.target.trim_end_matches('/')
+                        "{}/ is a directory \u{2014} link to the specific file (e.g., {}/README.md)",
+                        e.target.trim_end_matches('/'),
+                        e.target.trim_end_matches('/')
                     )),
                     ..Default::default()
-                });
-            }
-        }
-
-        diagnostics
+                }),
+                _ => None,
+            })
+            .collect()
     }
 }
 
@@ -84,6 +80,11 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
+            node_type: NodeType::Document,
+            hash: None,
+        });
+        graph.add_node(Node {
+            path: "setup.md".into(),
             node_type: NodeType::Document,
             hash: None,
         });

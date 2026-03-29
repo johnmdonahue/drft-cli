@@ -1,10 +1,11 @@
-mod analysis;
+mod analyses;
 mod cli;
 mod config;
 mod diagnostic;
 mod discovery;
 mod graph;
 mod lockfile;
+mod metrics;
 mod parsing;
 mod rules;
 
@@ -16,7 +17,7 @@ use cli::{Cli, ColorChoice, Commands, OutputFormat};
 use config::{Config, RuleSeverity};
 use diagnostic::Diagnostic;
 use graph::build_graph;
-use lockfile::{derive_manifest, read_lockfile, write_lockfile, Lockfile};
+use lockfile::{Lockfile, derive_manifest, read_lockfile, write_lockfile};
 use rules::all_rules;
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
@@ -79,7 +80,13 @@ fn try_main() -> Result<i32> {
             *recursive,
             *max_depth,
         ),
-        Commands::Report { analyses } => run_report(&root, cli.format, analyses),
+        Commands::Report { analyses, metrics } => {
+            if *metrics {
+                run_metrics(&root, cli.format)
+            } else {
+                run_report(&root, cli.format, analyses)
+            }
+        }
         Commands::Impact { files } => run_impact(&root, cli.format, files),
         Commands::Graph {
             recursive,
@@ -135,7 +142,10 @@ containment = "warn"
 cycle = "warn"
 directory-link = "warn"
 encapsulation = "warn"
+fragility = "off"
+fragmentation = "off"
 indirect-link = "off"
+layer-violation = "off"
 lockfile-outdated = "warn"
 orphan = "off"
 redundant-edge = "off"
@@ -150,6 +160,14 @@ stale = "warn"
 # [custom-rules.my-rule]
 # command = "./scripts/my-rule.sh"
 # severity = "warn"
+
+# Custom analyses (scripts that receive graph JSON on stdin, emit result JSON on stdout)
+# [custom-analyses.my-analysis]
+# command = "./scripts/my-analysis.sh"
+
+# Custom metrics (scripts that receive graph JSON on stdin, emit metrics as NDJSON)
+# [custom-metrics.my-metrics]
+# command = "./scripts/my-metrics.sh"
 "#;
 
     std::fs::write(&config_path, content)
@@ -159,10 +177,34 @@ stale = "warn"
 }
 
 fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
-    use analysis::transitive_reduction::TransitiveReduction;
-    use analysis::Analysis;
+    use analyses::Analysis;
+    use analyses::betweenness::Betweenness;
+    use analyses::bridges::Bridges as BridgesAnalysis;
+    use analyses::change_propagation::ChangePropagation;
+    use analyses::connected_components::ConnectedComponents;
+    use analyses::degree::Degree;
+    use analyses::depth::Depth as DepthAnalysis;
+    use analyses::edge_classification::{EdgeClassification, EdgeStatus};
+    use analyses::graph_stats::GraphStats;
+    use analyses::pagerank::PageRank;
+    use analyses::scc::StronglyConnectedComponents;
+    use analyses::scope_boundaries::ScopeBoundaries;
+    use analyses::transitive_reduction::TransitiveReduction;
 
-    let known_analyses = ["transitive-reduction"];
+    let known_analyses = [
+        "betweenness",
+        "bridges",
+        "change-propagation",
+        "connected-components",
+        "degree",
+        "depth",
+        "edge-classification",
+        "graph-stats",
+        "pagerank",
+        "scc",
+        "scope-boundaries",
+        "transitive-reduction",
+    ];
 
     // Validate analysis names
     for name in analysis_filter {
@@ -178,6 +220,345 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let run_all = analysis_filter.is_empty();
 
     let mut results = serde_json::Map::new();
+
+    if run_all || analysis_filter.iter().any(|a| a == "betweenness") {
+        let bw = Betweenness;
+        let result = bw.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(bw.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== betweenness ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    for nb in &result.nodes {
+                        println!("{}  {:.4}", nb.node, nb.score);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "bridges") {
+        let br = BridgesAnalysis;
+        let result = br.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(br.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== bridges ===");
+                if result.cut_vertices.is_empty() && result.bridges.is_empty() {
+                    println!("no cut vertices or bridges");
+                } else {
+                    println!(
+                        "{} cut {}, {} {}",
+                        result.cut_vertices.len(),
+                        if result.cut_vertices.len() == 1 {
+                            "vertex"
+                        } else {
+                            "vertices"
+                        },
+                        result.bridges.len(),
+                        if result.bridges.len() == 1 {
+                            "bridge"
+                        } else {
+                            "bridges"
+                        }
+                    );
+                    for v in &result.cut_vertices {
+                        println!("cut vertex: {v}");
+                    }
+                    for b in &result.bridges {
+                        println!("bridge: {} \u{2194} {}", b.source, b.target);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "change-propagation") {
+        let cp = ChangePropagation;
+        let result = cp.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(cp.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== change-propagation ===");
+                if !result.has_lockfile {
+                    println!("no lockfile");
+                } else if result.directly_changed.is_empty() && result.boundary_changes.is_empty() {
+                    println!("no changes since last lock");
+                } else {
+                    for c in &result.directly_changed {
+                        println!("{}: {}", c.node, c.reason);
+                    }
+                    for s in &result.transitively_stale {
+                        println!("{}: stale via {}", s.node, s.via);
+                    }
+                    for b in &result.boundary_changes {
+                        println!("{}: {}", b.node, b.reason);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "connected-components") {
+        let cc = ConnectedComponents;
+        let result = cc.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(cc.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== connected-components ===");
+                if result.component_count <= 1 {
+                    println!("1 component (fully connected)");
+                } else {
+                    println!("{} components", result.component_count);
+                    for c in &result.components {
+                        println!(
+                            "component {} ({} nodes): {}",
+                            c.id,
+                            c.members.len(),
+                            c.members.join(", ")
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "depth") {
+        let dep = DepthAnalysis;
+        let result = dep.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(dep.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== depth ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    // Group by depth
+                    let mut current_depth = None;
+                    let mut current_nodes = Vec::new();
+                    let mut current_has_cycle = false;
+
+                    let flush = |depth: usize, nodes: &[String], has_cycle: bool| {
+                        if has_cycle {
+                            println!("depth {} (cyclic): {}", depth, nodes.join(", "));
+                        } else {
+                            println!("depth {}: {}", depth, nodes.join(", "));
+                        }
+                    };
+
+                    for nd in &result.nodes {
+                        if current_depth != Some(nd.depth) {
+                            if let Some(d) = current_depth {
+                                flush(d, &current_nodes, current_has_cycle);
+                            }
+                            current_depth = Some(nd.depth);
+                            current_nodes.clear();
+                            current_has_cycle = false;
+                        }
+                        current_nodes.push(nd.node.clone());
+                        if nd.in_cycle {
+                            current_has_cycle = true;
+                        }
+                    }
+                    if let Some(d) = current_depth {
+                        flush(d, &current_nodes, current_has_cycle);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "edge-classification") {
+        let ec = EdgeClassification;
+        let result = ec.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(ec.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== edge-classification ===");
+                let mut counts = std::collections::HashMap::new();
+                for e in &result.edges {
+                    let label = match &e.status {
+                        EdgeStatus::Valid => "valid",
+                        EdgeStatus::Broken => "broken",
+                        EdgeStatus::Excluded => "excluded",
+                        EdgeStatus::DirectoryTarget => "directory",
+                        EdgeStatus::SymlinkTarget { .. } => "symlink",
+                        EdgeStatus::External => "external",
+                    };
+                    *counts.entry(label).or_insert(0usize) += 1;
+                }
+                let total = result.edges.len();
+                println!("{total} edges");
+                for label in &[
+                    "valid",
+                    "broken",
+                    "excluded",
+                    "directory",
+                    "symlink",
+                    "external",
+                ] {
+                    if let Some(&count) = counts.get(label) {
+                        println!("  {label}: {count}");
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "graph-stats") {
+        let gs = GraphStats;
+        let result = gs.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(gs.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== graph-stats ===");
+                println!("nodes: {}", result.node_count);
+                println!("edges: {}", result.edge_count);
+                println!("density: {:.2}", result.density);
+                match result.diameter {
+                    Some(d) => println!("diameter: {d}"),
+                    None => println!("diameter: - (disconnected)"),
+                }
+                match result.average_path_length {
+                    Some(a) => println!("avg path length: {a:.1}"),
+                    None => println!("avg path length: - (disconnected)"),
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "degree") {
+        let deg = Degree;
+        let result = deg.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(deg.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== degree ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    for nd in &result.nodes {
+                        println!("{}  in:{}  out:{}", nd.node, nd.in_degree, nd.out_degree);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "pagerank") {
+        let pr = PageRank;
+        let result = pr.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(pr.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== pagerank ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    if result.converged {
+                        println!("converged in {} iterations", result.iterations);
+                    } else {
+                        println!("did not converge after {} iterations", result.iterations);
+                    }
+                    for np in &result.nodes {
+                        println!("{}  {:.4}", np.node, np.score);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "scc") {
+        let scc = StronglyConnectedComponents;
+        let result = scc.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(scc.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== scc ===");
+                if result.nontrivial_count == 0 {
+                    println!("no non-trivial SCCs (graph is acyclic)");
+                } else {
+                    println!(
+                        "{} non-trivial {}",
+                        result.nontrivial_count,
+                        if result.nontrivial_count == 1 {
+                            "SCC"
+                        } else {
+                            "SCCs"
+                        }
+                    );
+                    for s in &result.sccs {
+                        println!(
+                            "scc {} ({} nodes): {}",
+                            s.id,
+                            s.members.len(),
+                            s.members.join(", ")
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "scope-boundaries") {
+        let sb = ScopeBoundaries;
+        let result = sb.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(sb.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== scope-boundaries ===");
+                println!("sealed: {}", if result.sealed { "yes" } else { "no" });
+                if result.escapes.is_empty() && result.encapsulation_violations.is_empty() {
+                    println!("no boundary crossings");
+                } else {
+                    for e in &result.escapes {
+                        println!("escape: {} \u{2192} {}", e.source, e.target);
+                    }
+                    for v in &result.encapsulation_violations {
+                        println!(
+                            "encapsulation: {} \u{2192} {} (bypasses {}manifest)",
+                            v.source, v.target, v.scope
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     if run_all || analysis_filter.iter().any(|a| a == "transitive-reduction") {
         let tr = TransitiveReduction;
@@ -201,9 +582,101 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
         }
     }
 
+    // Custom analyses
+    let custom_results = analyses::custom::run_all_custom_analyses(&graph, &scope_root, &config);
+    for (name, value) in &custom_results {
+        match format {
+            OutputFormat::Json => {
+                results.insert(name.clone(), value.clone());
+            }
+            _ => {
+                println!("=== {name} ===");
+                println!("{}", serde_json::to_string_pretty(value)?);
+            }
+        }
+    }
+
     if matches!(format, OutputFormat::Json) {
         let output = serde_json::json!({ "analyses": results });
         println!("{}", serde_json::to_string_pretty(&output)?);
+    }
+
+    Ok(0)
+}
+
+fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
+    use analyses::Analysis;
+    use analyses::betweenness::Betweenness;
+    use analyses::bridges::Bridges as BridgesAnalysis;
+    use analyses::change_propagation::ChangePropagation;
+    use analyses::connected_components::ConnectedComponents;
+    use analyses::degree::Degree;
+    use analyses::depth::Depth as DepthAnalysis;
+    use analyses::edge_classification::EdgeClassification;
+    use analyses::graph_stats::GraphStats;
+    use analyses::pagerank::PageRank;
+    use analyses::scc::StronglyConnectedComponents;
+    use analyses::scope_boundaries::ScopeBoundaries;
+    use analyses::transitive_reduction::TransitiveReduction;
+
+    let scope_root = find_scope_root(root);
+    let config = Config::load(&scope_root)?;
+    let graph = build_graph(&scope_root, &config)?;
+
+    // Run all analyses
+    let results = metrics::AnalysisResults {
+        betweenness: &Betweenness.run(&graph, &scope_root),
+        bridges: &BridgesAnalysis.run(&graph, &scope_root),
+        change_propagation: &ChangePropagation.run(&graph, &scope_root),
+        connected_components: &ConnectedComponents.run(&graph, &scope_root),
+        degree: &Degree.run(&graph, &scope_root),
+        depth: &DepthAnalysis.run(&graph, &scope_root),
+        edge_classification: &EdgeClassification.run(&graph, &scope_root),
+        graph_stats: &GraphStats.run(&graph, &scope_root),
+        pagerank: &PageRank.run(&graph, &scope_root),
+        scc: &StronglyConnectedComponents.run(&graph, &scope_root),
+        scope_boundaries: &ScopeBoundaries.run(&graph, &scope_root),
+        transitive_reduction: &TransitiveReduction.run(&graph, &scope_root),
+        graph: &graph,
+    };
+
+    let mut all_metrics = metrics::collect_all(&results);
+
+    // Custom metrics
+    all_metrics.extend(metrics::custom::run_all_custom_metrics(
+        &graph,
+        &scope_root,
+        &config,
+    ));
+
+    match format {
+        OutputFormat::Json => {
+            let output = serde_json::json!({ "metrics": all_metrics });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        _ => {
+            // Group by dimension
+            let mut by_dimension: std::collections::BTreeMap<&str, Vec<&metrics::Metric>> =
+                std::collections::BTreeMap::new();
+            for m in &all_metrics {
+                by_dimension.entry(&m.dimension).or_default().push(m);
+            }
+
+            println!("=== metrics ===");
+            for (dimension, dim_metrics) in &by_dimension {
+                println!("{dimension}");
+                for m in dim_metrics {
+                    match m.kind {
+                        metrics::MetricKind::Count => {
+                            println!("  {}: {}", m.name, m.value as i64);
+                        }
+                        _ => {
+                            println!("  {}: {:.4}", m.name, m.value);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(0)
@@ -636,7 +1109,7 @@ fn run_check_watch(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
+    use notify_debouncer_mini::{DebouncedEventKind, new_debouncer};
     use std::sync::mpsc;
     use std::time::Duration;
 

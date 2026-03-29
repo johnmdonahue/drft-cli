@@ -1,3 +1,15 @@
+pub mod betweenness;
+pub mod bridges;
+pub mod change_propagation;
+pub mod connected_components;
+pub mod custom;
+pub mod degree;
+pub mod depth;
+pub mod edge_classification;
+pub mod graph_stats;
+pub mod pagerank;
+pub mod scc;
+pub mod scope_boundaries;
 pub mod transitive_reduction;
 
 use crate::graph::Graph;
@@ -5,6 +17,7 @@ use std::path::Path;
 
 /// An analysis computes structured data about the graph.
 /// Rules consume analysis results and map them to diagnostics.
+/// Metrics extract scalar values from analysis results.
 /// See `docs/analyses/` for conceptual documentation on each analysis.
 pub trait Analysis {
     type Output: serde::Serialize;

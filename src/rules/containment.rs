@@ -1,3 +1,5 @@
+use crate::analyses::Analysis;
+use crate::analyses::scope_boundaries::ScopeBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 use crate::rules::Rule;
@@ -11,36 +13,27 @@ impl Rule for ContainmentRule {
     }
 
     fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        // Containment only applies when a scope boundary exists (drft.lock)
-        if !root.join("drft.lock").exists() {
+        let result = ScopeBoundaries.run(graph, root);
+
+        if !result.sealed {
             return vec![];
         }
 
-        let mut diagnostics = Vec::new();
-
-        for edge in &graph.edges {
-            // Skip external URLs
-            if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
-                continue;
-            }
-
-            // A target starting with ../ escapes the scope root
-            if edge.target.starts_with("../") || edge.target == ".." {
-                diagnostics.push(Diagnostic {
-                    rule: "containment".into(),
-                    message: "links outside scope boundary".into(),
-                    source: Some(edge.source.clone()),
-                    target: Some(edge.target.clone()),
-                    fix: Some(format!(
-                        "link reaches outside the scope — move {} into the scope or remove the link from {}",
-                        edge.target, edge.source
-                    )),
-                    ..Default::default()
-                });
-            }
-        }
-
-        diagnostics
+        result
+            .escapes
+            .iter()
+            .map(|e| Diagnostic {
+                rule: "containment".into(),
+                message: "links outside scope boundary".into(),
+                source: Some(e.source.clone()),
+                target: Some(e.target.clone()),
+                fix: Some(format!(
+                    "link reaches outside the scope \u{2014} move {} into the scope or remove the link from {}",
+                    e.target, e.source
+                )),
+                ..Default::default()
+            })
+            .collect()
     }
 }
 

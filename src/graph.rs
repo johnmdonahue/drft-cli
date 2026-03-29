@@ -63,6 +63,13 @@ impl Graph {
         self.nodes.insert(node.path.clone(), node);
     }
 
+    /// Returns true for Document and Asset nodes (excludes External, Frontier, Virtual).
+    pub fn is_real_node(&self, path: &str) -> bool {
+        self.nodes
+            .get(path)
+            .is_some_and(|n| matches!(n.node_type, NodeType::Document | NodeType::Asset))
+    }
+
     pub fn add_edge(&mut self, edge: Edge) {
         let idx = self.edges.len();
         self.forward
@@ -190,10 +197,10 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
 
         // Skip ignored files — they should not become asset nodes
-        if let Some(ref set) = ignore_set {
-            if set.is_match(&edge.target) {
-                continue;
-            }
+        if let Some(ref set) = ignore_set
+            && set.is_match(&edge.target)
+        {
+            continue;
         }
 
         // Regular asset node
@@ -248,6 +255,27 @@ pub fn resolve_link(source_file: &str, raw_target: &str) -> String {
     let source_dir = source_path.parent().unwrap_or(Path::new(""));
     let joined = source_dir.join(raw_target);
     normalize_relative_path(&joined.to_string_lossy())
+}
+
+#[cfg(test)]
+pub mod test_helpers {
+    use super::*;
+
+    pub fn make_node(path: &str) -> Node {
+        Node {
+            path: path.into(),
+            node_type: NodeType::Document,
+            hash: None,
+        }
+    }
+
+    pub fn make_edge(source: &str, target: &str) -> Edge {
+        Edge {
+            source: source.into(),
+            target: target.into(),
+            edge_type: EdgeType::Inline,
+        }
+    }
 }
 
 #[cfg(test)]
