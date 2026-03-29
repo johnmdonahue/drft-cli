@@ -257,7 +257,7 @@ drft impact observations.md --format json
 
 ### Claude Code hooks
 
-Add to `.claude/settings.json` to run drft automatically after markdown edits:
+Add to your project's `.claude/settings.json` to run drft automatically after markdown edits:
 
 ```json
 {
@@ -268,7 +268,7 @@ Add to `.claude/settings.json` to run drft automatically after markdown edits:
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$TOOL_INPUT_FILE_PATH\" == *.md ]] || [[ \"$TOOL_INPUT_file_path\" == *.md ]]; then drft check --format json 2>/dev/null; fi"
+            "command": "if [[ \"$TOOL_INPUT_FILE_PATH\" == *.md ]] || [[ \"$TOOL_INPUT_file_path\" == *.md ]]; then npx drft check --format json 2>/dev/null; fi"
           }
         ]
       }
@@ -277,14 +277,16 @@ Add to `.claude/settings.json` to run drft automatically after markdown edits:
 }
 ```
 
+If drft is installed globally (`cargo install drft-cli`), use `drft` instead of `npx drft`. For npm projects with `drft-cli` as a devDependency, `npx drft` ensures it resolves from `node_modules`.
+
 ### CI
 
 ```bash
-drft lock --check --recursive  # verify all lockfiles are current
-drft check --recursive          # run all rules across all scopes
+npx drft lock --check --recursive  # verify all lockfiles are current
+npx drft check --recursive          # run all rules across all scopes
 ```
 
-Both exit with code 1 on failure.
+Both exit with code 1 on failure. Use `drft` instead of `npx drft` if installed globally or via cargo.
 
 ## License
 

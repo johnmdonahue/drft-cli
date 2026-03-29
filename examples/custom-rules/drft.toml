@@ -8,3 +8,11 @@ severity = "warn"
 [custom-rules.naming-convention]
 command = "./scripts/naming-convention.sh"
 severity = "warn"
+
+[custom-rules.required-frontmatter]
+command = "./scripts/required-frontmatter.sh"
+severity = "warn"
+
+[custom-rules.max-depth]
+command = "./scripts/max-depth.sh"
+severity = "warn"
