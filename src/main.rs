@@ -123,6 +123,9 @@ fn run_init(root: &Path) -> Result<i32> {
 # Glob patterns for files to exclude from discovery
 ignore = []
 
+# Manifest file — seals the scope, controlling visibility to parent scopes
+# manifest = "README.md"
+
 # Rules: "error", "warn", or "off"
 [rules]
 broken-link = "warn"
@@ -131,6 +134,7 @@ cycle = "warn"
 directory-link = "warn"
 encapsulation = "warn"
 indirect-link = "off"
+lockfile-outdated = "warn"
 orphan = "off"
 stale = "warn"
 
@@ -188,10 +192,12 @@ fn lock_scope(
     let config = Config::load(root)?;
     let graph = build_graph(root, &config)?;
 
-    // Resolve manifest
+    // Resolve manifest: CLI flag > config > existing lockfile
     let manifest = if no_manifest {
         None
     } else if let Some(file) = manifest_flag {
+        Some(derive_manifest(&graph, file)?)
+    } else if let Some(ref file) = config.manifest {
         Some(derive_manifest(&graph, file)?)
     } else {
         // Preserve existing manifest (re-derive nodes from current graph)

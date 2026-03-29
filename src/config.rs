@@ -26,6 +26,7 @@ fn default_warn() -> RuleSeverity {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub ignore: Vec<String>,
+    pub manifest: Option<String>,
     pub rules: HashMap<String, RuleSeverity>,
     pub ignore_rules: HashMap<String, Vec<String>>,
     pub custom_rules: HashMap<String, CustomRuleConfig>,
@@ -36,6 +37,7 @@ pub struct Config {
 #[serde(rename_all = "kebab-case")]
 struct RawConfig {
     ignore: Option<Vec<String>>,
+    manifest: Option<String>,
     rules: Option<HashMap<String, RuleSeverity>>,
     ignore_rules: Option<HashMap<String, Vec<String>>>,
     custom_rules: Option<HashMap<String, CustomRuleConfig>>,
@@ -50,6 +52,7 @@ impl Config {
             ("directory-link", RuleSeverity::Warn),
             ("encapsulation", RuleSeverity::Warn),
             ("indirect-link", RuleSeverity::Off),
+            ("lockfile-outdated", RuleSeverity::Warn),
             ("orphan", RuleSeverity::Off),
             ("stale", RuleSeverity::Warn),
         ]
@@ -59,6 +62,7 @@ impl Config {
 
         Config {
             ignore: Vec::new(),
+            manifest: None,
             rules,
             ignore_rules: HashMap::new(),
             custom_rules: HashMap::new(),
@@ -67,10 +71,12 @@ impl Config {
     }
 
     pub fn load(root: &Path) -> Result<Self> {
-        let config_path = root.join("drft.toml");
-        if !config_path.exists() {
-            return Ok(Self::defaults());
-        }
+        // Look for drft.toml in root, then walk up to find an ancestor's config
+        let config_path = Self::find_config(root);
+        let config_path = match config_path {
+            Some(p) => p,
+            None => return Ok(Self::defaults()),
+        };
 
         let content = std::fs::read_to_string(&config_path)
             .with_context(|| format!("failed to read {}", config_path.display()))?;
@@ -83,6 +89,8 @@ impl Config {
         if let Some(ignore) = raw.ignore {
             config.ignore = ignore;
         }
+
+        config.manifest = raw.manifest;
 
         if let Some(custom_rules) = raw.custom_rules {
             config.custom_rules = custom_rules;
@@ -120,6 +128,21 @@ impl Config {
         }
 
         Ok(config)
+    }
+
+    /// Find the nearest drft.toml by walking up from `root`.
+    /// Returns None if no config file is found.
+    fn find_config(root: &Path) -> Option<std::path::PathBuf> {
+        let mut current = root.to_path_buf();
+        loop {
+            let candidate = current.join("drft.toml");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+            if !current.pop() {
+                return None;
+            }
+        }
     }
 
     pub fn rule_severity(&self, name: &str) -> RuleSeverity {
@@ -198,5 +221,39 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("drft.toml"), "not valid toml {{{{").unwrap();
         assert!(Config::load(dir.path()).is_err());
+    }
+
+    #[test]
+    fn inherits_config_from_parent() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\norphan = \"error\"\n",
+        )
+        .unwrap();
+
+        // Child has no drft.toml — should inherit parent's config
+        let child = dir.path().join("child");
+        fs::create_dir(&child).unwrap();
+
+        let config = Config::load(&child).unwrap();
+        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Error);
+    }
+
+    #[test]
+    fn child_config_overrides_parent() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\norphan = \"error\"\n",
+        )
+        .unwrap();
+
+        let child = dir.path().join("child");
+        fs::create_dir(&child).unwrap();
+        fs::write(child.join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
+
+        let config = Config::load(&child).unwrap();
+        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Off);
     }
 }

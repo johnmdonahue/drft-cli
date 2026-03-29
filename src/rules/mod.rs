@@ -5,6 +5,7 @@ pub mod cycle;
 pub mod directory_link;
 pub mod encapsulation;
 pub mod indirect_link;
+pub mod lockfile_outdated;
 pub mod orphan;
 pub mod stale;
 
@@ -25,6 +26,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(directory_link::DirectoryLinkRule),
         Box::new(encapsulation::EncapsulationRule),
         Box::new(indirect_link::IndirectLinkRule),
+        Box::new(lockfile_outdated::LockfileOutdatedRule),
         Box::new(orphan::OrphanRule),
         Box::new(stale::StaleRule),
     ]
