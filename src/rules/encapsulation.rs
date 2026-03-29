@@ -1,6 +1,7 @@
+use crate::analysis::Analysis;
+use crate::analysis::scope_boundaries::ScopeBoundaries;
 use crate::diagnostic::Diagnostic;
-use crate::graph::{Graph, NodeType};
-use crate::lockfile::read_lockfile;
+use crate::graph::Graph;
 use crate::rules::Rule;
 use std::path::Path;
 
@@ -12,64 +13,30 @@ impl Rule for EncapsulationRule {
     }
 
     fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+        let result = ScopeBoundaries.run(graph, root);
 
-        // For each frontier node, check if the child scope is sealed
-        for (path, node) in &graph.nodes {
-            if node.node_type != NodeType::Frontier {
-                continue;
-            }
-
-            let child_dir = root.join(path.trim_end_matches('/'));
-            let child_lockfile = match read_lockfile(&child_dir) {
-                Ok(Some(lf)) => lf,
-                _ => continue,
-            };
-            let manifest = match &child_lockfile.manifest {
-                Some(m) => m,
-                None => continue, // unsealed — no encapsulation to enforce
-            };
-
-            let scope_prefix = path.as_str(); // e.g., "research/"
-
-            for edge in &graph.edges {
-                // Only check edges from non-virtual sources (virtual→frontier is implicit)
-                if let Some(source_node) = graph.nodes.get(&edge.source)
-                    && source_node.node_type == NodeType::Virtual
-                {
-                    continue;
-                }
-
-                if !edge.target.starts_with(scope_prefix) {
-                    continue;
-                }
-
-                // Target relative to child scope (e.g., "internal.md")
-                let relative_target = &edge.target[scope_prefix.len()..];
-                if !manifest.nodes.iter().any(|n| n == relative_target) {
-                    diagnostics.push(Diagnostic {
-                        rule: "encapsulation".into(),
-                        message: format!("not in {scope_prefix}manifest"),
-                        source: Some(edge.source.clone()),
-                        target: Some(edge.target.clone()),
-                        fix: Some(format!(
-                            "{} is not exposed by the {scope_prefix}manifest — either add it to the manifest or remove the link from {}",
-                            edge.target, edge.source
-                        )),
-                        ..Default::default()
-                    });
-                }
-            }
-        }
-
-        diagnostics
+        result
+            .encapsulation_violations
+            .iter()
+            .map(|v| Diagnostic {
+                rule: "encapsulation".into(),
+                message: format!("not in {}manifest", v.scope),
+                source: Some(v.source.clone()),
+                target: Some(v.target.clone()),
+                fix: Some(format!(
+                    "{} is not exposed by the {}manifest \u{2014} either add it to the manifest or remove the link from {}",
+                    v.target, v.scope, v.source
+                )),
+                ..Default::default()
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, EdgeType, Graph, Node};
+    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileNode, Manifest, write_lockfile};
     use std::collections::BTreeMap;
     use std::fs;
@@ -135,7 +102,6 @@ mod tests {
             target: "research/overview.md".into(),
             edge_type: EdgeType::Inline,
         });
-        // Implicit virtual → frontier
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research/".into(),

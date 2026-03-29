@@ -172,6 +172,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::graph_stats::GraphStats;
     use analysis::pagerank::PageRank;
     use analysis::scc::StronglyConnectedComponents;
+    use analysis::scope_boundaries::ScopeBoundaries;
     use analysis::transitive_reduction::TransitiveReduction;
 
     let known_analyses = [
@@ -184,6 +185,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
         "graph-stats",
         "pagerank",
         "scc",
+        "scope-boundaries",
         "transitive-reduction",
     ];
 
@@ -477,6 +479,34 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                             s.id,
                             s.members.len(),
                             s.members.join(", ")
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "scope-boundaries") {
+        let sb = ScopeBoundaries;
+        let result = sb.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(sb.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== scope-boundaries ===");
+                println!("sealed: {}", if result.sealed { "yes" } else { "no" });
+                if result.escapes.is_empty() && result.encapsulation_violations.is_empty() {
+                    println!("no boundary crossings");
+                } else {
+                    for e in &result.escapes {
+                        println!("escape: {} \u{2192} {}", e.source, e.target);
+                    }
+                    for v in &result.encapsulation_violations {
+                        println!(
+                            "encapsulation: {} \u{2192} {} (bypasses {}manifest)",
+                            v.source, v.target, v.scope
                         );
                     }
                 }

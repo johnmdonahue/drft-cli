@@ -7,6 +7,7 @@ pub mod edge_classification;
 pub mod graph_stats;
 pub mod pagerank;
 pub mod scc;
+pub mod scope_boundaries;
 pub mod transitive_reduction;
 
 use crate::graph::Graph;

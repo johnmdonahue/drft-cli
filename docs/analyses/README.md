@@ -16,6 +16,7 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 | [Topological depth](depth.md) | `drft report --analysis depth` | Layer assignment from roots |
 | [Graph stats](graph-stats.md) | `drft report --analysis graph-stats` | Density, diameter, average path length |
 | [PageRank](pagerank.md) | `drft report --analysis pagerank` | Structural importance ranking |
+| [Scope boundaries](scope-boundaries.md) | `drft report --analysis scope-boundaries` | Scope escapes and encapsulation violations |
 | [Strongly connected components](scc.md) | `drft report --analysis scc` | Finds groups of mutually reachable nodes |
 | [Transitive reduction](transitive-reduction.md) | `drft report --analysis transitive-reduction` | Finds edges that are structurally redundant |
 
