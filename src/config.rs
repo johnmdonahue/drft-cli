@@ -54,6 +54,7 @@ impl Config {
             ("cycle", RuleSeverity::Warn),
             ("directory-link", RuleSeverity::Warn),
             ("encapsulation", RuleSeverity::Warn),
+            ("fragility", RuleSeverity::Off),
             ("fragmentation", RuleSeverity::Off),
             ("indirect-link", RuleSeverity::Off),
             ("layer-violation", RuleSeverity::Off),

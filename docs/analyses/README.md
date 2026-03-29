@@ -8,10 +8,13 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 
 | Analysis | Command | Description |
 |----------|---------|-------------|
+| [Betweenness centrality](betweenness.md) | `drft report --analysis betweenness` | Bridge document identification |
+| [Bridges / articulation points](bridges.md) | `drft report --analysis bridges` | Structural single points of failure |
 | [Connected components](connected-components.md) | `drft report --analysis connected-components` | Finds disconnected clusters |
 | [Degree distribution](degree.md) | `drft report --analysis degree` | In-degree and out-degree per node |
 | [Topological depth](depth.md) | `drft report --analysis depth` | Layer assignment from roots |
 | [Graph stats](graph-stats.md) | `drft report --analysis graph-stats` | Density, diameter, average path length |
+| [PageRank](pagerank.md) | `drft report --analysis pagerank` | Structural importance ranking |
 | [Strongly connected components](scc.md) | `drft report --analysis scc` | Finds groups of mutually reachable nodes |
 | [Transitive reduction](transitive-reduction.md) | `drft report --analysis transitive-reduction` | Finds edges that are structurally redundant |
 

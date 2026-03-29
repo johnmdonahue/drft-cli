@@ -1565,6 +1565,116 @@ fn report_scc_acyclic() {
 }
 
 #[test]
+fn report_betweenness_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "betweenness",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let bw = &v["analyses"]["betweenness"];
+    let nodes = bw["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 3);
+    // b.md should have the highest score (middle of chain)
+    assert_eq!(nodes[0]["node"], "b.md");
+}
+
+#[test]
+fn report_bridges_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "bridges",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("=== bridges ==="), "got: {stdout}");
+    assert!(stdout.contains("cut vertex: b.md"), "got: {stdout}");
+    assert!(stdout.contains("bridge:"), "got: {stdout}");
+}
+
+#[test]
+fn fragility_rule_fires() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nfragility = \"warn\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("fragility"),
+        "expected fragility warning, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_pagerank_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "pagerank",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let pr = &v["analyses"]["pagerank"];
+    assert!(pr["converged"].as_bool().unwrap());
+    let nodes = pr["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2);
+    // Scores should sum to ~1.0
+    let sum: f64 = nodes.iter().map(|n| n["score"].as_f64().unwrap()).sum();
+    assert!((sum - 1.0).abs() < 0.01);
+}
+
+#[test]
 fn fragmentation_rule_fires() {
     let dir = TempDir::new().unwrap();
     fs::write(

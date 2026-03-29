@@ -1,7 +1,10 @@
+pub mod betweenness;
+pub mod bridges;
 pub mod connected_components;
 pub mod degree;
 pub mod depth;
 pub mod graph_stats;
+pub mod pagerank;
 pub mod scc;
 pub mod transitive_reduction;
 

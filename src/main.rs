@@ -135,6 +135,7 @@ containment = "warn"
 cycle = "warn"
 directory-link = "warn"
 encapsulation = "warn"
+fragility = "off"
 fragmentation = "off"
 indirect-link = "off"
 layer-violation = "off"
@@ -162,18 +163,24 @@ stale = "warn"
 
 fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
     use analysis::Analysis;
+    use analysis::betweenness::Betweenness;
+    use analysis::bridges::Bridges as BridgesAnalysis;
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
     use analysis::depth::Depth as DepthAnalysis;
     use analysis::graph_stats::GraphStats;
+    use analysis::pagerank::PageRank;
     use analysis::scc::StronglyConnectedComponents;
     use analysis::transitive_reduction::TransitiveReduction;
 
     let known_analyses = [
+        "betweenness",
+        "bridges",
         "connected-components",
         "degree",
         "depth",
         "graph-stats",
+        "pagerank",
         "scc",
         "transitive-reduction",
     ];
@@ -192,6 +199,66 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let run_all = analysis_filter.is_empty();
 
     let mut results = serde_json::Map::new();
+
+    if run_all || analysis_filter.iter().any(|a| a == "betweenness") {
+        let bw = Betweenness;
+        let result = bw.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(bw.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== betweenness ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    for nb in &result.nodes {
+                        println!("{}  {:.4}", nb.node, nb.score);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "bridges") {
+        let br = BridgesAnalysis;
+        let result = br.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(br.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== bridges ===");
+                if result.cut_vertices.is_empty() && result.bridges.is_empty() {
+                    println!("no cut vertices or bridges");
+                } else {
+                    println!(
+                        "{} cut {}, {} {}",
+                        result.cut_vertices.len(),
+                        if result.cut_vertices.len() == 1 {
+                            "vertex"
+                        } else {
+                            "vertices"
+                        },
+                        result.bridges.len(),
+                        if result.bridges.len() == 1 {
+                            "bridge"
+                        } else {
+                            "bridges"
+                        }
+                    );
+                    for v in &result.cut_vertices {
+                        println!("cut vertex: {v}");
+                    }
+                    for b in &result.bridges {
+                        println!("bridge: {} \u{2194} {}", b.source, b.target);
+                    }
+                }
+            }
+        }
+    }
 
     if run_all || analysis_filter.iter().any(|a| a == "connected-components") {
         let cc = ConnectedComponents;
@@ -308,6 +375,32 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                 } else {
                     for nd in &result.nodes {
                         println!("{}  in:{}  out:{}", nd.node, nd.in_degree, nd.out_degree);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "pagerank") {
+        let pr = PageRank;
+        let result = pr.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(pr.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== pagerank ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    if result.converged {
+                        println!("converged in {} iterations", result.iterations);
+                    } else {
+                        println!("did not converge after {} iterations", result.iterations);
+                    }
+                    for np in &result.nodes {
+                        println!("{}  {:.4}", np.node, np.score);
                     }
                 }
             }
