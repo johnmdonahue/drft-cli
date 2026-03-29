@@ -2,6 +2,11 @@
 
 All notable changes to drft are documented here.
 
+## 0.1.1 (2026-03-28)
+
+- Fixed npm postinstall binary download
+- Added CI and automated publish workflows
+
 ## 0.1.0 (2026-03-28)
 
 Initial release.

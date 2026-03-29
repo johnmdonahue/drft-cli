@@ -1,6 +1,6 @@
 [package]
 name = "drft-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A structural integrity checker for markdown directories"
 license = "MIT"
