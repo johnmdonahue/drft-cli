@@ -494,7 +494,11 @@ fn scenario_26_lock_check_no_lockfile() {
 #[test]
 fn scenario_10_child_scope_unsealed() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("index.md"), "[overview](research/overview.md)").unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[overview](research/overview.md)",
+    )
+    .unwrap();
 
     let research = dir.path().join("research");
     fs::create_dir(&research).unwrap();
@@ -522,7 +526,10 @@ fn scenario_10_child_scope_unsealed() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.contains("encapsulation"), "unsealed scope should not trigger encapsulation");
+    assert!(
+        !stdout.contains("encapsulation"),
+        "unsealed scope should not trigger encapsulation"
+    );
     assert!(output.status.success());
 }
 
@@ -628,7 +635,10 @@ fn recursive_check_with_child_config() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.contains("orphan"), "non-recursive should not show child diagnostics");
+    assert!(
+        !stdout.contains("orphan"),
+        "non-recursive should not show child diagnostics"
+    );
 
     // Recursive: child's orphan config kicks in
     let output = drft_bin()
@@ -899,12 +909,7 @@ fn graph_recursive_produces_multiple_graphs() {
     fs::write(child.join("drft.lock"), "lockfile_version = 1\n").unwrap();
 
     let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "graph",
-            "--recursive",
-        ])
+        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
         .output()
         .unwrap();
 

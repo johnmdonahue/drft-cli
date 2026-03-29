@@ -266,7 +266,10 @@ mod tests {
         let result = Lockfile::from_toml(toml);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("not supported"), "error should mention version: {err}");
+        assert!(
+            err.contains("not supported"),
+            "error should mention version: {err}"
+        );
     }
 
     #[test]
