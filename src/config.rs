@@ -30,6 +30,9 @@ pub struct Config {
     pub rules: HashMap<String, RuleSeverity>,
     pub ignore_rules: HashMap<String, Vec<String>>,
     pub custom_rules: HashMap<String, CustomRuleConfig>,
+    /// Directory containing the drft.toml this config was loaded from.
+    /// Used to resolve relative paths in custom rule commands.
+    pub config_dir: Option<std::path::PathBuf>,
     ignore_rules_compiled: HashMap<String, Option<GlobSet>>,
 }
 
@@ -66,6 +69,7 @@ impl Config {
             rules,
             ignore_rules: HashMap::new(),
             custom_rules: HashMap::new(),
+            config_dir: None,
             ignore_rules_compiled: HashMap::new(),
         }
     }
@@ -85,6 +89,7 @@ impl Config {
             .with_context(|| format!("failed to parse {}", config_path.display()))?;
 
         let mut config = Self::defaults();
+        config.config_dir = config_path.parent().map(|p| p.to_path_buf());
 
         if let Some(ignore) = raw.ignore {
             config.ignore = ignore;

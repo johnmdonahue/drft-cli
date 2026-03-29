@@ -16,12 +16,23 @@ use crate::graph::Graph;
 /// are set by drft from the config — the script doesn't need to provide them.
 pub fn run_custom_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
+    let config_dir = config.config_dir.as_deref().unwrap_or(root);
 
     for (rule_name, rule_config) in &config.custom_rules {
-        match run_one(rule_name, rule_config, graph, root) {
+        match run_one(rule_name, rule_config, graph, root, config_dir) {
             Ok(mut results) => diagnostics.append(&mut results),
             Err(e) => {
                 eprintln!("warn: custom rule \"{rule_name}\" failed: {e}");
+                // Surface failures as diagnostics so JSON consumers see them
+                diagnostics.push(Diagnostic {
+                    rule: rule_name.clone(),
+                    severity: rule_config.severity,
+                    message: format!("custom rule failed: {e}"),
+                    fix: Some(format!(
+                        "custom rule \"{rule_name}\" failed to execute — check the command path and script"
+                    )),
+                    ..Default::default()
+                });
             }
         }
     }
@@ -34,6 +45,7 @@ fn run_one(
     rule_config: &CustomRuleConfig,
     graph: &Graph,
     root: &Path,
+    config_dir: &Path,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     // Build the graph JSON to pass on stdin
     let graph_json = build_graph_json(graph);
@@ -44,7 +56,14 @@ fn run_one(
         anyhow::bail!("empty command");
     }
 
-    let output = Command::new(parts[0])
+    // Resolve command path relative to config directory (where drft.toml lives)
+    let cmd = if parts[0].starts_with("./") || parts[0].starts_with("../") {
+        config_dir.join(parts[0]).to_string_lossy().to_string()
+    } else {
+        parts[0].to_string()
+    };
+
+    let output = Command::new(&cmd)
         .args(&parts[1..])
         .current_dir(root)
         .stdin(std::process::Stdio::piped())
@@ -194,7 +213,7 @@ mod tests {
         };
 
         let graph = make_graph();
-        let diagnostics = run_one("my-rule", &config, &graph, dir.path()).unwrap();
+        let diagnostics = run_one("my-rule", &config, &graph, dir.path(), dir.path()).unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "my-rule");
@@ -221,7 +240,7 @@ mod tests {
         };
 
         let graph = make_graph();
-        let result = run_one("bad-rule", &config, &graph, dir.path());
+        let result = run_one("bad-rule", &config, &graph, dir.path(), dir.path());
         assert!(result.is_err());
     }
 }
