@@ -20,10 +20,11 @@ When you push a version tag (`v*`):
 
 ## Secrets required
 
-Set these in GitHub repo settings (Settings > Secrets > Actions):
+Set these in GitHub repo settings (Settings > Secrets and variables > Actions):
 
 - **`CARGO_REGISTRY_TOKEN`** — from https://crates.io/settings/tokens (needs publish-update scope)
-- **`NPM_TOKEN`** — from https://www.npmjs.com/settings/tokens (create an **Automation** token — this bypasses 2FA for CI)
+
+npm uses **trusted publishing** (OIDC) — no token needed. Configure at https://www.npmjs.com/package/drft-cli/settings → add GitHub Actions as a trusted publisher (repo: `johnmdonahue/drft-cli`, workflow: `publish.yml`).
 
 ## Version numbers
 
