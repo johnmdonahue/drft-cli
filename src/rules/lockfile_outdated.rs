@@ -53,7 +53,7 @@ impl Rule for LockfileOutdatedRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{build_graph, hash_bytes, Edge, EdgeType, Node, NodeType};
+    use crate::graph::build_graph;
     use crate::lockfile::write_lockfile;
     use std::fs;
     use tempfile::TempDir;

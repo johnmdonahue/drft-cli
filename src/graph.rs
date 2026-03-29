@@ -220,23 +220,25 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
 /// Normalize a relative path by resolving `.` and `..` components using Path APIs.
 /// Does not touch the filesystem. Always returns forward-slash separated paths.
+/// Preserves leading `..` that escape above the root — these indicate scope escape.
 pub fn normalize_relative_path(path: &str) -> String {
-    let mut components: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
     for component in Path::new(path).components() {
         match component {
             std::path::Component::CurDir => {}
             std::path::Component::ParentDir => {
-                components.pop();
+                // Only pop if there's a normal component to pop (not a leading ..)
+                if parts.last().is_some_and(|p| p != "..") {
+                    parts.pop();
+                } else {
+                    parts.push("..".to_string());
+                }
             }
-            std::path::Component::Normal(c) => components.push(c),
+            std::path::Component::Normal(c) => parts.push(c.to_string_lossy().to_string()),
             _ => {}
         }
     }
-    components
-        .iter()
-        .map(|c| c.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
+    parts.join("/")
 }
 
 /// Resolve a link target relative to a source file, producing a path relative to the scope root.
@@ -268,8 +270,22 @@ mod tests {
     }
 
     #[test]
-    fn normalize_leading_dotdot() {
-        assert_eq!(normalize_relative_path("../a"), "a");
+    fn normalize_preserves_leading_dotdot() {
+        assert_eq!(normalize_relative_path("../a"), "../a");
+    }
+
+    #[test]
+    fn normalize_deep_escape() {
+        assert_eq!(normalize_relative_path("../../a"), "../../a");
+    }
+
+    #[test]
+    fn normalize_escape_after_descent() {
+        // guides/../../README.md -> ../README.md (one level above root)
+        assert_eq!(
+            normalize_relative_path("guides/../../README.md"),
+            "../README.md"
+        );
     }
 
     #[test]

@@ -24,30 +24,8 @@ impl Rule for ContainmentRule {
                 continue;
             }
 
-            // Check if the raw target (before normalization) escapes the scope.
-            // After normalization, paths that escape resolve to something like "" or
-            // the normalized form won't match a file inside the scope.
-            // But we need to check the un-normalized edge: if the link text
-            // included ../ that would go above root, it's a containment violation.
-            //
-            // We re-derive this by checking if the target path, when joined with root,
-            // would land outside root.
-            let joined = root.join(&edge.target);
-            let canonical_root = match root.canonicalize() {
-                Ok(p) => p,
-                Err(_) => return diagnostics,
-            };
-            // For broken links the target may not exist, so we canonicalize the parent
-            let target_parent = match joined.parent() {
-                Some(p) if p.exists() => match p.canonicalize() {
-                    Ok(cp) => cp,
-                    Err(_) => continue,
-                },
-                _ => continue,
-            };
-            let target_canonical = target_parent.join(joined.file_name().unwrap_or_default());
-
-            if !target_canonical.starts_with(&canonical_root) {
+            // A target starting with ../ escapes the scope root
+            if edge.target.starts_with("../") || edge.target == ".." {
                 diagnostics.push(Diagnostic {
                     rule: "containment".into(),
                     message: "links outside scope boundary".into(),
@@ -75,12 +53,8 @@ mod tests {
 
     #[test]
     fn detects_escape() {
-        let parent = TempDir::new().unwrap();
-        let scope = parent.path().join("docs");
-        fs::create_dir(&scope).unwrap();
-        fs::write(scope.join("drft.lock"), "lockfile_version = 1\n").unwrap();
-        fs::write(scope.join("index.md"), "").unwrap();
-        fs::write(parent.path().join("README.md"), "").unwrap();
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.lock"), "lockfile_version = 1\n").unwrap();
 
         let mut graph = Graph::new();
         graph.add_node(Node {
@@ -95,18 +69,38 @@ mod tests {
         });
 
         let rule = ContainmentRule;
-        let diagnostics = rule.evaluate(&graph, &scope);
+        let diagnostics = rule.evaluate(&graph, dir.path());
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "containment");
         assert_eq!(diagnostics[0].target.as_deref(), Some("../README.md"));
     }
 
     #[test]
+    fn detects_deep_escape() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.lock"), "lockfile_version = 1\n").unwrap();
+
+        let mut graph = Graph::new();
+        graph.add_node(Node {
+            path: "index.md".into(),
+            node_type: NodeType::Document,
+            hash: None,
+        });
+        graph.add_edge(Edge {
+            source: "index.md".into(),
+            target: "../../other.md".into(),
+            edge_type: EdgeType::Inline,
+        });
+
+        let rule = ContainmentRule;
+        let diagnostics = rule.evaluate(&graph, dir.path());
+        assert_eq!(diagnostics.len(), 1);
+    }
+
+    #[test]
     fn no_violation_for_internal_link() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("drft.lock"), "lockfile_version = 1\n").unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
-        fs::write(dir.path().join("setup.md"), "").unwrap();
 
         let mut graph = Graph::new();
         graph.add_node(Node {
@@ -128,14 +122,8 @@ mod tests {
     #[test]
     fn vacuous_without_lockfile() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
 
         let mut graph = Graph::new();
-        graph.add_node(Node {
-            path: "index.md".into(),
-            node_type: NodeType::Document,
-            hash: None,
-        });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../escape.md".into(),

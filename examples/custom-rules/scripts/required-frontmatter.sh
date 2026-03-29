@@ -2,15 +2,16 @@
 # Require specific frontmatter fields in all document nodes.
 # Receives JGF graph JSON on stdin, reads files from disk to check frontmatter.
 #
-# Checks for: title, sources
-# Customize REQUIRED_FIELDS below.
+# Customize REQUIRED_FIELDS and SKIP_NAMES below.
 
 REQUIRED_FIELDS="title sources"
+SKIP_NAMES="README.md CHANGELOG.md CONTRIBUTING.md CLAUDE.md"
 
 python3 -c "
 import json, sys, os, re
 
 required = '$REQUIRED_FIELDS'.split()
+skip_names = set('$SKIP_NAMES'.split())
 data = json.load(sys.stdin)
 graph = data['graph']
 
@@ -18,6 +19,11 @@ for path, node in sorted(graph['nodes'].items()):
     if node['metadata']['type'] != 'document':
         continue
     if not os.path.isfile(path):
+        continue
+
+    # Skip exempt filenames
+    filename = os.path.basename(path)
+    if filename in skip_names:
         continue
 
     content = open(path).read()

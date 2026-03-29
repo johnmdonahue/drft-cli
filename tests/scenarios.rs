@@ -992,3 +992,27 @@ fn lockfile_contains_version() {
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.starts_with("lockfile_version = 1"));
 }
+
+// ── Containment escape ─────────────────────────────────────────
+
+/// Issue #9: ../  links should trigger containment rule.
+#[test]
+fn containment_catches_escape() {
+    let dir = TempDir::new().unwrap();
+    let child = dir.path().join("docs");
+    fs::create_dir(&child).unwrap();
+    fs::write(child.join("drft.lock"), "lockfile_version = 1\n").unwrap();
+    fs::write(child.join("index.md"), "[escape](../README.md)").unwrap();
+    fs::write(dir.path().join("README.md"), "# Root").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", child.to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("containment"),
+        "expected containment violation for ../README.md, got: {stdout}"
+    );
+}
