@@ -8,6 +8,7 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 
 | Analysis | Command | Description |
 |----------|---------|-------------|
+| [Degree distribution](degree.md) | `drft report --analysis degree` | In-degree and out-degree per node |
 | [Transitive reduction](transitive-reduction.md) | `drft report --analysis transitive-reduction` | Finds edges that are structurally redundant |
 
 ## Graph theory and knowledge systems

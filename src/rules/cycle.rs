@@ -31,20 +31,20 @@ impl Rule for CycleRule {
         let node_set: HashSet<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
 
         for node_id in graph.nodes.keys() {
-            if color[node_id.as_str()] == Color::White {
-                if let Some(cycle_path) = dfs(node_id, graph, &node_set, &mut color, &mut stack) {
-                    let fix = format!(
-                        "circular dependency — review whether one of these links can be removed or the content restructured: {}",
-                        cycle_path.join(" → ")
-                    );
-                    diagnostics.push(Diagnostic {
-                        rule: "cycle".into(),
-                        message: "cycle detected".into(),
-                        path: Some(cycle_path),
-                        fix: Some(fix),
-                        ..Default::default()
-                    });
-                }
+            if color[node_id.as_str()] == Color::White
+                && let Some(cycle_path) = dfs(node_id, graph, &node_set, &mut color, &mut stack)
+            {
+                let fix = format!(
+                    "circular dependency — review whether one of these links can be removed or the content restructured: {}",
+                    cycle_path.join(" → ")
+                );
+                diagnostics.push(Diagnostic {
+                    rule: "cycle".into(),
+                    message: "cycle detected".into(),
+                    path: Some(cycle_path),
+                    fix: Some(fix),
+                    ..Default::default()
+                });
             }
         }
 

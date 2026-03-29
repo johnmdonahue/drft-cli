@@ -34,10 +34,10 @@ impl Rule for EncapsulationRule {
 
             for edge in &graph.edges {
                 // Only check edges from non-virtual sources (virtual→frontier is implicit)
-                if let Some(source_node) = graph.nodes.get(&edge.source) {
-                    if source_node.node_type == NodeType::Virtual {
-                        continue;
-                    }
+                if let Some(source_node) = graph.nodes.get(&edge.source)
+                    && source_node.node_type == NodeType::Virtual
+                {
+                    continue;
                 }
 
                 if !edge.target.starts_with(scope_prefix) {
@@ -70,7 +70,7 @@ impl Rule for EncapsulationRule {
 mod tests {
     use super::*;
     use crate::graph::{Edge, EdgeType, Graph, Node};
-    use crate::lockfile::{write_lockfile, Lockfile, LockfileNode, Manifest};
+    use crate::lockfile::{Lockfile, LockfileNode, Manifest, write_lockfile};
     use std::collections::BTreeMap;
     use std::fs;
     use tempfile::TempDir;

@@ -122,12 +122,11 @@ pub fn derive_manifest(graph: &Graph, manifest_file: &str) -> Result<Manifest> {
         for &idx in edge_indices {
             let target = &graph.edges[idx].target;
             // Only include targets that are nodes in this scope (not external, not outside)
-            if let Some(node) = graph.nodes.get(target.as_str()) {
-                if !matches!(node.node_type, crate::graph::NodeType::External)
-                    && !nodes.contains(target)
-                {
-                    nodes.push(target.clone());
-                }
+            if let Some(node) = graph.nodes.get(target.as_str())
+                && !matches!(node.node_type, crate::graph::NodeType::External)
+                && !nodes.contains(target)
+            {
+                nodes.push(target.clone());
             }
         }
     }

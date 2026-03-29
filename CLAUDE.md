@@ -12,7 +12,7 @@ Naming rule: "drift" spelled out refers only to the concept of markdown drift. T
 
 ## Language & stack
 
-- Rust (2021 edition)
+- Rust (2024 edition)
 - `clap` (derive) for CLI parsing
 - `serde` + `toml` for config/lockfile
 - `serde_json` for JSON output

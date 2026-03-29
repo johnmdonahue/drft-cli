@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
-use crate::lockfile::{read_lockfile, Lockfile};
+use crate::lockfile::{Lockfile, read_lockfile};
 use crate::rules::Rule;
 
 pub struct LockfileOutdatedRule;

@@ -1,5 +1,7 @@
+use crate::analysis::Analysis;
+use crate::analysis::degree::Degree;
 use crate::diagnostic::Diagnostic;
-use crate::graph::{Graph, NodeType};
+use crate::graph::Graph;
 use crate::rules::Rule;
 use std::path::Path;
 
@@ -10,64 +12,39 @@ impl Rule for OrphanRule {
         "orphan"
     }
 
-    fn evaluate(&self, graph: &Graph, _root: &Path) -> Vec<Diagnostic> {
-        let mut diagnostics = Vec::new();
+    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
+        let result = Degree.run(graph, root);
 
-        for (node_id, node) in &graph.nodes {
-            // Skip synthetic nodes (frontier, virtual, external)
-            if matches!(
-                node.node_type,
-                NodeType::Frontier | NodeType::Virtual | NodeType::External
-            ) {
-                continue;
-            }
-
-            // A node with no inbound edges is an orphan
-            let has_inbound = graph
-                .reverse
-                .get(node_id.as_str())
-                .is_some_and(|edges| !edges.is_empty());
-
-            if !has_inbound {
-                diagnostics.push(Diagnostic {
-                    rule: "orphan".into(),
-                    message: "no inbound links".into(),
-                    node: Some(node_id.clone()),
-                    fix: Some(format!(
-                        "{node_id} has no inbound links — either link to it from another file or remove it"
-                    )),
-                    ..Default::default()
-                });
-            }
-        }
-
-        diagnostics
+        result
+            .nodes
+            .iter()
+            .filter(|nd| nd.in_degree == 0)
+            .map(|nd| Diagnostic {
+                rule: "orphan".into(),
+                message: "no inbound links".into(),
+                node: Some(nd.node.clone()),
+                fix: Some(format!(
+                    "{} has no inbound links — either link to it from another file or remove it",
+                    nd.node
+                )),
+                ..Default::default()
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
-
-    fn make_node(path: &str) -> Node {
-        Node {
-            path: path.into(),
-            node_type: NodeType::Document,
-            hash: None,
-        }
-    }
+    use crate::graph::Graph;
+    use crate::graph::test_helpers::{make_edge, make_node};
 
     #[test]
     fn detects_orphan() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(make_node("orphan.md"));
-        graph.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
-        });
+        graph.add_edge(make_edge("index.md", "setup.md"));
 
         let rule = OrphanRule;
         let diagnostics = rule.evaluate(&graph, Path::new("."));
@@ -86,11 +63,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(make_node("setup.md"));
-        graph.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
-        });
+        graph.add_edge(make_edge("index.md", "setup.md"));
 
         let rule = OrphanRule;
         let diagnostics = rule.evaluate(&graph, Path::new("."));

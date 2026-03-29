@@ -1133,8 +1133,12 @@ fn report_text_output() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("transitive-reduction"),
-        "expected analysis header, got: {stdout}"
+        stdout.contains("=== degree ==="),
+        "expected degree header, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("=== transitive-reduction ==="),
+        "expected transitive-reduction header, got: {stdout}"
     );
     assert!(
         stdout.contains("a.md"),
@@ -1163,6 +1167,14 @@ fn report_json_output() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    // Degree analysis is present
+    assert!(
+        v["analyses"]["degree"]["nodes"].is_array(),
+        "expected degree analysis in JSON output"
+    );
+
+    // Transitive reduction analysis is present
     let tr = &v["analyses"]["transitive-reduction"];
     let edges = tr["redundant_edges"].as_array().unwrap();
     assert_eq!(edges.len(), 1);
@@ -1206,6 +1218,77 @@ fn report_unknown_analysis_exits_2() {
         .unwrap();
 
     assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn report_degree_text_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "degree",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("=== degree ==="),
+        "expected degree header, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("a.md"),
+        "expected a.md in degree output, got: {stdout}"
+    );
+    // a.md has out:2 (links to b and c)
+    assert!(
+        stdout.contains("out:2"),
+        "expected out:2 for a.md, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_degree_json_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "degree",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let deg = &v["analyses"]["degree"];
+    let nodes = deg["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 3);
+
+    let a = nodes.iter().find(|n| n["node"] == "a.md").unwrap();
+    assert_eq!(a["in_degree"], 0);
+    assert_eq!(a["out_degree"], 2);
+
+    let c = nodes.iter().find(|n| n["node"] == "c.md").unwrap();
+    assert_eq!(c["in_degree"], 2);
+    assert_eq!(c["out_degree"], 0);
 }
 
 // ── Containment escape ─────────────────────────────────────────

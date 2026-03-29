@@ -15,10 +15,10 @@ impl Rule for DirectoryLinkRule {
 
         for edge in &graph.edges {
             // Skip edges to frontier nodes (implicit virtual→frontier)
-            if let Some(target_node) = graph.nodes.get(&edge.target) {
-                if target_node.node_type == NodeType::Frontier {
-                    continue;
-                }
+            if let Some(target_node) = graph.nodes.get(&edge.target)
+                && target_node.node_type == NodeType::Frontier
+            {
+                continue;
             }
             let target_path = root.join(&edge.target);
             if target_path.is_dir() {

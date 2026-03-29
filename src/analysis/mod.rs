@@ -1,3 +1,4 @@
+pub mod degree;
 pub mod transitive_reduction;
 
 use crate::graph::Graph;

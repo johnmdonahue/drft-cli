@@ -16,7 +16,7 @@ use cli::{Cli, ColorChoice, Commands, OutputFormat};
 use config::{Config, RuleSeverity};
 use diagnostic::Diagnostic;
 use graph::build_graph;
-use lockfile::{derive_manifest, read_lockfile, write_lockfile, Lockfile};
+use lockfile::{Lockfile, derive_manifest, read_lockfile, write_lockfile};
 use rules::all_rules;
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
@@ -159,10 +159,11 @@ stale = "warn"
 }
 
 fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
-    use analysis::transitive_reduction::TransitiveReduction;
     use analysis::Analysis;
+    use analysis::degree::Degree;
+    use analysis::transitive_reduction::TransitiveReduction;
 
-    let known_analyses = ["transitive-reduction"];
+    let known_analyses = ["degree", "transitive-reduction"];
 
     // Validate analysis names
     for name in analysis_filter {
@@ -178,6 +179,27 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let run_all = analysis_filter.is_empty();
 
     let mut results = serde_json::Map::new();
+
+    if run_all || analysis_filter.iter().any(|a| a == "degree") {
+        let deg = Degree;
+        let result = deg.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(deg.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== degree ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    for nd in &result.nodes {
+                        println!("{}  in:{}  out:{}", nd.node, nd.in_degree, nd.out_degree);
+                    }
+                }
+            }
+        }
+    }
 
     if run_all || analysis_filter.iter().any(|a| a == "transitive-reduction") {
         let tr = TransitiveReduction;
@@ -636,7 +658,7 @@ fn run_check_watch(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
+    use notify_debouncer_mini::{DebouncedEventKind, new_debouncer};
     use std::sync::mpsc;
     use std::time::Duration;
 

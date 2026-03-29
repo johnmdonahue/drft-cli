@@ -52,10 +52,10 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
             .to_string_lossy()
             .replace('\\', "/");
 
-        if let Some(ref set) = ignore_set {
-            if set.is_match(&relative) {
-                continue;
-            }
+        if let Some(ref set) = ignore_set
+            && set.is_match(&relative)
+        {
+            continue;
         }
 
         files.push(relative);

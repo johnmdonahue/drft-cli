@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::diagnostic::Diagnostic;
 use crate::discovery::find_child_scopes;
-use crate::graph::{hash_bytes, Graph, NodeType};
+use crate::graph::{Graph, NodeType, hash_bytes};
 use crate::lockfile::read_lockfile;
 use crate::rules::Rule;
 
@@ -174,7 +174,7 @@ fn compute_current_hash(root: &Path, relative_path: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
-    use crate::lockfile::{write_lockfile, Lockfile};
+    use crate::lockfile::{Lockfile, write_lockfile};
     use std::fs;
     use tempfile::TempDir;
 
