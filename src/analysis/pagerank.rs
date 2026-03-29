@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::Graph;
 use std::collections::HashMap;
 use std::path::Path;
@@ -137,6 +137,48 @@ impl Analysis for PageRank {
             nodes,
         }
     }
+
+    fn metrics(&self, output: &PageRankResult, _graph: &Graph) -> Vec<Metric> {
+        if output.nodes.is_empty() {
+            return vec![];
+        }
+        let max = output.nodes.iter().map(|n| n.score).fold(0.0f64, f64::max);
+        let scores: Vec<f64> = output.nodes.iter().map(|n| n.score).collect();
+        let gini = gini_coefficient(&scores);
+
+        vec![
+            Metric {
+                name: "max_pagerank".into(),
+                value: max,
+                kind: MetricKind::Score,
+                dimension: "consistency".into(),
+            },
+            Metric {
+                name: "pagerank_gini".into(),
+                value: gini,
+                kind: MetricKind::Ratio,
+                dimension: "consistency".into(),
+            },
+        ]
+    }
+}
+
+fn gini_coefficient(values: &[f64]) -> f64 {
+    let n = values.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let sum: f64 = sorted.iter().sum();
+    if sum == 0.0 {
+        return 0.0;
+    }
+    let mut numerator = 0.0;
+    for (i, &v) in sorted.iter().enumerate() {
+        numerator += (2.0 * (i + 1) as f64 - n as f64 - 1.0) * v;
+    }
+    numerator / (n as f64 * sum)
 }
 
 #[cfg(test)]

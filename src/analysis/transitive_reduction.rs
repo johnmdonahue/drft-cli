@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::Graph;
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
@@ -61,6 +61,22 @@ impl Analysis for TransitiveReduction {
         });
 
         TransitiveReductionResult { redundant_edges }
+    }
+
+    fn metrics(&self, output: &TransitiveReductionResult, graph: &Graph) -> Vec<Metric> {
+        let total_edges = graph.edges.len();
+        let redundant = output.redundant_edges.len();
+        let ratio = if total_edges > 0 {
+            redundant as f64 / total_edges as f64
+        } else {
+            0.0
+        };
+        vec![Metric {
+            name: "redundant_edge_ratio".into(),
+            value: ratio,
+            kind: MetricKind::Ratio,
+            dimension: "conciseness".into(),
+        }]
     }
 }
 

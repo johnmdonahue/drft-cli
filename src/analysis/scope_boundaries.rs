@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::{Graph, NodeType};
 use crate::lockfile::read_lockfile;
 use std::path::Path;
@@ -104,6 +104,23 @@ impl Analysis for ScopeBoundaries {
             escapes,
             encapsulation_violations,
         }
+    }
+
+    fn metrics(&self, output: &ScopeBoundariesResult, _graph: &Graph) -> Vec<Metric> {
+        vec![
+            Metric {
+                name: "escape_count".into(),
+                value: output.escapes.len() as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            },
+            Metric {
+                name: "encapsulation_violation_count".into(),
+                value: output.encapsulation_violations.len() as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            },
+        ]
     }
 }
 

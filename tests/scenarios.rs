@@ -1221,6 +1221,74 @@ fn report_unknown_analysis_exits_2() {
 }
 
 #[test]
+fn report_metrics_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "report", "--metrics"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("=== metrics ==="),
+        "expected metrics header, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("orphan_ratio"),
+        "expected orphan_ratio, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("completeness"),
+        "expected completeness dimension, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("consistency"),
+        "expected consistency dimension, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_metrics_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--metrics",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let metrics = v["metrics"].as_array().unwrap();
+    assert!(!metrics.is_empty());
+
+    // Check that metrics have expected structure
+    let first = &metrics[0];
+    assert!(first["name"].is_string());
+    assert!(first["value"].is_f64());
+    assert!(first["kind"].is_string());
+    assert!(first["dimension"].is_string());
+
+    // Check specific metric exists
+    let has_orphan = metrics.iter().any(|m| m["name"] == "orphan_ratio");
+    assert!(has_orphan, "expected orphan_ratio metric in output");
+}
+
+#[test]
 fn report_degree_text_output() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();

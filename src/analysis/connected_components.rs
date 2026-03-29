@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::Graph;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -98,6 +98,35 @@ impl Analysis for ConnectedComponents {
             component_count,
             components,
         }
+    }
+
+    fn metrics(&self, output: &ConnectedComponentsResult, _graph: &Graph) -> Vec<Metric> {
+        let total_nodes: usize = output.components.iter().map(|c| c.members.len()).sum();
+        let largest = output
+            .components
+            .first()
+            .map(|c| c.members.len())
+            .unwrap_or(0);
+        let frag = if total_nodes > 0 {
+            1.0 - (largest as f64 / total_nodes as f64)
+        } else {
+            0.0
+        };
+
+        vec![
+            Metric {
+                name: "component_count".into(),
+                value: output.component_count as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            },
+            Metric {
+                name: "fragmentation_index".into(),
+                value: frag,
+                kind: MetricKind::Ratio,
+                dimension: "consistency".into(),
+            },
+        ]
     }
 }
 

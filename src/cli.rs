@@ -72,8 +72,12 @@ pub enum Commands {
     /// Run graph analyses and output structured results
     Report {
         /// Analyses to run (defaults to all)
-        #[arg(long = "analysis")]
+        #[arg(long = "analysis", conflicts_with = "metrics")]
         analyses: Vec<String>,
+
+        /// Output extracted scalar metrics instead of full analysis results
+        #[arg(long)]
+        metrics: bool,
     },
 
     /// Check markdown structure for rule violations

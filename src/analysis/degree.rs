@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::Graph;
 use std::path::Path;
 
@@ -62,6 +62,41 @@ impl Analysis for Degree {
         nodes.sort_by(|a, b| a.node.cmp(&b.node));
 
         DegreeResult { nodes }
+    }
+
+    fn metrics(&self, output: &DegreeResult, _graph: &Graph) -> Vec<Metric> {
+        let total = output.nodes.len() as f64;
+        if total == 0.0 {
+            return vec![];
+        }
+        let orphans = output.nodes.iter().filter(|n| n.in_degree == 0).count() as f64;
+        let islands = output
+            .nodes
+            .iter()
+            .filter(|n| n.in_degree == 0 && n.out_degree == 0)
+            .count() as f64;
+        let sinks = output.nodes.iter().filter(|n| n.out_degree == 0).count() as f64;
+
+        vec![
+            Metric {
+                name: "orphan_ratio".into(),
+                value: orphans / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+            Metric {
+                name: "island_ratio".into(),
+                value: islands / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+            Metric {
+                name: "sink_ratio".into(),
+                value: sinks / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+        ]
     }
 }
 

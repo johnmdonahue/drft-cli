@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::{EdgeType, Graph, NodeType};
 use std::path::Path;
 
@@ -51,6 +51,49 @@ impl Analysis for EdgeClassification {
             .collect();
 
         EdgeClassificationResult { edges }
+    }
+
+    fn metrics(&self, output: &EdgeClassificationResult, _graph: &Graph) -> Vec<Metric> {
+        let total = output.edges.len() as f64;
+        if total == 0.0 {
+            return vec![];
+        }
+        let broken = output
+            .edges
+            .iter()
+            .filter(|e| matches!(e.status, EdgeStatus::Broken))
+            .count() as f64;
+        let external = output
+            .edges
+            .iter()
+            .filter(|e| matches!(e.status, EdgeStatus::External))
+            .count() as f64;
+        let symlink = output
+            .edges
+            .iter()
+            .filter(|e| matches!(e.status, EdgeStatus::SymlinkTarget { .. }))
+            .count() as f64;
+
+        vec![
+            Metric {
+                name: "dead_link_rate".into(),
+                value: broken / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+            Metric {
+                name: "external_link_ratio".into(),
+                value: external / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+            Metric {
+                name: "symlink_ratio".into(),
+                value: symlink / total,
+                kind: MetricKind::Ratio,
+                dimension: "completeness".into(),
+            },
+        ]
     }
 }
 

@@ -79,7 +79,13 @@ fn try_main() -> Result<i32> {
             *recursive,
             *max_depth,
         ),
-        Commands::Report { analyses } => run_report(&root, cli.format, analyses),
+        Commands::Report { analyses, metrics } => {
+            if *metrics {
+                run_metrics(&root, cli.format)
+            } else {
+                run_report(&root, cli.format, analyses)
+            }
+        }
         Commands::Impact { files } => run_impact(&root, cli.format, files),
         Commands::Graph {
             recursive,
@@ -570,6 +576,83 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     if matches!(format, OutputFormat::Json) {
         let output = serde_json::json!({ "analyses": results });
         println!("{}", serde_json::to_string_pretty(&output)?);
+    }
+
+    Ok(0)
+}
+
+fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
+    use analysis::Analysis;
+    use analysis::Metric;
+    use analysis::betweenness::Betweenness;
+    use analysis::bridges::Bridges as BridgesAnalysis;
+    use analysis::change_propagation::ChangePropagation;
+    use analysis::connected_components::ConnectedComponents;
+    use analysis::degree::Degree;
+    use analysis::depth::Depth as DepthAnalysis;
+    use analysis::edge_classification::EdgeClassification;
+    use analysis::graph_stats::GraphStats;
+    use analysis::pagerank::PageRank;
+    use analysis::scc::StronglyConnectedComponents;
+    use analysis::scope_boundaries::ScopeBoundaries;
+    use analysis::transitive_reduction::TransitiveReduction;
+
+    let scope_root = find_scope_root(root);
+    let config = Config::load(&scope_root)?;
+    let graph = build_graph(&scope_root, &config)?;
+
+    let mut all_metrics: Vec<Metric> = Vec::new();
+
+    // Run each analysis and extract metrics
+    macro_rules! collect_metrics {
+        ($analysis:expr) => {{
+            let a = $analysis;
+            let output = a.run(&graph, &scope_root);
+            all_metrics.extend(a.metrics(&output, &graph));
+        }};
+    }
+
+    collect_metrics!(Betweenness);
+    collect_metrics!(BridgesAnalysis);
+    collect_metrics!(ChangePropagation);
+    collect_metrics!(ConnectedComponents);
+    collect_metrics!(Degree);
+    collect_metrics!(DepthAnalysis);
+    collect_metrics!(EdgeClassification);
+    collect_metrics!(GraphStats);
+    collect_metrics!(PageRank);
+    collect_metrics!(StronglyConnectedComponents);
+    collect_metrics!(ScopeBoundaries);
+    collect_metrics!(TransitiveReduction);
+
+    match format {
+        OutputFormat::Json => {
+            let output = serde_json::json!({ "metrics": all_metrics });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        _ => {
+            // Group by dimension
+            let mut by_dimension: std::collections::BTreeMap<&str, Vec<&Metric>> =
+                std::collections::BTreeMap::new();
+            for m in &all_metrics {
+                by_dimension.entry(&m.dimension).or_default().push(m);
+            }
+
+            println!("=== metrics ===");
+            for (dimension, metrics) in &by_dimension {
+                println!("{dimension}");
+                for m in metrics {
+                    match m.kind {
+                        analysis::MetricKind::Count => {
+                            println!("  {}: {}", m.name, m.value as i64);
+                        }
+                        _ => {
+                            println!("  {}: {:.4}", m.name, m.value);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(0)

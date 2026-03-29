@@ -1,4 +1,4 @@
-use super::Analysis;
+use super::{Analysis, Metric, MetricKind};
 use crate::graph::Graph;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -59,6 +59,46 @@ impl Analysis for GraphStats {
             diameter,
             average_path_length,
         }
+    }
+
+    fn metrics(&self, output: &GraphStatsResult, _graph: &Graph) -> Vec<Metric> {
+        let mut m = vec![
+            Metric {
+                name: "node_count".into(),
+                value: output.node_count as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            },
+            Metric {
+                name: "edge_count".into(),
+                value: output.edge_count as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            },
+            Metric {
+                name: "density".into(),
+                value: output.density,
+                kind: MetricKind::Ratio,
+                dimension: "consistency".into(),
+            },
+        ];
+        if let Some(d) = output.diameter {
+            m.push(Metric {
+                name: "diameter".into(),
+                value: d as f64,
+                kind: MetricKind::Count,
+                dimension: "consistency".into(),
+            });
+        }
+        if let Some(a) = output.average_path_length {
+            m.push(Metric {
+                name: "avg_path_length".into(),
+                value: a,
+                kind: MetricKind::Score,
+                dimension: "consistency".into(),
+            });
+        }
+        m
     }
 }
 
