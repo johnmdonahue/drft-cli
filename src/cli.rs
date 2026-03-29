@@ -69,6 +69,13 @@ pub enum Commands {
         files: Vec<String>,
     },
 
+    /// Run graph analyses and output structured results
+    Report {
+        /// Analyses to run (defaults to all)
+        #[arg(long = "analysis")]
+        analyses: Vec<String>,
+    },
+
     /// Check markdown structure for rule violations
     Check {
         /// Run only specific rules (can be repeated)

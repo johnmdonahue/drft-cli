@@ -7,6 +7,7 @@ pub mod encapsulation;
 pub mod indirect_link;
 pub mod lockfile_outdated;
 pub mod orphan;
+pub mod redundant_edge;
 pub mod stale;
 
 use crate::diagnostic::Diagnostic;
@@ -28,6 +29,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(indirect_link::IndirectLinkRule),
         Box::new(lockfile_outdated::LockfileOutdatedRule),
         Box::new(orphan::OrphanRule),
+        Box::new(redundant_edge::RedundantEdgeRule),
         Box::new(stale::StaleRule),
     ]
 }

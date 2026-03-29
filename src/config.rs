@@ -57,6 +57,7 @@ impl Config {
             ("indirect-link", RuleSeverity::Off),
             ("lockfile-outdated", RuleSeverity::Warn),
             ("orphan", RuleSeverity::Off),
+            ("redundant-edge", RuleSeverity::Off),
             ("stale", RuleSeverity::Warn),
         ]
         .into_iter()
