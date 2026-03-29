@@ -1291,6 +1291,92 @@ fn report_degree_json_output() {
     assert_eq!(c["out_degree"], 0);
 }
 
+#[test]
+fn report_connected_components_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap(); // isolated
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "connected-components",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("=== connected-components ==="),
+        "expected header, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("2 components"),
+        "expected 2 components, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_connected_components_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "connected-components",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let cc = &v["analyses"]["connected-components"];
+    assert_eq!(cc["component_count"], 2);
+    assert_eq!(cc["components"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn fragmentation_rule_fires() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nfragmentation = \"warn\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("fragmentation"),
+        "expected fragmentation warning, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("disconnected component"),
+        "expected disconnected component message, got: {stdout}"
+    );
+}
+
 // ── Containment escape ─────────────────────────────────────────
 
 /// Issue #9: ../  links should trigger containment rule.

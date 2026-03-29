@@ -54,6 +54,7 @@ impl Config {
             ("cycle", RuleSeverity::Warn),
             ("directory-link", RuleSeverity::Warn),
             ("encapsulation", RuleSeverity::Warn),
+            ("fragmentation", RuleSeverity::Off),
             ("indirect-link", RuleSeverity::Off),
             ("lockfile-outdated", RuleSeverity::Warn),
             ("orphan", RuleSeverity::Off),

@@ -135,6 +135,7 @@ containment = "warn"
 cycle = "warn"
 directory-link = "warn"
 encapsulation = "warn"
+fragmentation = "off"
 indirect-link = "off"
 lockfile-outdated = "warn"
 orphan = "off"
@@ -160,10 +161,11 @@ stale = "warn"
 
 fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
     use analysis::Analysis;
+    use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
     use analysis::transitive_reduction::TransitiveReduction;
 
-    let known_analyses = ["degree", "transitive-reduction"];
+    let known_analyses = ["connected-components", "degree", "transitive-reduction"];
 
     // Validate analysis names
     for name in analysis_filter {
@@ -179,6 +181,33 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let run_all = analysis_filter.is_empty();
 
     let mut results = serde_json::Map::new();
+
+    if run_all || analysis_filter.iter().any(|a| a == "connected-components") {
+        let cc = ConnectedComponents;
+        let result = cc.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(cc.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== connected-components ===");
+                if result.component_count <= 1 {
+                    println!("1 component (fully connected)");
+                } else {
+                    println!("{} components", result.component_count);
+                    for c in &result.components {
+                        println!(
+                            "component {} ({} nodes): {}",
+                            c.id,
+                            c.members.len(),
+                            c.members.join(", ")
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     if run_all || analysis_filter.iter().any(|a| a == "degree") {
         let deg = Degree;

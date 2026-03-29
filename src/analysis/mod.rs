@@ -1,3 +1,4 @@
+pub mod connected_components;
 pub mod degree;
 pub mod transitive_reduction;
 
