@@ -2,6 +2,30 @@
 
 All notable changes to drft are documented here.
 
+## 0.1.2 (2026-03-29)
+
+- Add `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
+- Config inheritance: child scopes without `drft.toml` inherit from nearest ancestor
+- Persist manifest in `drft.toml`: `manifest = "README.md"` is the source of truth
+- Add `drft impact` command for transitive dependency analysis
+- JSON summary envelope for `drft check --format json`
+- Structured JSON errors on stderr when `--format json` is set
+- JSON Graph Format (JGF) output for `drft graph`
+- Custom script rules via `[custom-rules]` in config
+- Per-rule path ignores via `[ignore-rules]` in config
+- `--max-depth` flag for recursive operations
+- `--watch` mode for `drft check`
+- Colored terminal output
+- Diagnostics include `fix` field with actionable instructions
+- Direct + transitive staleness differentiation
+- `.gitignore` respect via `ignore` crate
+- Lockfile version checking
+- Fixed: email links no longer flagged as broken links
+- Fixed: frontmatter parser rejects YAML objects/arrays/quoted strings
+- Fixed: cycle detection panic on DFS root nodes
+- Fixed: directory-link rule skips frontier nodes
+- Fixed: ignored files detected as "excluded by ignore pattern" in broken-link
+
 ## 0.1.1 (2026-03-28)
 
 - Fixed npm postinstall binary download
