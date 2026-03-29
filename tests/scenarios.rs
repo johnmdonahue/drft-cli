@@ -1292,6 +1292,61 @@ fn report_degree_json_output() {
 }
 
 #[test]
+fn report_graph_stats_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "graph-stats",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("=== graph-stats ==="), "got: {stdout}");
+    assert!(stdout.contains("nodes: 2"), "got: {stdout}");
+    assert!(stdout.contains("edges: 2"), "got: {stdout}");
+    assert!(stdout.contains("density:"), "got: {stdout}");
+    assert!(stdout.contains("diameter: 1"), "got: {stdout}");
+}
+
+#[test]
+fn report_graph_stats_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "graph-stats",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let gs = &v["analyses"]["graph-stats"];
+    assert_eq!(gs["node_count"], 2);
+    assert_eq!(gs["edge_count"], 2);
+    assert_eq!(gs["diameter"], 1);
+    assert!(gs["density"].as_f64().unwrap() > 0.0);
+}
+
+#[test]
 fn report_connected_components_text() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();

@@ -163,9 +163,15 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::Analysis;
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
+    use analysis::graph_stats::GraphStats;
     use analysis::transitive_reduction::TransitiveReduction;
 
-    let known_analyses = ["connected-components", "degree", "transitive-reduction"];
+    let known_analyses = [
+        "connected-components",
+        "degree",
+        "graph-stats",
+        "transitive-reduction",
+    ];
 
     // Validate analysis names
     for name in analysis_filter {
@@ -204,6 +210,31 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                             c.members.join(", ")
                         );
                     }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "graph-stats") {
+        let gs = GraphStats;
+        let result = gs.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(gs.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== graph-stats ===");
+                println!("nodes: {}", result.node_count);
+                println!("edges: {}", result.edge_count);
+                println!("density: {:.2}", result.density);
+                match result.diameter {
+                    Some(d) => println!("diameter: {d}"),
+                    None => println!("diameter: - (disconnected)"),
+                }
+                match result.average_path_length {
+                    Some(a) => println!("avg path length: {a:.1}"),
+                    None => println!("avg path length: - (disconnected)"),
                 }
             }
         }
