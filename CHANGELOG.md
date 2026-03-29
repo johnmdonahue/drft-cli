@@ -2,6 +2,10 @@
 
 All notable changes to drft are documented here.
 
+## 0.1.3 (2026-03-29)
+
+- Fix npm package downloading binaries from wrong release version
+
 ## 0.1.2 (2026-03-29)
 
 - Add `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
