@@ -484,9 +484,13 @@ fn run_check(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    // Validate rule names
+    // Validate rule names (built-in + custom from config)
+    let scope_root = find_scope_root(root);
+    let root_config = Config::load(&scope_root)?;
     let available_rules = all_rules();
-    let known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
+    let mut known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
+    let custom_names: Vec<String> = root_config.custom_rules.keys().cloned().collect();
+    known_names.extend(custom_names.iter().map(|s| s.as_str()));
     for name in rule_filter {
         if !known_names.contains(&name.as_str()) {
             anyhow::bail!("unknown rule: \"{name}\"");
@@ -731,9 +735,21 @@ fn check_scope(
         diagnostics.extend(findings);
     }
 
-    // Run custom rules
-    if !config.custom_rules.is_empty() {
+    // Run custom rules (respecting --rule filter)
+    let run_custom = if rule_filter.is_empty() {
+        !config.custom_rules.is_empty()
+    } else {
+        config
+            .custom_rules
+            .keys()
+            .any(|name| rule_filter.iter().any(|f| f == name))
+    };
+    if run_custom {
         let mut custom_findings = rules::custom::run_custom_rules(&graph, root, &config);
+        // Filter to only requested custom rules if --rule is set
+        if !rule_filter.is_empty() {
+            custom_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
+        }
         // Apply ignore-rules filtering to custom rule diagnostics too
         custom_findings.retain(|d| {
             let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
