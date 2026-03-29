@@ -1,6 +1,7 @@
 pub mod completeness;
 pub mod conciseness;
 pub mod consistency;
+pub mod custom;
 pub mod timeliness;
 
 use crate::analyses::betweenness::BetweennessResult;

@@ -160,6 +160,14 @@ stale = "warn"
 # [custom-rules.my-rule]
 # command = "./scripts/my-rule.sh"
 # severity = "warn"
+
+# Custom analyses (scripts that receive graph JSON on stdin, emit result JSON on stdout)
+# [custom-analyses.my-analysis]
+# command = "./scripts/my-analysis.sh"
+
+# Custom metrics (scripts that receive graph JSON on stdin, emit metrics as NDJSON)
+# [custom-metrics.my-metrics]
+# command = "./scripts/my-metrics.sh"
 "#;
 
     std::fs::write(&config_path, content)
@@ -574,6 +582,20 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
         }
     }
 
+    // Custom analyses
+    let custom_results = analyses::custom::run_all_custom_analyses(&graph, &scope_root, &config);
+    for (name, value) in &custom_results {
+        match format {
+            OutputFormat::Json => {
+                results.insert(name.clone(), value.clone());
+            }
+            _ => {
+                println!("=== {name} ===");
+                println!("{}", serde_json::to_string_pretty(value)?);
+            }
+        }
+    }
+
     if matches!(format, OutputFormat::Json) {
         let output = serde_json::json!({ "analyses": results });
         println!("{}", serde_json::to_string_pretty(&output)?);
@@ -618,7 +640,14 @@ fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
         graph: &graph,
     };
 
-    let all_metrics = metrics::collect_all(&results);
+    let mut all_metrics = metrics::collect_all(&results);
+
+    // Custom metrics
+    all_metrics.extend(metrics::custom::run_all_custom_metrics(
+        &graph,
+        &scope_root,
+        &config,
+    ));
 
     match format {
         OutputFormat::Json => {

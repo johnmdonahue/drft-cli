@@ -2,6 +2,7 @@ pub mod betweenness;
 pub mod bridges;
 pub mod change_propagation;
 pub mod connected_components;
+pub mod custom;
 pub mod degree;
 pub mod depth;
 pub mod edge_classification;

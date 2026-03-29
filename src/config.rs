@@ -19,6 +19,16 @@ pub struct CustomRuleConfig {
     pub severity: RuleSeverity,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CustomAnalysisConfig {
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CustomMetricConfig {
+    pub command: String,
+}
+
 fn default_warn() -> RuleSeverity {
     RuleSeverity::Warn
 }
@@ -30,8 +40,10 @@ pub struct Config {
     pub rules: HashMap<String, RuleSeverity>,
     pub ignore_rules: HashMap<String, Vec<String>>,
     pub custom_rules: HashMap<String, CustomRuleConfig>,
+    pub custom_analyses: HashMap<String, CustomAnalysisConfig>,
+    pub custom_metrics: HashMap<String, CustomMetricConfig>,
     /// Directory containing the drft.toml this config was loaded from.
-    /// Used to resolve relative paths in custom rule commands.
+    /// Used to resolve relative paths in custom commands.
     pub config_dir: Option<std::path::PathBuf>,
     ignore_rules_compiled: HashMap<String, Option<GlobSet>>,
 }
@@ -44,6 +56,8 @@ struct RawConfig {
     rules: Option<HashMap<String, RuleSeverity>>,
     ignore_rules: Option<HashMap<String, Vec<String>>>,
     custom_rules: Option<HashMap<String, CustomRuleConfig>>,
+    custom_analyses: Option<HashMap<String, CustomAnalysisConfig>>,
+    custom_metrics: Option<HashMap<String, CustomMetricConfig>>,
 }
 
 impl Config {
@@ -73,6 +87,8 @@ impl Config {
             rules,
             ignore_rules: HashMap::new(),
             custom_rules: HashMap::new(),
+            custom_analyses: HashMap::new(),
+            custom_metrics: HashMap::new(),
             config_dir: None,
             ignore_rules_compiled: HashMap::new(),
         }
@@ -103,6 +119,12 @@ impl Config {
 
         if let Some(custom_rules) = raw.custom_rules {
             config.custom_rules = custom_rules;
+        }
+        if let Some(custom_analyses) = raw.custom_analyses {
+            config.custom_analyses = custom_analyses;
+        }
+        if let Some(custom_metrics) = raw.custom_metrics {
+            config.custom_metrics = custom_metrics;
         }
 
         if let Some(ignore_rules) = raw.ignore_rules {

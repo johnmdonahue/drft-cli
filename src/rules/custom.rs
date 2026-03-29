@@ -127,7 +127,7 @@ struct CustomDiagnostic {
     fix: Option<String>,
 }
 
-fn build_graph_json(graph: &Graph) -> String {
+pub(crate) fn build_graph_json(graph: &Graph) -> String {
     let mut nodes = serde_json::Map::new();
     for (path, node) in &graph.nodes {
         let mut meta = serde_json::Map::new();
