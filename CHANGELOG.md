@@ -2,6 +2,12 @@
 
 All notable changes to drft are documented here.
 
+## 0.2.0 (2026-03-29)
+
+- `--rule` filtering now works for custom rules
+- `npx drft` documented for npm-based projects
+- New custom rule examples: required-frontmatter, max-depth
+
 ## 0.1.3 (2026-03-29)
 
 - Fix npm package downloading binaries from wrong release version
