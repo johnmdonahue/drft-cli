@@ -2,6 +2,16 @@
 
 All notable changes to drft are documented here.
 
+## 0.2.1 (2026-03-29)
+
+- Fix #9: containment rule now catches `../` links escaping scope boundary
+- Fix #11: custom rule commands resolve relative to config file, not CWD
+- Fix #8: required-frontmatter example adds file exemptions (SKIP_NAMES)
+- `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
+- Config inheritance: child scopes without `drft.toml` inherit from nearest ancestor
+- Manifest persisted in `drft.toml`: `manifest = "README.md"` is source of truth
+- Failed custom rules now surface as diagnostics in JSON output
+
 ## 0.2.0 (2026-03-29)
 
 - `--rule` filtering now works for custom rules
