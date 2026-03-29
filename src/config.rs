@@ -56,6 +56,7 @@ impl Config {
             ("encapsulation", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Off),
             ("indirect-link", RuleSeverity::Off),
+            ("layer-violation", RuleSeverity::Off),
             ("lockfile-outdated", RuleSeverity::Warn),
             ("orphan", RuleSeverity::Off),
             ("redundant-edge", RuleSeverity::Off),

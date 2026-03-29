@@ -6,6 +6,7 @@ pub mod directory_link;
 pub mod encapsulation;
 pub mod fragmentation;
 pub mod indirect_link;
+pub mod layer_violation;
 pub mod lockfile_outdated;
 pub mod orphan;
 pub mod redundant_edge;
@@ -29,6 +30,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(encapsulation::EncapsulationRule),
         Box::new(fragmentation::FragmentationRule),
         Box::new(indirect_link::IndirectLinkRule),
+        Box::new(layer_violation::LayerViolationRule),
         Box::new(lockfile_outdated::LockfileOutdatedRule),
         Box::new(orphan::OrphanRule),
         Box::new(redundant_edge::RedundantEdgeRule),

@@ -1458,6 +1458,88 @@ fn report_scc_json() {
 }
 
 #[test]
+fn report_depth_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "depth",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("=== depth ==="), "got: {stdout}");
+    assert!(stdout.contains("depth 0:"), "got: {stdout}");
+    assert!(stdout.contains("depth 2:"), "got: {stdout}");
+}
+
+#[test]
+fn report_depth_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "depth",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let dep = &v["analyses"]["depth"];
+    assert_eq!(dep["max_depth"], 1);
+    let nodes = dep["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2);
+}
+
+#[test]
+fn layer_violation_rule_fires() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nlayer-violation = \"warn\"\n",
+    )
+    .unwrap();
+    // a → b → c, a → c (skip-layer: depth 0 → depth 2)
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("layer-violation"),
+        "expected layer-violation warning, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("skip-layer"),
+        "expected skip-layer message, got: {stdout}"
+    );
+}
+
+#[test]
 fn report_scc_acyclic() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();

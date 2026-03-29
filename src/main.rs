@@ -137,6 +137,7 @@ directory-link = "warn"
 encapsulation = "warn"
 fragmentation = "off"
 indirect-link = "off"
+layer-violation = "off"
 lockfile-outdated = "warn"
 orphan = "off"
 redundant-edge = "off"
@@ -163,6 +164,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::Analysis;
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
+    use analysis::depth::Depth as DepthAnalysis;
     use analysis::graph_stats::GraphStats;
     use analysis::scc::StronglyConnectedComponents;
     use analysis::transitive_reduction::TransitiveReduction;
@@ -170,6 +172,7 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     let known_analyses = [
         "connected-components",
         "degree",
+        "depth",
         "graph-stats",
         "scc",
         "transitive-reduction",
@@ -211,6 +214,54 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                             c.members.len(),
                             c.members.join(", ")
                         );
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "depth") {
+        let dep = DepthAnalysis;
+        let result = dep.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(dep.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== depth ===");
+                if result.nodes.is_empty() {
+                    println!("no nodes");
+                } else {
+                    // Group by depth
+                    let mut current_depth = None;
+                    let mut current_nodes = Vec::new();
+                    let mut current_has_cycle = false;
+
+                    let flush = |depth: usize, nodes: &[String], has_cycle: bool| {
+                        if has_cycle {
+                            println!("depth {} (cyclic): {}", depth, nodes.join(", "));
+                        } else {
+                            println!("depth {}: {}", depth, nodes.join(", "));
+                        }
+                    };
+
+                    for nd in &result.nodes {
+                        if current_depth != Some(nd.depth) {
+                            if let Some(d) = current_depth {
+                                flush(d, &current_nodes, current_has_cycle);
+                            }
+                            current_depth = Some(nd.depth);
+                            current_nodes.clear();
+                            current_has_cycle = false;
+                        }
+                        current_nodes.push(nd.node.clone());
+                        if nd.in_cycle {
+                            current_has_cycle = true;
+                        }
+                    }
+                    if let Some(d) = current_depth {
+                        flush(d, &current_nodes, current_has_cycle);
                     }
                 }
             }
