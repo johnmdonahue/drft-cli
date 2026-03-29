@@ -11,6 +11,7 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 | [Connected components](connected-components.md) | `drft report --analysis connected-components` | Finds disconnected clusters |
 | [Degree distribution](degree.md) | `drft report --analysis degree` | In-degree and out-degree per node |
 | [Graph stats](graph-stats.md) | `drft report --analysis graph-stats` | Density, diameter, average path length |
+| [Strongly connected components](scc.md) | `drft report --analysis scc` | Finds groups of mutually reachable nodes |
 | [Transitive reduction](transitive-reduction.md) | `drft report --analysis transitive-reduction` | Finds edges that are structurally redundant |
 
 ## Graph theory and knowledge systems

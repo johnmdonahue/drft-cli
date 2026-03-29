@@ -1,6 +1,7 @@
 pub mod connected_components;
 pub mod degree;
 pub mod graph_stats;
+pub mod scc;
 pub mod transitive_reduction;
 
 use crate::graph::Graph;

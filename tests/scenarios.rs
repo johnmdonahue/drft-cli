@@ -1405,6 +1405,84 @@ fn report_connected_components_json() {
 }
 
 #[test]
+fn report_scc_text() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "[a](a.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "scc",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("=== scc ==="), "got: {stdout}");
+    assert!(stdout.contains("1 non-trivial SCC"), "got: {stdout}");
+    assert!(stdout.contains("3 nodes"), "got: {stdout}");
+}
+
+#[test]
+fn report_scc_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+            "--analysis",
+            "scc",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let scc = &v["analyses"]["scc"];
+    assert_eq!(scc["nontrivial_count"], 1);
+    assert_eq!(scc["sccs"][0]["members"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn report_scc_acyclic() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "scc",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("no non-trivial SCCs"),
+        "expected acyclic message, got: {stdout}"
+    );
+}
+
+#[test]
 fn fragmentation_rule_fires() {
     let dir = TempDir::new().unwrap();
     fs::write(

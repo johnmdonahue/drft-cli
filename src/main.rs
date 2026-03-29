@@ -164,12 +164,14 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
     use analysis::connected_components::ConnectedComponents;
     use analysis::degree::Degree;
     use analysis::graph_stats::GraphStats;
+    use analysis::scc::StronglyConnectedComponents;
     use analysis::transitive_reduction::TransitiveReduction;
 
     let known_analyses = [
         "connected-components",
         "degree",
         "graph-stats",
+        "scc",
         "transitive-reduction",
     ];
 
@@ -255,6 +257,41 @@ fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> 
                 } else {
                     for nd in &result.nodes {
                         println!("{}  in:{}  out:{}", nd.node, nd.in_degree, nd.out_degree);
+                    }
+                }
+            }
+        }
+    }
+
+    if run_all || analysis_filter.iter().any(|a| a == "scc") {
+        let scc = StronglyConnectedComponents;
+        let result = scc.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(scc.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                println!("=== scc ===");
+                if result.nontrivial_count == 0 {
+                    println!("no non-trivial SCCs (graph is acyclic)");
+                } else {
+                    println!(
+                        "{} non-trivial {}",
+                        result.nontrivial_count,
+                        if result.nontrivial_count == 1 {
+                            "SCC"
+                        } else {
+                            "SCCs"
+                        }
+                    );
+                    for s in &result.sccs {
+                        println!(
+                            "scc {} ({} nodes): {}",
+                            s.id,
+                            s.members.len(),
+                            s.members.join(", ")
+                        );
                     }
                 }
             }
