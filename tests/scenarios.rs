@@ -993,6 +993,221 @@ fn lockfile_contains_version() {
     assert!(lockfile.starts_with("lockfile_version = 1"));
 }
 
+// ── Redundant edge ────────────────────────────────────────────
+
+/// redundant-edge is off by default — no output even with redundant edges.
+#[test]
+fn redundant_edge_off_by_default() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("redundant-edge"),
+        "redundant-edge should be off by default"
+    );
+}
+
+/// redundant-edge enabled via drft.toml produces diagnostics.
+#[test]
+fn redundant_edge_enabled_via_config() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nredundant-edge = \"warn\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("redundant-edge"),
+        "expected redundant-edge diagnostic, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("a.md"),
+        "expected source a.md in output, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("c.md"),
+        "expected target c.md in output, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("via"),
+        "expected via in output, got: {stdout}"
+    );
+}
+
+/// --rule redundant-edge overrides off to warn.
+#[test]
+fn redundant_edge_via_rule_flag() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "check",
+            "--rule",
+            "redundant-edge",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("redundant-edge"),
+        "expected redundant-edge diagnostic via --rule flag, got: {stdout}"
+    );
+}
+
+/// redundant-edge JSON output has expected fields.
+#[test]
+fn redundant_edge_json() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nredundant-edge = \"warn\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "check",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let diagnostics = v["diagnostics"].as_array().unwrap();
+    let redundant: Vec<&serde_json::Value> = diagnostics
+        .iter()
+        .filter(|d| d["rule"] == "redundant-edge")
+        .collect();
+    assert_eq!(redundant.len(), 1);
+    assert_eq!(redundant[0]["source"], "a.md");
+    assert_eq!(redundant[0]["target"], "c.md");
+    assert!(redundant[0]["via"].is_string());
+    assert!(redundant[0]["fix"].is_string());
+}
+
+// ── Report command ────────────────────────────────────────────
+
+#[test]
+fn report_text_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "report"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("transitive-reduction"),
+        "expected analysis header, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("a.md"),
+        "expected source in report, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_json_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
+    fs::write(dir.path().join("c.md"), "# C").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "report",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let tr = &v["analyses"]["transitive-reduction"];
+    let edges = tr["redundant_edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["source"], "a.md");
+    assert_eq!(edges[0]["target"], "c.md");
+}
+
+#[test]
+fn report_no_redundancy() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "report"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("no redundant edges"),
+        "expected clean report, got: {stdout}"
+    );
+}
+
+#[test]
+fn report_unknown_analysis_exits_2() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "report",
+            "--analysis",
+            "nonexistent",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+}
+
 // ── Containment escape ─────────────────────────────────────────
 
 /// Issue #9: ../  links should trigger containment rule.

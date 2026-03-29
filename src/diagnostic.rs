@@ -49,9 +49,14 @@ impl Diagnostic {
 
         match (&self.source, &self.target) {
             (Some(source), Some(target)) => {
+                let via_suffix = self
+                    .via
+                    .as_ref()
+                    .map(|v| format!(" via {v}"))
+                    .unwrap_or_default();
                 format!(
-                    "{severity}[{}]: {source} \u{2192} {target} ({})",
-                    self.rule, self.message
+                    "{severity}[{}]: {source} \u{2192} {target} ({}{})",
+                    self.rule, self.message, via_suffix
                 )
             }
             _ if self.path.is_some() => {
@@ -84,9 +89,14 @@ impl Diagnostic {
 
         match (&self.source, &self.target) {
             (Some(source), Some(target)) => {
+                let via_suffix = self
+                    .via
+                    .as_ref()
+                    .map(|v| format!(" via {cyan}{v}{reset}"))
+                    .unwrap_or_default();
                 format!(
-                    "{color}{severity_str}{reset}[{bold}{}{reset}]: {cyan}{source}{reset} \u{2192} {cyan}{target}{reset} ({})",
-                    self.rule, self.message
+                    "{color}{severity_str}{reset}[{bold}{}{reset}]: {cyan}{source}{reset} \u{2192} {cyan}{target}{reset} ({}{})",
+                    self.rule, self.message, via_suffix
                 )
             }
             _ if self.path.is_some() => {

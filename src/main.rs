@@ -1,3 +1,4 @@
+mod analysis;
 mod cli;
 mod config;
 mod diagnostic;
@@ -78,6 +79,7 @@ fn try_main() -> Result<i32> {
             *recursive,
             *max_depth,
         ),
+        Commands::Report { analyses } => run_report(&root, cli.format, analyses),
         Commands::Impact { files } => run_impact(&root, cli.format, files),
         Commands::Graph {
             recursive,
@@ -136,6 +138,7 @@ encapsulation = "warn"
 indirect-link = "off"
 lockfile-outdated = "warn"
 orphan = "off"
+redundant-edge = "off"
 stale = "warn"
 
 # Per-rule path ignores (glob patterns)
@@ -151,6 +154,57 @@ stale = "warn"
 
     std::fs::write(&config_path, content)
         .with_context(|| format!("failed to write {}", config_path.display()))?;
+
+    Ok(0)
+}
+
+fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
+    use analysis::transitive_reduction::TransitiveReduction;
+    use analysis::Analysis;
+
+    let known_analyses = ["transitive-reduction"];
+
+    // Validate analysis names
+    for name in analysis_filter {
+        if !known_analyses.contains(&name.as_str()) {
+            anyhow::bail!("unknown analysis: \"{name}\"");
+        }
+    }
+
+    let scope_root = find_scope_root(root);
+    let config = Config::load(&scope_root)?;
+    let graph = build_graph(&scope_root, &config)?;
+
+    let run_all = analysis_filter.is_empty();
+
+    let mut results = serde_json::Map::new();
+
+    if run_all || analysis_filter.iter().any(|a| a == "transitive-reduction") {
+        let tr = TransitiveReduction;
+        let result = tr.run(&graph, &scope_root);
+
+        match format {
+            OutputFormat::Json => {
+                results.insert(tr.name().to_string(), serde_json::to_value(&result)?);
+            }
+            _ => {
+                if result.redundant_edges.is_empty() {
+                    println!("=== transitive-reduction ===");
+                    println!("no redundant edges");
+                } else {
+                    println!("=== transitive-reduction ===");
+                    for re in &result.redundant_edges {
+                        println!("{} \u{2192} {} (via {})", re.source, re.target, re.via);
+                    }
+                }
+            }
+        }
+    }
+
+    if matches!(format, OutputFormat::Json) {
+        let output = serde_json::json!({ "analyses": results });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    }
 
     Ok(0)
 }

@@ -1,0 +1,15 @@
+pub mod transitive_reduction;
+
+use crate::graph::Graph;
+use std::path::Path;
+
+/// An analysis computes structured data about the graph.
+/// Rules consume analysis results and map them to diagnostics.
+/// See `docs/analyses/` for conceptual documentation on each analysis.
+pub trait Analysis {
+    type Output: serde::Serialize;
+
+    fn name(&self) -> &str;
+
+    fn run(&self, graph: &Graph, root: &Path) -> Self::Output;
+}
