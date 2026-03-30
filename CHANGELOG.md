@@ -2,6 +2,34 @@
 
 All notable changes to drft are documented here.
 
+## 0.3.0 (2026-03-30)
+
+Major architecture overhaul: drft is now a structural integrity checker for any linked file system, not just markdown.
+
+### Breaking changes
+- Config format: unified `[parsers]` and `[rules]` sections replace prior layout
+- Lockfile v2: nodes + hashes only, no edges
+- `scope` terminology renamed to `graph` throughout
+
+### New features
+- **Configurable parsers**: built-in markdown parser + script-based parsers via `command` field
+- **Batch script parsers**: one process per parser instead of one per file (PR #19)
+- **Rust doc comment parser**: links source files to docs via `parse-rust.sh`
+- **`drft analysis`** (unstable): 11 graph analyses — degree, SCC, connected components, depth, graph stats, bridges, betweenness centrality, PageRank, transitive reduction, graph boundaries, change propagation
+- **`drft metrics`** (unstable): scalar health metrics extracted from analyses
+- **Custom analyses and custom metrics** via external scripts
+- **Criterion benchmarks** for the full pipeline
+
+### Rules
+- New: `fragmentation`, `layer-violation`, `redundant-edge`
+- `stale` rule now defaults to error severity
+- Rules refactored to consume analysis results
+
+### Fixes
+- Wikilink/frontmatter parsers skip inline code spans and code blocks
+- Ignore patterns now apply to child graph detection
+- Dropped lockfile version migration check
+
 ## 0.2.1 (2026-03-29)
 
 - Fix #9: containment rule now catches `../` links escaping graph boundary
