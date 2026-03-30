@@ -69,7 +69,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },
@@ -77,7 +77,7 @@ mod tests {
         nodes.insert(
             "internal.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:bbb".into()),
                 graph: None,
             },
@@ -101,7 +101,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
@@ -113,7 +113,7 @@ mod tests {
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research/".into()),
         });
@@ -144,7 +144,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });

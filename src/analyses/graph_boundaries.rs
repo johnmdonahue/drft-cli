@@ -182,7 +182,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },
@@ -228,7 +228,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },

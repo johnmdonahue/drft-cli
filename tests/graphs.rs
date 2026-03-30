@@ -31,7 +31,7 @@ fn scenario_10_child_graph_open() {
     // Verify lockfile has graph + child-graph resource nodes
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains(r#"type = "graph""#));
-    assert!(lockfile.contains(r#"type = "resource""#));
+    assert!(lockfile.contains(r#"type = "external""#));
 
     // Check should be clean (unsealed = no encapsulation)
     let output = drft_bin()
@@ -136,7 +136,11 @@ fn recursive_lock() {
 fn recursive_check_with_child_config() {
     let dir = TempDir::new().unwrap();
     // Parent disables orphan so only child's config triggers it
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\norphan-node = \"off\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
     let child = dir.path().join("child");

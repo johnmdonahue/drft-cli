@@ -125,7 +125,7 @@ mod tests {
     fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         }

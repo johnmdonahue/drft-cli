@@ -23,7 +23,7 @@ fn scenario_5_first_lock() {
     assert!(lockfile.contains("index.md"));
     assert!(lockfile.contains("setup.md"));
     assert!(lockfile.contains("b3:"));
-    assert!(lockfile.contains(r#"type = "source""#));
+    assert!(lockfile.contains(r#"type = "file""#));
 
     // Check should show no staleness after lock
     let output = drft_bin()

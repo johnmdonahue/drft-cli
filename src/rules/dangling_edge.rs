@@ -47,14 +47,14 @@ impl Rule for DanglingEdgeRule {
                 }
 
                 if target_path.exists() {
-                    // File exists but was excluded by ignore pattern
+                    // File exists but was excluded from the graph
                     return Some(Diagnostic {
                         rule: "dangling-edge".into(),
-                        message: "file excluded by ignore pattern".into(),
+                        message: "file excluded from graph".into(),
                         source: Some(edge.source.clone()),
                         target: Some(edge.target.clone()),
                         fix: Some(format!(
-                            "{} exists but is excluded by an ignore pattern \u{2014} either remove the link from {} or update the ignore config",
+                            "{} exists but is not in the graph \u{2014} either remove the link from {} or update include/exclude config",
                             edge.target, edge.source
                         )),
                         ..Default::default()
@@ -105,7 +105,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
@@ -134,13 +134,13 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });

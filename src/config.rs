@@ -130,7 +130,12 @@ fn default_warn() -> RuleSeverity {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub ignore: Vec<String>,
+    /// Glob patterns declaring which filesystem paths become File nodes.
+    /// Default: `["*.md"]`.
+    pub include: Vec<String>,
+    /// Glob patterns removed from the graph (applied after `include`).
+    /// Also respects `.gitignore`.
+    pub exclude: Vec<String>,
     pub interface: Option<InterfaceConfig>,
     pub parsers: HashMap<String, ParserConfig>,
     pub rules: HashMap<String, RuleConfig>,
@@ -141,10 +146,13 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct RawConfig {
-    ignore: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
     interface: Option<InterfaceConfig>,
     parsers: Option<HashMap<String, RawParserValue>>,
     rules: Option<HashMap<String, RawRuleValue>>,
+    // v0.3 key — accepted as alias for `exclude`
+    ignore: Option<Vec<String>>,
     // v0.2 keys — detected for migration warnings
     manifest: Option<toml::Value>,
     custom_rules: Option<toml::Value>,
@@ -213,7 +221,8 @@ impl Config {
         .collect();
 
         Config {
-            ignore: Vec::new(),
+            include: vec!["*.md".to_string()],
+            exclude: Vec::new(),
             interface: None,
             parsers,
             rules,
@@ -262,8 +271,22 @@ impl Config {
         let mut config = Self::defaults();
         config.config_dir = config_path.parent().map(|p| p.to_path_buf());
 
+        if let Some(include) = raw.include {
+            config.include = include;
+        }
+
+        // `ignore` is the v0.3 name for `exclude` — accept with warning
+        if raw.ignore.is_some() && raw.exclude.is_some() {
+            anyhow::bail!(
+                "drft.toml has both 'ignore' and 'exclude' — remove 'ignore' (renamed to 'exclude' in v0.4)"
+            );
+        }
         if let Some(ignore) = raw.ignore {
-            config.ignore = ignore;
+            eprintln!("warn: drft.toml uses 'ignore' — rename to 'exclude' (v0.4)");
+            config.exclude = ignore;
+        }
+        if let Some(exclude) = raw.exclude {
+            config.exclude = exclude;
         }
 
         config.interface = raw.interface;
@@ -379,7 +402,8 @@ mod tests {
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Warn);
         assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
-        assert!(config.ignore.is_empty());
+        assert_eq!(config.include, vec!["*.md"]);
+        assert!(config.exclude.is_empty());
         assert!(config.parsers.contains_key("markdown"));
     }
 
@@ -494,6 +518,38 @@ mod tests {
         assert_eq!(script_rules.len(), 1);
         assert_eq!(script_rules[0].0, "my-check");
         assert_eq!(script_rules[0].1.command.as_deref(), Some("./check.sh"));
+    }
+
+    #[test]
+    fn loads_include_exclude() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "include = [\"*.md\", \"*.yaml\"]\nexclude = [\"drafts/*\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.include, vec!["*.md", "*.yaml"]);
+        assert_eq!(config.exclude, vec!["drafts/*"]);
+    }
+
+    #[test]
+    fn ignore_migrates_to_exclude() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), "ignore = [\"drafts/*\"]\n").unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.exclude, vec!["drafts/*"]);
+    }
+
+    #[test]
+    fn ignore_and_exclude_conflicts() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "ignore = [\"a/*\"]\nexclude = [\"b/*\"]\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).is_err());
     }
 
     #[test]

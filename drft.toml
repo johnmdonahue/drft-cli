@@ -1,5 +1,7 @@
 # drft.toml — drft dogfooding itself
 
+include = ["*.md", "*.rs"]
+
 [parsers]
 markdown = true
 

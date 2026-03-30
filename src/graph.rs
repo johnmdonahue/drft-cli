@@ -11,8 +11,7 @@ use crate::parsers;
 )]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
-    Source,
-    Resource,
+    File,
     External,
     Graph,
 }
@@ -132,12 +131,12 @@ impl Graph {
         self.nodes.insert(node.path.clone(), node);
     }
 
-    /// Returns true for Source and Resource nodes (excludes External and Graph).
-    /// Used by structural analyses that operate only on file-backed nodes.
+    /// Returns true for File nodes (excludes External and Graph).
+    /// Used by structural analyses that operate only on declared file-backed nodes.
     pub fn is_file_node(&self, path: &str) -> bool {
         self.nodes
             .get(path)
-            .is_some_and(|n| matches!(n.node_type, NodeType::Source | NodeType::Resource))
+            .is_some_and(|n| n.node_type == NodeType::File)
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
@@ -159,56 +158,61 @@ pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
 }
 
-/// Build a graph from files in `root`, using configured parsers to extract links.
-/// Computes BLAKE3 content hashes for all nodes.
+/// Build a graph from files in `root`.
+///
+/// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
+/// 2. Read text content for parser input (graceful skip for binary files).
+/// 3. Run parsers to extract edges.
+/// 4. Edge targets outside `include` become External nodes (not tracked).
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
-    let all_files = discover(root, &config.ignore)?;
-    let child_graphs = find_child_graphs(root, &config.ignore)?;
+    let included_files = discover(root, &config.include, &config.exclude)?;
+    let child_graphs = find_child_graphs(root, &config.exclude)?;
     let mut graph = Graph::new();
     graph.child_graphs = child_graphs;
     let mut pending_edges = Vec::new();
 
-    // Build parser registry from config
-    let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
+    // 1. Create File nodes for everything in include — hash raw bytes.
+    //    Separately read text content for files parsers will need.
+    let mut file_text: HashMap<String, String> = HashMap::new(); // path → text content
 
-    // Read all files and determine which parsers match each
-    let mut file_contents: HashMap<String, (String, String)> = HashMap::new(); // path → (content, hash)
+    for file in &included_files {
+        let file_path = root.join(file);
+        let raw = std::fs::read(&file_path)?;
+        let hash = hash_bytes(&raw);
+
+        graph.add_node(Node {
+            path: file.clone(),
+            node_type: NodeType::File,
+            hash: Some(hash),
+            graph: None,
+        });
+
+        // Try to read as text for parser input — binary files just won't have text
+        if let Ok(text) = String::from_utf8(raw) {
+            file_text.insert(file.clone(), text);
+        }
+    }
+
+    // 2. Build parser registry and determine which files each parser receives
+    let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
     let mut parser_files: Vec<Vec<String>> = vec![Vec::new(); parser_list.len()];
 
-    for file in &all_files {
-        let mut matched = false;
+    for file in &included_files {
         for (i, parser) in parser_list.iter().enumerate() {
             if parser.matches(file) {
                 parser_files[i].push(file.clone());
-                matched = true;
             }
         }
-        if matched {
-            let file_path = root.join(file);
-            let content = std::fs::read_to_string(&file_path)?;
-            let hash = hash_bytes(content.as_bytes());
-            file_contents.insert(file.clone(), (content, hash));
-        }
     }
 
-    // Create Source nodes for all matched files
-    for (path, (_, hash)) in &file_contents {
-        graph.add_node(Node {
-            path: path.clone(),
-            node_type: NodeType::Source,
-            hash: Some(hash.clone()),
-            graph: None,
-        });
-    }
-
-    // Run each parser in batch mode
+    // 3. Run each parser in batch mode
     for (i, parser) in parser_list.iter().enumerate() {
         let files: Vec<(&str, &str)> = parser_files[i]
             .iter()
             .filter_map(|path| {
-                file_contents
+                file_text
                     .get(path)
-                    .map(|(content, _)| (path.as_str(), content.as_str()))
+                    .map(|content| (path.as_str(), content.as_str()))
             })
             .collect();
 
@@ -241,8 +245,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // Create Graph nodes for child graphs — any directory with drft.toml or drft.lock.
-    // No hash: staleness within a child graph is the child's concern, not the parent's.
+    // 4. Create Graph nodes for child graphs
     let graph_prefixes: Vec<String> = graph.child_graphs.clone();
     for graph_dir in &graph_prefixes {
         graph.add_node(Node {
@@ -253,25 +256,18 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         });
     }
 
-    // Build ignore set for filtering asset nodes
-    let ignore_set = if config.ignore.is_empty() {
-        None
-    } else {
-        let mut builder = globset::GlobSetBuilder::new();
-        for pattern in &config.ignore {
-            if let Ok(glob) = globset::Glob::new(pattern) {
-                builder.add(glob);
-            }
-        }
-        builder.build().ok()
-    };
-
-    // Create External, child-graph projection, and Resource nodes for non-Source targets
+    // 5. Classify edge targets not already in the graph
+    //    - URIs → External
+    //    - Child graph files (exist on disk) → External with graph field
+    //    - Files on disk outside include → External
+    //    - Doesn't exist / is directory → no node (dangling-edge / directory-edge candidates)
     let mut implicit_edges = Vec::new();
     for edge in &pending_edges {
         if graph.nodes.contains_key(&edge.target) {
             continue;
         }
+
+        // URIs → External
         if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
             graph.add_node(Node {
                 path: edge.target.clone(),
@@ -282,22 +278,20 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Check if target is inside a child graph → Source/Resource with graph field
+        // Target inside a child graph → External with graph field (if file exists)
         let in_child_graph = graph_prefixes
             .iter()
             .find(|s| edge.target.starts_with(s.as_str()));
         if let Some(graph_prefix) = in_child_graph {
             let target_path = root.join(&edge.target);
             if target_path.is_file() {
-                let content = std::fs::read(&target_path)?;
-                let hash = hash_bytes(&content);
                 graph.add_node(Node {
                     path: edge.target.clone(),
-                    node_type: NodeType::Resource,
-                    hash: Some(hash),
+                    node_type: NodeType::External,
+                    hash: None,
                     graph: Some(graph_prefix.clone()),
                 });
-                // Synthetic coupling edge: child-graph node → Graph node
+                // Synthetic coupling edge: child-graph file → Graph node
                 implicit_edges.push(Edge {
                     source: edge.target.clone(),
                     target: graph_prefix.clone(),
@@ -308,25 +302,18 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Skip ignored files — they should not become Resource nodes
-        if let Some(ref set) = ignore_set
-            && set.is_match(&edge.target)
-        {
-            continue;
-        }
-
-        // Regular Resource node
+        // File exists on disk but not in include → External (validated, not tracked)
         let target_path = root.join(&edge.target);
         if target_path.is_file() {
-            let content = std::fs::read(&target_path)?;
-            let hash = hash_bytes(&content);
             graph.add_node(Node {
                 path: edge.target.clone(),
-                node_type: NodeType::Resource,
-                hash: Some(hash),
+                node_type: NodeType::External,
+                hash: None,
                 graph: None,
             });
         }
+        // If doesn't exist or is a directory: no node created.
+        // dangling-edge and directory-edge rules handle these cases.
     }
 
     // Add all edges (explicit + implicit) to the graph
@@ -400,7 +387,7 @@ pub mod test_helpers {
     pub fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         }
@@ -477,13 +464,13 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "a.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
         g.add_node(Node {
             path: "b.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });

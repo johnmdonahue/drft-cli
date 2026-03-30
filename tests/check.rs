@@ -209,7 +209,11 @@ fn scenario_23_orphan_warn_by_default() {
 #[test]
 fn scenario_7b_orphan_enabled() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"warn\"\n").unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\norphan-node = \"warn\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
@@ -232,7 +236,11 @@ fn scenario_7b_orphan_enabled() {
 #[test]
 fn scenario_29_rule_filtering() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"warn\"\n").unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\norphan-node = \"warn\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 
@@ -265,7 +273,11 @@ fn scenario_29_rule_filtering() {
 fn rule_flag_overrides_off_to_warn() {
     let dir = TempDir::new().unwrap();
     // Explicitly disable orphan in config
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\norphan-node = \"off\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 

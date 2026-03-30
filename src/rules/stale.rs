@@ -109,13 +109,13 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
         });

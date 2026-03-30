@@ -99,7 +99,9 @@ done
     fs::write(
         dir.path().join("drft.toml"),
         format!(
-            r#"[parsers.custom]
+            r#"include = ["*.txt", "*.md"]
+
+[parsers.custom]
 glob = "*.txt"
 command = "{}"
 "#,

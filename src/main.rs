@@ -118,8 +118,11 @@ fn run_init(root: &Path, interface_from: Option<&str>, no_interface: bool) -> Re
     let mut content = String::from(
         r#"# drft.toml
 
-# Glob patterns for files to exclude from discovery
-ignore = []
+# Which paths become File nodes (default: ["*.md"])
+include = ["*.md"]
+
+# Remove from the graph (also respects .gitignore)
+# exclude = []
 
 [parsers]
 markdown = true

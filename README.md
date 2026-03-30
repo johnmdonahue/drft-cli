@@ -109,8 +109,11 @@ drft init --no-interface               # config without interface (open graph)
 `drft.toml` in the graph root:
 
 ```toml
-# Glob patterns for files to exclude from discovery
-ignore = ["drafts/*", "archive/*"]
+# Which paths become File nodes (default: ["*.md"])
+include = ["*.md", "*.yaml"]
+
+# Remove from the graph (also respects .gitignore)
+exclude = ["drafts/*", "archive/*"]
 
 # Public interface — nodes accessible from parent graphs.
 # Presence of this section enables encapsulation.

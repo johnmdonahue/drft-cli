@@ -69,7 +69,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
@@ -96,7 +96,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });
@@ -121,7 +121,7 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
         });

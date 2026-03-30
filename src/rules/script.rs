@@ -179,13 +179,13 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
         });

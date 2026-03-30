@@ -19,12 +19,11 @@ Parsers define what a "link" is. Markdown is the default parser, but any file ty
 
 | Type | Meaning |
 |------|---------|
-| `Source` | A file a parser ran on. Can have outbound edges. |
-| `Resource` | A file linked to but not parsed. Inbound edges only. |
-| `External` | A URI-scheme link targeting a resource outside the filesystem. |
+| `File` | A path matched by `include` (minus `exclude`). Hashed, tracked, sent to parsers. |
+| `External` | Discovered via an edge — target not in `include`. Validated for existence, not tracked. Covers both file paths on disk and URIs. |
 | `Graph` | A child graph (directory with its own `drft.toml` or `drft.lock`). A hypernode. |
 
-Source/Resource classification is parser-driven, not file-type-driven. A `.md` file is a Source if the markdown parser is enabled, otherwise a Resource if something links to it. Enable a parser and its matched files become Sources.
+Node classification is driven by `include`/`exclude`, not by parsers. The `include` patterns declare the graph's known universe of files. Everything outside is an exit.
 
 ### Edge types
 
@@ -48,7 +47,7 @@ pub struct EdgeType {
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Parsing                             src/parsers/           │
-│  Discovers files, parses links from matched file types.     │
+│  Discovers files via include/exclude, parses links.         │
 │  Pluggable: built-in (markdown) + custom scripts.           │
 │                                                             │
 │  Produces the Graph.                                        │
@@ -175,12 +174,12 @@ Any directory is a graph. A child directory with its own `drft.toml` or `drft.lo
 
 - A graph with `[interface]` in its `drft.toml` enforces encapsulation: only interface nodes can be linked to from parent graphs.
 - A graph without `[interface]` is open -- anything can link into it.
-- **Child graphs** appear as `Graph` nodes in the parent. Files inside them that are linked from the parent appear as Source or Resource nodes with a `graph` field.
+- **Child graphs** appear as `Graph` nodes in the parent. Files inside them that are linked from the parent appear as External nodes with a `graph` field.
 - `drft check --recursive` and `drft lock --recursive` traverse the tree.
 
 ## Lockfile
 
-`drft.lock` is a deterministic TOML snapshot of the graph's node set and content hashes. All file-backed nodes (Source, Resource, Graph) are hashed via BLAKE3. It enables:
+`drft.lock` is a deterministic TOML snapshot of the graph's node set and content hashes. All File nodes are hashed via BLAKE3 (raw bytes). It enables:
 
 - **Staleness detection** — compare current hashes to locked hashes.
 - **Change propagation** — BFS from changed nodes through reverse edges to find transitively stale dependents.
@@ -204,7 +203,8 @@ Edges are not stored in the lockfile. If a file's links change, its content hash
 `drft.toml` controls:
 
 ```toml
-ignore = ["drafts/*"]           # glob patterns to exclude from discovery
+include = ["*.md", "*.rs"]      # which paths become File nodes (default: ["*.md"])
+exclude = ["drafts/*"]          # remove from the graph (also respects .gitignore)
 
 [interface]
 nodes = ["overview.md"]         # public interface nodes (enables encapsulation)
@@ -303,4 +303,4 @@ Add the metric extraction to `src/metrics.rs` inside `compute_metrics()`. The me
 - **Three directories, three concerns.** `parsers/` extracts links, `analyses/` computes properties, `rules/` emits diagnostics. No layer reaches into another's concern.
 - **No new dependencies for algorithms.** All graph algorithms (Tarjan's SCC, Brandes' betweenness, PageRank, BFS) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
 - **Deterministic output.** All results are sorted. No timestamps in lockfiles. Same input always produces same output.
-- **Explicit node filtering.** Each analysis declares which node types it operates on. No shared default, no hidden filter. Source and Resource for most structural analyses; Graph nodes added for boundary analyses.
+- **Explicit node filtering.** Each analysis declares which node types it operates on. No shared default, no hidden filter. File nodes for most structural analyses; Graph nodes added for boundary analyses.
