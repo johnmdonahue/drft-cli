@@ -47,6 +47,8 @@ drft discovers files, runs configurable parsers to extract links between them, a
 | `orphan` | off | File has no inbound links |
 | `indirect-link` | off | Link target is a symlink |
 
+See the [full documentation](docs/README.md) for details on parsers, analyses, and rules.
+
 ## Commands
 
 ### `drft check`
