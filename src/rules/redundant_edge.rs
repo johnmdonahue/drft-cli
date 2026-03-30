@@ -4,7 +4,6 @@ use crate::analyses::transitive_reduction::TransitiveReduction;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-/// See `docs/rules/redundant-edge.md` for details.
 pub struct RedundantEdgeRule;
 
 impl Rule for RedundantEdgeRule {

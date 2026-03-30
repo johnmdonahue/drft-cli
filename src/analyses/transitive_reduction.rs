@@ -14,7 +14,6 @@ pub struct TransitiveReductionResult {
     pub redundant_edges: Vec<RedundantEdge>,
 }
 
-/// See `docs/analyses/transitive-reduction.md` for the full conceptual explanation.
 pub struct TransitiveReduction;
 
 impl Analysis for TransitiveReduction {

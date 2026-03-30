@@ -33,3 +33,7 @@ ignore = ["glossary.md"]
 ## Analysis
 
 Powered by the [scc](../analyses/scc.md) (strongly connected components) analysis, which uses Tarjan's algorithm to find all cycles.
+
+## Source
+
+[`src/rules/cycle.rs`](../../src/rules/cycle.rs)

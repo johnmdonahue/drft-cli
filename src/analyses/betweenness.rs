@@ -12,7 +12,6 @@ pub struct BetweennessResult {
     pub nodes: Vec<NodeBetweenness>,
 }
 
-/// See `docs/analyses/betweenness.md` for details.
 pub struct Betweenness;
 
 impl Analysis for Betweenness {

@@ -15,7 +15,6 @@ pub struct DepthResult {
     pub nodes: Vec<NodeDepth>,
 }
 
-/// See `docs/analyses/depth.md` for details.
 pub struct Depth;
 
 impl Analysis for Depth {

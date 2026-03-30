@@ -39,3 +39,7 @@ ignore = ["index.md"]
 ## Analysis
 
 Powered by the [depth](../analyses/depth.md) analysis, which computes the longest-path depth of each node from the graph roots.
+
+## Source
+
+[`src/rules/layer_violation.rs`](../../src/rules/layer_violation.rs)

@@ -32,3 +32,7 @@ ignore = []
 ## Analysis
 
 This rule inspects the graph edges directly -- it does not consume a separate analysis. For each edge with a local target, it checks whether the target path is a symlink on the filesystem.
+
+## Source
+
+[`src/rules/indirect_link.rs`](../../src/rules/indirect_link.rs)

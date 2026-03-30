@@ -22,7 +22,6 @@ pub struct ScopeBoundariesResult {
     pub encapsulation_violations: Vec<EncapsulationViolation>,
 }
 
-/// See `docs/analyses/graph-boundaries.md` for details.
 pub struct GraphBoundaries;
 
 impl Analysis for GraphBoundaries {

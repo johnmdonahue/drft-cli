@@ -32,3 +32,7 @@ ignore = ["index.md"]
 ## Analysis
 
 Powered by the [transitive-reduction](../analyses/transitive-reduction.md) analysis, which computes the minimal edge set that preserves all reachability.
+
+## Source
+
+[`src/rules/redundant_edge.rs`](../../src/rules/redundant_edge.rs)

@@ -11,7 +11,6 @@ pub struct GraphStatsResult {
     pub average_path_length: Option<f64>,
 }
 
-/// See `docs/analyses/graph-stats.md` for details.
 pub struct GraphStats;
 
 impl Analysis for GraphStats {

@@ -70,3 +70,7 @@ JSON output:
 ## Algorithm
 
 Uses [Tarjan's algorithm](https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm): a single DFS pass with a stack, maintaining discovery index and low-link values. When a node's low-link equals its index, the stack is popped to form an SCC. Only edges between real nodes are followed. Complexity is O(V + E).
+
+## Source
+
+[`src/analyses/scc.rs`](../../src/analyses/scc.rs)

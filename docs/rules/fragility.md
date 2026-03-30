@@ -34,3 +34,7 @@ ignore = ["index.md"]
 ## Analysis
 
 Powered by the [bridges](../analyses/bridges.md) analysis, which uses Tarjan's bridge-finding algorithm to identify cut vertices and bridge edges in O(V + E).
+
+## Source
+
+[`src/rules/fragility.rs`](../../src/rules/fragility.rs)

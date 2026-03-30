@@ -13,7 +13,6 @@ pub struct BridgesResult {
     pub bridges: Vec<BridgeEdge>,
 }
 
-/// See `docs/analyses/bridges.md` for details.
 pub struct Bridges;
 
 impl Analysis for Bridges {

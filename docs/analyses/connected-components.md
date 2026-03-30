@@ -75,3 +75,7 @@ fragmentation = "warn"
 ## Algorithm
 
 Treats the directed graph as undirected by considering both forward and reverse edges. Runs BFS from each unvisited real node to discover components. This is O(V + E).
+
+## Source
+
+[`src/analyses/connected_components.rs`](../../src/analyses/connected_components.rs)

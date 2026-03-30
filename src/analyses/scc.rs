@@ -16,7 +16,6 @@ pub struct SccResult {
     pub node_scc: HashMap<String, usize>,
 }
 
-/// See `docs/analyses/scc.md` for details.
 pub struct StronglyConnectedComponents;
 
 impl Analysis for StronglyConnectedComponents {

@@ -4,7 +4,6 @@ use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-/// See `docs/rules/containment.md` for details.
 pub struct ContainmentRule;
 
 impl Rule for ContainmentRule {

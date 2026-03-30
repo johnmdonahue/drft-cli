@@ -4,7 +4,6 @@ use crate::analyses::scc::StronglyConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-/// See `docs/rules/cycle.md` for details.
 pub struct CycleRule;
 
 impl Rule for CycleRule {

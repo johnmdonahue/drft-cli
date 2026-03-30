@@ -34,3 +34,7 @@ ignore = ["CHANGELOG.md"]
 ## Analysis
 
 Powered by the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges.
+
+## Source
+
+[`src/rules/stale.rs`](../../src/rules/stale.rs)

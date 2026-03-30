@@ -135,3 +135,7 @@ markdown = false
 ## External URLs
 
 External links (`http://` and `https://`) are recorded in the graph with `is_external: true`. They are not skipped -- they become edges that analyses and rules can reason about. Anchor-only links (`#heading`) and `mailto:` links are skipped entirely.
+
+## Source
+
+[`src/parsers/markdown.rs`](../../src/parsers/markdown.rs)

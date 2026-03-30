@@ -5,7 +5,6 @@ use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 use std::collections::HashMap;
 
-/// See `docs/rules/layer-violation.md` for details.
 pub struct LayerViolationRule;
 
 impl Rule for LayerViolationRule {

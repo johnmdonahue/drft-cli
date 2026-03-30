@@ -61,3 +61,7 @@ Two rules consume this analysis:
 ## Algorithm
 
 For escapes: checks `drft.lock` existence (sealed scope), then scans edges for `../` target prefixes. For encapsulation: iterates Frontier nodes, reads each child scope's lockfile manifest, and identifies edges targeting non-manifest files inside the scope. Skips edges from Virtual nodes (implicit scope-internal edges).
+
+## Source
+
+[`src/analyses/graph_boundaries.rs`](../../src/analyses/graph_boundaries.rs)

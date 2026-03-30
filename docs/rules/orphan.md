@@ -34,3 +34,7 @@ ignore = ["index.md", "README.md"]
 ## Analysis
 
 Powered by the [degree](../analyses/degree.md) analysis, which computes in-degree and out-degree for every node.
+
+## Source
+
+[`src/rules/orphan.rs`](../../src/rules/orphan.rs)

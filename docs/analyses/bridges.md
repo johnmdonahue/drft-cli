@@ -54,3 +54,7 @@ fragility = "warn"
 ## Algorithm
 
 Treats the directed graph as undirected. Uses [Tarjan's bridge-finding algorithm](https://en.wikipedia.org/wiki/Bridge_(graph_theory)#Tarjan's_bridge-finding_algorithm): a single DFS pass maintaining discovery times and low-link values. A node is a cut vertex if it is the root with 2+ children, or has a child where `low[child] >= disc[node]`. An edge is a bridge if `low[child] > disc[node]`. Complexity is O(V + E).
+
+## Source
+
+[`src/analyses/bridges.rs`](../../src/analyses/bridges.rs)

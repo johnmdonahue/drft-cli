@@ -3,8 +3,6 @@ use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEn
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks, images,
 /// frontmatter file references, and wikilinks.
-///
-/// See `docs/parsers/markdown.md` for details.
 pub struct MarkdownParser {
     pub glob: globset::GlobMatcher,
     pub type_filter: Option<Vec<String>>,

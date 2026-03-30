@@ -4,7 +4,6 @@ use crate::analyses::change_propagation::ChangePropagation;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-/// See `docs/rules/stale.md` for details.
 pub struct StaleRule;
 
 impl Rule for StaleRule {

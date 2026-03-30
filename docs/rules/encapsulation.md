@@ -35,3 +35,7 @@ ignore = []
 ## Analysis
 
 Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child scope lockfiles to determine interface boundaries.
+
+## Source
+
+[`src/rules/encapsulation.rs`](../../src/rules/encapsulation.rs)

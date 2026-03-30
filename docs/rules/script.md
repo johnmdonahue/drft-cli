@@ -60,3 +60,7 @@ If the script exits with a non-zero status, `drft` emits a warning to stderr and
 # Flag any node whose path contains "draft"
 cat | jq -c '.graph.nodes | to_entries[] | select(.key | test("draft")) | {message: "file looks like a draft", node: .key}'
 ```
+
+## Source
+
+[`src/rules/script.rs`](../../src/rules/script.rs)

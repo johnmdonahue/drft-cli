@@ -5,8 +5,6 @@ use std::time::Duration;
 
 /// Script-based parser. Runs an external command that receives the file path
 /// on stdin and emits NDJSON links on stdout.
-///
-/// See `docs/parsers/script.md` for details.
 pub struct ScriptParser {
     pub parser_name: String,
     pub glob: globset::GlobMatcher,

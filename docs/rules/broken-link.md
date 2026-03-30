@@ -33,3 +33,7 @@ ignore = ["drafts/"]
 ## Analysis
 
 This rule inspects the graph edges directly -- it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists in the graph or on the filesystem.
+
+## Source
+
+[`src/rules/broken_link.rs`](../../src/rules/broken_link.rs)

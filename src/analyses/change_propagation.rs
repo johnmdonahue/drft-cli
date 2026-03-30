@@ -31,7 +31,6 @@ pub struct ChangePropagationResult {
     pub boundary_changes: Vec<BoundaryChange>,
 }
 
-/// See `docs/analyses/change-propagation.md` for details.
 pub struct ChangePropagation;
 
 impl Analysis for ChangePropagation {

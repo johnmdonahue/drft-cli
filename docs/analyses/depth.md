@@ -85,3 +85,7 @@ layer-violation = "warn"
 4. Expand back: all members of a super-node get its depth and `in_cycle: true`.
 
 Complexity is O(V + E) for the SCC analysis plus O(V + E) for the BFS.
+
+## Source
+
+[`src/analyses/depth.rs`](../../src/analyses/depth.rs)

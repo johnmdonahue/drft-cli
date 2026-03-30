@@ -34,3 +34,7 @@ ignore = ["README.md"]
 ## Analysis
 
 Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which identifies edges that cross scope boundaries.
+
+## Source
+
+[`src/rules/containment.rs`](../../src/rules/containment.rs)

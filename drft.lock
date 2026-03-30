@@ -34,47 +34,47 @@ hash = "b3:db3c7004bcb86cd7c26bae00af0f5fe053c92c77193725e5ead40f4f80e361a8"
 
 [nodes."docs/analyses/betweenness.md"]
 type = "source"
-hash = "b3:1c4f1031abcddcdbb5c3770bd7258d6b353c4778faab72779b0a248f8948c3f4"
+hash = "b3:7954fa697e13106867f4aed239b1d6700e146c614b4cc51055253fdda3b00ac8"
 
 [nodes."docs/analyses/bridges.md"]
 type = "source"
-hash = "b3:98c2b987696cccd56e6dac446ec2b09ec1790bc2e371e3fd298e97644a5c4c23"
+hash = "b3:58d481d6d06e01963448d6b92a08d7ef25b738a3f4a360d62e25998356308b86"
 
 [nodes."docs/analyses/change-propagation.md"]
 type = "source"
-hash = "b3:1f771990a67bb164ed3324dbbe47757a8b2c363feec54fba594c314fe0ae116c"
+hash = "b3:859858bb79f6bf1cfc46ee97e8d39e0e5ab4a48b1410029b1f87ffa18d0198a7"
 
 [nodes."docs/analyses/connected-components.md"]
 type = "source"
-hash = "b3:1e4166b578c43a99d3006b9a3dfa44b6e0b4e95e6896ce60a4b5b589247e6438"
+hash = "b3:78764dc26af51c9d77a49f1948cc21d24b9445b50c0dd5a41dc0ab0b3712ef15"
 
 [nodes."docs/analyses/degree.md"]
 type = "source"
-hash = "b3:b5e1f5bee07643448a42d651fdfb4c353c288fdbd0e63e77c5523d2959477bc3"
+hash = "b3:3d247d5943135f50bf4618299b2558e654a601182f9c1d82745fdbca909d7536"
 
 [nodes."docs/analyses/depth.md"]
 type = "source"
-hash = "b3:a14cfcd2420d3cb454640ab497d183244bf548313339edea91274838b17e14bd"
+hash = "b3:87ea11dfba7cb9c7d9b47f16c40be8ec70b4a656fc928009ed63d9477e9386d9"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
+hash = "b3:a4fb0b48bf9a7a2a0580d3f42b069b544f34115ed6e0bedd3445416690a1e79a"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
-hash = "b3:28ec11b9a8e110dc160df881691683a5a07e453964e3b738efd34a4d8852ca2a"
+hash = "b3:b4de292ddea6a94254041302cc4f98706906ba76caafae4df758a237f55f81de"
 
 [nodes."docs/analyses/pagerank.md"]
 type = "source"
-hash = "b3:1a6aee4b996179b3d6cf039c087e33fa3f9809c6db71a89b8da834fd902a6743"
+hash = "b3:b5f56c2fa394d7f1951bb5cea35b21a1f005b1299d1cf23a188573d64db81ad8"
 
 [nodes."docs/analyses/scc.md"]
 type = "source"
-hash = "b3:8c737ffe4f13c4c79fc59659e611025bc182ecaa19f0fbbd5b28135575e4302a"
+hash = "b3:665f5e955edbd06f63b124f103c5c5397ba4e92a00329195cca9b4c83f400950"
 
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
-hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
+hash = "b3:89703393c81a09006932fea38d5b30c43e7719e7b2c69a7f1baa4e9232981656"
 
 [nodes."docs/parsers/README.md"]
 type = "source"
@@ -82,11 +82,11 @@ hash = "b3:dbceea65c926ffdc47c4036d9187c56d227c69b160668586a1af12aa06aad0ca"
 
 [nodes."docs/parsers/markdown.md"]
 type = "source"
-hash = "b3:bc1150e14c2912057500f29b94e9f9891f13cecfbe0e98890cedb973b8bcead7"
+hash = "b3:a47a30282b7939f1ee843d401fde2302b8c68ecd5cbca34f61c6c8ce00ee3b72"
 
 [nodes."docs/parsers/script.md"]
 type = "source"
-hash = "b3:90510b2f5f51e55d6cddca642fd23ac8e81fece95c6b70ca60f3302d63faefca"
+hash = "b3:760a4ecc396697fbb3c65f869f64e4a85aa5a162cefd7fc1cfe22627907906df"
 
 [nodes."docs/rules/README.md"]
 type = "source"
@@ -94,55 +94,55 @@ hash = "b3:a0ff854f10cac0ec76f485d2750c494c5b05d926f39360af0387a0b8b63d5b3e"
 
 [nodes."docs/rules/broken-link.md"]
 type = "source"
-hash = "b3:22c1ce9d6d2ee5fdd8a8c84b0efa04cdb6cc64a20aabf7846a1244d58c2810ff"
+hash = "b3:b318b9d8966173637c56e4fe5d9ce835d04ae61fcae99224b29c95651056dda1"
 
 [nodes."docs/rules/containment.md"]
 type = "source"
-hash = "b3:97791ca32a90fa2372139e8fe2db7fda3c466e66242b291986cf62d32a4e91ea"
+hash = "b3:ddd35647a8fc006b198e0e9147eed7f61db4220849ae7a05358787391e498a78"
 
 [nodes."docs/rules/cycle.md"]
 type = "source"
-hash = "b3:c23585cc63d8fe5f8a5d7b5830f2f2cc18353ac69479ad5c7cd3f8b25dbaf4f8"
+hash = "b3:cd7213f79340d45e49d758617641acc348b4fe80768e6f4cd8695b6c05aa78ce"
 
 [nodes."docs/rules/directory-link.md"]
 type = "source"
-hash = "b3:dd5710b51d37967ea427c7193fc6970cdc6fa7939d752c834d161012a3b1870c"
+hash = "b3:2986ad4046028266aec9af1906c436db462185b157bc9802bebfc5269174b28d"
 
 [nodes."docs/rules/encapsulation.md"]
 type = "source"
-hash = "b3:82e198a2f54dff30a492deb92fc36730cb621b5c721c05eae32b3e1ccfc94eda"
+hash = "b3:da61c4818ba9079af925cb064e30d9d6809d83a2af54b2187e88ca200ce84a69"
 
 [nodes."docs/rules/fragility.md"]
 type = "source"
-hash = "b3:dc46ab3d07a4bd761ad0777da564bb371adfa2e0711b75e55eb2345df19b7ca0"
+hash = "b3:21d2533d88bae57ba47989851155ad65ceddc491fb7ee34cd9b36d0282a613da"
 
 [nodes."docs/rules/fragmentation.md"]
 type = "source"
-hash = "b3:d01e72ecfe7eca1254679b9eb97a1183bc308dbfae59838ff80b73114dcfa6e7"
+hash = "b3:d9ee464219a252b438c5b56d3100df586f31d9511cbf32d21ce1acc097bc773f"
 
 [nodes."docs/rules/indirect-link.md"]
 type = "source"
-hash = "b3:adc220dbd4c9ef1f22e063f78e05118ee2fabb6ce9da9a7a40ee35ebc17a97f1"
+hash = "b3:46827df8102a563995d29c828c55f8b8e7efa0cc8a868373bf9ca0205889f34e"
 
 [nodes."docs/rules/layer-violation.md"]
 type = "source"
-hash = "b3:b9017096649a5f2346043aa36c86dc436057d7958047eb6b99d739d1b65b54ec"
+hash = "b3:7472b60e438bc5224062b797dde3a3ade85849ca1e3620a616f21ab1c73abd9b"
 
 [nodes."docs/rules/orphan.md"]
 type = "source"
-hash = "b3:a001bbe0c0a33a80acf17a537f95b76ebaea7e0ac41f948e74a1278a0cfab1e0"
+hash = "b3:e508fa34ec0a44227081ce4a38b0a98a712731f035c5dfd9df2bd989a69e1b65"
 
 [nodes."docs/rules/redundant-edge.md"]
 type = "source"
-hash = "b3:9f69cd5292fd8c758665da9743af08e73579cbfc55cce7611ce25acc84d23aa8"
+hash = "b3:5e5b1fb779b0e5861527889d4163278f6ba8e64b232713269e46491e1ddcea1d"
 
 [nodes."docs/rules/script.md"]
 type = "source"
-hash = "b3:b89fc1e2e2a80e7fd28718c803a77bd2bbea0e266fce0d36ba6923a054da21a3"
+hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
 
 [nodes."docs/rules/stale.md"]
 type = "source"
-hash = "b3:7b599a8dbddd3e59dc90b4de72e5f56fa90d718e6f92e1f8a62893b0cea749bc"
+hash = "b3:b89c713e9e1994f9a2d8ee351b4c60cf7538d945cf223e6c2cca13f0ba653132"
 
 [nodes."examples/README.md"]
 type = "source"
@@ -236,35 +236,35 @@ hash = "b3:e286dbf5e8d71686305c35d2d6406aeb6bb9c0cc430fc5e7c7e4754d841946e7"
 
 [nodes."src/analyses/betweenness.rs"]
 type = "source"
-hash = "b3:0e0c9bda9c586c8d5ef2fcc1f7074196fd6e59a4377986bfe325a6570f46f87a"
+hash = "b3:0960afe7fefbee376ab6ed391f751d32473306bfb9d2105838f1b5b2c603db5e"
 
 [nodes."src/analyses/bridges.rs"]
 type = "source"
-hash = "b3:1631feddd45a3d9860cbd19391e36fd672cbc078c50ea569590d525f1fd19ab3"
+hash = "b3:3e6aa5c9c9b0e06102211bcfea85768849a31daa57bf4e2930eeace1b1bcd6b9"
 
 [nodes."src/analyses/change_propagation.rs"]
 type = "source"
-hash = "b3:0e071af3f8526ff8a2dbedbb030a07b0b93631b4e36b0b56f6793cee787d83e5"
+hash = "b3:3745c18948f54c9138ccbfdb2c3f08302dff1f18219eda27ae681b09d56c29fd"
 
 [nodes."src/analyses/connected_components.rs"]
 type = "source"
-hash = "b3:ade8ae5c9b5364e39553fcf9e41aaa4b76fd485956cbfdc42744acd09a7e0646"
+hash = "b3:cb42cadd133281385163adfae088af644dd56003a625247160856df6f02c9d26"
 
 [nodes."src/analyses/degree.rs"]
 type = "source"
-hash = "b3:3878f2be4e9454eb7ed963dbfd9b923877b92214dedb3bb78605f6a288a3a743"
+hash = "b3:56480a148d5d40c2ce46e5c4aea0412379030b301d921041d1cbdedaf619da5d"
 
 [nodes."src/analyses/depth.rs"]
 type = "source"
-hash = "b3:e7555577769452c922cc859ff081707921edcec1978f34e6025717c9e616d9af"
+hash = "b3:9d06abdaa68f8e6128804b73673001e3be0e7d95a418c0b203877e79ccde518d"
 
 [nodes."src/analyses/graph_boundaries.rs"]
 type = "source"
-hash = "b3:78837e3864efe3c847916692dfebae61396ec8a8ff08e6995fc0bd27d860d3bf"
+hash = "b3:ae6f445fb6ac26753552cdfa3224d7fb6adfd4c1a2cd2c852acfcfea594f61cc"
 
 [nodes."src/analyses/graph_stats.rs"]
 type = "source"
-hash = "b3:84d6564f7a964a573660d8346e4ff2491a2c30caccd2ad2a2362ea8bc741f3fb"
+hash = "b3:de246d46387a0a8158ccdeb5c500488e17a839d34e8b5b31b972558a5fabcd1c"
 
 [nodes."src/analyses/mod.rs"]
 type = "source"
@@ -272,15 +272,15 @@ hash = "b3:d75e2f1907b7bf2f67876a215d664b3096dd537d4ee73e2dec3d0aa118778a91"
 
 [nodes."src/analyses/pagerank.rs"]
 type = "source"
-hash = "b3:45890323f79768da0c99f740ce27ee22ac5a92b89f1b009c1a06b46a0d76988e"
+hash = "b3:f66f2e80ea1f2339cf7964dd5ca67fdedebcd9c83856f856c322c9cfbcd5503f"
 
 [nodes."src/analyses/scc.rs"]
 type = "source"
-hash = "b3:31afe76e3f126204a7129073fce1a601e33362750e35d55d31689fef20b64506"
+hash = "b3:ad5f092a11391c02ad0069fba96aeb620c03727b2af2be6a3750cef33223c85f"
 
 [nodes."src/analyses/transitive_reduction.rs"]
 type = "source"
-hash = "b3:b2983e7bdd1b88543609513baa5c32218213e1a3b482bb3319a2458b2c1f63d7"
+hash = "b3:6ccc6c57e100c553b795d802e30bf8ce52be8573a5e58ad3ef1c3f66164a8b87"
 
 [nodes."src/cli.rs"]
 type = "source"
@@ -316,7 +316,7 @@ hash = "b3:188b083617978717db7a52247fb6ed84ea65ce461ec1b3ea44c258a45239afe1"
 
 [nodes."src/parsers/markdown.rs"]
 type = "source"
-hash = "b3:c15b84306673391fa0576279ea1018d4f0bf28b339de4d614a3cea1d7d3e47f0"
+hash = "b3:9b997350ea787db70396ea691acbbea9b9b8405c72dce2829ccc160b501f4b4d"
 
 [nodes."src/parsers/mod.rs"]
 type = "source"
@@ -324,43 +324,43 @@ hash = "b3:b2a34528cd482d5b12f0cc9133493fea552257feceb47331a4ba52aef4bbf856"
 
 [nodes."src/parsers/script.rs"]
 type = "source"
-hash = "b3:0f417853cea57f371f688f9e821d2810e090f11e5c1590552136ac31b278fb06"
+hash = "b3:a463b550e2b973df2cc000236f532c3aed1db79ef0170294bd4cbb27d354ad9e"
 
 [nodes."src/rules/broken_link.rs"]
 type = "source"
-hash = "b3:fb052bb1ed5fc38158fa0349a08260b673371318393f809315ca89b2163c9b84"
+hash = "b3:149a4361861cb1794a700ca4bfb8b75ee8677b99dc0b6fdf6d197ed6cee2df3d"
 
 [nodes."src/rules/containment.rs"]
 type = "source"
-hash = "b3:627c27fd30a05cc25d7ea67f744505dc90332f5920822d3e2ad69ec6d4efd4b7"
+hash = "b3:c9cc3d738f630d4bd698854b7904990ed5883045b57aabe96999219fabd885ea"
 
 [nodes."src/rules/cycle.rs"]
 type = "source"
-hash = "b3:a87924d679368c8fd053eb790ec7b35cf74da5a783f29402fea9777d5a64f9b0"
+hash = "b3:c0ef2515fc3fdadcf4ff9286fc8dd28ea8864e9cb71b403862365bd590bfab06"
 
 [nodes."src/rules/directory_link.rs"]
 type = "source"
-hash = "b3:d8eac3fb0784aa69fa3d61cab510807f54819b7525d272fc62fee96275579557"
+hash = "b3:89228e9e28c7f4460830704abbba432f35101bfd1d1ac0c733fdb3b5c01f28bb"
 
 [nodes."src/rules/encapsulation.rs"]
 type = "source"
-hash = "b3:1dcffe3b408bcc76591beb055a9afe6dc1392d8172a30ac673d4bbe358735cf1"
+hash = "b3:012f72513a1dae46973e18be870fc4fcd1ef9f5a777801864ad21f20f6d13b09"
 
 [nodes."src/rules/fragility.rs"]
 type = "source"
-hash = "b3:c9d4c3d5bdebf94c68787edec5a3c0cd271ea926b24377427323bb37dc3eff6c"
+hash = "b3:df96c54f04fc0a2dbbdc04e18a178bfc5a951a78b44a23b45a21db76701a1672"
 
 [nodes."src/rules/fragmentation.rs"]
 type = "source"
-hash = "b3:de93cf64b5efe235b139d15b7bbbcd8f0f1cc3b3aaba8eee6dba4ae89da2147c"
+hash = "b3:b7f89297a35bc475063ea042e8d01a67d50a7bd909c81e61d7cc36f8898d1756"
 
 [nodes."src/rules/indirect_link.rs"]
 type = "source"
-hash = "b3:6f88b907b79f1de64d884aa5a0cb5b41d00fd8f9944374e7b448818dc9e1e6cd"
+hash = "b3:5a0d06dffd2a4257d16d4a90136f0805179adb79b364eb2a492b0336929a17b1"
 
 [nodes."src/rules/layer_violation.rs"]
 type = "source"
-hash = "b3:6d1eeca6c22e2fe560e9c710aa699b58d9bfce5189842c655b39dcdee8e48fe6"
+hash = "b3:d8aaa6e139939ca2cabde2ab4cf4fdf1793bdd47c9b7130e3b8e513c52e045dd"
 
 [nodes."src/rules/mod.rs"]
 type = "source"
@@ -368,19 +368,19 @@ hash = "b3:f098ab56a1eafbc3d5e24b26039e04db0f6a8032f90c91a70808805015698639"
 
 [nodes."src/rules/orphan.rs"]
 type = "source"
-hash = "b3:581588d45fb752f3e375a1d5f97d623ad41d6fbda545ef97e2986b4cef532537"
+hash = "b3:e90eee2fe847dfa5a28212496f4dc91df555445c6eed7b0aa60c4e3d56d8559e"
 
 [nodes."src/rules/redundant_edge.rs"]
 type = "source"
-hash = "b3:5d4a66f7757653ae9caeed8cb2fab5c48e54adea517a30e1864e1c695c014297"
+hash = "b3:126ede3263ea4b1e4d49e981c00ec1beebde017684a00a1d502e178d5312e051"
 
 [nodes."src/rules/script.rs"]
 type = "source"
-hash = "b3:ab941b5ad75a5e069b471bc2c6267c13dcb26d2f69386469b6d594a4d5bbd483"
+hash = "b3:f36a6e303ec371a4e64b968b3a43a3bc2105f29ef78753677f70b2a31f5c9154"
 
 [nodes."src/rules/stale.rs"]
 type = "source"
-hash = "b3:a6afc8147f11a37534921306046e12282186e951b0b851a2dd03df452f58323e"
+hash = "b3:e6d3a1ca8a41d918f1d8a6a29b8c20d3efd36fd53a4c5be703814418505746b2"
 
 [nodes."tests/scenarios.rs"]
 type = "source"

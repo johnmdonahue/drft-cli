@@ -1,7 +1,6 @@
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-/// See `docs/rules/indirect-link.md` for details.
 pub struct IndirectLinkRule;
 
 impl Rule for IndirectLinkRule {

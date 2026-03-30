@@ -34,3 +34,7 @@ ignore = []
 ## Analysis
 
 This rule inspects the graph edges directly -- it does not consume a separate analysis. For each edge whose target is not in the graph, it checks whether the path is a directory on the filesystem.
+
+## Source
+
+[`src/rules/directory_link.rs`](../../src/rules/directory_link.rs)

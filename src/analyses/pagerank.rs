@@ -14,7 +14,6 @@ pub struct PageRankResult {
     pub nodes: Vec<NodePageRank>,
 }
 
-/// See `docs/analyses/pagerank.md` for details.
 pub struct PageRank;
 
 const DAMPING: f64 = 0.85;
