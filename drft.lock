@@ -332,7 +332,7 @@ hash = "b3:16862e6d9b92906fa5c64e6ba66459909f059d9a38901c00cc23acb85e1c38d7"
 
 [nodes."src/parsers/script.rs"]
 type = "source"
-hash = "b3:516e0f788faf2a7f25cae3ccc4d5b21acbbd4537a62c9818906775689365851d"
+hash = "b3:bf0d51fa95905fc3ce466473ab35aadb2a845b234817b217e72a4a43f3774d9c"
 
 [nodes."src/rules/broken_link.rs"]
 type = "source"
@@ -428,7 +428,7 @@ hash = "b3:8c8763bd375c1449abdbd255c29f4013c6f0e065fa110fd464f96f3fbeaa5713"
 
 [nodes."tests/parsers.rs"]
 type = "source"
-hash = "b3:4ae1f10c861ffd1ca86c8f520367c4407fff79e693a963296207d6b649b72e24"
+hash = "b3:bfe51d32c49b66d11bd242c6c767ede9863848bce233153a2bc1f633bb5f0fb0"
 
 [nodes."tests/rules.rs"]
 type = "source"

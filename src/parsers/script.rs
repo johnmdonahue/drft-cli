@@ -174,11 +174,20 @@ fn wait_with_timeout(
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
+                    // Join reader threads so they don't leak. The child
+                    // will be killed by the caller, which closes the
+                    // pipes and unblocks the readers.
+                    let _ = stdout_thread.join();
+                    let _ = stderr_thread.join();
                     return Err(());
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
-            Err(_) => return Err(()),
+            Err(_) => {
+                let _ = stdout_thread.join();
+                let _ = stderr_thread.join();
+                return Err(());
+            }
         }
     }
 }

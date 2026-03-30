@@ -69,6 +69,7 @@ fn wikilinks_create_edges() {
 }
 
 #[test]
+#[cfg(unix)]
 fn script_parser_batch_protocol() {
     let dir = TempDir::new().unwrap();
 
@@ -102,7 +103,7 @@ done
 glob = "*.txt"
 command = "{}"
 "#,
-            script.to_string_lossy()
+            script.to_string_lossy().replace('"', "\\\"")
         ),
     )
     .unwrap();
