@@ -181,7 +181,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             .collect();
 
         if matching.is_empty() {
-            continue; // No parser matches — skip file (won't become a Source node)
+            continue;
         }
 
         let file_path = root.join(file);

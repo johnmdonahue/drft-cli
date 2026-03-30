@@ -300,7 +300,7 @@ hash = "b3:a0cac3285063f40b587298cbafa5eb5c98a459e93bf04683cfbdb5163902d9e4"
 
 [nodes."src/graph.rs"]
 type = "source"
-hash = "b3:8e669ffaca0165b3ae0fa483d2fa78b1a0c2f349e843adfc4e781893b349990a"
+hash = "b3:c4aac799fcff8a05c72b1f046f13d12e844e1a119caf518256990c5009836694"
 
 [nodes."src/lockfile.rs"]
 type = "source"
