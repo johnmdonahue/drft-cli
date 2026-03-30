@@ -43,14 +43,12 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "connected-components": {
-      "component_count": 2,
-      "components": [
-        { "id": 1, "members": ["a.md", "b.md", "e.md"] },
-        { "id": 2, "members": ["c.md", "d.md"] }
-      ]
-    }
+  "connected-components": {
+    "component_count": 2,
+    "components": [
+      { "id": 1, "members": ["a.md", "b.md", "e.md"] },
+      { "id": 2, "members": ["c.md", "d.md"] }
+    ]
   }
 }
 ```

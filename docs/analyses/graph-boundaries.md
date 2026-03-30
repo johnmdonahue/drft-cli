@@ -33,20 +33,18 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "graph-boundaries": {
-      "has_interface": true,
-      "escapes": [
-        { "source": "index.md", "target": "../README.md" }
-      ],
-      "encapsulation_violations": [
-        {
-          "source": "parent.md",
-          "target": "research/internal.md",
-          "graph": "research/"
-        }
-      ]
-    }
+  "graph-boundaries": {
+    "has_interface": true,
+    "escapes": [
+      { "source": "index.md", "target": "../README.md" }
+    ],
+    "encapsulation_violations": [
+      {
+        "source": "parent.md",
+        "target": "research/internal.md",
+        "graph": "research/"
+      }
+    ]
   }
 }
 ```

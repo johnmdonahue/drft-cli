@@ -128,7 +128,7 @@ Pure analyses (SCC, PageRank, bridges) ignore root/config/lockfile. Stateful ana
 
 Metrics extract named scalar values from analysis results. They are flat -- no dimension grouping, no taxonomy. Each metric is derived from a specific analysis.
 
-Metrics live in `src/metrics.rs` as a single module. The `compute_metrics()` function runs the analyses it needs and returns `Vec<Metric>`.
+Metrics live in `src/metrics.rs` as a single module. The `compute_metrics()` function takes pre-computed analysis results (via `AnalysisInputs`) and returns `Vec<Metric>`. Analyses are run by the `report` command; metrics are derived from their outputs.
 
 Each `Metric` carries a `MetricKind` (`Ratio`, `Count`, or `Score`) that indicates how to interpret and normalize the value.
 

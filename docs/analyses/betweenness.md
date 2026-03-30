@@ -36,13 +36,11 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "betweenness": {
-      "nodes": [
-        { "node": "hub.md", "score": 0.72 },
-        { "node": "index.md", "score": 0.45 }
-      ]
-    }
+  "betweenness": {
+    "nodes": [
+      { "node": "hub.md", "score": 0.72 },
+      { "node": "index.md", "score": 0.45 }
+    ]
   }
 }
 ```

@@ -43,15 +43,13 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "degree": {
-      "nodes": [
-        { "node": "a.md", "in_degree": 0, "out_degree": 2 },
-        { "node": "b.md", "in_degree": 1, "out_degree": 1 },
-        { "node": "c.md", "in_degree": 1, "out_degree": 0 },
-        { "node": "d.md", "in_degree": 1, "out_degree": 0 }
-      ]
-    }
+  "degree": {
+    "nodes": [
+      { "node": "a.md", "in_degree": 0, "out_degree": 2 },
+      { "node": "b.md", "in_degree": 1, "out_degree": 1 },
+      { "node": "c.md", "in_degree": 1, "out_degree": 0 },
+      { "node": "d.md", "in_degree": 1, "out_degree": 0 }
+    ]
   }
 }
 ```

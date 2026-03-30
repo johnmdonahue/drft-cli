@@ -45,14 +45,12 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "graph-stats": {
-      "node_count": 12,
-      "edge_count": 23,
-      "density": 0.17,
-      "diameter": 4,
-      "average_path_length": 2.3
-    }
+  "graph-stats": {
+    "node_count": 12,
+    "edge_count": 23,
+    "density": 0.17,
+    "diameter": 4,
+    "average_path_length": 2.3
   }
 }
 ```

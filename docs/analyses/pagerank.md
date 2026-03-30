@@ -37,15 +37,13 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "pagerank": {
-      "iterations": 23,
-      "converged": true,
-      "nodes": [
-        { "node": "index.md", "score": 0.18 },
-        { "node": "hub.md", "score": 0.12 }
-      ]
-    }
+  "pagerank": {
+    "iterations": 23,
+    "converged": true,
+    "nodes": [
+      { "node": "index.md", "score": 0.18 },
+      { "node": "hub.md", "score": 0.12 }
+    ]
   }
 }
 ```

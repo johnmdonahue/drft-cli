@@ -47,19 +47,17 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "scc": {
-      "scc_count": 4,
-      "nontrivial_count": 1,
-      "sccs": [
-        { "id": 1, "members": ["a.md", "b.md", "c.md"] }
-      ],
-      "node_scc": {
-        "a.md": 1,
-        "b.md": 1,
-        "c.md": 1,
-        "d.md": 2
-      }
+  "scc": {
+    "scc_count": 4,
+    "nontrivial_count": 1,
+    "sccs": [
+      { "id": 1, "members": ["a.md", "b.md", "c.md"] }
+    ],
+    "node_scc": {
+      "a.md": 1,
+      "b.md": 1,
+      "c.md": 1,
+      "d.md": 2
     }
   }
 }

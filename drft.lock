@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:07e9befa47d18264ed55ef954af96fbc9fa2b7bc1dd1a794227411d99a100f2d"
+hash = "b3:88962adc4f48a7f192b831da709cfc2674d41a0cdcd08baca4bfe1dcaa3991ed"
 
 [nodes."CHANGELOG.md"]
 type = "source"
@@ -38,7 +38,7 @@ hash = "b3:e4e1a9d30b88834e4488ec295e3117d9d42baa1bcb9954386e8c30e99760df5e"
 
 [nodes."docs/analyses/betweenness.md"]
 type = "source"
-hash = "b3:c85b40d4ec50b36c989ff38842f038313f1c6154aef0d47f2712766a546e98d7"
+hash = "b3:cb2477cd1a42022938befe7ad1f1a77e86ba02a37eb236f79b91c2aba2d820fa"
 
 [nodes."docs/analyses/bridges.md"]
 type = "source"
@@ -46,39 +46,39 @@ hash = "b3:9cbb8b52122e5616f26afe214e1628e9342d3e186044f4f543cac29bd8df6e75"
 
 [nodes."docs/analyses/change-propagation.md"]
 type = "source"
-hash = "b3:32bad8432e6ec5ef52c962139512138f434c141b4caeeb42189819d4d93c800b"
+hash = "b3:083ba3a306d209eaa665cbc8564129e858e0954fdb99023cafc570dc16744d00"
 
 [nodes."docs/analyses/connected-components.md"]
 type = "source"
-hash = "b3:78ab5fe753a494f831ca6bbde322935b7b476bd101b0acb47057f19d6fba5cca"
+hash = "b3:59fc2cdc01c8571652aae48f83014c27a4c70202373df75527e1407a5977d37f"
 
 [nodes."docs/analyses/degree.md"]
 type = "source"
-hash = "b3:4c3b234c87fa06e5f8d5e79fd74df299027faabc70c94791eaa2f690d891c9c3"
+hash = "b3:291104c6f7cbcbd59eda0b4b3829403963fe992a44ab1d9ac62d278a7367ff36"
 
 [nodes."docs/analyses/depth.md"]
 type = "source"
-hash = "b3:a6f8adab69ea8361243ed1d4f7d07498458458e3bd5cc9123daaf2d56b38935f"
+hash = "b3:2bbb1481797d414e29cefaa379ae50663a86a0e552df8f577913cb107806c372"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:38059e6e339e79b9b27274c510aa9c6dafe06d7a65bc718a65f950d6f7df106b"
+hash = "b3:20dd82156a35ed64a68d6e56708229d9b90bb2b48adba23f73db6a0290127d5c"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
-hash = "b3:a6e2493b29b536bed5a1c909dc604c6087cd158c01e8d62ec22b9decd79248c0"
+hash = "b3:b189c418667b1b0502f2c5bdb2dd8c530678be07d8c1573f93a9bfc24c471f97"
 
 [nodes."docs/analyses/pagerank.md"]
 type = "source"
-hash = "b3:c6d4518a00025a9007698bafaeebb8494b3d40c4c3a2b7274a9de02acd5d5bac"
+hash = "b3:e4e7eaa2e842c735868787665c7cb958a5d4893da7235cc28b5193c4a1d38676"
 
 [nodes."docs/analyses/scc.md"]
 type = "source"
-hash = "b3:a4c7bddff8c2b51717a098e60a546b318a9dcf946a73b27875436c31e9da6b72"
+hash = "b3:bb6a3d0595e6a116a43636b4cf92b03d9c59fe089116b0b7dd6a91ca9696a1b1"
 
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
-hash = "b3:45eda2f987d89786112da8f2c60ad9a2ba52e8cf2b59b08e71eb8a86b280f137"
+hash = "b3:a8b890afc7075ae14cae97d2d36987a708015f9434466e2cab1f86cc122440d9"
 
 [nodes."docs/parsers/README.md"]
 type = "source"
