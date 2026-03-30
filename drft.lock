@@ -1,0 +1,130 @@
+lockfile_version = 2
+
+[nodes."ARCHITECTURE.md"]
+type = "source"
+hash = "b3:2388649574979b30d8b557be06284f09359cd7f9f16832916c84d8e5b0c57ac5"
+
+[nodes."CHANGELOG.md"]
+type = "source"
+hash = "b3:d49b8f255e5e1f0a8cbbae014a65e61345bf7c27791e23ad2f488e5d96299b55"
+
+[nodes."CLAUDE.md"]
+type = "source"
+hash = "b3:5d57c7dd441cc6e29e43068317dd2db77348144a540e7c3a1da0ca6587897a68"
+
+[nodes."CONTRIBUTING.md"]
+type = "source"
+hash = "b3:2fb6dc7ac78728600cea75ac714b8ba9e0acf36eca490fd3e3f8d0fe03e95d8c"
+
+[nodes."README.md"]
+type = "source"
+hash = "b3:9dc1633ce0be41ed90b76e18492e6d606ffff9a7b9b5f3f49406c78ac07d0182"
+
+[nodes."RELEASING.md"]
+type = "source"
+hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
+
+[nodes."docs/analyses/README.md"]
+type = "source"
+hash = "b3:abf2e10806875c85aff8ad54f1b0cba43e6c7ecbfa40689206777eb14c8015c6"
+
+[nodes."docs/analyses/betweenness.md"]
+type = "source"
+hash = "b3:1c4f1031abcddcdbb5c3770bd7258d6b353c4778faab72779b0a248f8948c3f4"
+
+[nodes."docs/analyses/bridges.md"]
+type = "source"
+hash = "b3:98c2b987696cccd56e6dac446ec2b09ec1790bc2e371e3fd298e97644a5c4c23"
+
+[nodes."docs/analyses/change-propagation.md"]
+type = "source"
+hash = "b3:1f771990a67bb164ed3324dbbe47757a8b2c363feec54fba594c314fe0ae116c"
+
+[nodes."docs/analyses/connected-components.md"]
+type = "source"
+hash = "b3:1e4166b578c43a99d3006b9a3dfa44b6e0b4e95e6896ce60a4b5b589247e6438"
+
+[nodes."docs/analyses/degree.md"]
+type = "source"
+hash = "b3:b5e1f5bee07643448a42d651fdfb4c353c288fdbd0e63e77c5523d2959477bc3"
+
+[nodes."docs/analyses/depth.md"]
+type = "source"
+hash = "b3:a14cfcd2420d3cb454640ab497d183244bf548313339edea91274838b17e14bd"
+
+[nodes."docs/analyses/edge-classification.md"]
+type = "source"
+hash = "b3:ce6674d5222ad61e6011598496f438b8170ac9d5d7efb3a6afa88c236a6c9211"
+
+[nodes."docs/analyses/graph-stats.md"]
+type = "source"
+hash = "b3:28ec11b9a8e110dc160df881691683a5a07e453964e3b738efd34a4d8852ca2a"
+
+[nodes."docs/analyses/pagerank.md"]
+type = "source"
+hash = "b3:1a6aee4b996179b3d6cf039c087e33fa3f9809c6db71a89b8da834fd902a6743"
+
+[nodes."docs/analyses/scc.md"]
+type = "source"
+hash = "b3:8c737ffe4f13c4c79fc59659e611025bc182ecaa19f0fbbd5b28135575e4302a"
+
+[nodes."docs/analyses/scope-boundaries.md"]
+type = "source"
+hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
+
+[nodes."docs/analyses/transitive-reduction.md"]
+type = "source"
+hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
+
+[nodes."examples/broken/"]
+type = "graph"
+hash = "b3:7a3bc3a6250633d7165e2e784d1aa7cb24a2614875d5838cc1813dd448b6d87c"
+
+[nodes."examples/custom-rules/"]
+type = "graph"
+hash = "b3:ad5b6fa19f364bccd2a2dc47156f37bc8d32584508dc27175c7c2bb3c57e1207"
+
+[nodes."examples/cyclic/"]
+type = "graph"
+hash = "b3:c97fa869906887cae5961525ee5f697f3e028ce3696011bdf7a3984ac1f091fe"
+
+[nodes."examples/monorepo/"]
+type = "graph"
+hash = "b3:ae74b2f2152b743b7666b20f33d1c0825e2c83b4c2e66e82d5a046d33500f24a"
+
+[nodes."examples/simple/"]
+type = "graph"
+hash = "b3:66ab3959b3d87691fa3889403446cc725ea243f4b99157febf40bf0bf0d18aa0"
+
+[nodes."examples/with-assets/"]
+type = "graph"
+hash = "b3:b13427025164225a155aea4b08cff35392821241f392f2453968d1703d04cac3"
+
+[nodes."examples/with-config/"]
+type = "graph"
+hash = "b3:dd2e3f3cafda0b338a72fcd3aec30a928ed7aeac017673577cec6eb144d3a2bb"
+
+[nodes."https://en.wikipedia.org/wiki/Betweenness_centrality#Brandes'_algorithm"]
+type = "external"
+
+[nodes."https://en.wikipedia.org/wiki/Bridge_(graph_theory)#Tarjan's_bridge-finding_algorithm"]
+type = "external"
+
+[nodes."https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm"]
+type = "external"
+
+[nodes."https://en.wikipedia.org/wiki/Transitive_reduction"]
+type = "external"
+
+[nodes."https://github.com/johnmdonahue/drft-cli"]
+type = "external"
+
+[nodes."https://github.com/johnmdonahue/drft-cli/releases"]
+type = "external"
+
+[nodes."https://github.com/jsongraph/json-graph-specification"]
+type = "external"
+
+[nodes."npm/README.md"]
+type = "source"
+hash = "b3:e286dbf5e8d71686305c35d2d6406aeb6bb9c0cc430fc5e7c7e4754d841946e7"

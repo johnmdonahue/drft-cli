@@ -1,0 +1,9 @@
+lockfile_version = 2
+
+[nodes."index.md"]
+type = "source"
+hash = "b3:9c29dd9aa31340c0273854ebcfc0f18a36b6d60c98ddf72709de8567552b9ac5"
+
+[nodes."setup.md"]
+type = "source"
+hash = "b3:caae5d263cf608bf1057ee58b609c2e15ee0665fab62eaf3d873b79a320684b4"

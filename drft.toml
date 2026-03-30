@@ -1,0 +1,21 @@
+# drft.toml — drft dogfooding itself
+
+ignore = [
+  "examples/*",
+  "target/*",
+  ".scratch/*",
+]
+
+[parsers]
+markdown = true
+
+[rules]
+cycle = "warn"
+stale = "warn"
+containment = "warn"
+encapsulation = "warn"
+
+# README.md has false-positive broken links from JSON code block examples
+[rules.broken-link]
+severity = "warn"
+ignore = ["README.md"]
