@@ -1,7 +1,5 @@
-use super::Analysis;
-use crate::graph::Graph;
+use super::{Analysis, AnalysisContext};
 use std::collections::HashMap;
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BridgeEdge {
@@ -24,13 +22,14 @@ impl Analysis for Bridges {
         "bridges"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> BridgesResult {
+    fn run(&self, ctx: &AnalysisContext) -> BridgesResult {
+        let graph = ctx.graph;
         // Build undirected adjacency among real nodes
         let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -39,8 +38,8 @@ impl Analysis for Bridges {
         }
 
         for edge in &graph.edges {
-            if graph.is_real_node(&edge.source)
-                && graph.is_real_node(&edge.target)
+            if graph.is_file_node(&edge.source)
+                && graph.is_file_node(&edge.target)
                 && edge.source != edge.target
             {
                 adj.entry(edge.source.as_str())
@@ -174,12 +173,23 @@ impl<'a> TarjanBridgeState<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn linear_chain() {
-        // a — b — c (all edges are bridges, b is cut vertex)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -187,14 +197,14 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert_eq!(result.bridges.len(), 2);
         assert_eq!(result.cut_vertices, vec!["b.md"]);
     }
 
     #[test]
     fn cycle_has_no_bridges() {
-        // a — b — c — a (no bridges, no cut vertices)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -203,14 +213,14 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert!(result.bridges.is_empty());
         assert!(result.cut_vertices.is_empty());
     }
 
     #[test]
     fn star_graph() {
-        // center — a, center — b, center — c (center is cut vertex, all edges are bridges)
         let mut graph = Graph::new();
         graph.add_node(make_node("center.md"));
         graph.add_node(make_node("a.md"));
@@ -220,7 +230,8 @@ mod tests {
         graph.add_edge(make_edge("center.md", "b.md"));
         graph.add_edge(make_edge("center.md", "c.md"));
 
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert_eq!(result.cut_vertices, vec!["center.md"]);
         assert_eq!(result.bridges.len(), 3);
     }
@@ -228,7 +239,8 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert!(result.cut_vertices.is_empty());
         assert!(result.bridges.is_empty());
     }
@@ -238,15 +250,14 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
 
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert!(result.cut_vertices.is_empty());
         assert!(result.bridges.is_empty());
     }
 
     #[test]
     fn cycle_with_tail() {
-        // a — b — c — b (cycle), c — d (bridge)
-        // b is in a cycle with c, d hangs off c. c is cut vertex, c—d is bridge.
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -254,10 +265,11 @@ mod tests {
         graph.add_node(make_node("d.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
-        graph.add_edge(make_edge("c.md", "a.md")); // cycle a-b-c
-        graph.add_edge(make_edge("c.md", "d.md")); // tail
+        graph.add_edge(make_edge("c.md", "a.md"));
+        graph.add_edge(make_edge("c.md", "d.md"));
 
-        let result = Bridges.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Bridges.run(&make_ctx(&graph, &config));
         assert_eq!(result.bridges.len(), 1);
         assert_eq!(result.bridges[0].source, "c.md");
         assert_eq!(result.bridges[0].target, "d.md");

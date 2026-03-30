@@ -1,9 +1,8 @@
-use super::Rule;
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::transitive_reduction::TransitiveReduction;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct RedundantEdgeRule;
 
@@ -12,9 +11,14 @@ impl Rule for RedundantEdgeRule {
         "redundant-edge"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let analysis = TransitiveReduction;
-        let result = analysis.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = TransitiveReduction.run(&analysis_ctx);
 
         result
             .redundant_edges
@@ -38,13 +42,17 @@ impl Rule for RedundantEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, EdgeType, Node, NodeType};
+    use crate::config::Config;
+    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::rules::RuleContext;
+    use std::path::Path;
 
     fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: None,
+            graph: None,
         }
     }
 
@@ -52,7 +60,17 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
+        }
+    }
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
         }
     }
 
@@ -66,8 +84,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("a.md", "c.md"));
 
-        let rule = RedundantEdgeRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = RedundantEdgeRule.evaluate(&make_ctx(&graph, &config));
 
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "redundant-edge");
@@ -86,9 +104,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let rule = RedundantEdgeRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
-
+        let config = Config::defaults();
+        let diagnostics = RedundantEdgeRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 }

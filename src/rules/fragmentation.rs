@@ -1,9 +1,8 @@
-use super::Rule;
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::connected_components::ConnectedComponents;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct FragmentationRule;
 
@@ -12,14 +11,19 @@ impl Rule for FragmentationRule {
         "fragmentation"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = ConnectedComponents.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = ConnectedComponents.run(&analysis_ctx);
 
         if result.component_count <= 1 {
             return Vec::new();
         }
 
-        // One diagnostic per extra component (skip the largest)
         result
             .components
             .iter()
@@ -43,8 +47,20 @@ impl Rule for FragmentationRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use crate::rules::RuleContext;
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn no_diagnostic_when_connected() {
@@ -53,7 +69,8 @@ mod tests {
         graph.add_node(make_node("b.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
 
-        let diagnostics = FragmentationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = FragmentationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
@@ -64,9 +81,9 @@ mod tests {
         graph.add_node(make_node("b.md"));
         graph.add_node(make_node("c.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
-        // c.md is isolated
 
-        let diagnostics = FragmentationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = FragmentationRule.evaluate(&make_ctx(&graph, &config));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "fragmentation");
         assert!(diagnostics[0].message.contains("disconnected component"));
@@ -75,7 +92,8 @@ mod tests {
     #[test]
     fn no_diagnostic_for_empty_graph() {
         let graph = Graph::new();
-        let diagnostics = FragmentationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = FragmentationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 }

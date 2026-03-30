@@ -1,23 +1,23 @@
-mod analyses;
 mod cli;
-mod config;
-mod diagnostic;
-mod discovery;
-mod graph;
-mod lockfile;
-mod metrics;
-mod parsing;
-mod rules;
+
+use drft::analyses;
+use drft::config;
+use drft::diagnostic;
+use drft::graph;
+use drft::lockfile;
+use drft::metrics;
+use drft::rules;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
+use analyses::Analysis;
 use cli::{Cli, ColorChoice, Commands, OutputFormat};
 use config::{Config, RuleSeverity};
 use diagnostic::Diagnostic;
 use graph::build_graph;
-use lockfile::{Lockfile, derive_manifest, read_lockfile, write_lockfile};
+use lockfile::{Lockfile, write_lockfile};
 use rules::all_rules;
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
@@ -65,28 +65,17 @@ fn try_main() -> Result<i32> {
     };
 
     match &cli.command {
-        Commands::Init => run_init(&root),
+        Commands::Init {
+            interface_from,
+            no_interface,
+        } => run_init(&root, interface_from.as_deref(), *no_interface),
         Commands::Lock {
             check,
-            manifest,
-            no_manifest,
             recursive,
             max_depth,
-        } => run_lock(
-            &root,
-            *check,
-            manifest.as_deref(),
-            *no_manifest,
-            *recursive,
-            *max_depth,
-        ),
-        Commands::Report { analyses, metrics } => {
-            if *metrics {
-                run_metrics(&root, cli.format)
-            } else {
-                run_report(&root, cli.format, analyses)
-            }
-        }
+        } => run_lock(&root, *check, *recursive, *max_depth),
+        Commands::Analysis { analyses } => run_analysis(&root, cli.format, analyses),
+        Commands::Metrics => run_metrics(&root, cli.format),
         Commands::Impact { files } => run_impact(&root, cli.format, files),
         Commands::Graph {
             recursive,
@@ -121,563 +110,65 @@ fn try_main() -> Result<i32> {
     }
 }
 
-fn run_init(root: &Path) -> Result<i32> {
+fn run_init(root: &Path, interface_from: Option<&str>, no_interface: bool) -> Result<i32> {
     let config_path = root.join("drft.toml");
     if config_path.exists() {
         anyhow::bail!("drft.toml already exists");
     }
 
-    let content = r#"# drft.toml
+    let mut content = String::from(
+        r#"# drft.toml
 
 # Glob patterns for files to exclude from discovery
 ignore = []
 
-# Manifest file — seals the scope, controlling visibility to parent scopes
-# manifest = "README.md"
+[parsers]
+markdown = true
 
-# Rules: "error", "warn", or "off"
 [rules]
 broken-link = "warn"
-containment = "warn"
 cycle = "warn"
-directory-link = "warn"
-encapsulation = "warn"
-fragility = "off"
-fragmentation = "off"
-indirect-link = "off"
-layer-violation = "off"
-lockfile-outdated = "warn"
-orphan = "off"
-redundant-edge = "off"
-stale = "warn"
+stale = "error"
+"#,
+    );
 
-# Per-rule path ignores (glob patterns)
-# [ignore-rules]
-# orphan = ["README.md", "index.md"]
-# broken-link = ["drafts/*"]
+    // Derive interface from a file's outbound links
+    if let Some(file) = interface_from {
+        let config = Config::defaults();
+        let graph = build_graph(root, &config)?;
 
-# Custom rules (scripts that receive graph JSON on stdin, emit diagnostics as NDJSON)
-# [custom-rules.my-rule]
-# command = "./scripts/my-rule.sh"
-# severity = "warn"
+        if !graph.nodes.contains_key(file) {
+            anyhow::bail!("file \"{file}\" not found in graph");
+        }
 
-# Custom analyses (scripts that receive graph JSON on stdin, emit result JSON on stdout)
-# [custom-analyses.my-analysis]
-# command = "./scripts/my-analysis.sh"
+        let mut nodes = Vec::new();
+        if let Some(edge_indices) = graph.forward.get(file) {
+            for &idx in edge_indices {
+                let target = &graph.edges[idx].target;
+                if graph.nodes.contains_key(target.as_str()) && !nodes.contains(target) {
+                    nodes.push(target.clone());
+                }
+            }
+        }
+        nodes.sort();
 
-# Custom metrics (scripts that receive graph JSON on stdin, emit metrics as NDJSON)
-# [custom-metrics.my-metrics]
-# command = "./scripts/my-metrics.sh"
-"#;
+        content.push_str("\n[interface]\nnodes = [");
+        if nodes.is_empty() {
+            content.push(']');
+        } else {
+            content.push('\n');
+            for node in &nodes {
+                content.push_str(&format!("  \"{node}\",\n"));
+            }
+            content.push(']');
+        }
+        content.push('\n');
+    } else if !no_interface {
+        content.push_str("\n# [interface]\n# nodes = [\"overview.md\", \"api/*.md\"]\n");
+    }
 
-    std::fs::write(&config_path, content)
+    std::fs::write(&config_path, &content)
         .with_context(|| format!("failed to write {}", config_path.display()))?;
-
-    Ok(0)
-}
-
-fn run_report(root: &Path, format: OutputFormat, analysis_filter: &[String]) -> Result<i32> {
-    use analyses::Analysis;
-    use analyses::betweenness::Betweenness;
-    use analyses::bridges::Bridges as BridgesAnalysis;
-    use analyses::change_propagation::ChangePropagation;
-    use analyses::connected_components::ConnectedComponents;
-    use analyses::degree::Degree;
-    use analyses::depth::Depth as DepthAnalysis;
-    use analyses::edge_classification::{EdgeClassification, EdgeStatus};
-    use analyses::graph_stats::GraphStats;
-    use analyses::pagerank::PageRank;
-    use analyses::scc::StronglyConnectedComponents;
-    use analyses::scope_boundaries::ScopeBoundaries;
-    use analyses::transitive_reduction::TransitiveReduction;
-
-    let known_analyses = [
-        "betweenness",
-        "bridges",
-        "change-propagation",
-        "connected-components",
-        "degree",
-        "depth",
-        "edge-classification",
-        "graph-stats",
-        "pagerank",
-        "scc",
-        "scope-boundaries",
-        "transitive-reduction",
-    ];
-
-    // Validate analysis names
-    for name in analysis_filter {
-        if !known_analyses.contains(&name.as_str()) {
-            anyhow::bail!("unknown analysis: \"{name}\"");
-        }
-    }
-
-    let scope_root = find_scope_root(root);
-    let config = Config::load(&scope_root)?;
-    let graph = build_graph(&scope_root, &config)?;
-
-    let run_all = analysis_filter.is_empty();
-
-    let mut results = serde_json::Map::new();
-
-    if run_all || analysis_filter.iter().any(|a| a == "betweenness") {
-        let bw = Betweenness;
-        let result = bw.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(bw.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== betweenness ===");
-                if result.nodes.is_empty() {
-                    println!("no nodes");
-                } else {
-                    for nb in &result.nodes {
-                        println!("{}  {:.4}", nb.node, nb.score);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "bridges") {
-        let br = BridgesAnalysis;
-        let result = br.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(br.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== bridges ===");
-                if result.cut_vertices.is_empty() && result.bridges.is_empty() {
-                    println!("no cut vertices or bridges");
-                } else {
-                    println!(
-                        "{} cut {}, {} {}",
-                        result.cut_vertices.len(),
-                        if result.cut_vertices.len() == 1 {
-                            "vertex"
-                        } else {
-                            "vertices"
-                        },
-                        result.bridges.len(),
-                        if result.bridges.len() == 1 {
-                            "bridge"
-                        } else {
-                            "bridges"
-                        }
-                    );
-                    for v in &result.cut_vertices {
-                        println!("cut vertex: {v}");
-                    }
-                    for b in &result.bridges {
-                        println!("bridge: {} \u{2194} {}", b.source, b.target);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "change-propagation") {
-        let cp = ChangePropagation;
-        let result = cp.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(cp.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== change-propagation ===");
-                if !result.has_lockfile {
-                    println!("no lockfile");
-                } else if result.directly_changed.is_empty() && result.boundary_changes.is_empty() {
-                    println!("no changes since last lock");
-                } else {
-                    for c in &result.directly_changed {
-                        println!("{}: {}", c.node, c.reason);
-                    }
-                    for s in &result.transitively_stale {
-                        println!("{}: stale via {}", s.node, s.via);
-                    }
-                    for b in &result.boundary_changes {
-                        println!("{}: {}", b.node, b.reason);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "connected-components") {
-        let cc = ConnectedComponents;
-        let result = cc.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(cc.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== connected-components ===");
-                if result.component_count <= 1 {
-                    println!("1 component (fully connected)");
-                } else {
-                    println!("{} components", result.component_count);
-                    for c in &result.components {
-                        println!(
-                            "component {} ({} nodes): {}",
-                            c.id,
-                            c.members.len(),
-                            c.members.join(", ")
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "depth") {
-        let dep = DepthAnalysis;
-        let result = dep.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(dep.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== depth ===");
-                if result.nodes.is_empty() {
-                    println!("no nodes");
-                } else {
-                    // Group by depth
-                    let mut current_depth = None;
-                    let mut current_nodes = Vec::new();
-                    let mut current_has_cycle = false;
-
-                    let flush = |depth: usize, nodes: &[String], has_cycle: bool| {
-                        if has_cycle {
-                            println!("depth {} (cyclic): {}", depth, nodes.join(", "));
-                        } else {
-                            println!("depth {}: {}", depth, nodes.join(", "));
-                        }
-                    };
-
-                    for nd in &result.nodes {
-                        if current_depth != Some(nd.depth) {
-                            if let Some(d) = current_depth {
-                                flush(d, &current_nodes, current_has_cycle);
-                            }
-                            current_depth = Some(nd.depth);
-                            current_nodes.clear();
-                            current_has_cycle = false;
-                        }
-                        current_nodes.push(nd.node.clone());
-                        if nd.in_cycle {
-                            current_has_cycle = true;
-                        }
-                    }
-                    if let Some(d) = current_depth {
-                        flush(d, &current_nodes, current_has_cycle);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "edge-classification") {
-        let ec = EdgeClassification;
-        let result = ec.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(ec.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== edge-classification ===");
-                let mut counts = std::collections::HashMap::new();
-                for e in &result.edges {
-                    let label = match &e.status {
-                        EdgeStatus::Valid => "valid",
-                        EdgeStatus::Broken => "broken",
-                        EdgeStatus::Excluded => "excluded",
-                        EdgeStatus::DirectoryTarget => "directory",
-                        EdgeStatus::SymlinkTarget { .. } => "symlink",
-                        EdgeStatus::External => "external",
-                    };
-                    *counts.entry(label).or_insert(0usize) += 1;
-                }
-                let total = result.edges.len();
-                println!("{total} edges");
-                for label in &[
-                    "valid",
-                    "broken",
-                    "excluded",
-                    "directory",
-                    "symlink",
-                    "external",
-                ] {
-                    if let Some(&count) = counts.get(label) {
-                        println!("  {label}: {count}");
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "graph-stats") {
-        let gs = GraphStats;
-        let result = gs.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(gs.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== graph-stats ===");
-                println!("nodes: {}", result.node_count);
-                println!("edges: {}", result.edge_count);
-                println!("density: {:.2}", result.density);
-                match result.diameter {
-                    Some(d) => println!("diameter: {d}"),
-                    None => println!("diameter: - (disconnected)"),
-                }
-                match result.average_path_length {
-                    Some(a) => println!("avg path length: {a:.1}"),
-                    None => println!("avg path length: - (disconnected)"),
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "degree") {
-        let deg = Degree;
-        let result = deg.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(deg.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== degree ===");
-                if result.nodes.is_empty() {
-                    println!("no nodes");
-                } else {
-                    for nd in &result.nodes {
-                        println!("{}  in:{}  out:{}", nd.node, nd.in_degree, nd.out_degree);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "pagerank") {
-        let pr = PageRank;
-        let result = pr.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(pr.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== pagerank ===");
-                if result.nodes.is_empty() {
-                    println!("no nodes");
-                } else {
-                    if result.converged {
-                        println!("converged in {} iterations", result.iterations);
-                    } else {
-                        println!("did not converge after {} iterations", result.iterations);
-                    }
-                    for np in &result.nodes {
-                        println!("{}  {:.4}", np.node, np.score);
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "scc") {
-        let scc = StronglyConnectedComponents;
-        let result = scc.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(scc.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== scc ===");
-                if result.nontrivial_count == 0 {
-                    println!("no non-trivial SCCs (graph is acyclic)");
-                } else {
-                    println!(
-                        "{} non-trivial {}",
-                        result.nontrivial_count,
-                        if result.nontrivial_count == 1 {
-                            "SCC"
-                        } else {
-                            "SCCs"
-                        }
-                    );
-                    for s in &result.sccs {
-                        println!(
-                            "scc {} ({} nodes): {}",
-                            s.id,
-                            s.members.len(),
-                            s.members.join(", ")
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "scope-boundaries") {
-        let sb = ScopeBoundaries;
-        let result = sb.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(sb.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                println!("=== scope-boundaries ===");
-                println!("sealed: {}", if result.sealed { "yes" } else { "no" });
-                if result.escapes.is_empty() && result.encapsulation_violations.is_empty() {
-                    println!("no boundary crossings");
-                } else {
-                    for e in &result.escapes {
-                        println!("escape: {} \u{2192} {}", e.source, e.target);
-                    }
-                    for v in &result.encapsulation_violations {
-                        println!(
-                            "encapsulation: {} \u{2192} {} (bypasses {}manifest)",
-                            v.source, v.target, v.scope
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    if run_all || analysis_filter.iter().any(|a| a == "transitive-reduction") {
-        let tr = TransitiveReduction;
-        let result = tr.run(&graph, &scope_root);
-
-        match format {
-            OutputFormat::Json => {
-                results.insert(tr.name().to_string(), serde_json::to_value(&result)?);
-            }
-            _ => {
-                if result.redundant_edges.is_empty() {
-                    println!("=== transitive-reduction ===");
-                    println!("no redundant edges");
-                } else {
-                    println!("=== transitive-reduction ===");
-                    for re in &result.redundant_edges {
-                        println!("{} \u{2192} {} (via {})", re.source, re.target, re.via);
-                    }
-                }
-            }
-        }
-    }
-
-    // Custom analyses
-    let custom_results = analyses::custom::run_all_custom_analyses(&graph, &scope_root, &config);
-    for (name, value) in &custom_results {
-        match format {
-            OutputFormat::Json => {
-                results.insert(name.clone(), value.clone());
-            }
-            _ => {
-                println!("=== {name} ===");
-                println!("{}", serde_json::to_string_pretty(value)?);
-            }
-        }
-    }
-
-    if matches!(format, OutputFormat::Json) {
-        let output = serde_json::json!({ "analyses": results });
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    }
-
-    Ok(0)
-}
-
-fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
-    use analyses::Analysis;
-    use analyses::betweenness::Betweenness;
-    use analyses::bridges::Bridges as BridgesAnalysis;
-    use analyses::change_propagation::ChangePropagation;
-    use analyses::connected_components::ConnectedComponents;
-    use analyses::degree::Degree;
-    use analyses::depth::Depth as DepthAnalysis;
-    use analyses::edge_classification::EdgeClassification;
-    use analyses::graph_stats::GraphStats;
-    use analyses::pagerank::PageRank;
-    use analyses::scc::StronglyConnectedComponents;
-    use analyses::scope_boundaries::ScopeBoundaries;
-    use analyses::transitive_reduction::TransitiveReduction;
-
-    let scope_root = find_scope_root(root);
-    let config = Config::load(&scope_root)?;
-    let graph = build_graph(&scope_root, &config)?;
-
-    // Run all analyses
-    let results = metrics::AnalysisResults {
-        betweenness: &Betweenness.run(&graph, &scope_root),
-        bridges: &BridgesAnalysis.run(&graph, &scope_root),
-        change_propagation: &ChangePropagation.run(&graph, &scope_root),
-        connected_components: &ConnectedComponents.run(&graph, &scope_root),
-        degree: &Degree.run(&graph, &scope_root),
-        depth: &DepthAnalysis.run(&graph, &scope_root),
-        edge_classification: &EdgeClassification.run(&graph, &scope_root),
-        graph_stats: &GraphStats.run(&graph, &scope_root),
-        pagerank: &PageRank.run(&graph, &scope_root),
-        scc: &StronglyConnectedComponents.run(&graph, &scope_root),
-        scope_boundaries: &ScopeBoundaries.run(&graph, &scope_root),
-        transitive_reduction: &TransitiveReduction.run(&graph, &scope_root),
-        graph: &graph,
-    };
-
-    let mut all_metrics = metrics::collect_all(&results);
-
-    // Custom metrics
-    all_metrics.extend(metrics::custom::run_all_custom_metrics(
-        &graph,
-        &scope_root,
-        &config,
-    ));
-
-    match format {
-        OutputFormat::Json => {
-            let output = serde_json::json!({ "metrics": all_metrics });
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
-        _ => {
-            // Group by dimension
-            let mut by_dimension: std::collections::BTreeMap<&str, Vec<&metrics::Metric>> =
-                std::collections::BTreeMap::new();
-            for m in &all_metrics {
-                by_dimension.entry(&m.dimension).or_default().push(m);
-            }
-
-            println!("=== metrics ===");
-            for (dimension, dim_metrics) in &by_dimension {
-                println!("{dimension}");
-                for m in dim_metrics {
-                    match m.kind {
-                        metrics::MetricKind::Count => {
-                            println!("  {}: {}", m.name, m.value as i64);
-                        }
-                        _ => {
-                            println!("  {}: {:.4}", m.name, m.value);
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     Ok(0)
 }
@@ -685,59 +176,30 @@ fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
 fn run_lock(
     root: &Path,
     check_mode: bool,
-    manifest_flag: Option<&str>,
-    no_manifest: bool,
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    if manifest_flag.is_some() && no_manifest {
-        anyhow::bail!("cannot use --manifest and --no-manifest together");
-    }
-
-    // Recursive: lock child scopes bottom-up first
+    // Recursive: lock child graphs bottom-up first
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        let child_scopes = find_lockable_scopes(root)?;
-        for child_dir in &child_scopes {
-            let code = run_lock(child_dir, check_mode, None, false, true, next_depth)?;
+        let child_graphs = find_lockable_graphs(root)?;
+        for child_dir in &child_graphs {
+            let code = run_lock(child_dir, check_mode, true, next_depth)?;
             if check_mode && code != 0 {
                 return Ok(code);
             }
         }
     }
 
-    // Lock this scope
-    lock_scope(root, check_mode, manifest_flag, no_manifest)
+    // Lock this graph
+    lock_graph(root, check_mode)
 }
 
-fn lock_scope(
-    root: &Path,
-    check_mode: bool,
-    manifest_flag: Option<&str>,
-    no_manifest: bool,
-) -> Result<i32> {
+fn lock_graph(root: &Path, check_mode: bool) -> Result<i32> {
     let config = Config::load(root)?;
     let graph = build_graph(root, &config)?;
 
-    // Resolve manifest: CLI flag > config > existing lockfile
-    let manifest = if no_manifest {
-        None
-    } else if let Some(file) = manifest_flag {
-        Some(derive_manifest(&graph, file)?)
-    } else if let Some(ref file) = config.manifest {
-        Some(derive_manifest(&graph, file)?)
-    } else {
-        // Preserve existing manifest (re-derive nodes from current graph)
-        match read_lockfile(root)? {
-            Some(existing) => match existing.manifest {
-                Some(m) => Some(derive_manifest(&graph, &m.file)?),
-                None => None,
-            },
-            None => None,
-        }
-    };
-
-    let lockfile = Lockfile::from_graph(&graph, manifest);
+    let lockfile = Lockfile::from_graph(&graph);
 
     if check_mode {
         let lock_path = root.join("drft.lock");
@@ -762,17 +224,285 @@ fn lock_scope(
     }
 }
 
+fn run_analysis(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i32> {
+    let config = Config::load(root)?;
+    let graph = build_graph(root, &config)?;
+    let lockfile = lockfile::read_lockfile(root)?;
+    let ctx = analyses::AnalysisContext {
+        graph: &graph,
+        root,
+        config: &config,
+        lockfile: lockfile.as_ref(),
+    };
+
+    // Run all analyses, serialize results to JSON values
+    let all: Vec<(&str, serde_json::Value)> = vec![
+        (
+            "degree",
+            serde_json::to_value(analyses::degree::Degree.run(&ctx))?,
+        ),
+        (
+            "scc",
+            serde_json::to_value(analyses::scc::StronglyConnectedComponents.run(&ctx))?,
+        ),
+        (
+            "connected-components",
+            serde_json::to_value(analyses::connected_components::ConnectedComponents.run(&ctx))?,
+        ),
+        (
+            "depth",
+            serde_json::to_value(analyses::depth::Depth.run(&ctx))?,
+        ),
+        (
+            "graph-stats",
+            serde_json::to_value(analyses::graph_stats::GraphStats.run(&ctx))?,
+        ),
+        (
+            "bridges",
+            serde_json::to_value(analyses::bridges::Bridges.run(&ctx))?,
+        ),
+        (
+            "transitive-reduction",
+            serde_json::to_value(analyses::transitive_reduction::TransitiveReduction.run(&ctx))?,
+        ),
+        (
+            "betweenness",
+            serde_json::to_value(analyses::betweenness::Betweenness.run(&ctx))?,
+        ),
+        (
+            "pagerank",
+            serde_json::to_value(analyses::pagerank::PageRank.run(&ctx))?,
+        ),
+        (
+            "graph-boundaries",
+            serde_json::to_value(analyses::graph_boundaries::GraphBoundaries.run(&ctx))?,
+        ),
+        (
+            "change-propagation",
+            serde_json::to_value(analyses::change_propagation::ChangePropagation.run(&ctx))?,
+        ),
+    ];
+
+    let results: Vec<_> = if filter.is_empty() {
+        all
+    } else {
+        all.into_iter()
+            .filter(|(name, _)| filter.iter().any(|f| f == name))
+            .collect()
+    };
+
+    if results.is_empty() && !filter.is_empty() {
+        anyhow::bail!("no matching analyses: {}", filter.join(", "));
+    }
+
+    match format {
+        OutputFormat::Json => {
+            let map: serde_json::Map<String, serde_json::Value> = results
+                .iter()
+                .map(|(name, value)| (name.to_string(), value.clone()))
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&map)?);
+        }
+        OutputFormat::Text | OutputFormat::Dot => {
+            for (name, result) in &results {
+                println!("=== {name} ===");
+                println!("{}", serde_json::to_string_pretty(result)?);
+                println!();
+            }
+        }
+    }
+
+    Ok(0)
+}
+
+fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
+    let config = Config::load(root)?;
+    let graph = build_graph(root, &config)?;
+    let lockfile = lockfile::read_lockfile(root)?;
+    let ctx = analyses::AnalysisContext {
+        graph: &graph,
+        root,
+        config: &config,
+        lockfile: lockfile.as_ref(),
+    };
+
+    // Run the analyses we need for metrics
+    let degree = analyses::degree::Degree.run(&ctx);
+    let scc = analyses::scc::StronglyConnectedComponents.run(&ctx);
+    let cc = analyses::connected_components::ConnectedComponents.run(&ctx);
+    let stats = analyses::graph_stats::GraphStats.run(&ctx);
+    let bridges = analyses::bridges::Bridges.run(&ctx);
+    let reduction = analyses::transitive_reduction::TransitiveReduction.run(&ctx);
+    let change = analyses::change_propagation::ChangePropagation.run(&ctx);
+    let pagerank = analyses::pagerank::PageRank.run(&ctx);
+
+    use metrics::{Metric, MetricKind};
+    let mut all_metrics: Vec<Metric> = Vec::new();
+
+    // Connectivity
+    let total_nodes = graph
+        .nodes
+        .values()
+        .filter(|n| graph.is_file_node(&n.path))
+        .count() as f64;
+    if total_nodes > 0.0 {
+        let orphans = degree.nodes.iter().filter(|n| n.in_degree == 0).count() as f64;
+        all_metrics.push(Metric {
+            name: "orphan_ratio".into(),
+            value: orphans / total_nodes,
+            kind: MetricKind::Ratio,
+            dimension: "connectivity".into(),
+        });
+
+        let islands = cc
+            .components
+            .iter()
+            .filter(|c| c.members.len() == 1)
+            .count() as f64;
+        all_metrics.push(Metric {
+            name: "island_ratio".into(),
+            value: islands / total_nodes,
+            kind: MetricKind::Ratio,
+            dimension: "connectivity".into(),
+        });
+    }
+
+    // Complexity
+    all_metrics.push(Metric {
+        name: "component_count".into(),
+        value: cc.component_count as f64,
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
+    all_metrics.push(Metric {
+        name: "density".into(),
+        value: stats.density,
+        kind: MetricKind::Ratio,
+        dimension: "complexity".into(),
+    });
+    all_metrics.push(Metric {
+        name: "cyclomatic_complexity".into(),
+        value: (graph.edges.len() as f64 - graph.nodes.len() as f64 + cc.components.len() as f64),
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
+    if let Some(d) = stats.diameter {
+        all_metrics.push(Metric {
+            name: "diameter".into(),
+            value: d as f64,
+            kind: MetricKind::Count,
+            dimension: "complexity".into(),
+        });
+    }
+    if let Some(avg) = stats.average_path_length {
+        all_metrics.push(Metric {
+            name: "average_path_length".into(),
+            value: avg,
+            kind: MetricKind::Score,
+            dimension: "complexity".into(),
+        });
+    }
+
+    // Conciseness
+    let total_edges = graph.edges.len() as f64;
+    if total_edges > 0.0 {
+        all_metrics.push(Metric {
+            name: "redundant_edge_ratio".into(),
+            value: reduction.redundant_edges.len() as f64 / total_edges,
+            kind: MetricKind::Ratio,
+            dimension: "conciseness".into(),
+        });
+    }
+
+    // Resilience
+    all_metrics.push(Metric {
+        name: "bridge_count".into(),
+        value: bridges.bridges.len() as f64,
+        kind: MetricKind::Count,
+        dimension: "resilience".into(),
+    });
+    all_metrics.push(Metric {
+        name: "cut_node_count".into(),
+        value: bridges.cut_vertices.len() as f64,
+        kind: MetricKind::Count,
+        dimension: "resilience".into(),
+    });
+
+    // Freshness
+    if change.has_lockfile {
+        all_metrics.push(Metric {
+            name: "directly_changed_count".into(),
+            value: change.directly_changed.len() as f64,
+            kind: MetricKind::Count,
+            dimension: "freshness".into(),
+        });
+        all_metrics.push(Metric {
+            name: "transitively_stale_count".into(),
+            value: change.transitively_stale.len() as f64,
+            kind: MetricKind::Count,
+            dimension: "freshness".into(),
+        });
+        if total_nodes > 0.0 {
+            let stale = (change.directly_changed.len() + change.transitively_stale.len()) as f64;
+            all_metrics.push(Metric {
+                name: "stale_ratio".into(),
+                value: stale / total_nodes,
+                kind: MetricKind::Ratio,
+                dimension: "freshness".into(),
+            });
+        }
+    }
+
+    // PageRank concentration
+    if !pagerank.nodes.is_empty() {
+        let scores: Vec<f64> = pagerank.nodes.iter().map(|n| n.score).collect();
+        let max = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        all_metrics.push(Metric {
+            name: "max_pagerank".into(),
+            value: max,
+            kind: MetricKind::Score,
+            dimension: "complexity".into(),
+        });
+    }
+
+    // SCC
+    all_metrics.push(Metric {
+        name: "cycle_count".into(),
+        value: scc.nontrivial_count as f64,
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
+
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&all_metrics)?);
+        }
+        OutputFormat::Text | OutputFormat::Dot => {
+            for m in &all_metrics {
+                let val = if m.value == m.value.floor() {
+                    format!("{}", m.value as i64)
+                } else {
+                    format!("{:.4}", m.value)
+                };
+                println!("{:<30} {:>10}  ({})", m.name, val, m.dimension);
+            }
+        }
+    }
+
+    Ok(0)
+}
+
 fn run_graph(
     root: &Path,
     format: OutputFormat,
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    let scope_root = find_scope_root(root);
+    let graph_root = find_graph_root(root);
 
     match format {
         OutputFormat::Dot => {
-            let graphs = collect_jgf_graphs(&scope_root, ".", recursive, max_depth)?;
+            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
             println!("digraph {{");
             let mut all_nodes = Vec::new();
             let mut all_edges = Vec::new();
@@ -814,7 +544,7 @@ fn run_graph(
         }
         _ => {
             // JSON Graph Format (JGF)
-            let graphs = collect_jgf_graphs(&scope_root, ".", recursive, max_depth)?;
+            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
 
             let jgf_graphs: Vec<serde_json::Value> = graphs
                 .iter()
@@ -871,19 +601,19 @@ fn run_graph(
     Ok(0)
 }
 
-struct ScopeGraph {
+struct GraphExport {
     id: String,
     nodes: Vec<(String, graph::NodeType, Option<String>)>, // path, type, hash
     edges: Vec<(String, String, graph::EdgeType)>,
 }
 
-/// Collect JGF graph(s) from a scope and optionally its children.
+/// Collect JGF graph(s) from a graph root and optionally its children.
 fn collect_jgf_graphs(
     root: &Path,
     id: &str,
     recursive: bool,
     max_depth: Option<usize>,
-) -> Result<Vec<ScopeGraph>> {
+) -> Result<Vec<GraphExport>> {
     let config = Config::load(root)?;
     let g = build_graph(root, &config)?;
 
@@ -897,10 +627,10 @@ fn collect_jgf_graphs(
         .edges
         .iter()
         .filter(|e| g.nodes.contains_key(&e.target))
-        .map(|e| (e.source.clone(), e.target.clone(), e.edge_type))
+        .map(|e| (e.source.clone(), e.target.clone(), e.edge_type.clone()))
         .collect();
 
-    let mut graphs = vec![ScopeGraph {
+    let mut graphs = vec![GraphExport {
         id: id.to_string(),
         nodes,
         edges,
@@ -908,19 +638,19 @@ fn collect_jgf_graphs(
 
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_scope in &g.child_scopes {
-            let child_dir = root.join(child_scope.trim_end_matches('/'));
+        for child_graph in &g.child_graphs {
+            let child_dir = root.join(child_graph.trim_end_matches('/'));
             let child_id = if id == "." {
-                child_scope.trim_end_matches('/').to_string()
+                child_graph.trim_end_matches('/').to_string()
             } else {
                 format!(
                     "{}/{}",
                     id.trim_end_matches('/'),
-                    child_scope.trim_end_matches('/')
+                    child_graph.trim_end_matches('/')
                 )
             };
-            let child_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
-            graphs.extend(child_graphs);
+            let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
+            graphs.extend(sub_graphs);
         }
     }
 
@@ -928,9 +658,9 @@ fn collect_jgf_graphs(
 }
 
 fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32> {
-    let scope_root = find_scope_root(root);
-    let config = Config::load(&scope_root)?;
-    let graph = build_graph(&scope_root, &config)?;
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+    let graph = build_graph(&graph_root, &config)?;
 
     // Resolve file args (try with .md extension if not found)
     let mut seeds: Vec<String> = Vec::new();
@@ -1011,27 +741,27 @@ fn run_check(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    // Validate rule names (built-in + custom from config)
-    let scope_root = find_scope_root(root);
-    let root_config = Config::load(&scope_root)?;
+    // Validate rule names (built-in + script rules from config)
+    let graph_root = find_graph_root(root);
+    let root_config = Config::load(&graph_root)?;
     let available_rules = all_rules();
     let mut known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
-    let custom_names: Vec<String> = root_config.custom_rules.keys().cloned().collect();
-    known_names.extend(custom_names.iter().map(|s| s.as_str()));
+    let script_names: Vec<String> = root_config
+        .script_rules()
+        .map(|(name, _)| name.to_string())
+        .collect();
+    known_names.extend(script_names.iter().map(|s| s.as_str()));
     for name in rule_filter {
         if !known_names.contains(&name.as_str()) {
             anyhow::bail!("unknown rule: \"{name}\"");
         }
     }
 
-    // Scope resolution: walk up to find nearest ancestor with drft.lock
-    let scope_root = find_scope_root(root);
-
-    let mut diagnostics = check_scope(&scope_root, rule_filter, None, recursive, max_depth)?;
+    let mut diagnostics = check_graph(&graph_root, rule_filter, None, recursive, max_depth)?;
 
     diagnostics.sort_by(|a, b| {
-        a.scope
-            .cmp(&b.scope)
+        a.graph
+            .cmp(&b.graph)
             .then_with(|| a.rule.cmp(&b.rule))
             .then_with(|| a.source.cmp(&b.source))
             .then_with(|| a.target.cmp(&b.target))
@@ -1039,23 +769,23 @@ fn run_check(
     });
 
     let colorize = use_color(color, format);
-    let mut current_scope: Option<&Option<String>> = None;
+    let mut current_graph: Option<&Option<String>> = None;
     for d in &diagnostics {
         match format {
             OutputFormat::Text | OutputFormat::Dot => {
-                // Print scope header when scope changes
-                if current_scope != Some(&d.scope) {
-                    if let Some(scope) = &d.scope {
-                        if current_scope.is_some() {
+                // Print graph header when graph changes
+                if current_graph != Some(&d.graph) {
+                    if let Some(g) = &d.graph {
+                        if current_graph.is_some() {
                             println!();
                         }
                         if colorize {
-                            println!("\x1b[1m[{scope}]\x1b[0m");
+                            println!("\x1b[1m[{g}]\x1b[0m");
                         } else {
-                            println!("[{scope}]");
+                            println!("[{g}]");
                         }
                     }
-                    current_scope = Some(&d.scope);
+                    current_graph = Some(&d.graph);
                 }
                 if colorize {
                     println!("{}", d.format_text_color());
@@ -1113,7 +843,7 @@ fn run_check_watch(
     use std::sync::mpsc;
     use std::time::Duration;
 
-    let scope_root = find_scope_root(root);
+    let graph_root = find_graph_root(root);
 
     // Initial run
     print!("\x1b[2J\x1b[H"); // clear screen
@@ -1125,7 +855,7 @@ fn run_check_watch(
 
     notify::Watcher::watch(
         debouncer.watcher(),
-        &scope_root,
+        &graph_root,
         notify::RecursiveMode::Recursive,
     )?;
 
@@ -1158,11 +888,11 @@ fn run_check_watch(
     Ok(0)
 }
 
-/// Find subdirectories that are lockable scopes (have drft.lock or drft.toml).
-/// Returns absolute paths, sorted, shallowest first. Does not recurse past scope boundaries.
+/// Find subdirectories that are lockable graphs (have drft.lock or drft.toml).
+/// Returns absolute paths, sorted, shallowest first. Does not recurse past graph boundaries.
 /// Respects .gitignore.
-fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut scopes = Vec::new();
+fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut graphs = Vec::new();
     let mut found: Vec<PathBuf> = Vec::new();
     let root_owned = root.to_path_buf();
 
@@ -1180,7 +910,7 @@ fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
             continue;
         }
 
-        // Skip if inside an already-found scope
+        // Skip if inside an already-found graph
         let inside_existing = found.iter().any(|s| entry.path().starts_with(s));
         if inside_existing {
             continue;
@@ -1190,17 +920,17 @@ fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
         let has_config = entry.path().join("drft.toml").exists();
         if has_lock || has_config {
             found.push(entry.path().to_path_buf());
-            scopes.push(entry.path().to_path_buf());
+            graphs.push(entry.path().to_path_buf());
         }
     }
 
-    scopes.sort();
-    Ok(scopes)
+    graphs.sort();
+    Ok(graphs)
 }
 
 /// Walk up from `start` to find the nearest ancestor directory with `drft.lock`.
 /// If none found, returns `start`.
-fn find_scope_root(start: &Path) -> std::path::PathBuf {
+fn find_graph_root(start: &Path) -> std::path::PathBuf {
     let mut current = start.to_path_buf();
     loop {
         if current.join("drft.lock").exists() {
@@ -1212,11 +942,11 @@ fn find_scope_root(start: &Path) -> std::path::PathBuf {
     }
 }
 
-/// Check a single scope and optionally recurse into child scopes.
-fn check_scope(
+/// Check a single graph and optionally recurse into child graphs.
+fn check_graph(
     root: &Path,
     rule_filter: &[String],
-    scope_prefix: Option<&str>,
+    graph_prefix: Option<&str>,
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<Vec<Diagnostic>> {
@@ -1244,7 +974,13 @@ fn check_scope(
             severity
         };
 
-        let mut findings = rule.evaluate(&graph, root);
+        let rule_ctx = rules::RuleContext {
+            graph: &graph,
+            root,
+            config: &config,
+            lockfile: None,
+        };
+        let mut findings = rule.evaluate(&rule_ctx);
         findings.retain(|d| {
             // Check all path fields against ignore-rules
             let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
@@ -1255,54 +991,54 @@ fn check_scope(
         });
         for d in &mut findings {
             d.severity = severity;
-            if scope_prefix.is_some() {
-                d.scope = scope_prefix.map(|s| s.to_string());
+            if graph_prefix.is_some() {
+                d.graph = graph_prefix.map(|s| s.to_string());
             }
         }
         diagnostics.extend(findings);
     }
 
-    // Run custom rules (respecting --rule filter)
-    let run_custom = if rule_filter.is_empty() {
-        !config.custom_rules.is_empty()
+    // Run script rules (respecting --rule filter)
+    let has_script_rules = config.script_rules().next().is_some();
+    let run_script = if rule_filter.is_empty() {
+        has_script_rules
     } else {
         config
-            .custom_rules
-            .keys()
-            .any(|name| rule_filter.iter().any(|f| f == name))
+            .script_rules()
+            .any(|(name, _)| rule_filter.iter().any(|f| f == name))
     };
-    if run_custom {
-        let mut custom_findings = rules::custom::run_custom_rules(&graph, root, &config);
-        // Filter to only requested custom rules if --rule is set
+    if run_script {
+        let mut script_findings = rules::script::run_script_rules(&graph, root, &config);
+        // Filter to only requested rules if --rule is set
         if !rule_filter.is_empty() {
-            custom_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
+            script_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
         }
-        // Apply ignore-rules filtering to custom rule diagnostics too
-        custom_findings.retain(|d| {
+        // Apply per-rule ignore filtering to script rule diagnostics
+        script_findings.retain(|d| {
             let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
                 .into_iter()
                 .flatten()
                 .collect();
             !paths.iter().any(|p| config.is_rule_ignored(&d.rule, p))
         });
-        for d in &mut custom_findings {
-            if scope_prefix.is_some() {
-                d.scope = scope_prefix.map(|s| s.to_string());
+        for d in &mut script_findings {
+            if graph_prefix.is_some() {
+                d.graph = graph_prefix.map(|s| s.to_string());
             }
         }
-        diagnostics.extend(custom_findings);
+        diagnostics.extend(script_findings);
     }
 
-    // Recursively check child scopes if --recursive
+    // Recursively check child graphs if --recursive
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_scope in &graph.child_scopes {
-            let child_dir = root.join(child_scope.trim_end_matches('/'));
-            let child_prefix = match scope_prefix {
-                Some(parent) => format!("{parent}/{}", child_scope.trim_end_matches('/')),
-                None => child_scope.trim_end_matches('/').to_string(),
+        for child_graph in &graph.child_graphs {
+            let child_dir = root.join(child_graph.trim_end_matches('/'));
+            let child_prefix = match graph_prefix {
+                Some(parent) => format!("{parent}/{}", child_graph.trim_end_matches('/')),
+                None => child_graph.trim_end_matches('/').to_string(),
             };
-            let child_diagnostics = check_scope(
+            let child_diagnostics = check_graph(
                 &child_dir,
                 rule_filter,
                 Some(&child_prefix),

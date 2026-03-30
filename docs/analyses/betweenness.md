@@ -50,3 +50,7 @@ JSON output:
 ## Algorithm
 
 Uses [Brandes' algorithm](https://en.wikipedia.org/wiki/Betweenness_centrality#Brandes'_algorithm) on the directed graph. For each source node, BFS computes shortest paths and predecessor lists, then back-propagation accumulates pair-dependencies. Scores are normalized by `(n-1)*(n-2)` for directed graphs. Complexity is O(V * E).
+
+## Source
+
+[`src/analyses/betweenness.rs`](../../src/analyses/betweenness.rs)

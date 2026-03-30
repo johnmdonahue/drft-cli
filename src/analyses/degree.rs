@@ -1,6 +1,4 @@
-use super::Analysis;
-use crate::graph::Graph;
-use std::path::Path;
+use super::{Analysis, AnalysisContext};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NodeDegree {
@@ -23,11 +21,12 @@ impl Analysis for Degree {
         "degree"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> DegreeResult {
+    fn run(&self, ctx: &AnalysisContext) -> DegreeResult {
+        let graph = ctx.graph;
         let mut nodes: Vec<NodeDegree> = graph
             .nodes
             .keys()
-            .filter(|path| graph.is_real_node(path))
+            .filter(|path| graph.is_file_node(path))
             .map(|path| {
                 let in_degree = graph
                     .reverse
@@ -35,7 +34,7 @@ impl Analysis for Degree {
                     .map(|indices| {
                         indices
                             .iter()
-                            .filter(|&&idx| graph.is_real_node(&graph.edges[idx].source))
+                            .filter(|&&idx| graph.is_file_node(&graph.edges[idx].source))
                             .count()
                     })
                     .unwrap_or(0);
@@ -46,7 +45,7 @@ impl Analysis for Degree {
                     .map(|indices| {
                         indices
                             .iter()
-                            .filter(|&&idx| graph.is_real_node(&graph.edges[idx].target))
+                            .filter(|&&idx| graph.is_file_node(&graph.edges[idx].target))
                             .count()
                     })
                     .unwrap_or(0);
@@ -68,13 +67,26 @@ impl Analysis for Degree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Graph, Node, NodeType};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         assert!(result.nodes.is_empty());
     }
 
@@ -83,7 +95,8 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
 
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes.len(), 1);
         assert_eq!(result.nodes[0].node, "a.md");
         assert_eq!(result.nodes[0].in_degree, 0);
@@ -92,7 +105,6 @@ mod tests {
 
     #[test]
     fn diamond_graph() {
-        // a → b, a → c, b → d, c → d
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -103,7 +115,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "d.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
 
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes.len(), 4);
 
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
@@ -121,7 +134,8 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_edge(make_edge("a.md", "a.md"));
 
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes[0].in_degree, 1);
         assert_eq!(result.nodes[0].out_degree, 1);
     }
@@ -134,13 +148,14 @@ mod tests {
             path: "https://example.com".into(),
             node_type: NodeType::External,
             hash: None,
+            graph: None,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes.len(), 1);
         assert_eq!(result.nodes[0].node, "a.md");
-        // Edge to external node is not counted
         assert_eq!(result.nodes[0].out_degree, 0);
     }
 
@@ -151,7 +166,8 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
 
-        let result = Degree.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Degree.run(&make_ctx(&graph, &config));
         let paths: Vec<&str> = result.nodes.iter().map(|n| n.node.as_str()).collect();
         assert_eq!(paths, vec!["a.md", "b.md", "c.md"]);
     }

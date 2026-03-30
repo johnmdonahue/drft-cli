@@ -1,9 +1,8 @@
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::scc::StronglyConnectedComponents;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::rules::Rule;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct CycleRule;
 
@@ -12,14 +11,19 @@ impl Rule for CycleRule {
         "cycle"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = StronglyConnectedComponents.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = StronglyConnectedComponents.run(&analysis_ctx);
 
         result
             .sccs
             .iter()
             .map(|scc| {
-                // Build a cycle path: members + repeat first to close the cycle
                 let mut path = scc.members.clone();
                 if let Some(first) = path.first().cloned() {
                     path.push(first);
@@ -45,8 +49,20 @@ impl Rule for CycleRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use crate::rules::RuleContext;
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn detects_simple_cycle() {
@@ -58,15 +74,13 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let rule = CycleRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "cycle");
 
         let path = diagnostics[0].path.as_ref().unwrap();
-        // Cycle should start and end with the same node
         assert_eq!(path.first(), path.last());
-        // All three nodes should be in the path
         assert!(path.contains(&"a.md".to_string()));
         assert!(path.contains(&"b.md".to_string()));
         assert!(path.contains(&"c.md".to_string()));
@@ -81,8 +95,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let rule = CycleRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
@@ -90,11 +104,10 @@ mod tests {
     fn ignores_broken_link_edges() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
-        // Edge to non-existent node should not crash or produce false cycle
         graph.add_edge(make_edge("a.md", "missing.md"));
 
-        let rule = CycleRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 }

@@ -3,6 +3,9 @@
 # Glob patterns for files to exclude from discovery
 ignore = []
 
+[parsers]
+markdown = true
+
 # Rules: "error", "warn", or "off"
 [rules]
 broken-link = "warn"

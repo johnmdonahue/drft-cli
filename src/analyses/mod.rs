@@ -2,27 +2,36 @@ pub mod betweenness;
 pub mod bridges;
 pub mod change_propagation;
 pub mod connected_components;
-pub mod custom;
 pub mod degree;
 pub mod depth;
-pub mod edge_classification;
+pub mod graph_boundaries;
 pub mod graph_stats;
 pub mod pagerank;
 pub mod scc;
-pub mod scope_boundaries;
 pub mod transitive_reduction;
 
+use crate::config::Config;
 use crate::graph::Graph;
+use crate::lockfile::Lockfile;
 use std::path::Path;
+
+/// Context passed to every analysis, providing access to the graph,
+/// filesystem root, config, and optional lockfile.
+pub struct AnalysisContext<'a> {
+    pub graph: &'a Graph,
+    pub root: &'a Path,
+    pub config: &'a Config,
+    pub lockfile: Option<&'a Lockfile>,
+}
 
 /// An analysis computes structured data about the graph.
 /// Rules consume analysis results and map them to diagnostics.
 /// Metrics extract scalar values from analysis results.
-/// See `docs/analyses/` for conceptual documentation on each analysis.
+/// See [`docs/analyses`](../../docs/analyses/README.md) for conceptual documentation on each analysis.
 pub trait Analysis {
     type Output: serde::Serialize;
 
     fn name(&self) -> &str;
 
-    fn run(&self, graph: &Graph, root: &Path) -> Self::Output;
+    fn run(&self, ctx: &AnalysisContext) -> Self::Output;
 }

@@ -56,7 +56,7 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Only real nodes (Document and Asset) are included — external URLs, frontier boundaries, and virtual nodes are excluded. Degree counts only edges between real nodes.
+Nodes are sorted alphabetically by path. Only Source and Resource nodes are included — External and Graph nodes are excluded. Degree counts only edges between Source/Resource nodes.
 
 ### As a rule (`drft check`)
 
@@ -76,3 +76,7 @@ orphan = "warn"
 ## Algorithm
 
 For each real node, count the entries in the forward adjacency list (out-degree) and reverse adjacency list (in-degree), filtering to only count edges where the other endpoint is also a real node. This is O(V + E).
+
+## Source
+
+[`src/analyses/degree.rs`](../../src/analyses/degree.rs)

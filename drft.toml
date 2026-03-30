@@ -1,0 +1,16 @@
+# drft.toml — drft dogfooding itself
+
+[parsers]
+markdown = true
+
+[parsers.rust]
+glob = "*.rs"
+command = "./scripts/parse-rust.sh"
+types = ["comment"]
+
+[rules]
+broken-link = "warn"
+cycle = "warn"
+stale = "error"
+containment = "warn"
+encapsulation = "warn"

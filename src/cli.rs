@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "drft",
-    about = "Structural integrity checker for markdown directories"
+    about = "Structural integrity checker for linked file systems"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -26,7 +26,15 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Create a drft.toml config file
-    Init,
+    Init {
+        /// Derive interface nodes from a file's outbound links
+        #[arg(long, value_name = "FILE")]
+        interface_from: Option<String>,
+
+        /// Create config without interface (open graph)
+        #[arg(long)]
+        no_interface: bool,
+    },
 
     /// Snapshot the current state to drft.lock
     Lock {
@@ -34,30 +42,22 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
 
-        /// Seal the scope by declaring a manifest file
-        #[arg(long, value_name = "FILE")]
-        manifest: Option<String>,
-
-        /// Unseal the scope by removing the manifest
-        #[arg(long)]
-        no_manifest: bool,
-
-        /// Lock child scopes recursively (bottom-up)
+        /// Lock child graphs recursively (bottom-up)
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
     },
 
     /// Export the dependency graph
     Graph {
-        /// Include child scope graphs
+        /// Include child graphs
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
     },
@@ -69,28 +69,27 @@ pub enum Commands {
         files: Vec<String>,
     },
 
-    /// Run graph analyses and output structured results
-    Report {
+    /// [unstable] Run graph analyses and output structured results
+    Analysis {
         /// Analyses to run (defaults to all)
-        #[arg(long = "analysis", conflicts_with = "metrics")]
+        #[arg(long = "analysis")]
         analyses: Vec<String>,
-
-        /// Output extracted scalar metrics instead of full analysis results
-        #[arg(long)]
-        metrics: bool,
     },
 
-    /// Check markdown structure for rule violations
+    /// [unstable] Extract scalar health metrics from analysis results
+    Metrics,
+
+    /// Check structure for rule violations
     Check {
         /// Run only specific rules (can be repeated)
         #[arg(long = "rule")]
         rules: Vec<String>,
 
-        /// Check child scopes recursively
+        /// Check child graphs recursively
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
 

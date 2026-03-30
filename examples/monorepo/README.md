@@ -1,6 +1,6 @@
 # Monorepo
 
-A project with nested scopes. Each subdirectory under `projects/` is its own scope.
+A project with nested graphs. Each subdirectory under `projects/` is its own child graph.
 
 - [Docs](docs/overview.md)
 - [Alpha](projects/alpha/index.md)

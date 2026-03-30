@@ -53,3 +53,7 @@ JSON output:
 ## Algorithm
 
 Uses the power iteration method with damping factor d = 0.85, maximum 100 iterations, and convergence threshold ε = 1e-6. Dangling nodes (out-degree 0) redistribute their rank evenly to all nodes. Convergence is checked via the L1 norm of the rank difference vector. Complexity is O(iterations * (V + E)).
+
+## Source
+
+[`src/analyses/pagerank.rs`](../../src/analyses/pagerank.rs)

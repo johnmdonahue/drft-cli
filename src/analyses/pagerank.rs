@@ -1,7 +1,5 @@
-use super::Analysis;
-use crate::graph::Graph;
+use super::{Analysis, AnalysisContext};
 use std::collections::HashMap;
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NodePageRank {
@@ -29,11 +27,12 @@ impl Analysis for PageRank {
         "pagerank"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> PageRankResult {
+    fn run(&self, ctx: &AnalysisContext) -> PageRankResult {
+        let graph = ctx.graph;
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -56,8 +55,8 @@ impl Analysis for PageRank {
         }
 
         for edge in &graph.edges {
-            if graph.is_real_node(&edge.source)
-                && graph.is_real_node(&edge.target)
+            if graph.is_file_node(&edge.source)
+                && graph.is_file_node(&edge.target)
                 && edge.source != edge.target
             {
                 *out_degree.get_mut(edge.source.as_str()).unwrap() += 1;
@@ -142,15 +141,28 @@ impl Analysis for PageRank {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn single_node() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
 
-        let result = PageRank.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = PageRank.run(&make_ctx(&graph, &config));
         assert!(result.converged);
         assert_eq!(result.nodes.len(), 1);
         assert!((result.nodes[0].score - 1.0).abs() < 1e-4);
@@ -158,13 +170,13 @@ mod tests {
 
     #[test]
     fn two_nodes_with_link() {
-        // a → b: b should have higher rank
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
 
-        let result = PageRank.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = PageRank.run(&make_ctx(&graph, &config));
         assert!(result.converged);
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
         let b = result.nodes.iter().find(|n| n.node == "b.md").unwrap();
@@ -181,7 +193,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = PageRank.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = PageRank.run(&make_ctx(&graph, &config));
         let sum: f64 = result.nodes.iter().map(|n| n.score).sum();
         assert!((sum - 1.0).abs() < 1e-4);
     }
@@ -189,21 +202,22 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = PageRank.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = PageRank.run(&make_ctx(&graph, &config));
         assert!(result.converged);
         assert!(result.nodes.is_empty());
     }
 
     #[test]
     fn dangling_node() {
-        // a → b, c is dangling (out-degree 0)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
         graph.add_node(make_node("c.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
 
-        let result = PageRank.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = PageRank.run(&make_ctx(&graph, &config));
         assert!(result.converged);
         let sum: f64 = result.nodes.iter().map(|n| n.score).sum();
         assert!((sum - 1.0).abs() < 1e-4);

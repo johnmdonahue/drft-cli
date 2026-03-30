@@ -3,8 +3,8 @@ use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use std::path::Path;
 
-/// Discover all markdown files under `root`, stopping at child scope boundaries
-/// (directories containing `drft.lock`). Respects `.gitignore` automatically.
+/// Discover all files under `root`, stopping at child graph boundaries
+/// (directories containing `drft.lock` or `drft.toml`). Respects `.gitignore` automatically.
 /// Returns paths relative to `root`, sorted.
 pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
     let ignore_set = if ignore_patterns.is_empty() {
@@ -28,7 +28,10 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
                 if entry.path() == root_owned {
                     return true;
                 }
-                if entry.path().join("drft.lock").exists() {
+                // Stop at child graph boundaries
+                if entry.path().join("drft.lock").exists()
+                    || entry.path().join("drft.toml").exists()
+                {
                     return false;
                 }
             }
@@ -42,9 +45,6 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
             continue;
         }
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
 
         let relative = path
             .strip_prefix(root)
@@ -65,16 +65,26 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
     Ok(files)
 }
 
-/// Find child scope directories (those containing `drft.lock`) under `root`.
+/// Find child graph directories (those containing `drft.lock` or `drft.toml`) under `root`.
 /// Returns relative paths with trailing slash (e.g., `"research/"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
-/// Respects `.gitignore` to avoid walking ignored directories.
-pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
-    let mut scopes = Vec::new();
+/// Respects `.gitignore` and `ignore_patterns` from config.
+pub fn find_child_graphs(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
+    let ignore_set = if ignore_patterns.is_empty() {
+        None
+    } else {
+        let mut builder = GlobSetBuilder::new();
+        for pattern in ignore_patterns {
+            builder.add(Glob::new(pattern)?);
+        }
+        Some(builder.build()?)
+    };
+
+    let mut child_graphs = Vec::new();
     let root_owned = root.to_path_buf();
 
     // Use the ignore crate to respect .gitignore, and stop recursing
-    // past child scope boundaries.
+    // past child graph boundaries.
     let walker = WalkBuilder::new(root)
         .follow_links(true)
         .sort_by_file_name(|a, b| a.cmp(b))
@@ -107,7 +117,7 @@ pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
             .to_string_lossy()
             .replace('\\', "/");
 
-        // Skip if inside an already-found child scope
+        // Skip if inside an already-found child graph
         let inside_existing = found_prefixes
             .iter()
             .any(|s| relative.starts_with(s.as_str()));
@@ -115,15 +125,22 @@ pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
             continue;
         }
 
-        if entry.path().join("drft.lock").exists() {
-            let scope_path = format!("{relative}/");
-            found_prefixes.push(scope_path.clone());
-            scopes.push(scope_path);
+        if entry.path().join("drft.lock").exists() || entry.path().join("drft.toml").exists() {
+            // Skip if matched by ignore patterns
+            if let Some(ref set) = ignore_set
+                && set.is_match(&relative)
+            {
+                continue;
+            }
+
+            let graph_path = format!("{relative}/");
+            found_prefixes.push(graph_path.clone());
+            child_graphs.push(graph_path);
         }
     }
 
-    scopes.sort();
-    Ok(scopes)
+    child_graphs.sort();
+    Ok(child_graphs)
 }
 
 #[cfg(test)]
@@ -133,18 +150,18 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn discovers_md_files() {
+    fn discovers_all_files() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Hello").unwrap();
         fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
         fs::write(dir.path().join("notes.txt"), "not markdown").unwrap();
 
         let files = discover(dir.path(), &[]).unwrap();
-        assert_eq!(files, vec!["index.md", "setup.md"]);
+        assert_eq!(files, vec!["index.md", "notes.txt", "setup.md"]);
     }
 
     #[test]
-    fn stops_at_scope_boundary() {
+    fn stops_at_graph_boundary() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
@@ -185,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_child_scopes() {
+    fn finds_child_graphs() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
@@ -197,28 +214,28 @@ mod tests {
         fs::create_dir(&beta).unwrap();
         fs::write(beta.join("drft.lock"), "").unwrap();
 
-        // No lockfile in gamma — not a child scope
+        // No lockfile in gamma — not a child graph
         let gamma = dir.path().join("gamma");
         fs::create_dir(&gamma).unwrap();
         fs::write(gamma.join("readme.md"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path()).unwrap();
-        assert_eq!(scopes, vec!["alpha/", "beta/"]);
+        let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
+        assert_eq!(child_graphs, vec!["alpha/", "beta/"]);
     }
 
     #[test]
-    fn child_scopes_stops_at_boundary() {
+    fn child_graphs_stops_at_boundary() {
         let dir = TempDir::new().unwrap();
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
         fs::write(child.join("drft.lock"), "").unwrap();
 
-        // Grandchild scope — should NOT appear from parent's perspective
+        // Grandchild graph — should NOT appear from parent's perspective
         let grandchild = child.join("nested");
         fs::create_dir(&grandchild).unwrap();
         fs::write(grandchild.join("drft.lock"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path()).unwrap();
-        assert_eq!(scopes, vec!["child/"]);
+        let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
+        assert_eq!(child_graphs, vec!["child/"]);
     }
 }

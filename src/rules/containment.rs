@@ -1,9 +1,8 @@
 use crate::analyses::Analysis;
-use crate::analyses::scope_boundaries::ScopeBoundaries;
+use crate::analyses::AnalysisContext;
+use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::rules::Rule;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct ContainmentRule;
 
@@ -12,8 +11,14 @@ impl Rule for ContainmentRule {
         "containment"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = ScopeBoundaries.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = GraphBoundaries.run(&analysis_ctx);
 
         if !result.sealed {
             return vec![];
@@ -24,11 +29,11 @@ impl Rule for ContainmentRule {
             .iter()
             .map(|e| Diagnostic {
                 rule: "containment".into(),
-                message: "links outside scope boundary".into(),
+                message: "links outside graph boundary".into(),
                 source: Some(e.source.clone()),
                 target: Some(e.target.clone()),
                 fix: Some(format!(
-                    "link reaches outside the scope \u{2014} move {} into the scope or remove the link from {}",
+                    "link reaches outside the graph \u{2014} move {} into the graph or remove the link from {}",
                     e.target, e.source
                 )),
                 ..Default::default()
@@ -40,9 +45,21 @@ impl Rule for ContainmentRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::rules::RuleContext;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root,
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn detects_escape() {
@@ -52,17 +69,20 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: None,
+            graph: None,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../README.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let rule = ContainmentRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = ContainmentRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "containment");
         assert_eq!(diagnostics[0].target.as_deref(), Some("../README.md"));
@@ -76,17 +96,20 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: None,
+            graph: None,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../../other.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let rule = ContainmentRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = ContainmentRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
 
@@ -98,17 +121,20 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: None,
+            graph: None,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let rule = ContainmentRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = ContainmentRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -120,11 +146,13 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../escape.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let rule = ContainmentRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = ContainmentRule.evaluate(&ctx);
         assert!(
             diagnostics.is_empty(),
             "no lockfile means no boundary to enforce"

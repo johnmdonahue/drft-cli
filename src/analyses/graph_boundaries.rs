@@ -1,10 +1,9 @@
-use super::Analysis;
-use crate::graph::{Graph, NodeType};
+use super::{Analysis, AnalysisContext};
+use crate::graph::NodeType;
 use crate::lockfile::read_lockfile;
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ScopeEscape {
+pub struct GraphEscape {
     pub source: String,
     pub target: String,
 }
@@ -13,30 +12,31 @@ pub struct ScopeEscape {
 pub struct EncapsulationViolation {
     pub source: String,
     pub target: String,
-    pub scope: String,
-    pub manifest_file: String,
+    pub graph: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ScopeBoundariesResult {
+pub struct GraphBoundariesResult {
     pub sealed: bool,
-    pub escapes: Vec<ScopeEscape>,
+    pub escapes: Vec<GraphEscape>,
     pub encapsulation_violations: Vec<EncapsulationViolation>,
 }
 
-pub struct ScopeBoundaries;
+pub struct GraphBoundaries;
 
-impl Analysis for ScopeBoundaries {
-    type Output = ScopeBoundariesResult;
+impl Analysis for GraphBoundaries {
+    type Output = GraphBoundariesResult;
 
     fn name(&self) -> &str {
-        "scope-boundaries"
+        "graph-boundaries"
     }
 
-    fn run(&self, graph: &Graph, root: &Path) -> ScopeBoundariesResult {
-        let sealed = root.join("drft.lock").exists();
+    fn run(&self, ctx: &AnalysisContext) -> GraphBoundariesResult {
+        let graph = ctx.graph;
+        let root = ctx.root;
+        let sealed = root.join("drft.lock").exists() || root.join("drft.toml").exists();
 
-        // Find scope escapes (edges with ../ targets)
+        // Find graph escapes (edges with ../ targets)
         let escapes = if sealed {
             graph
                 .edges
@@ -46,7 +46,7 @@ impl Analysis for ScopeBoundaries {
                         && !edge.target.starts_with("https://")
                         && (edge.target.starts_with("../") || edge.target == "..")
                 })
-                .map(|edge| ScopeEscape {
+                .map(|edge| GraphEscape {
                     source: edge.source.clone(),
                     target: edge.target.clone(),
                 })
@@ -59,47 +59,56 @@ impl Analysis for ScopeBoundaries {
         let mut encapsulation_violations = Vec::new();
 
         for (path, node) in &graph.nodes {
-            if node.node_type != NodeType::Frontier {
+            if node.node_type != NodeType::Graph {
                 continue;
             }
 
             let child_dir = root.join(path.trim_end_matches('/'));
-            let child_lockfile = match read_lockfile(&child_dir) {
-                Ok(Some(lf)) => lf,
-                _ => continue,
-            };
-            let manifest = match &child_lockfile.manifest {
-                Some(m) => m,
-                None => continue,
+
+            // Try reading interface from child lockfile
+            let interface_nodes = if let Ok(Some(lf)) = read_lockfile(&child_dir) {
+                match &lf.interface {
+                    Some(iface) => iface.nodes.clone(),
+                    None => continue, // No interface = open graph, no violations
+                }
+            } else {
+                // No lockfile — try reading child's drft.toml for interface
+                let child_config = crate::config::Config::load(&child_dir);
+                match child_config {
+                    Ok(config) => match config.interface {
+                        Some(iface) => iface.nodes,
+                        None => continue, // No interface = open graph
+                    },
+                    Err(_) => continue,
+                }
             };
 
-            let scope_prefix = path.as_str();
+            let graph_prefix = path.as_str();
 
             for edge in &graph.edges {
-                // Skip virtual sources (implicit virtual→frontier edges)
+                // Skip child-graph sources (implicit coupling edges)
                 if let Some(source_node) = graph.nodes.get(&edge.source)
-                    && source_node.node_type == NodeType::Virtual
+                    && source_node.graph.is_some()
                 {
                     continue;
                 }
 
-                if !edge.target.starts_with(scope_prefix) {
+                if !edge.target.starts_with(graph_prefix) {
                     continue;
                 }
 
-                let relative_target = &edge.target[scope_prefix.len()..];
-                if !manifest.nodes.iter().any(|n| n == relative_target) {
+                let relative_target = &edge.target[graph_prefix.len()..];
+                if !interface_nodes.iter().any(|n| n == relative_target) {
                     encapsulation_violations.push(EncapsulationViolation {
                         source: edge.source.clone(),
                         target: edge.target.clone(),
-                        scope: scope_prefix.to_string(),
-                        manifest_file: manifest.file.clone(),
+                        graph: graph_prefix.to_string(),
                     });
                 }
             }
         }
 
-        ScopeBoundariesResult {
+        GraphBoundariesResult {
             sealed,
             escapes,
             encapsulation_violations,
@@ -110,23 +119,37 @@ impl Analysis for ScopeBoundaries {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Graph, Node, NodeType};
-    use crate::lockfile::{Lockfile, LockfileNode, Manifest, write_lockfile};
+    use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
     use std::collections::BTreeMap;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
+    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root,
+            config,
+            lockfile: None,
+        }
+    }
+
     #[test]
-    fn detects_scope_escape() {
+    fn detects_graph_escape() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.lock"), "lockfile_version = 1\n").unwrap();
+        fs::write(dir.path().join("drft.lock"), "lockfile_version = 2\n").unwrap();
 
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_edge(make_edge("index.md", "../README.md"));
 
-        let result = ScopeBoundaries.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = GraphBoundaries.run(&ctx);
         assert!(result.sealed);
         assert_eq!(result.escapes.len(), 1);
         assert_eq!(result.escapes[0].target, "../README.md");
@@ -140,7 +163,9 @@ mod tests {
         graph.add_node(make_node("index.md"));
         graph.add_edge(make_edge("index.md", "../README.md"));
 
-        let result = ScopeBoundaries.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = GraphBoundaries.run(&ctx);
         assert!(!result.sealed);
         assert!(result.escapes.is_empty());
     }
@@ -157,18 +182,17 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Document,
+                node_type: NodeType::Source,
                 hash: Some("b3:aaa".into()),
+                graph: None,
             },
         );
         let lockfile = Lockfile {
-            lockfile_version: 1,
-            manifest: Some(Manifest {
-                file: "overview.md".into(),
+            lockfile_version: 2,
+            interface: Some(LockfileInterface {
                 nodes: vec!["overview.md".into()],
             }),
             nodes,
-            edges: vec![],
         };
         write_lockfile(&research, &lockfile).unwrap();
 
@@ -176,22 +200,25 @@ mod tests {
         graph.add_node(make_node("index.md"));
         graph.add_node(Node {
             path: "research/".into(),
-            node_type: NodeType::Frontier,
+            node_type: NodeType::Graph,
             hash: None,
+            graph: None,
         });
         graph.add_edge(make_edge("index.md", "research/internal.md"));
 
-        let result = ScopeBoundaries.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = GraphBoundaries.run(&ctx);
         assert_eq!(result.encapsulation_violations.len(), 1);
         assert_eq!(
             result.encapsulation_violations[0].target,
             "research/internal.md"
         );
-        assert_eq!(result.encapsulation_violations[0].scope, "research/");
+        assert_eq!(result.encapsulation_violations[0].graph, "research/");
     }
 
     #[test]
-    fn manifest_file_is_not_violation() {
+    fn interface_file_is_not_violation() {
         let dir = TempDir::new().unwrap();
         let research = dir.path().join("research");
         fs::create_dir_all(&research).unwrap();
@@ -201,18 +228,17 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Document,
+                node_type: NodeType::Source,
                 hash: Some("b3:aaa".into()),
+                graph: None,
             },
         );
         let lockfile = Lockfile {
-            lockfile_version: 1,
-            manifest: Some(Manifest {
-                file: "overview.md".into(),
+            lockfile_version: 2,
+            interface: Some(LockfileInterface {
                 nodes: vec!["overview.md".into()],
             }),
             nodes,
-            edges: vec![],
         };
         write_lockfile(&research, &lockfile).unwrap();
 
@@ -220,12 +246,15 @@ mod tests {
         graph.add_node(make_node("index.md"));
         graph.add_node(Node {
             path: "research/".into(),
-            node_type: NodeType::Frontier,
+            node_type: NodeType::Graph,
             hash: None,
+            graph: None,
         });
         graph.add_edge(make_edge("index.md", "research/overview.md"));
 
-        let result = ScopeBoundaries.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = GraphBoundaries.run(&ctx);
         assert!(result.encapsulation_violations.is_empty());
     }
 }

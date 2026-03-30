@@ -17,7 +17,7 @@ pub struct Diagnostic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope: Option<String>,
+    pub graph: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
 }
@@ -33,7 +33,7 @@ impl Default for Diagnostic {
             node: None,
             via: None,
             path: None,
-            scope: None,
+            graph: None,
             fix: None,
         }
     }
@@ -171,13 +171,13 @@ mod tests {
     }
 
     #[test]
-    fn text_format_with_scope() {
+    fn text_format_with_graph_prefix() {
         let d = Diagnostic {
             rule: "orphan".into(),
             severity: RuleSeverity::Warn,
             message: "no inbound links".into(),
             node: Some("orphan.md".into()),
-            scope: Some("beta".into()),
+            graph: Some("beta".into()),
             ..Default::default()
         };
         // Scope is handled by the output loop, not format_text

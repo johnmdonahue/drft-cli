@@ -1,18 +1,13 @@
-lockfile_version = 1
+lockfile_version = 2
 
 [nodes."index.md"]
-type = "document"
+type = "source"
 hash = "b3:58ae2247fe46fac10e152e2465ac709f5cc5077c06f33815e1897c9dde301362"
 
 [nodes."orphan.md"]
-type = "document"
+type = "source"
 hash = "b3:1bd0390a7d416f0806cef0f42de3ef820e34f25a7528a5613f2af60ea8d1562d"
 
 [nodes."roadmap.md"]
-type = "document"
+type = "source"
 hash = "b3:3d19a8521087de39528ab83626f974cee2f11afeb44b92ba3b9c7e0c74949769"
-
-[[edges]]
-source = "index.md"
-target = "roadmap.md"
-type = "inline"

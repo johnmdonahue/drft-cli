@@ -1,32 +1,17 @@
-lockfile_version = 1
+lockfile_version = 2
 
 [nodes."config.md"]
-type = "document"
+type = "source"
 hash = "b3:0da3fb374e7d55ca78333dfede8696599d9583ec08f3aa0f17c08a043834e1b3"
 
 [nodes."faq.md"]
-type = "document"
+type = "source"
 hash = "b3:44aa84d4b37362b710d71145bcac5affb4cfba67d8b5c7f3b2a345c3da025c16"
 
 [nodes."index.md"]
-type = "document"
+type = "source"
 hash = "b3:90eb25eb61adf2cee1ea8f45a00ae4812cf93c7143b80c347e35eb8f012e957b"
 
 [nodes."setup.md"]
-type = "document"
+type = "source"
 hash = "b3:716613e289c9e6ac5747f13aeb19cec4f9471231831737d74a31dde39247613e"
-
-[[edges]]
-source = "index.md"
-target = "faq.md"
-type = "inline"
-
-[[edges]]
-source = "index.md"
-target = "setup.md"
-type = "inline"
-
-[[edges]]
-source = "setup.md"
-target = "config.md"
-type = "inline"

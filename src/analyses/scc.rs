@@ -1,7 +1,6 @@
-use super::Analysis;
+use super::{Analysis, AnalysisContext};
 use crate::graph::Graph;
 use std::collections::HashMap;
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Scc {
@@ -26,11 +25,12 @@ impl Analysis for StronglyConnectedComponents {
         "scc"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> SccResult {
+    fn run(&self, ctx: &AnalysisContext) -> SccResult {
+        let graph = ctx.graph;
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -61,7 +61,7 @@ impl Analysis for StronglyConnectedComponents {
         // Check for self-loops to determine non-trivial single-node SCCs
         let mut has_self_loop: HashMap<&str, bool> = HashMap::new();
         for edge in &graph.edges {
-            if edge.source == edge.target && graph.is_real_node(&edge.source) {
+            if edge.source == edge.target && graph.is_file_node(&edge.source) {
                 has_self_loop.insert(edge.source.as_str(), true);
             }
         }
@@ -124,7 +124,7 @@ impl<'a> TarjanState<'a> {
         if let Some(edge_indices) = self.graph.forward.get(v) {
             for &idx in edge_indices {
                 let w = self.graph.edges[idx].target.as_str();
-                if !self.graph.is_real_node(w) {
+                if !self.graph.is_file_node(w) {
                     continue;
                 }
                 if !self.index.contains_key(w) {
@@ -164,8 +164,20 @@ impl<'a> TarjanState<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn dag_has_no_nontrivial_sccs() {
@@ -176,8 +188,9 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
-        assert_eq!(result.scc_count, 3); // 3 trivial SCCs
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
+        assert_eq!(result.scc_count, 3);
         assert_eq!(result.nontrivial_count, 0);
         assert!(result.sccs.is_empty());
     }
@@ -192,7 +205,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.nontrivial_count, 1);
         assert_eq!(result.sccs.len(), 1);
         assert_eq!(result.sccs[0].members, vec!["a.md", "b.md", "c.md"]);
@@ -210,14 +224,14 @@ mod tests {
         graph.add_edge(make_edge("c.md", "d.md"));
         graph.add_edge(make_edge("d.md", "c.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.nontrivial_count, 2);
         assert_eq!(result.sccs.len(), 2);
     }
 
     #[test]
     fn mixed_cyclic_and_acyclic() {
-        // a → b → c → b (cycle: b,c), a is acyclic
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -226,11 +240,10 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "b.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.nontrivial_count, 1);
         assert_eq!(result.sccs[0].members, vec!["b.md", "c.md"]);
-
-        // a.md should be in a trivial SCC
         assert!(result.node_scc.contains_key("a.md"));
     }
 
@@ -240,7 +253,8 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_edge(make_edge("a.md", "a.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.nontrivial_count, 1);
         assert_eq!(result.sccs[0].members, vec!["a.md"]);
     }
@@ -248,7 +262,8 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.scc_count, 0);
         assert_eq!(result.nontrivial_count, 0);
     }
@@ -262,7 +277,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = StronglyConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = StronglyConnectedComponents.run(&make_ctx(&graph, &config));
         assert!(result.node_scc.contains_key("a.md"));
         assert!(result.node_scc.contains_key("b.md"));
         assert!(result.node_scc.contains_key("c.md"));

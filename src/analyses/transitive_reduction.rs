@@ -1,7 +1,6 @@
-use super::Analysis;
+use super::{Analysis, AnalysisContext};
 use crate::graph::Graph;
 use std::collections::{HashSet, VecDeque};
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RedundantEdge {
@@ -15,7 +14,6 @@ pub struct TransitiveReductionResult {
     pub redundant_edges: Vec<RedundantEdge>,
 }
 
-/// See `docs/analyses/transitive-reduction.md` for the full conceptual explanation.
 pub struct TransitiveReduction;
 
 impl Analysis for TransitiveReduction {
@@ -25,7 +23,8 @@ impl Analysis for TransitiveReduction {
         "transitive-reduction"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> TransitiveReductionResult {
+    fn run(&self, ctx: &AnalysisContext) -> TransitiveReductionResult {
+        let graph = ctx.graph;
         let node_set: HashSet<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
         let mut redundant_edges = Vec::new();
 
@@ -118,13 +117,17 @@ fn reachable_without_direct(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
+    use crate::graph::{Edge, EdgeType, Node, NodeType};
+    use std::path::Path;
 
     fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: None,
+            graph: None,
         }
     }
 
@@ -132,13 +135,22 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
+        }
+    }
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
         }
     }
 
     #[test]
     fn diamond_redundancy() {
-        // A → B → C, A → C (redundant)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -147,8 +159,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("a.md", "c.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
 
         assert_eq!(result.redundant_edges.len(), 1);
         assert_eq!(result.redundant_edges[0].source, "a.md");
@@ -158,7 +170,6 @@ mod tests {
 
     #[test]
     fn no_redundancy() {
-        // A → B → C (no shortcuts)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -166,16 +177,13 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
-
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
         assert!(result.redundant_edges.is_empty());
     }
 
     #[test]
     fn multiple_redundancies() {
-        // A → B → C, A → C (redundant)
-        // A → B → D, A → D (redundant)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -187,8 +195,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
         graph.add_edge(make_edge("a.md", "d.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
 
         assert_eq!(result.redundant_edges.len(), 2);
         let targets: Vec<&str> = result
@@ -202,7 +210,6 @@ mod tests {
 
     #[test]
     fn longer_chain() {
-        // A → B → C → D, A → D (redundant via B)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -213,8 +220,8 @@ mod tests {
         graph.add_edge(make_edge("c.md", "d.md"));
         graph.add_edge(make_edge("a.md", "d.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
 
         assert_eq!(result.redundant_edges.len(), 1);
         assert_eq!(result.redundant_edges[0].source, "a.md");
@@ -228,17 +235,13 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_edge(make_edge("a.md", "a.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
-
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
         assert!(result.redundant_edges.is_empty());
     }
 
     #[test]
     fn disconnected_components() {
-        // Component 1: A → B
-        // Component 2: C → D
-        // No redundancy
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -247,9 +250,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
-
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
         assert!(result.redundant_edges.is_empty());
     }
 
@@ -259,11 +261,10 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
-        graph.add_edge(make_edge("a.md", "missing.md")); // target not in nodes
+        graph.add_edge(make_edge("a.md", "missing.md"));
 
-        let analysis = TransitiveReduction;
-        let result = analysis.run(&graph, Path::new("."));
-
+        let config = Config::defaults();
+        let result = TransitiveReduction.run(&make_ctx(&graph, &config));
         assert!(result.redundant_edges.is_empty());
     }
 }

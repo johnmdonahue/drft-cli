@@ -3,13 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::graph::{EdgeType, Graph, NodeType};
-
-const SUPPORTED_LOCKFILE_VERSION: u32 = 1;
+use crate::graph::{Graph, NodeType};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct Manifest {
-    pub file: String,
+pub struct LockfileInterface {
     pub nodes: Vec<String>,
 }
 
@@ -17,11 +14,9 @@ pub struct Manifest {
 pub struct Lockfile {
     pub lockfile_version: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub manifest: Option<Manifest>,
+    pub interface: Option<LockfileInterface>,
     #[serde(default)]
     pub nodes: BTreeMap<String, LockfileNode>,
-    #[serde(default)]
-    pub edges: Vec<LockfileEdge>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -30,21 +25,15 @@ pub struct LockfileNode {
     pub node_type: NodeType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LockfileEdge {
-    pub source: String,
-    pub target: String,
-    #[serde(rename = "type")]
-    pub edge_type: EdgeType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph: Option<String>,
 }
 
 impl Lockfile {
     /// Convert an in-memory Graph to a Lockfile.
     /// Nodes are stored in a BTreeMap (sorted by path).
-    /// Edges are sorted by (source, target, type).
-    pub fn from_graph(graph: &Graph, manifest: Option<Manifest>) -> Self {
+    /// Edges are not stored — edge changes are detected via content hashes.
+    pub fn from_graph(graph: &Graph) -> Self {
         let mut nodes = BTreeMap::new();
         for (path, node) in &graph.nodes {
             nodes.insert(
@@ -52,41 +41,23 @@ impl Lockfile {
                 LockfileNode {
                     node_type: node.node_type,
                     hash: node.hash.clone(),
+                    graph: node.graph.clone(),
                 },
             );
         }
 
-        let mut edges: Vec<LockfileEdge> = graph
-            .edges
-            .iter()
-            .filter(|e| {
-                // Only include edges whose target is a known node
-                graph.nodes.contains_key(&e.target)
+        let interface = if graph.interface.is_empty() {
+            None
+        } else {
+            Some(LockfileInterface {
+                nodes: graph.interface.clone(),
             })
-            .map(|e| LockfileEdge {
-                source: e.source.clone(),
-                target: e.target.clone(),
-                edge_type: e.edge_type,
-            })
-            .collect();
-
-        edges.sort_by(|a, b| {
-            a.source
-                .cmp(&b.source)
-                .then_with(|| a.target.cmp(&b.target))
-                .then_with(|| a.edge_type.cmp(&b.edge_type))
-        });
-
-        // Deduplicate edges
-        edges.dedup_by(|a, b| {
-            a.source == b.source && a.target == b.target && a.edge_type == b.edge_type
-        });
+        };
 
         Lockfile {
-            lockfile_version: 1,
-            manifest,
+            lockfile_version: 2,
+            interface,
             nodes,
-            edges,
         }
     }
 
@@ -95,47 +66,11 @@ impl Lockfile {
         toml::to_string_pretty(self).context("failed to serialize lockfile")
     }
 
-    /// Deserialize from TOML string. Rejects lockfiles with unsupported versions.
+    /// Deserialize from TOML string.
     pub fn from_toml(content: &str) -> Result<Self> {
         let lockfile: Self = toml::from_str(content).context("failed to parse lockfile")?;
-        if lockfile.lockfile_version > SUPPORTED_LOCKFILE_VERSION {
-            anyhow::bail!(
-                "drft.lock version {} is not supported (max supported: {}). upgrade drft to read this lockfile",
-                lockfile.lockfile_version,
-                SUPPORTED_LOCKFILE_VERSION
-            );
-        }
         Ok(lockfile)
     }
-}
-
-/// Derive a manifest from the graph: the manifest file + its in-scope outbound link targets.
-pub fn derive_manifest(graph: &Graph, manifest_file: &str) -> Result<Manifest> {
-    if !graph.nodes.contains_key(manifest_file) {
-        anyhow::bail!("manifest file \"{manifest_file}\" not found in scope");
-    }
-
-    let mut nodes = vec![manifest_file.to_string()];
-
-    // Collect outbound link targets from the manifest file that are within the scope
-    if let Some(edge_indices) = graph.forward.get(manifest_file) {
-        for &idx in edge_indices {
-            let target = &graph.edges[idx].target;
-            // Only include targets that are nodes in this scope (not external, not outside)
-            if let Some(node) = graph.nodes.get(target.as_str())
-                && !matches!(node.node_type, crate::graph::NodeType::External)
-                && !nodes.contains(target)
-            {
-                nodes.push(target.clone());
-            }
-        }
-    }
-
-    nodes.sort();
-    Ok(Manifest {
-        file: manifest_file.to_string(),
-        nodes,
-    })
 }
 
 /// Read `drft.lock` from the given root directory.
@@ -161,7 +96,6 @@ pub fn write_lockfile(root: &Path, lockfile: &Lockfile) -> Result<()> {
         .with_context(|| format!("failed to write {}", tmp_path.display()))?;
 
     std::fs::rename(&tmp_path, &lock_path).with_context(|| {
-        // Clean up temp file on rename failure
         let _ = std::fs::remove_file(&tmp_path);
         format!(
             "failed to rename {} to {}",
@@ -176,39 +110,36 @@ pub fn write_lockfile(root: &Path, lockfile: &Lockfile) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, Graph, Node};
+    use crate::graph::{Node, NodeType};
     use tempfile::TempDir;
 
     fn make_graph() -> Graph {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some("b3:aaa".into()),
+            graph: None,
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some("b3:bbb".into()),
-        });
-        g.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
+            graph: None,
         });
         g
     }
 
     #[test]
     fn from_graph_produces_sorted_nodes() {
-        let lf = Lockfile::from_graph(&make_graph(), None);
+        let lf = Lockfile::from_graph(&make_graph());
         let keys: Vec<&String> = lf.nodes.keys().collect();
         assert_eq!(keys, vec!["index.md", "setup.md"]);
     }
 
     #[test]
     fn roundtrip_toml() {
-        let lf = Lockfile::from_graph(&make_graph(), None);
+        let lf = Lockfile::from_graph(&make_graph());
         let toml_str = lf.to_toml().unwrap();
         let parsed = Lockfile::from_toml(&toml_str).unwrap();
         assert_eq!(lf, parsed);
@@ -216,7 +147,7 @@ mod tests {
 
     #[test]
     fn deterministic_output() {
-        let lf = Lockfile::from_graph(&make_graph(), None);
+        let lf = Lockfile::from_graph(&make_graph());
         let a = lf.to_toml().unwrap();
         let b = lf.to_toml().unwrap();
         assert_eq!(a, b);
@@ -225,7 +156,7 @@ mod tests {
     #[test]
     fn write_and_read() {
         let dir = TempDir::new().unwrap();
-        let lf = Lockfile::from_graph(&make_graph(), None);
+        let lf = Lockfile::from_graph(&make_graph());
         write_lockfile(dir.path(), &lf).unwrap();
         let read_back = read_lockfile(dir.path()).unwrap().unwrap();
         assert_eq!(lf, read_back);
@@ -238,42 +169,34 @@ mod tests {
     }
 
     #[test]
-    fn filters_edges_to_unknown_nodes() {
-        let mut g = Graph::new();
-        g.add_node(Node {
-            path: "index.md".into(),
-            node_type: NodeType::Document,
-            hash: Some("b3:aaa".into()),
-        });
-        // Edge to non-existent node (broken link)
-        g.add_edge(Edge {
-            source: "index.md".into(),
-            target: "gone.md".into(),
-            edge_type: EdgeType::Inline,
-        });
-
-        let lf = Lockfile::from_graph(&g, None);
+    fn no_edges_in_lockfile() {
+        let lf = Lockfile::from_graph(&make_graph());
+        let toml_str = lf.to_toml().unwrap();
         assert!(
-            lf.edges.is_empty(),
-            "broken link edges should be filtered out"
+            !toml_str.contains("[[edges]]"),
+            "lockfile v2 should not contain edges"
         );
     }
 
     #[test]
-    fn rejects_future_lockfile_version() {
-        let toml = "lockfile_version = 99\n";
-        let result = Lockfile::from_toml(toml);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("not supported"),
-            "error should mention version: {err}"
-        );
+    fn stores_interface_when_present() {
+        let mut g = make_graph();
+        g.interface = vec!["index.md".to_string()];
+        let lf = Lockfile::from_graph(&g);
+        assert!(lf.interface.is_some());
+        assert_eq!(lf.interface.unwrap().nodes, vec!["index.md"]);
     }
 
     #[test]
-    fn accepts_current_lockfile_version() {
-        let toml = "lockfile_version = 1\n";
+    fn no_interface_when_empty() {
+        let g = make_graph();
+        let lf = Lockfile::from_graph(&g);
+        assert!(lf.interface.is_none());
+    }
+
+    #[test]
+    fn parses_current_lockfile_version() {
+        let toml = "lockfile_version = 2\n";
         let result = Lockfile::from_toml(toml);
         assert!(result.is_ok());
     }
