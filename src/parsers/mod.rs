@@ -7,7 +7,7 @@ use std::collections::HashMap;
 /// A raw link emitted by a parser — just target path and bare link type.
 /// The full EdgeType (`parser:type`) is constructed by the graph builder.
 ///
-/// See `docs/parsers/README.md` for details.
+/// See [`docs/parsers`](../../docs/parsers/README.md) for details.
 #[derive(Debug, Clone)]
 pub struct RawLink {
     pub target: String,

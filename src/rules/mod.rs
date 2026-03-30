@@ -21,7 +21,7 @@ use std::path::Path;
 /// Context passed to every rule, providing access to the graph,
 /// filesystem root, config, and optional lockfile.
 ///
-/// See `docs/rules/README.md` for details.
+/// See [`docs/rules`](../../docs/rules/README.md) for details.
 pub struct RuleContext<'a> {
     pub graph: &'a Graph,
     pub root: &'a Path,
