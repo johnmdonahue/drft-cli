@@ -69,6 +69,16 @@ pub enum Commands {
         files: Vec<String>,
     },
 
+    /// [unstable] Run graph analyses and output structured results
+    Analysis {
+        /// Analyses to run (defaults to all)
+        #[arg(long = "analysis")]
+        analyses: Vec<String>,
+    },
+
+    /// [unstable] Extract scalar health metrics from analysis results
+    Metrics,
+
     /// Check structure for rule violations
     Check {
         /// Run only specific rules (can be repeated)

@@ -284,7 +284,7 @@ hash = "b3:6ccc6c57e100c553b795d802e30bf8ce52be8573a5e58ad3ef1c3f66164a8b87"
 
 [nodes."src/cli.rs"]
 type = "source"
-hash = "b3:fe6788c5ba8eaacb9deae3112441ac835ec15cda61962360a39a4c9148d5b9c2"
+hash = "b3:010ea19b3914ce4e5bf4910a25e4f3b7c1272878e33589554c6e1b8ca796d141"
 
 [nodes."src/config.rs"]
 type = "source"
@@ -308,7 +308,7 @@ hash = "b3:d20c203c6089c5b2acd67953ac6866ea412aa24ee3e391f8cd1fbfbfe2ed8bad"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:764ad43420e1dba8722935901e4cee4cf9cae0bf99ca7c787eb984e48b492c5b"
+hash = "b3:9b27d77ec17aea6e3e82ff913ebdf40ba5abc5ab0c97d6d9d46201a08bdb55ec"
 
 [nodes."src/metrics.rs"]
 type = "source"
