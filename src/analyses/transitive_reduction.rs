@@ -137,6 +137,9 @@ mod tests {
             target: target.into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         }
     }
 

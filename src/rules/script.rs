@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
+use crate::analyses::EnrichedGraph;
 use crate::config::{Config, RuleConfig};
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
@@ -15,12 +16,12 @@ use crate::graph::Graph;
 ///
 /// All fields except `message` are optional. The `rule` and `severity` fields
 /// are set by drft from the config — the script doesn't need to provide them.
-pub fn run_script_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
+pub fn run_script_rules(enriched: &EnrichedGraph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let config_dir = config.config_dir.as_deref().unwrap_or(root);
 
     for (rule_name, rule_config) in config.script_rules() {
-        match run_one(rule_name, rule_config, graph, root, config_dir) {
+        match run_one(rule_name, rule_config, &enriched.graph, root, config_dir) {
             Ok(mut results) => diagnostics.append(&mut results),
             Err(e) => {
                 eprintln!("warn: script rule \"{rule_name}\" failed: {e}");
@@ -194,6 +195,9 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
         g
     }

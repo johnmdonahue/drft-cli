@@ -95,6 +95,12 @@ pub struct Edge {
     /// True if created by graph builder (e.g., child-graph coupling edges), not parsed from content.
     #[allow(dead_code)]
     pub synthetic: bool,
+    /// Target is a symlink on disk. Set during graph building.
+    pub target_is_symlink: bool,
+    /// Target is a directory on disk. Set during graph building.
+    pub target_is_directory: bool,
+    /// Resolved symlink destination, if target is a symlink.
+    pub symlink_target: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -231,6 +237,9 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         target: link.target,
                         edge_type,
                         synthetic: false,
+                        target_is_symlink: false,
+                        target_is_directory: false,
+                        symlink_target: None,
                     });
                 } else {
                     let resolved = resolve_link(&file, &link.target);
@@ -239,6 +248,9 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         target: resolved,
                         edge_type,
                         synthetic: false,
+                        target_is_symlink: false,
+                        target_is_directory: false,
+                        symlink_target: None,
                     });
                 }
             }
@@ -297,6 +309,9 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     target: graph_prefix.clone(),
                     edge_type: edge.edge_type.clone(),
                     synthetic: true,
+                    target_is_symlink: false,
+                    target_is_directory: false,
+                    symlink_target: None,
                 });
             }
             continue;
@@ -316,8 +331,23 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         // dangling-edge and directory-edge rules handle these cases.
     }
 
-    // Add all edges (explicit + implicit) to the graph
+    // Probe filesystem properties for non-URI edge targets
     pending_edges.extend(implicit_edges);
+    for edge in &mut pending_edges {
+        if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+            continue;
+        }
+        let target_path = root.join(&edge.target);
+        edge.target_is_symlink = target_path.is_symlink();
+        edge.target_is_directory = target_path.is_dir();
+        if edge.target_is_symlink {
+            edge.symlink_target = std::fs::read_link(&target_path)
+                .ok()
+                .map(|p| p.to_string_lossy().to_string());
+        }
+    }
+
+    // Add all edges (explicit + implicit) to the graph
     for edge in pending_edges {
         graph.add_edge(edge);
     }
@@ -399,6 +429,9 @@ pub mod test_helpers {
             target: target.into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         }
     }
 }
@@ -479,6 +512,9 @@ mod tests {
             target: "b.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
         assert_eq!(g.forward["a.md"], vec![0]);
         assert_eq!(g.reverse["b.md"], vec![0]);

@@ -9,8 +9,7 @@ impl Rule for SymlinkEdgeRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let graph = ctx.graph;
-        let root = ctx.root;
+        let graph = &ctx.graph.graph;
 
         graph
             .edges
@@ -21,12 +20,12 @@ impl Rule for SymlinkEdgeRule {
                     return None;
                 }
 
-                // Check if target path is a symlink on the filesystem
-                let target_path = root.join(&edge.target);
-                if target_path.is_symlink() {
-                    let resolved = std::fs::read_link(&target_path)
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|_| "unknown".to_string());
+                // Check edge property set during graph building
+                if edge.target_is_symlink {
+                    let resolved = edge
+                        .symlink_target
+                        .as_deref()
+                        .unwrap_or("unknown");
                     Some(Diagnostic {
                         rule: "symlink-edge".into(),
                         message: format!("target is a symlink to {resolved}"),
@@ -49,31 +48,17 @@ impl Rule for SymlinkEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
-    use std::fs;
-    use std::os::unix::fs::symlink;
-    use std::path::Path;
-    use tempfile::TempDir;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
     fn detects_symlink_target() {
-        let dir = TempDir::new().unwrap();
-        let shared = dir.path().join("shared");
-        fs::create_dir(&shared).unwrap();
-        fs::write(shared.join("setup.md"), "# Setup").unwrap();
-        symlink(shared.join("setup.md"), dir.path().join("setup.md")).unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
@@ -86,10 +71,13 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: true,
+            target_is_directory: false,
+            symlink_target: Some("/shared/setup.md".into()),
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "symlink-edge");
@@ -98,9 +86,6 @@ mod tests {
 
     #[test]
     fn no_diagnostic_for_regular_file() {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
@@ -113,10 +98,13 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

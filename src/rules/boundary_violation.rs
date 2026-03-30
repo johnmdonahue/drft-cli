@@ -1,6 +1,3 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
@@ -12,13 +9,7 @@ impl Rule for BoundaryViolationRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = GraphBoundaries.run(&analysis_ctx);
+        let result = &ctx.graph.graph_boundaries;
 
         if !result.sealed {
             return vec![];
@@ -49,16 +40,10 @@ mod tests {
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph, root: &std::path::Path) -> crate::analyses::EnrichedGraph {
+        crate::analyses::enrich_graph(graph, root, &Config::defaults(), None)
     }
 
     #[test]
@@ -78,10 +63,13 @@ mod tests {
             target: "../README.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "boundary-violation");
@@ -105,10 +93,13 @@ mod tests {
             target: "../../other.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
@@ -130,10 +121,13 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -148,10 +142,13 @@ mod tests {
             target: "../escape.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(
             diagnostics.is_empty(),

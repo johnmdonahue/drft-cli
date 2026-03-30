@@ -10,8 +10,7 @@ impl Rule for DanglingEdgeRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let graph = ctx.graph;
-        let root = ctx.root;
+        let graph = &ctx.graph.graph;
 
         graph
             .edges
@@ -27,41 +26,23 @@ impl Rule for DanglingEdgeRule {
                     if node.node_type == NodeType::Graph {
                         return None; // Frontier nodes are valid
                     }
-                    // Check if target is a symlink (not broken)
-                    let target_path = root.join(&edge.target);
-                    if target_path.is_symlink() {
+                    if edge.target_is_symlink {
                         return None; // Handled by symlink-edge rule
                     }
                     return None; // Valid
                 }
 
-                // Target not in graph — filesystem checks
-                let target_path = root.join(&edge.target);
-
-                if target_path.is_symlink() {
+                // Target not in graph — check edge properties
+                if edge.target_is_symlink {
                     return None; // Handled by symlink-edge rule
                 }
 
-                if target_path.is_dir() {
+                if edge.target_is_directory {
                     return None; // Handled by directory-edge rule
                 }
 
-                if target_path.exists() {
-                    // File exists but was excluded from the graph
-                    return Some(Diagnostic {
-                        rule: "dangling-edge".into(),
-                        message: "file excluded from graph".into(),
-                        source: Some(edge.source.clone()),
-                        target: Some(edge.target.clone()),
-                        fix: Some(format!(
-                            "{} exists but is not in the graph \u{2014} either remove the link from {} or update include/exclude config",
-                            edge.target, edge.source
-                        )),
-                        ..Default::default()
-                    });
-                }
-
-                // Truly broken
+                // Truly broken — file not found
+                // (If the file existed on disk, build_graph would have created an External node)
                 Some(Diagnostic {
                     rule: "dangling-edge".into(),
                     message: "file not found".into(),
@@ -81,27 +62,17 @@ impl Rule for DanglingEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
-    use std::fs;
-    use std::path::Path;
-    use tempfile::TempDir;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
     fn detects_dangling_edge() {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
@@ -114,10 +85,13 @@ mod tests {
             target: "gone.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "dangling-edge");
@@ -127,10 +101,6 @@ mod tests {
 
     #[test]
     fn no_diagnostic_for_valid_link() {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
-        fs::write(dir.path().join("setup.md"), "").unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
@@ -149,10 +119,63 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
+        let diagnostics = DanglingEdgeRule.evaluate(&ctx);
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn skips_symlink_targets() {
+        let mut graph = Graph::new();
+        graph.add_node(Node {
+            path: "index.md".into(),
+            node_type: NodeType::File,
+            hash: None,
+            graph: None,
+        });
+        graph.add_edge(Edge {
+            source: "index.md".into(),
+            target: "linked.md".into(),
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
+            target_is_symlink: true,
+            target_is_directory: false,
+            symlink_target: Some("real.md".into()),
+        });
+
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
+        let diagnostics = DanglingEdgeRule.evaluate(&ctx);
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn skips_directory_targets() {
+        let mut graph = Graph::new();
+        graph.add_node(Node {
+            path: "index.md".into(),
+            node_type: NodeType::File,
+            hash: None,
+            graph: None,
+        });
+        graph.add_edge(Edge {
+            source: "index.md".into(),
+            target: "guides".into(),
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: true,
+            symlink_target: None,
+        });
+
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

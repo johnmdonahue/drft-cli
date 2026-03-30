@@ -12,21 +12,15 @@ pub mod script;
 pub mod stale;
 pub mod symlink_edge;
 
-use crate::config::Config;
+use crate::analyses::EnrichedGraph;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::lockfile::Lockfile;
-use std::path::Path;
 
-/// Context passed to every rule, providing access to the graph,
-/// filesystem root, config, and optional lockfile.
+/// Context passed to every rule. Rules are pure functions over the
+/// enriched graph — no filesystem access, no config, no lockfile.
 ///
 /// See [`docs/rules`](../../docs/rules/README.md) for details.
 pub struct RuleContext<'a> {
-    pub graph: &'a Graph,
-    pub root: &'a Path,
-    pub config: &'a Config,
-    pub lockfile: Option<&'a Lockfile>,
+    pub graph: &'a EnrichedGraph,
 }
 
 pub trait Rule {

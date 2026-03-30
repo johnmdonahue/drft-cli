@@ -1,6 +1,3 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
@@ -12,13 +9,7 @@ impl Rule for EncapsulationViolationRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = GraphBoundaries.run(&analysis_ctx);
+        let result = &ctx.graph.graph_boundaries;
 
         result
             .encapsulation_violations
@@ -47,19 +38,13 @@ mod tests {
     use crate::rules::RuleContext;
     use std::collections::BTreeMap;
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph, root: &std::path::Path) -> crate::analyses::EnrichedGraph {
+        crate::analyses::enrich_graph(graph, root, &Config::defaults(), None)
     }
 
-    fn setup_sealed_child(dir: &Path) {
+    fn setup_sealed_child(dir: &std::path::Path) {
         let research = dir.join("research");
         fs::create_dir_all(&research).unwrap();
         fs::write(research.join("overview.md"), "# Overview").unwrap();
@@ -122,16 +107,22 @@ mod tests {
             target: "research/overview.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research/".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -159,10 +150,13 @@ mod tests {
             target: "research/internal.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext { graph: &enriched };
         let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "encapsulation-violation");

@@ -217,6 +217,9 @@ mod tests {
             target: "setup.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         });
 
         let lockfile = Lockfile::from_graph(&graph);

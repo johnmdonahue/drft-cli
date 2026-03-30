@@ -853,10 +853,7 @@ fn check_graph(
         };
 
         let rule_ctx = rules::RuleContext {
-            graph: &enriched.graph,
-            root,
-            config: &config,
-            lockfile: lockfile.as_ref(),
+            graph: &enriched,
         };
         let mut findings = rule.evaluate(&rule_ctx);
         findings.retain(|d| {
@@ -886,7 +883,7 @@ fn check_graph(
             .any(|(name, _)| rule_filter.iter().any(|f| f == name))
     };
     if run_script {
-        let mut script_findings = rules::script::run_script_rules(&enriched.graph, root, &config);
+        let mut script_findings = rules::script::run_script_rules(&enriched, root, &config);
         // Filter to only requested rules if --rule is set
         if !rule_filter.is_empty() {
             script_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));

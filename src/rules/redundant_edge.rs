@@ -1,6 +1,3 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::transitive_reduction::TransitiveReduction;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
@@ -12,13 +9,7 @@ impl Rule for RedundantEdgeRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = TransitiveReduction.run(&analysis_ctx);
+        let result = &ctx.graph.transitive_reduction;
 
         result
             .redundant_edges
@@ -42,10 +33,10 @@ impl Rule for RedundantEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
-    use std::path::Path;
 
     fn make_node(path: &str) -> Node {
         Node {
@@ -62,16 +53,14 @@ mod tests {
             target: target.into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
+            target_is_symlink: false,
+            target_is_directory: false,
+            symlink_target: None,
         }
     }
 
-    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root: Path::new("."),
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
@@ -84,8 +73,9 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("a.md", "c.md"));
 
-        let config = Config::defaults();
-        let diagnostics = RedundantEdgeRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
+        let diagnostics = RedundantEdgeRule.evaluate(&ctx);
 
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "redundant-edge");
@@ -104,8 +94,9 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let config = Config::defaults();
-        let diagnostics = RedundantEdgeRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext { graph: &enriched };
+        let diagnostics = RedundantEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 }
