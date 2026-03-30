@@ -1,6 +1,6 @@
 # drft
 
-A structural integrity checker for markdown directories.
+A structural integrity checker for linked file systems.
 
 This is the npm distribution of [drft](https://github.com/johnmdonahue/drft-cli). It downloads the prebuilt binary for your platform.
 
