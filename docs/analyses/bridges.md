@@ -24,7 +24,7 @@ Cut vertices and bridges reveal fragility in your documentation structure:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis bridges
+drft report bridges
 ```
 
 ```

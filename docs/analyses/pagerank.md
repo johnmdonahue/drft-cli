@@ -19,7 +19,7 @@ PageRank reveals which documents are structurally most important:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis pagerank
+drft report pagerank
 ```
 
 ```

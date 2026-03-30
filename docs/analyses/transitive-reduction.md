@@ -38,7 +38,7 @@ Not every redundant edge is a mistake. In some structures, direct links are inte
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis transitive-reduction
+drft report transitive-reduction
 ```
 
 ```

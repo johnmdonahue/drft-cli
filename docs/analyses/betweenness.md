@@ -19,7 +19,7 @@ Betweenness identifies **bridge documents** — files that connect different par
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis betweenness
+drft report betweenness
 ```
 
 ```

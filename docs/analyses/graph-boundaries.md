@@ -19,7 +19,7 @@ Graphs let you decompose a large documentation system into independently managea
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis graph-boundaries
+drft report graph-boundaries
 ```
 
 ```

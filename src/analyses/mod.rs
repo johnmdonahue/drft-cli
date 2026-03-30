@@ -24,6 +24,23 @@ pub struct AnalysisContext<'a> {
     pub lockfile: Option<&'a Lockfile>,
 }
 
+/// All known analysis names, sorted alphabetically.
+pub fn all_analysis_names() -> &'static [&'static str] {
+    &[
+        "betweenness",
+        "bridges",
+        "change-propagation",
+        "connected-components",
+        "degree",
+        "depth",
+        "graph-boundaries",
+        "graph-stats",
+        "pagerank",
+        "scc",
+        "transitive-reduction",
+    ]
+}
+
 /// An analysis computes structured data about the graph.
 /// Rules consume analysis results and map them to diagnostics.
 /// Metrics extract scalar values from analysis results.

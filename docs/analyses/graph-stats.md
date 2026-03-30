@@ -22,7 +22,7 @@ These metrics give you a high-level health check:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis graph-stats
+drft report graph-stats
 ```
 
 ```

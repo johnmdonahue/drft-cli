@@ -29,7 +29,7 @@ A single connected component means every document is reachable from every other 
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis connected-components
+drft report connected-components
 ```
 
 ```

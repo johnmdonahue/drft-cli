@@ -27,7 +27,7 @@ The existing `cycle` rule tells you a cycle exists. SCCs tell you **exactly whic
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis scc
+drft report scc
 ```
 
 ```

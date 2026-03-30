@@ -28,7 +28,7 @@ Degree distribution reveals the structural role of each document:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis degree
+drft report degree
 ```
 
 ```

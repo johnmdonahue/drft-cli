@@ -26,7 +26,7 @@ In systems with intentional layering — like research → observations → desi
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis depth
+drft report depth
 ```
 
 ```

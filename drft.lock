@@ -2,11 +2,11 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:62fd21ec21b1b2578c3dac85c72bf7b0e5dabe2413998ff4aee12081bc07a50c"
+hash = "b3:07e9befa47d18264ed55ef954af96fbc9fa2b7bc1dd1a794227411d99a100f2d"
 
 [nodes."CHANGELOG.md"]
 type = "source"
-hash = "b3:347fe6ca258f75e442f495eb008eb429ad8a64a2b977ff7b3c84035c949900fa"
+hash = "b3:fa1e17f3709fea33172c69aca29686c849e2b0f731c97e79cf1c1ded1240ab97"
 
 [nodes."CLAUDE.md"]
 type = "source"
@@ -34,51 +34,51 @@ hash = "b3:7ca093184a3be8b8d24f11b61c433db3da1cd38f557ef71553a23768c75ad057"
 
 [nodes."docs/analyses/README.md"]
 type = "source"
-hash = "b3:db3c7004bcb86cd7c26bae00af0f5fe053c92c77193725e5ead40f4f80e361a8"
+hash = "b3:e4e1a9d30b88834e4488ec295e3117d9d42baa1bcb9954386e8c30e99760df5e"
 
 [nodes."docs/analyses/betweenness.md"]
 type = "source"
-hash = "b3:7954fa697e13106867f4aed239b1d6700e146c614b4cc51055253fdda3b00ac8"
+hash = "b3:c85b40d4ec50b36c989ff38842f038313f1c6154aef0d47f2712766a546e98d7"
 
 [nodes."docs/analyses/bridges.md"]
 type = "source"
-hash = "b3:58d481d6d06e01963448d6b92a08d7ef25b738a3f4a360d62e25998356308b86"
+hash = "b3:9cbb8b52122e5616f26afe214e1628e9342d3e186044f4f543cac29bd8df6e75"
 
 [nodes."docs/analyses/change-propagation.md"]
 type = "source"
-hash = "b3:87786b044901d3160f67714e0689aa8b0aa21a08c765b6f66869686431a30a21"
+hash = "b3:32bad8432e6ec5ef52c962139512138f434c141b4caeeb42189819d4d93c800b"
 
 [nodes."docs/analyses/connected-components.md"]
 type = "source"
-hash = "b3:78764dc26af51c9d77a49f1948cc21d24b9445b50c0dd5a41dc0ab0b3712ef15"
+hash = "b3:78ab5fe753a494f831ca6bbde322935b7b476bd101b0acb47057f19d6fba5cca"
 
 [nodes."docs/analyses/degree.md"]
 type = "source"
-hash = "b3:33fd99eb4940ff1e4910c2881943ff25fc6bda924f3b6616f963736a402d9906"
+hash = "b3:4c3b234c87fa06e5f8d5e79fd74df299027faabc70c94791eaa2f690d891c9c3"
 
 [nodes."docs/analyses/depth.md"]
 type = "source"
-hash = "b3:87ea11dfba7cb9c7d9b47f16c40be8ec70b4a656fc928009ed63d9477e9386d9"
+hash = "b3:a6f8adab69ea8361243ed1d4f7d07498458458e3bd5cc9123daaf2d56b38935f"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:db1fd9fd623fe6cc97c639c4bda1e948f67bf179e1f0529de31ec0db5624eadd"
+hash = "b3:38059e6e339e79b9b27274c510aa9c6dafe06d7a65bc718a65f950d6f7df106b"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
-hash = "b3:b4de292ddea6a94254041302cc4f98706906ba76caafae4df758a237f55f81de"
+hash = "b3:a6e2493b29b536bed5a1c909dc604c6087cd158c01e8d62ec22b9decd79248c0"
 
 [nodes."docs/analyses/pagerank.md"]
 type = "source"
-hash = "b3:b5f56c2fa394d7f1951bb5cea35b21a1f005b1299d1cf23a188573d64db81ad8"
+hash = "b3:c6d4518a00025a9007698bafaeebb8494b3d40c4c3a2b7274a9de02acd5d5bac"
 
 [nodes."docs/analyses/scc.md"]
 type = "source"
-hash = "b3:665f5e955edbd06f63b124f103c5c5397ba4e92a00329195cca9b4c83f400950"
+hash = "b3:a4c7bddff8c2b51717a098e60a546b318a9dcf946a73b27875436c31e9da6b72"
 
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
-hash = "b3:89703393c81a09006932fea38d5b30c43e7719e7b2c69a7f1baa4e9232981656"
+hash = "b3:45eda2f987d89786112da8f2c60ad9a2ba52e8cf2b59b08e71eb8a86b280f137"
 
 [nodes."docs/parsers/README.md"]
 type = "source"
@@ -272,7 +272,7 @@ hash = "b3:de246d46387a0a8158ccdeb5c500488e17a839d34e8b5b31b972558a5fabcd1c"
 
 [nodes."src/analyses/mod.rs"]
 type = "source"
-hash = "b3:26bff69ffa263665921f6828ba59644af72849f505ae1908c71418640239ed4e"
+hash = "b3:467a52403996fb6c4e883def43b5cc44a0527be3234e95937d3133ddb339b974"
 
 [nodes."src/analyses/pagerank.rs"]
 type = "source"
@@ -288,7 +288,7 @@ hash = "b3:6ccc6c57e100c553b795d802e30bf8ce52be8573a5e58ad3ef1c3f66164a8b87"
 
 [nodes."src/cli.rs"]
 type = "source"
-hash = "b3:b662f1cf67b3ae80babbaf148088c02cc65be827ab1ca20bc5dc53374c07c67e"
+hash = "b3:6b893e9286ee0969be16802658fcf0bb0ad7fa0cf7eed778fe7a7ace57dc6d5b"
 
 [nodes."src/config.rs"]
 type = "source"
@@ -316,11 +316,11 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:7597b57ae5d790922d563a5651a277b3b048ca7fab02aef4d4a537eec5e2a0cb"
+hash = "b3:6976dd6e343a25c8fb230fb00a88184635977191de28ff18dcd84c75c4dd0b83"
 
 [nodes."src/metrics.rs"]
 type = "source"
-hash = "b3:188b083617978717db7a52247fb6ed84ea65ce461ec1b3ea44c258a45239afe1"
+hash = "b3:fbc3bc0613792f3b408c738e7c9c1c6f152634f33c88767772974d7477225519"
 
 [nodes."src/parsers/markdown.rs"]
 type = "source"
@@ -429,6 +429,10 @@ hash = "b3:8c8763bd375c1449abdbd255c29f4013c6f0e065fa110fd464f96f3fbeaa5713"
 [nodes."tests/parsers.rs"]
 type = "source"
 hash = "b3:bfe51d32c49b66d11bd242c6c767ede9863848bce233153a2bc1f633bb5f0fb0"
+
+[nodes."tests/report.rs"]
+type = "source"
+hash = "b3:64fd6debb76b8fb6b06d4c7aa03469f7485dc15212dcac9c6956adb1afb22fb8"
 
 [nodes."tests/rules.rs"]
 type = "source"

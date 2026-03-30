@@ -17,7 +17,7 @@ When a file changes, its dependents may need review:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis change-propagation
+drft report change-propagation
 ```
 
 ```

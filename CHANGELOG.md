@@ -15,8 +15,7 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 - **Configurable parsers**: built-in markdown parser + script-based parsers via `command` field
 - **Batch script parsers**: one process per parser instead of one per file (PR #19)
 - **Rust doc comment parser**: links source files to docs via `parse-rust.sh`
-- **`drft analysis`** (unstable): 11 graph analyses — degree, SCC, connected components, depth, graph stats, bridges, betweenness centrality, PageRank, transitive reduction, graph boundaries, change propagation
-- **`drft metrics`** (unstable): scalar health metrics extracted from analyses
+- **`drft report`** (unstable): unified command for 11 graph analyses and 15 scalar health metrics — run all with `drft report`, filter by name with `drft report depth orphan_ratio`
 - **Custom analyses and custom metrics** via external scripts
 - **Criterion benchmarks** for the full pipeline
 
