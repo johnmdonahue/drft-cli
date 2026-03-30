@@ -1,18 +1,21 @@
+[parsers]
+markdown = true
+
 [rules]
 orphan = "off"
 
-[custom-rules.max-fan-out]
+[rules.max-fan-out]
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
 
-[custom-rules.naming-convention]
+[rules.naming-convention]
 command = "./scripts/naming-convention.sh"
 severity = "warn"
 
-[custom-rules.required-frontmatter]
+[rules.required-frontmatter]
 command = "./scripts/required-frontmatter.sh"
 severity = "warn"
 
-[custom-rules.max-depth]
+[rules.max-depth]
 command = "./scripts/max-depth.sh"
 severity = "warn"

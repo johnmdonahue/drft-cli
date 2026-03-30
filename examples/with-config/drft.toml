@@ -1,5 +1,8 @@
 ignore = ["drafts/*"]
 
+[parsers]
+markdown = true
+
 [rules]
 broken-link = "error"
 cycle = "error"

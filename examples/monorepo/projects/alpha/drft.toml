@@ -1,2 +1,5 @@
+[parsers]
+markdown = true
+
 [rules]
 broken-link = "error"
