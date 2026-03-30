@@ -5,7 +5,7 @@ markdown = true
 
 [parsers.rust]
 glob = "*.rs"
-command = "./scripts/parse-rust-docs.sh"
+command = "./scripts/parse-rust.sh"
 types = ["comment"]
 
 [rules]
