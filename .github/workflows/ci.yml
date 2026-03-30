@@ -18,5 +18,5 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings
       - run: cargo test
-      - run: cargo run -- lock --check
       - run: cargo run -- check
+      - run: cargo run -- lock --check

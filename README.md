@@ -301,11 +301,13 @@ If drft is installed globally (`cargo install drft-cli`), use `drft` instead of 
 ### CI
 
 ```bash
-npx drft lock --check --recursive  # verify all lockfiles are current
-npx drft check --recursive          # run all rules across all graphs
+npx drft check --recursive          # catch violations and staleness
+npx drft lock --check --recursive   # verify lockfiles are committed
 ```
 
-Both exit with code 1 on failure. Use `drft` instead of `npx drft` if installed globally or via cargo.
+Run `check` first — it catches broken links, cycles, and stale files. Then `lock --check` verifies the lockfile is committed (structural consistency). Both exit with code 1 on failure.
+
+The workflow: edit → `drft check` (see what's stale) → review impacted files → `drft lock` (acknowledge the changes) → commit. Lock is the "I've reviewed the impacts" step.
 
 ## License
 
