@@ -1,6 +1,6 @@
 # drft
 
-A structural integrity checker for markdown directories. drft treats a directory of markdown files as a dependency graph -- files are nodes, links are edges -- and validates the graph against configurable rules.
+A structural integrity checker for linked file systems. drft treats a directory of files as a dependency graph -- files are nodes, links are edges -- and validates the graph against configurable rules.
 
 ## Install
 
@@ -34,7 +34,7 @@ drft lock --check
 
 ## What it does
 
-drft discovers markdown files, extracts links between them (inline, reference, image, autolink, frontmatter, wikilink), and builds a dependency graph. It then validates that graph against a set of rules:
+drft discovers files, runs configurable parsers to extract links between them, and builds a dependency graph. It then validates that graph against a set of rules:
 
 | Rule | Default | Description |
 |------|---------|-------------|
@@ -42,8 +42,8 @@ drft discovers markdown files, extracts links between them (inline, reference, i
 | `cycle` | warn | Circular dependency detected |
 | `directory-link` | warn | Link points to a directory, not a file |
 | `stale` | warn | Dependency changed since last lock |
-| `containment` | warn | Link escapes the scope boundary |
-| `encapsulation` | warn | Link reaches into a sealed scope's non-manifest files |
+| `containment` | warn | Link escapes the graph boundary |
+| `encapsulation` | warn | Link reaches into a child graph's non-interface files |
 | `orphan` | off | File has no inbound links |
 | `indirect-link` | off | Link target is a symlink |
 
@@ -56,7 +56,7 @@ Validate the graph against all enabled rules.
 ```bash
 drft check                    # check current directory
 drft check -C path/to/docs   # check a different directory
-drft check --recursive        # include child scopes
+drft check --recursive        # include child graphs
 drft check --rule orphan      # run only specific rules
 drft check --watch            # re-check on file changes
 drft check --format json      # machine-readable output
@@ -64,13 +64,12 @@ drft check --format json      # machine-readable output
 
 ### `drft lock`
 
-Snapshot file hashes and the dependency graph to `drft.lock`. This enables staleness detection -- when a file changes, its dependents are flagged.
+Snapshot file hashes to `drft.lock`. This enables staleness detection -- when a file changes, its dependents are flagged.
 
 ```bash
 drft lock                     # create/update drft.lock
 drft lock --check             # verify lockfile is current (CI)
-drft lock --recursive         # lock all scopes bottom-up
-drft lock --manifest index.md # seal the scope with a manifest
+drft lock --recursive         # lock all graphs bottom-up
 ```
 
 ### `drft graph`
@@ -80,7 +79,7 @@ Export the dependency graph.
 ```bash
 drft graph                    # JSON Graph Format output
 drft graph --format dot       # Graphviz DOT output
-drft graph --recursive        # include child scope graphs
+drft graph --recursive        # include child graphs
 ```
 
 ### `drft impact`
@@ -97,52 +96,70 @@ drft impact config.md faq.md      # multiple files
 
 Create a default `drft.toml` config file.
 
+```bash
+drft init                              # write default drft.toml
+drft init --interface-from README.md   # derive interface from file's outbound links
+drft init --no-interface               # config without interface (open graph)
+```
+
 ## Configuration
 
-`drft.toml` in the scope root:
+`drft.toml` in the graph root:
 
 ```toml
 # Glob patterns for files to exclude from discovery
 ignore = ["drafts/*", "archive/*"]
 
+# Public interface — nodes accessible from parent graphs.
+# Presence of this section enables encapsulation.
+[interface]
+nodes = ["overview.md", "api/*.md"]
+
+# Parsers — which file types to parse and how
+[parsers]
+markdown = true                    # built-in, all defaults
+
+[parsers.tsx]                      # custom (has command)
+glob = "*.tsx"
+command = "./scripts/parse-tsx-links.sh"
+
 # Rule severities: "error", "warn", or "off"
+# Table form for per-rule options or custom rules
 [rules]
 broken-link = "error"
 cycle = "error"
-orphan = "warn"
 stale = "warn"
 
-# Per-rule path ignores
-[ignore-rules]
-orphan = ["README.md", "CLAUDE.md"]
+[rules.orphan]
+severity = "warn"
+ignore = ["README.md", "CLAUDE.md"]
 
-# Custom rules (scripts that receive graph JSON on stdin)
-[custom-rules.max-fan-out]
+[rules.max-fan-out]
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
 ```
 
 drft automatically respects `.gitignore`.
 
-## Scopes
+## Graph nesting
 
-A directory with a `drft.lock` becomes a **scope**. Child directories with their own `drft.lock` are **child scopes** -- they're checked independently with their own config.
+A directory with a `drft.toml` or `drft.lock` becomes a **graph**. Child directories with their own config are **child graphs** -- they appear as `Graph` nodes in the parent graph and are checked independently.
 
 ```
 project/
-  drft.lock              # root scope
+  drft.lock              # root graph
   drft.toml
   index.md
   docs/
     overview.md
   research/
-    drft.lock            # child scope (frontier node in parent)
-    drft.toml
+    drft.toml            # child graph (Graph node in parent)
+    drft.lock
     overview.md
     internal.md
 ```
 
-Use `--recursive` to check or lock all scopes in one command. Use `--manifest` to seal a scope and control which files are visible to the parent.
+Use `--recursive` to check or lock all graphs in one command. Use `[interface]` in `drft.toml` to declare a graph's public interface and control which files are visible to the parent.
 
 ## Output
 
@@ -187,7 +204,7 @@ Graph JSON follows the [JSON Graph Format](https://github.com/jsongraph/json-gra
 Custom rules are scripts that receive the dependency graph as JSON on stdin and emit diagnostics as newline-delimited JSON on stdout:
 
 ```toml
-[custom-rules.max-fan-out]
+[rules.max-fan-out]
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
 ```
@@ -205,7 +222,7 @@ for node, count in ...:
 
 See `examples/custom-rules/` for complete examples.
 
-**Security note:** Custom rules execute arbitrary shell commands defined in `drft.toml`. Review the `[custom-rules]` section before running `drft check` in untrusted repositories, the same as you would review npm scripts or Makefiles.
+**Security note:** Custom rules and custom parsers execute arbitrary shell commands defined in `drft.toml`. Review the `[rules]` and `[parsers]` sections before running `drft` in untrusted repositories, the same as you would review npm scripts or Makefiles.
 
 ## LLM integration
 
@@ -283,7 +300,7 @@ If drft is installed globally (`cargo install drft-cli`), use `drft` instead of 
 
 ```bash
 npx drft lock --check --recursive  # verify all lockfiles are current
-npx drft check --recursive          # run all rules across all scopes
+npx drft check --recursive          # run all rules across all graphs
 ```
 
 Both exit with code 1 on failure. Use `drft` instead of `npx drft` if installed globally or via cargo.
