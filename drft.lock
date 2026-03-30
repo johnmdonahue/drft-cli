@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "file"
-hash = "b3:cbace270caf755871ec70df2a6596eb687932af3431b039e5330144703f87bcd"
+hash = "b3:4f484282652ca7a94aa83bc7ba4616ebff11383129e02defa69b746afce99f6e"
 
 [nodes."CHANGELOG.md"]
 type = "file"
@@ -18,7 +18,7 @@ hash = "b3:620bd26670ad54d4cc3dbf602e84fb3275883afa61f3acbe08564de12cdb3926"
 
 [nodes."README.md"]
 type = "file"
-hash = "b3:fdae6e3dbdb406fde107fbebda7e8ad0b18e45f176b4a3df1cea7315fc00f382"
+hash = "b3:36c80025c09a0eb9caefacbdde2982bc8d2b824ad39564e3760818f1363cac70"
 
 [nodes."RELEASING.md"]
 type = "file"
@@ -292,7 +292,7 @@ hash = "b3:6b893e9286ee0969be16802658fcf0bb0ad7fa0cf7eed778fe7a7ace57dc6d5b"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:06596199a3d40639bdc58079f384475a66229daf4e1284dfd1c2ee3c385281c4"
+hash = "b3:7363300ff30d3e14e5062d22979ec628e642104f1baeb7f7b866d02379d42b8a"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
@@ -316,7 +316,7 @@ hash = "b3:4070e5ff5a54453ed17d53f6f6ad250ac007d998e543a5e9bc04bee8e7323395"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:d3abc85d3b615bed912e2092a6e25fe514a97b521cd0481b43b08e03b932f258"
+hash = "b3:667df4233dfedb14ad0a6b8caff11adf24c2f81a4da5c89998007d1b49fc173f"
 
 [nodes."src/metrics.rs"]
 type = "file"
@@ -328,15 +328,15 @@ hash = "b3:b1c39e7135461f5fb0a39d3c322bcbe50695715ee9070e354299d8e19e90d2be"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"
-hash = "b3:e77b47fc1e699fbfaf3c34d958f1cca1e4335a67777770f5581963832f64ec42"
+hash = "b3:f98aec1260e2fc3f4b2a9c3dc2e419b01bd814057dce01696f31529e9a13c3f4"
 
 [nodes."src/parsers/mod.rs"]
 type = "file"
-hash = "b3:16862e6d9b92906fa5c64e6ba66459909f059d9a38901c00cc23acb85e1c38d7"
+hash = "b3:83ecd95cddb3e6cc243a7f7b0d2afeb6b7ea4b0432f65f9ee7f2cdf5c48c6693"
 
 [nodes."src/parsers/script.rs"]
 type = "file"
-hash = "b3:bf0d51fa95905fc3ce466473ab35aadb2a845b234817b217e72a4a43f3774d9c"
+hash = "b3:60f5c94acdfdefe20c1937dcfdeb22dc80d5a5ad4d44a4e48ee25e8e453ff124"
 
 [nodes."src/rules/README.md"]
 type = "file"
@@ -436,7 +436,7 @@ hash = "b3:893cbd8cdba8d88bdb32fc6c29ab0a76585d1373dc585be3b2677c76cb70c20a"
 
 [nodes."tests/parsers.rs"]
 type = "file"
-hash = "b3:d9af4c7f55e1208d204d00f506457ec10952a36d56cd2a4cd5e10262c27796e3"
+hash = "b3:22377c96ba98b77a8dd22428f30337b294425ab1b7ccb96a2ca0cc2db1862420"
 
 [nodes."tests/report.rs"]
 type = "file"

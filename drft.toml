@@ -2,8 +2,8 @@
 
 include = ["*.md", "*.rs"]
 
-[parsers]
-markdown = true
+[parsers.markdown]
+files = ["*.md"]
 
 [rules]
 # All rules default to warn. Override only what you need.

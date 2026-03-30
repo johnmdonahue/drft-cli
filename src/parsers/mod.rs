@@ -35,11 +35,40 @@ pub trait Parser {
     }
 }
 
-/// Default glob patterns for built-in parsers.
-fn default_glob(parser_name: &str) -> Option<&'static str> {
-    match parser_name {
-        "markdown" => Some("*.md"),
-        _ => None,
+/// Extract the `types` array from parser options, if present.
+fn extract_type_filter(options: &Option<toml::Value>) -> Option<Vec<String>> {
+    options
+        .as_ref()
+        .and_then(|v| v.get("types"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+}
+
+/// Build a GlobSet from file patterns (for parser routing).
+/// Returns None if no patterns → parser receives all File nodes.
+fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globset::GlobSet> {
+    let patterns = patterns.as_ref()?;
+    let mut builder = globset::GlobSetBuilder::new();
+    for pattern in patterns {
+        match globset::Glob::new(pattern) {
+            Ok(g) => {
+                builder.add(g);
+            }
+            Err(e) => {
+                eprintln!("warn: invalid glob in parser {name}.files: {e}");
+            }
+        }
+    }
+    match builder.build() {
+        Ok(set) => Some(set),
+        Err(e) => {
+            eprintln!("warn: failed to compile globs for parser {name}.files: {e}");
+            None
+        }
     }
 }
 
@@ -53,21 +82,8 @@ pub fn build_parsers(
     let mut parsers: Vec<Box<dyn Parser>> = Vec::new();
 
     for (name, config) in parsers_config {
-        let glob_pattern = config
-            .glob
-            .as_deref()
-            .or_else(|| default_glob(name))
-            .unwrap_or("*");
-
-        let glob = match globset::Glob::new(glob_pattern) {
-            Ok(g) => g.compile_matcher(),
-            Err(e) => {
-                eprintln!("warn: invalid glob for parser {name}: {e}");
-                continue;
-            }
-        };
-
-        let type_filter = config.types.clone();
+        let file_filter = build_file_filter(&config.files, name);
+        let type_filter = extract_type_filter(&config.options);
 
         if let Some(ref command) = config.command {
             // Script-based parser
@@ -84,7 +100,7 @@ pub fn build_parsers(
 
             parsers.push(Box::new(script::ScriptParser {
                 parser_name: name.clone(),
-                glob,
+                file_filter,
                 type_filter,
                 command: resolved_command,
                 timeout_ms: config.timeout.unwrap_or(5000),
@@ -94,7 +110,10 @@ pub fn build_parsers(
             // Built-in parser
             match name.as_str() {
                 "markdown" => {
-                    parsers.push(Box::new(markdown::MarkdownParser { glob, type_filter }));
+                    parsers.push(Box::new(markdown::MarkdownParser {
+                        file_filter,
+                        type_filter,
+                    }));
                 }
                 _ => {
                     eprintln!(

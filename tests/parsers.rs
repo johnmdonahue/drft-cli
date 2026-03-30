@@ -102,7 +102,7 @@ done
             r#"include = ["*.txt", "*.md"]
 
 [parsers.custom]
-glob = "*.txt"
+files = ["*.txt"]
 command = "{}"
 "#,
             script.to_string_lossy().replace('"', "\\\"")

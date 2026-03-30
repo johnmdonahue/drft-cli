@@ -4,7 +4,8 @@ use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEn
 /// Built-in markdown parser. Extracts inline/reference/autolinks, images,
 /// frontmatter file references, and wikilinks.
 pub struct MarkdownParser {
-    pub glob: globset::GlobMatcher,
+    /// File routing filter. None = receives all File nodes.
+    pub file_filter: Option<globset::GlobSet>,
     pub type_filter: Option<Vec<String>>,
 }
 
@@ -14,9 +15,10 @@ impl Parser for MarkdownParser {
     }
 
     fn matches(&self, path: &str) -> bool {
-        // Match against just the filename portion
-        let filename = path.rsplit('/').next().unwrap_or(path);
-        self.glob.is_match(filename)
+        match &self.file_filter {
+            Some(set) => set.is_match(path),
+            None => true, // No filter = receives all File nodes
+        }
     }
 
     fn parse(&self, _path: &str, content: &str) -> Vec<RawLink> {
@@ -317,7 +319,7 @@ mod tests {
 
     fn parse(content: &str) -> Vec<RawLink> {
         let parser = MarkdownParser {
-            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            file_filter: None,
             type_filter: None,
         };
         parser.parse("test.md", content)
@@ -457,7 +459,7 @@ mod tests {
     #[test]
     fn type_filter_works() {
         let parser = MarkdownParser {
-            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            file_filter: None,
             type_filter: Some(vec!["frontmatter".to_string()]),
         };
         let content = "---\nsources:\n  - ./ref.md\n---\n\n[inline](other.md) and [[wikilink]]\n";
@@ -467,20 +469,23 @@ mod tests {
     }
 
     #[test]
-    fn matches_md_files() {
+    fn no_filter_matches_everything() {
         let parser = MarkdownParser {
-            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            file_filter: None,
             type_filter: None,
         };
         assert!(parser.matches("index.md"));
+        assert!(parser.matches("main.rs"));
         assert!(parser.matches("docs/guide.md"));
-        assert!(!parser.matches("main.rs"));
     }
 
     #[test]
-    fn matches_custom_glob() {
+    fn file_filter_restricts_matching() {
+        let mut builder = globset::GlobSetBuilder::new();
+        builder.add(globset::Glob::new("*.md").unwrap());
+        builder.add(globset::Glob::new("*.mdx").unwrap());
         let parser = MarkdownParser {
-            glob: globset::Glob::new("*.{md,mdx}").unwrap().compile_matcher(),
+            file_filter: Some(builder.build().unwrap()),
             type_filter: None,
         };
         assert!(parser.matches("index.md"));

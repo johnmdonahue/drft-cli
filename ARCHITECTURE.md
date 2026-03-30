@@ -70,7 +70,7 @@ The pipeline: **Parsing → Graph → Analyses → Metrics → Rules**. Each lay
 
 Each layer has its own directory and concerns:
 
-- **`src/parsers/`** — link extraction. Each parser implements the `Parser` trait, matches files by glob, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
+- **`src/parsers/`** — link extraction. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
 - **`src/analyses/`** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
 - **`src/metrics.rs`** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
 - **`src/rules/`** — diagnostic mapping. Each rule implements the `Rule` trait, receives a `RuleContext` with full evaluated state, and emits `Diagnostic` structs with severity and fix suggestions.
@@ -213,7 +213,7 @@ nodes = ["overview.md"]         # public interface nodes (enables encapsulation)
 markdown = true                 # built-in parser, all defaults
 
 [parsers.tsx]                   # custom parser (has command)
-glob = "*.tsx"
+files = ["*.tsx"]
 command = "./scripts/parse-tsx.sh"
 
 [rules]

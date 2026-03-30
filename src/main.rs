@@ -124,8 +124,8 @@ include = ["*.md"]
 # Remove from the graph (also respects .gitignore)
 # exclude = []
 
-[parsers]
-markdown = true
+[parsers.markdown]
+# files = ["*.md"]   # uncomment to restrict (receives all included files by default)
 
 [rules]
 # All rules default to warn. Override only what you need.

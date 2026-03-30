@@ -8,7 +8,8 @@ use std::time::Duration;
 /// on stdin (one per line) and emits NDJSON links on stdout.
 pub struct ScriptParser {
     pub parser_name: String,
-    pub glob: globset::GlobMatcher,
+    /// File routing filter. None = receives all File nodes.
+    pub file_filter: Option<globset::GlobSet>,
     pub type_filter: Option<Vec<String>>,
     pub command: String,
     pub timeout_ms: u64,
@@ -21,8 +22,10 @@ impl Parser for ScriptParser {
     }
 
     fn matches(&self, path: &str) -> bool {
-        let filename = path.rsplit('/').next().unwrap_or(path);
-        self.glob.is_match(filename)
+        match &self.file_filter {
+            Some(set) => set.is_match(path),
+            None => true, // No filter = receives all File nodes
+        }
     }
 
     fn parse(&self, path: &str, _content: &str) -> Vec<RawLink> {

@@ -120,12 +120,12 @@ exclude = ["drafts/*", "archive/*"]
 [interface]
 nodes = ["overview.md", "api/*.md"]
 
-# Parsers — which file types to parse and how
-[parsers]
-markdown = true                    # built-in, all defaults
+# Parsers — edge extraction from File nodes
+[parsers.markdown]
+files = ["*.md"]                   # restrict to .md files (default: all)
 
 [parsers.tsx]                      # custom (has command)
-glob = "*.tsx"
+files = ["*.tsx"]
 command = "./scripts/parse-tsx-links.sh"
 
 # Rule severities: "error", "warn", or "off"

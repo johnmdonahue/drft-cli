@@ -15,14 +15,17 @@ pub enum RuleSeverity {
 // ── Parser config ──────────────────────────────────────────────
 
 /// Configuration for a single parser under `[parsers]`.
-/// Supports shorthand (`markdown = true`, `markdown = ["frontmatter"]`)
-/// and expanded table form (`[parsers.markdown]` with fields).
+/// Supports shorthand (`markdown = true`) and expanded table form
+/// (`[parsers.markdown]` with fields). Parser-specific options go
+/// under `[parsers.<name>.options]` and are passed through to the parser.
 #[derive(Debug, Clone)]
 pub struct ParserConfig {
-    pub glob: Option<String>,
-    pub types: Option<Vec<String>>,
+    /// Which File nodes to send to this parser. None = all File nodes.
+    pub files: Option<Vec<String>>,
     pub command: Option<String>,
     pub timeout: Option<u64>,
+    /// Arbitrary options passed through to the parser (not interpreted by drft).
+    pub options: Option<toml::Value>,
 }
 
 /// Serde helper: untagged enum to parse shorthand or table forms.
@@ -31,14 +34,17 @@ pub struct ParserConfig {
 enum RawParserValue {
     /// `markdown = true`
     Bool(bool),
-    /// `markdown = ["frontmatter", "wikilink"]`
+    /// `markdown = ["frontmatter", "wikilink"]` (v0.3 shorthand for types)
     Types(Vec<String>),
     /// `[parsers.markdown]` with fields
     Table {
-        glob: Option<String>,
-        types: Option<Vec<String>>,
+        files: Option<Vec<String>>,
         command: Option<String>,
         timeout: Option<u64>,
+        options: Option<toml::Value>,
+        // v0.3 keys — accepted as migration aliases
+        glob: Option<String>,
+        types: Option<Vec<String>>,
     },
 }
 
@@ -47,28 +53,71 @@ impl From<RawParserValue> for Option<ParserConfig> {
         match val {
             RawParserValue::Bool(false) => None,
             RawParserValue::Bool(true) => Some(ParserConfig {
-                glob: None,
-                types: None,
+                files: None,
                 command: None,
                 timeout: None,
+                options: None,
             }),
-            RawParserValue::Types(types) => Some(ParserConfig {
-                glob: None,
-                types: Some(types),
-                command: None,
-                timeout: None,
-            }),
+            RawParserValue::Types(types) => {
+                // v0.3 shorthand: `markdown = ["frontmatter"]` → options.types
+                let options = toml::Value::Table(toml::map::Map::from_iter([(
+                    "types".to_string(),
+                    toml::Value::Array(types.into_iter().map(toml::Value::String).collect()),
+                )]));
+                Some(ParserConfig {
+                    files: None,
+                    command: None,
+                    timeout: None,
+                    options: Some(options),
+                })
+            }
             RawParserValue::Table {
-                glob,
-                types,
+                files,
                 command,
                 timeout,
-            } => Some(ParserConfig {
+                options,
                 glob,
                 types,
-                command,
-                timeout,
-            }),
+            } => {
+                // Migrate v0.3 `glob` → `files`
+                let files = if files.is_some() {
+                    files
+                } else if let Some(glob) = glob {
+                    eprintln!("warn: parser 'glob' is deprecated — rename to 'files' (v0.4)");
+                    Some(vec![glob])
+                } else {
+                    None
+                };
+
+                // Migrate v0.3 bare `types` → options.types
+                let options = if let Some(types) = types {
+                    eprintln!(
+                        "warn: parser 'types' is deprecated — move to [parsers.<name>.options] (v0.4)"
+                    );
+                    let types_val =
+                        toml::Value::Array(types.into_iter().map(toml::Value::String).collect());
+                    match options {
+                        Some(toml::Value::Table(mut tbl)) => {
+                            tbl.entry("types").or_insert(types_val);
+                            Some(toml::Value::Table(tbl))
+                        }
+                        None => {
+                            let tbl = toml::map::Map::from_iter([("types".to_string(), types_val)]);
+                            Some(toml::Value::Table(tbl))
+                        }
+                        other => other, // options exists but isn't a table — leave it
+                    }
+                } else {
+                    options
+                };
+
+                Some(ParserConfig {
+                    files,
+                    command,
+                    timeout,
+                    options,
+                })
+            }
         }
     }
 }
@@ -184,10 +233,10 @@ impl Config {
         parsers.insert(
             "markdown".to_string(),
             ParserConfig {
-                glob: None,
-                types: None,
+                files: None,
                 command: None,
                 timeout: None,
+                options: None,
             },
         );
 
@@ -444,13 +493,13 @@ mod tests {
         let config = Config::load(dir.path()).unwrap();
         assert!(config.parsers.contains_key("markdown"));
         let p = &config.parsers["markdown"];
-        assert!(p.glob.is_none());
-        assert!(p.types.is_none());
+        assert!(p.files.is_none());
+        assert!(p.options.is_none());
         assert!(p.command.is_none());
     }
 
     #[test]
-    fn loads_parser_shorthand_types() {
+    fn loads_parser_shorthand_types_migrates_to_options() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
@@ -459,25 +508,58 @@ mod tests {
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         let p = &config.parsers["markdown"];
-        assert_eq!(
-            p.types.as_deref(),
-            Some(vec!["frontmatter".to_string(), "wikilink".to_string()]).as_deref()
-        );
+        // v0.3 shorthand types → options.types
+        let opts = p.options.as_ref().unwrap();
+        let types = opts.get("types").unwrap().as_array().unwrap();
+        assert_eq!(types.len(), 2);
+        assert_eq!(types[0].as_str().unwrap(), "frontmatter");
+        assert_eq!(types[1].as_str().unwrap(), "wikilink");
     }
 
     #[test]
-    fn loads_parser_table() {
+    fn loads_parser_table_with_files() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[parsers.tsx]\nglob = \"*.tsx\"\ncommand = \"./parse.sh\"\ntimeout = 10000\n",
+            "[parsers.tsx]\nfiles = [\"*.tsx\", \"*.ts\"]\ncommand = \"./parse.sh\"\ntimeout = 10000\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         let p = &config.parsers["tsx"];
-        assert_eq!(p.glob.as_deref(), Some("*.tsx"));
+        assert_eq!(
+            p.files.as_deref(),
+            Some(&["*.tsx".to_string(), "*.ts".to_string()][..])
+        );
         assert_eq!(p.command.as_deref(), Some("./parse.sh"));
         assert_eq!(p.timeout, Some(10000));
+    }
+
+    #[test]
+    fn loads_parser_glob_migrates_to_files() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[parsers.tsx]\nglob = \"*.tsx\"\ncommand = \"./parse.sh\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let p = &config.parsers["tsx"];
+        assert_eq!(p.files.as_deref(), Some(&["*.tsx".to_string()][..]));
+    }
+
+    #[test]
+    fn loads_parser_options() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[parsers.markdown]\nfiles = [\"*.md\"]\n\n[parsers.markdown.options]\ntypes = [\"inline\"]\nextract_metadata = true\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let p = &config.parsers["markdown"];
+        let opts = p.options.as_ref().unwrap();
+        assert!(opts.get("types").is_some());
+        assert_eq!(opts.get("extract_metadata").unwrap().as_bool(), Some(true));
     }
 
     #[test]
