@@ -1,7 +1,5 @@
 # drft.toml — drft dogfooding itself
 
-ignore = ["examples/*"]
-
 [parsers]
 markdown = true
 

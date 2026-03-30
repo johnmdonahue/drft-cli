@@ -220,19 +220,16 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // Create Graph nodes for child scopes
+    // Create Graph nodes for child scopes — any directory with drft.toml or drft.lock.
+    // No hash: staleness within a child graph is the child's concern, not the parent's.
     let scope_prefixes: Vec<String> = graph.child_scopes.clone();
     for scope_dir in &scope_prefixes {
-        let child_lock_path = root.join(scope_dir.trim_end_matches('/')).join("drft.lock");
-        if let Ok(content) = std::fs::read(&child_lock_path) {
-            let hash = hash_bytes(&content);
-            graph.add_node(Node {
-                path: scope_dir.clone(),
-                node_type: NodeType::Graph,
-                hash: Some(hash),
-                graph: None,
-            });
-        }
+        graph.add_node(Node {
+            path: scope_dir.clone(),
+            node_type: NodeType::Graph,
+            hash: None,
+            graph: None,
+        });
     }
 
     // Build ignore set for filtering asset nodes

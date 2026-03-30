@@ -76,6 +76,27 @@ hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
 type = "source"
 hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
 
+[nodes."examples/broken/"]
+type = "graph"
+
+[nodes."examples/custom-rules/"]
+type = "graph"
+
+[nodes."examples/cyclic/"]
+type = "graph"
+
+[nodes."examples/monorepo/"]
+type = "graph"
+
+[nodes."examples/simple/"]
+type = "graph"
+
+[nodes."examples/with-assets/"]
+type = "graph"
+
+[nodes."examples/with-config/"]
+type = "graph"
+
 [nodes."https://en.wikipedia.org/wiki/Betweenness_centrality#Brandes'_algorithm"]
 type = "external"
 
