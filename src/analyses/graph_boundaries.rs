@@ -3,7 +3,7 @@ use crate::graph::NodeType;
 use crate::lockfile::read_lockfile;
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ScopeEscape {
+pub struct GraphEscape {
     pub source: String,
     pub target: String,
 }
@@ -16,27 +16,27 @@ pub struct EncapsulationViolation {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ScopeBoundariesResult {
+pub struct GraphBoundariesResult {
     pub sealed: bool,
-    pub escapes: Vec<ScopeEscape>,
+    pub escapes: Vec<GraphEscape>,
     pub encapsulation_violations: Vec<EncapsulationViolation>,
 }
 
 pub struct GraphBoundaries;
 
 impl Analysis for GraphBoundaries {
-    type Output = ScopeBoundariesResult;
+    type Output = GraphBoundariesResult;
 
     fn name(&self) -> &str {
         "graph-boundaries"
     }
 
-    fn run(&self, ctx: &AnalysisContext) -> ScopeBoundariesResult {
+    fn run(&self, ctx: &AnalysisContext) -> GraphBoundariesResult {
         let graph = ctx.graph;
         let root = ctx.root;
         let sealed = root.join("drft.lock").exists() || root.join("drft.toml").exists();
 
-        // Find scope escapes (edges with ../ targets)
+        // Find graph escapes (edges with ../ targets)
         let escapes = if sealed {
             graph
                 .edges
@@ -46,7 +46,7 @@ impl Analysis for GraphBoundaries {
                         && !edge.target.starts_with("https://")
                         && (edge.target.starts_with("../") || edge.target == "..")
                 })
-                .map(|edge| ScopeEscape {
+                .map(|edge| GraphEscape {
                     source: edge.source.clone(),
                     target: edge.target.clone(),
                 })
@@ -83,32 +83,32 @@ impl Analysis for GraphBoundaries {
                 }
             };
 
-            let scope_prefix = path.as_str();
+            let graph_prefix = path.as_str();
 
             for edge in &graph.edges {
-                // Skip graph-scoped sources (implicit child→parent edges)
+                // Skip child-graph sources (implicit coupling edges)
                 if let Some(source_node) = graph.nodes.get(&edge.source)
                     && source_node.graph.is_some()
                 {
                     continue;
                 }
 
-                if !edge.target.starts_with(scope_prefix) {
+                if !edge.target.starts_with(graph_prefix) {
                     continue;
                 }
 
-                let relative_target = &edge.target[scope_prefix.len()..];
+                let relative_target = &edge.target[graph_prefix.len()..];
                 if !interface_nodes.iter().any(|n| n == relative_target) {
                     encapsulation_violations.push(EncapsulationViolation {
                         source: edge.source.clone(),
                         target: edge.target.clone(),
-                        scope: scope_prefix.to_string(),
+                        scope: graph_prefix.to_string(),
                     });
                 }
             }
         }
 
-        ScopeBoundariesResult {
+        GraphBoundariesResult {
             sealed,
             escapes,
             encapsulation_violations,
@@ -139,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_scope_escape() {
+    fn detects_graph_escape() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("drft.lock"), "lockfile_version = 2\n").unwrap();
 

@@ -244,7 +244,7 @@ hash = "b3:3e6aa5c9c9b0e06102211bcfea85768849a31daa57bf4e2930eeace1b1bcd6b9"
 
 [nodes."src/analyses/change_propagation.rs"]
 type = "source"
-hash = "b3:3745c18948f54c9138ccbfdb2c3f08302dff1f18219eda27ae681b09d56c29fd"
+hash = "b3:8fec3d718be907a7ff428111abda0c1781cb4752b4cac8bd8a499d8d0cbcf82a"
 
 [nodes."src/analyses/connected_components.rs"]
 type = "source"
@@ -260,7 +260,7 @@ hash = "b3:9d06abdaa68f8e6128804b73673001e3be0e7d95a418c0b203877e79ccde518d"
 
 [nodes."src/analyses/graph_boundaries.rs"]
 type = "source"
-hash = "b3:ae6f445fb6ac26753552cdfa3224d7fb6adfd4c1a2cd2c852acfcfea594f61cc"
+hash = "b3:2b9b8dc5c41191d13ec71d6e0def6d38d5fdd485cc7510c039f84575280f776f"
 
 [nodes."src/analyses/graph_stats.rs"]
 type = "source"
@@ -284,7 +284,7 @@ hash = "b3:6ccc6c57e100c553b795d802e30bf8ce52be8573a5e58ad3ef1c3f66164a8b87"
 
 [nodes."src/cli.rs"]
 type = "source"
-hash = "b3:010ea19b3914ce4e5bf4910a25e4f3b7c1272878e33589554c6e1b8ca796d141"
+hash = "b3:b662f1cf67b3ae80babbaf148088c02cc65be827ab1ca20bc5dc53374c07c67e"
 
 [nodes."src/config.rs"]
 type = "source"
@@ -292,23 +292,23 @@ hash = "b3:a31d062e63ac7a452d260ac83e805b25b5aadc3a56a6c39aa3ec140600df531b"
 
 [nodes."src/diagnostic.rs"]
 type = "source"
-hash = "b3:65816c239a53d7be465d78dcbb97747d993dd2d001149e3b9d6bdcdc79d48a9d"
+hash = "b3:d3adf5e756f582c5d7793487da119dc9bd8a4c0b63f2baa9b6e0fd901f454640"
 
 [nodes."src/discovery.rs"]
 type = "source"
-hash = "b3:a0cac3285063f40b587298cbafa5eb5c98a459e93bf04683cfbdb5163902d9e4"
+hash = "b3:bbd954d91ac369f40886ab9a444d7d66762e7541634c5c8b1c939ee3f20c413f"
 
 [nodes."src/graph.rs"]
 type = "source"
-hash = "b3:c4aac799fcff8a05c72b1f046f13d12e844e1a119caf518256990c5009836694"
+hash = "b3:8133b19cce2ead901e3eb2d0d946e814d18c02fb0977e64ba73589549c21a911"
 
 [nodes."src/lockfile.rs"]
 type = "source"
-hash = "b3:d20c203c6089c5b2acd67953ac6866ea412aa24ee3e391f8cd1fbfbfe2ed8bad"
+hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:9b27d77ec17aea6e3e82ff913ebdf40ba5abc5ab0c97d6d9d46201a08bdb55ec"
+hash = "b3:35e7333484444dceeb89c4960f19c868104e51688368facc74e6895a7f1c2283"
 
 [nodes."src/metrics.rs"]
 type = "source"
@@ -332,7 +332,7 @@ hash = "b3:149a4361861cb1794a700ca4bfb8b75ee8677b99dc0b6fdf6d197ed6cee2df3d"
 
 [nodes."src/rules/containment.rs"]
 type = "source"
-hash = "b3:c9cc3d738f630d4bd698854b7904990ed5883045b57aabe96999219fabd885ea"
+hash = "b3:919b3f53b3e3418e1ed89a757c36b7826c2fe02a2ee4ef4eeea481e2edd65c05"
 
 [nodes."src/rules/cycle.rs"]
 type = "source"
@@ -380,8 +380,48 @@ hash = "b3:f36a6e303ec371a4e64b968b3a43a3bc2105f29ef78753677f70b2a31f5c9154"
 
 [nodes."src/rules/stale.rs"]
 type = "source"
-hash = "b3:e6d3a1ca8a41d918f1d8a6a29b8c20d3efd36fd53a4c5be703814418505746b2"
+hash = "b3:6e5a7fa38be46bd6ca5bd66040a86725c3518f4cfa8758b5bb81fb2d45d65f07"
 
-[nodes."tests/scenarios.rs"]
+[nodes."tests/check.rs"]
 type = "source"
-hash = "b3:dcf11ed5a2c38e3f017aba42b6f6f1b7f1f9f7960a7693beb3c253aac667077e"
+hash = "b3:aba3f7be7afdd33ceaae564830912e5ce0c5a97d18452ce43908c1dab0a3b399"
+
+[nodes."tests/common/mod.rs"]
+type = "source"
+hash = "b3:2d229609bd5598d5ca83de9d55a84fbcd29e54cb545ef562295ff9c483e5cd2e"
+
+[nodes."tests/custom_rules.rs"]
+type = "source"
+hash = "b3:c777bfe125798bbd96b65917815efc04c2005234c69dcf2d1c79cfca9abd1f64"
+
+[nodes."tests/graph.rs"]
+type = "source"
+hash = "b3:97eff4359275de4e7ae66d062be4deb3969d8c6360fafa72449cd8d472930bd9"
+
+[nodes."tests/graphs.rs"]
+type = "source"
+hash = "b3:cda1aa42d5cb144d93b4119b540a4f42e1b956c83aaea7b552e10ee7316316ac"
+
+[nodes."tests/impact.rs"]
+type = "source"
+hash = "b3:9206c7bb26c96d623da5f7a601b6773f139d7b83779a29cdfc92743ffc025770"
+
+[nodes."tests/init.rs"]
+type = "source"
+hash = "b3:e5407771a501b6acad778a725dcef63dd37b224cb629c867e793ca694e8ae6ed"
+
+[nodes."tests/lock.rs"]
+type = "source"
+hash = "b3:32c40afb7f6c95bb5c16f7aa4ad87a8c5bea372c104905568a5409f87e18582a"
+
+[nodes."tests/output.rs"]
+type = "source"
+hash = "b3:8c8763bd375c1449abdbd255c29f4013c6f0e065fa110fd464f96f3fbeaa5713"
+
+[nodes."tests/parsers.rs"]
+type = "source"
+hash = "b3:9958c8e3798a54f6d6919e51b55c4e617cb6572f4b63f4cfaf4cd77476b6d881"
+
+[nodes."tests/rules.rs"]
+type = "source"
+hash = "b3:8852c930c79a4a4753f6a0356d1b790583f1bbf35b526fb6a3cba72a1196515c"

@@ -56,15 +56,15 @@ impl Rule for StaleRule {
         for change in &result.boundary_changes {
             diagnostics.push(Diagnostic {
                 rule: "stale".into(),
-                message: "scope boundary changed".into(),
+                message: "graph boundary changed".into(),
                 node: Some(change.node.clone()),
                 fix: Some(match change.reason.as_str() {
-                    "scope removed" => format!(
+                    "child graph removed" => format!(
                         "{} no longer has a drft.lock \u{2014} run drft lock to update the parent lockfile",
                         change.node
                     ),
-                    "new scope" => format!(
-                        "{} is a new child scope \u{2014} run drft lock to update the parent lockfile",
+                    "new child graph" => format!(
+                        "{} is a new child graph \u{2014} run drft lock to update the parent lockfile",
                         change.node
                     ),
                     _ => "run drft lock to update the lockfile".to_string(),

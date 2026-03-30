@@ -42,22 +42,22 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
 
-        /// Lock child scopes recursively (bottom-up)
+        /// Lock child graphs recursively (bottom-up)
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
     },
 
     /// Export the dependency graph
     Graph {
-        /// Include child scope graphs
+        /// Include child graphs
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
     },
@@ -85,11 +85,11 @@ pub enum Commands {
         #[arg(long = "rule")]
         rules: Vec<String>,
 
-        /// Check child scopes recursively
+        /// Check child graphs recursively
         #[arg(long, short = 'r')]
         recursive: bool,
 
-        /// Max scope nesting depth for --recursive
+        /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
 

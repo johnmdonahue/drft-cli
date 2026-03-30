@@ -29,11 +29,11 @@ impl Rule for ContainmentRule {
             .iter()
             .map(|e| Diagnostic {
                 rule: "containment".into(),
-                message: "links outside scope boundary".into(),
+                message: "links outside graph boundary".into(),
                 source: Some(e.source.clone()),
                 target: Some(e.target.clone()),
                 fix: Some(format!(
-                    "link reaches outside the scope \u{2014} move {} into the scope or remove the link from {}",
+                    "link reaches outside the graph \u{2014} move {} into the graph or remove the link from {}",
                     e.target, e.source
                 )),
                 ..Default::default()

@@ -1,5 +1,5 @@
 use super::{Analysis, AnalysisContext};
-use crate::discovery::find_child_scopes;
+use crate::discovery::find_child_graphs;
 use crate::graph::{NodeType, hash_bytes};
 use crate::lockfile::read_lockfile;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -82,16 +82,16 @@ impl Analysis for ChangePropagation {
 
         // Boundary changes
         let mut boundary_changes = Vec::new();
-        let current_scopes: HashSet<String> = find_child_scopes(root, &ctx.config.ignore)
+        let current_graphs: HashSet<String> = find_child_graphs(root, &ctx.config.ignore)
             .unwrap_or_default()
             .into_iter()
             .collect();
 
         for (path, node) in &lockfile.nodes {
-            if node.node_type == NodeType::Graph && !current_scopes.contains(path.as_str()) {
+            if node.node_type == NodeType::Graph && !current_graphs.contains(path.as_str()) {
                 boundary_changes.push(BoundaryChange {
                     node: path.clone(),
-                    reason: "scope removed".into(),
+                    reason: "child graph removed".into(),
                 });
             }
         }
@@ -102,11 +102,11 @@ impl Analysis for ChangePropagation {
             .filter(|(_, n)| n.node_type == NodeType::Graph)
             .map(|(p, _)| p.as_str())
             .collect();
-        for scope in &current_scopes {
-            if !lockfile_frontiers.contains(scope.as_str()) {
+        for child_graph in &current_graphs {
+            if !lockfile_frontiers.contains(child_graph.as_str()) {
                 boundary_changes.push(BoundaryChange {
-                    node: scope.clone(),
-                    reason: "new scope".into(),
+                    node: child_graph.clone(),
+                    reason: "new child graph".into(),
                 });
             }
         }

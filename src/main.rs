@@ -142,7 +142,7 @@ stale = "warn"
         let graph = build_graph(root, &config)?;
 
         if !graph.nodes.contains_key(file) {
-            anyhow::bail!("file \"{file}\" not found in scope");
+            anyhow::bail!("file \"{file}\" not found in graph");
         }
 
         let mut nodes = Vec::new();
@@ -183,11 +183,11 @@ fn run_lock(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    // Recursive: lock child scopes bottom-up first
+    // Recursive: lock child graphs bottom-up first
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        let child_scopes = find_lockable_scopes(root)?;
-        for child_dir in &child_scopes {
+        let child_graphs = find_lockable_graphs(root)?;
+        for child_dir in &child_graphs {
             let code = run_lock(child_dir, check_mode, true, next_depth)?;
             if check_mode && code != 0 {
                 return Ok(code);
@@ -195,11 +195,11 @@ fn run_lock(
         }
     }
 
-    // Lock this scope
-    lock_scope(root, check_mode)
+    // Lock this graph
+    lock_graph(root, check_mode)
 }
 
-fn lock_scope(root: &Path, check_mode: bool) -> Result<i32> {
+fn lock_graph(root: &Path, check_mode: bool) -> Result<i32> {
     let config = Config::load(root)?;
     let graph = build_graph(root, &config)?;
 
@@ -386,11 +386,11 @@ fn run_graph(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    let scope_root = find_scope_root(root);
+    let graph_root = find_graph_root(root);
 
     match format {
         OutputFormat::Dot => {
-            let graphs = collect_jgf_graphs(&scope_root, ".", recursive, max_depth)?;
+            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
             println!("digraph {{");
             let mut all_nodes = Vec::new();
             let mut all_edges = Vec::new();
@@ -432,7 +432,7 @@ fn run_graph(
         }
         _ => {
             // JSON Graph Format (JGF)
-            let graphs = collect_jgf_graphs(&scope_root, ".", recursive, max_depth)?;
+            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
 
             let jgf_graphs: Vec<serde_json::Value> = graphs
                 .iter()
@@ -489,19 +489,19 @@ fn run_graph(
     Ok(0)
 }
 
-struct ScopeGraph {
+struct GraphExport {
     id: String,
     nodes: Vec<(String, graph::NodeType, Option<String>)>, // path, type, hash
     edges: Vec<(String, String, graph::EdgeType)>,
 }
 
-/// Collect JGF graph(s) from a scope and optionally its children.
+/// Collect JGF graph(s) from a graph root and optionally its children.
 fn collect_jgf_graphs(
     root: &Path,
     id: &str,
     recursive: bool,
     max_depth: Option<usize>,
-) -> Result<Vec<ScopeGraph>> {
+) -> Result<Vec<GraphExport>> {
     let config = Config::load(root)?;
     let g = build_graph(root, &config)?;
 
@@ -518,7 +518,7 @@ fn collect_jgf_graphs(
         .map(|e| (e.source.clone(), e.target.clone(), e.edge_type.clone()))
         .collect();
 
-    let mut graphs = vec![ScopeGraph {
+    let mut graphs = vec![GraphExport {
         id: id.to_string(),
         nodes,
         edges,
@@ -526,19 +526,19 @@ fn collect_jgf_graphs(
 
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_scope in &g.child_scopes {
-            let child_dir = root.join(child_scope.trim_end_matches('/'));
+        for child_graph in &g.child_graphs {
+            let child_dir = root.join(child_graph.trim_end_matches('/'));
             let child_id = if id == "." {
-                child_scope.trim_end_matches('/').to_string()
+                child_graph.trim_end_matches('/').to_string()
             } else {
                 format!(
                     "{}/{}",
                     id.trim_end_matches('/'),
-                    child_scope.trim_end_matches('/')
+                    child_graph.trim_end_matches('/')
                 )
             };
-            let child_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
-            graphs.extend(child_graphs);
+            let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
+            graphs.extend(sub_graphs);
         }
     }
 
@@ -546,9 +546,9 @@ fn collect_jgf_graphs(
 }
 
 fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32> {
-    let scope_root = find_scope_root(root);
-    let config = Config::load(&scope_root)?;
-    let graph = build_graph(&scope_root, &config)?;
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+    let graph = build_graph(&graph_root, &config)?;
 
     // Resolve file args (try with .md extension if not found)
     let mut seeds: Vec<String> = Vec::new();
@@ -630,8 +630,8 @@ fn run_check(
     max_depth: Option<usize>,
 ) -> Result<i32> {
     // Validate rule names (built-in + script rules from config)
-    let scope_root = find_scope_root(root);
-    let root_config = Config::load(&scope_root)?;
+    let graph_root = find_graph_root(root);
+    let root_config = Config::load(&graph_root)?;
     let available_rules = all_rules();
     let mut known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
     let script_names: Vec<String> = root_config
@@ -645,7 +645,7 @@ fn run_check(
         }
     }
 
-    let mut diagnostics = check_scope(&scope_root, rule_filter, None, recursive, max_depth)?;
+    let mut diagnostics = check_graph(&graph_root, rule_filter, None, recursive, max_depth)?;
 
     diagnostics.sort_by(|a, b| {
         a.scope
@@ -657,14 +657,14 @@ fn run_check(
     });
 
     let colorize = use_color(color, format);
-    let mut current_scope: Option<&Option<String>> = None;
+    let mut current_graph: Option<&Option<String>> = None;
     for d in &diagnostics {
         match format {
             OutputFormat::Text | OutputFormat::Dot => {
-                // Print scope header when scope changes
-                if current_scope != Some(&d.scope) {
+                // Print graph header when graph changes
+                if current_graph != Some(&d.scope) {
                     if let Some(scope) = &d.scope {
-                        if current_scope.is_some() {
+                        if current_graph.is_some() {
                             println!();
                         }
                         if colorize {
@@ -673,7 +673,7 @@ fn run_check(
                             println!("[{scope}]");
                         }
                     }
-                    current_scope = Some(&d.scope);
+                    current_graph = Some(&d.scope);
                 }
                 if colorize {
                     println!("{}", d.format_text_color());
@@ -731,7 +731,7 @@ fn run_check_watch(
     use std::sync::mpsc;
     use std::time::Duration;
 
-    let scope_root = find_scope_root(root);
+    let graph_root = find_graph_root(root);
 
     // Initial run
     print!("\x1b[2J\x1b[H"); // clear screen
@@ -743,7 +743,7 @@ fn run_check_watch(
 
     notify::Watcher::watch(
         debouncer.watcher(),
-        &scope_root,
+        &graph_root,
         notify::RecursiveMode::Recursive,
     )?;
 
@@ -776,11 +776,11 @@ fn run_check_watch(
     Ok(0)
 }
 
-/// Find subdirectories that are lockable scopes (have drft.lock or drft.toml).
-/// Returns absolute paths, sorted, shallowest first. Does not recurse past scope boundaries.
+/// Find subdirectories that are lockable graphs (have drft.lock or drft.toml).
+/// Returns absolute paths, sorted, shallowest first. Does not recurse past graph boundaries.
 /// Respects .gitignore.
-fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut scopes = Vec::new();
+fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut graphs = Vec::new();
     let mut found: Vec<PathBuf> = Vec::new();
     let root_owned = root.to_path_buf();
 
@@ -798,7 +798,7 @@ fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
             continue;
         }
 
-        // Skip if inside an already-found scope
+        // Skip if inside an already-found graph
         let inside_existing = found.iter().any(|s| entry.path().starts_with(s));
         if inside_existing {
             continue;
@@ -808,17 +808,17 @@ fn find_lockable_scopes(root: &Path) -> Result<Vec<PathBuf>> {
         let has_config = entry.path().join("drft.toml").exists();
         if has_lock || has_config {
             found.push(entry.path().to_path_buf());
-            scopes.push(entry.path().to_path_buf());
+            graphs.push(entry.path().to_path_buf());
         }
     }
 
-    scopes.sort();
-    Ok(scopes)
+    graphs.sort();
+    Ok(graphs)
 }
 
 /// Walk up from `start` to find the nearest ancestor directory with `drft.lock`.
 /// If none found, returns `start`.
-fn find_scope_root(start: &Path) -> std::path::PathBuf {
+fn find_graph_root(start: &Path) -> std::path::PathBuf {
     let mut current = start.to_path_buf();
     loop {
         if current.join("drft.lock").exists() {
@@ -830,11 +830,11 @@ fn find_scope_root(start: &Path) -> std::path::PathBuf {
     }
 }
 
-/// Check a single scope and optionally recurse into child scopes.
-fn check_scope(
+/// Check a single graph and optionally recurse into child graphs.
+fn check_graph(
     root: &Path,
     rule_filter: &[String],
-    scope_prefix: Option<&str>,
+    graph_prefix: Option<&str>,
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<Vec<Diagnostic>> {
@@ -879,8 +879,8 @@ fn check_scope(
         });
         for d in &mut findings {
             d.severity = severity;
-            if scope_prefix.is_some() {
-                d.scope = scope_prefix.map(|s| s.to_string());
+            if graph_prefix.is_some() {
+                d.scope = graph_prefix.map(|s| s.to_string());
             }
         }
         diagnostics.extend(findings);
@@ -910,23 +910,23 @@ fn check_scope(
             !paths.iter().any(|p| config.is_rule_ignored(&d.rule, p))
         });
         for d in &mut script_findings {
-            if scope_prefix.is_some() {
-                d.scope = scope_prefix.map(|s| s.to_string());
+            if graph_prefix.is_some() {
+                d.scope = graph_prefix.map(|s| s.to_string());
             }
         }
         diagnostics.extend(script_findings);
     }
 
-    // Recursively check child scopes if --recursive
+    // Recursively check child graphs if --recursive
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_scope in &graph.child_scopes {
-            let child_dir = root.join(child_scope.trim_end_matches('/'));
-            let child_prefix = match scope_prefix {
-                Some(parent) => format!("{parent}/{}", child_scope.trim_end_matches('/')),
-                None => child_scope.trim_end_matches('/').to_string(),
+        for child_graph in &graph.child_graphs {
+            let child_dir = root.join(child_graph.trim_end_matches('/'));
+            let child_prefix = match graph_prefix {
+                Some(parent) => format!("{parent}/{}", child_graph.trim_end_matches('/')),
+                None => child_graph.trim_end_matches('/').to_string(),
             };
-            let child_diagnostics = check_scope(
+            let child_diagnostics = check_graph(
                 &child_dir,
                 rule_filter,
                 Some(&child_prefix),

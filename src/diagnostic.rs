@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn text_format_with_scope() {
+    fn text_format_with_graph_prefix() {
         let d = Diagnostic {
             rule: "orphan".into(),
             severity: RuleSeverity::Warn,

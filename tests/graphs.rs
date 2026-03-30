@@ -3,7 +3,7 @@ use common::drft_bin;
 use std::fs;
 use tempfile::TempDir;
 
-/// Scenario 10: Child scope — unsealed. Parent links to child file, no violation.
+/// Scenario 10: Child graph — open (no interface). Parent links to child file, no violation.
 #[test]
 fn scenario_10_child_scope_unsealed() {
     let dir = TempDir::new().unwrap();
@@ -41,7 +41,7 @@ fn scenario_10_child_scope_unsealed() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("encapsulation"),
-        "unsealed scope should not trigger encapsulation"
+        "open graph (no interface) should not trigger encapsulation"
     );
     assert!(output.status.success());
 }
@@ -91,7 +91,7 @@ fn scenario_12_encapsulation_violation() {
     );
     assert!(
         stdout.contains("research/internal.md"),
-        "should mention the non-manifest file"
+        "should mention the non-interface file"
     );
     assert!(output.status.success(), "default severity is warn");
 }
@@ -131,7 +131,7 @@ fn recursive_lock() {
     assert!(output.status.success());
 }
 
-/// Recursive check runs child scopes with their own config.
+/// Recursive check runs child graphs with their own config.
 #[test]
 fn recursive_check_with_child_config() {
     let dir = TempDir::new().unwrap();
@@ -163,14 +163,14 @@ fn recursive_check_with_child_config() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("[child]"),
-        "recursive should show scope header, got: {stdout}"
+        "recursive should show graph header, got: {stdout}"
     );
     assert!(stdout.contains("orphan"), "child's orphan rule should fire");
 }
 
 /// Scope boundary staleness — child gains drft.lock after parent locked.
 #[test]
-fn scope_boundary_staleness() {
+fn graph_boundary_staleness() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.md"), "[docs](docs/readme.md)").unwrap();
 
@@ -184,20 +184,20 @@ fn scope_boundary_staleness() {
         .output()
         .unwrap();
 
-    // Now create a child scope in docs/
+    // Now create a child graph in docs/
     drft_bin()
         .args(["-C", docs.to_str().unwrap(), "lock"])
         .output()
         .unwrap();
 
-    // Parent should detect the new scope boundary
+    // Parent should detect the new graph boundary
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("scope boundary changed"),
-        "expected scope boundary staleness, got: {stdout}"
+        stdout.contains("graph boundary changed"),
+        "expected graph boundary staleness, got: {stdout}"
     );
 }

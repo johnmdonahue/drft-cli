@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Config;
-use crate::discovery::{discover, find_child_scopes};
+use crate::discovery::{discover, find_child_graphs};
 use crate::parsers;
 
 #[derive(
@@ -104,7 +104,7 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     pub forward: HashMap<String, Vec<usize>>,
     pub reverse: HashMap<String, Vec<usize>>,
-    pub child_scopes: Vec<String>,
+    pub child_graphs: Vec<String>,
     /// Resolved interface nodes from config (empty = open graph).
     pub interface: Vec<String>,
 }
@@ -163,9 +163,9 @@ pub fn hash_bytes(content: &[u8]) -> String {
 /// Computes BLAKE3 content hashes for all nodes.
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let all_files = discover(root, &config.ignore)?;
-    let child_scopes = find_child_scopes(root, &config.ignore)?;
+    let child_graphs = find_child_graphs(root, &config.ignore)?;
     let mut graph = Graph::new();
-    graph.child_scopes = child_scopes;
+    graph.child_graphs = child_graphs;
     let mut pending_edges = Vec::new();
 
     // Build parser registry from config
@@ -220,12 +220,12 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // Create Graph nodes for child scopes — any directory with drft.toml or drft.lock.
+    // Create Graph nodes for child graphs — any directory with drft.toml or drft.lock.
     // No hash: staleness within a child graph is the child's concern, not the parent's.
-    let scope_prefixes: Vec<String> = graph.child_scopes.clone();
-    for scope_dir in &scope_prefixes {
+    let graph_prefixes: Vec<String> = graph.child_graphs.clone();
+    for graph_dir in &graph_prefixes {
         graph.add_node(Node {
-            path: scope_dir.clone(),
+            path: graph_dir.clone(),
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
@@ -261,11 +261,11 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Check if target is inside a child scope → Source/Resource with graph field
-        let in_child_scope = scope_prefixes
+        // Check if target is inside a child graph → Source/Resource with graph field
+        let in_child_graph = graph_prefixes
             .iter()
             .find(|s| edge.target.starts_with(s.as_str()));
-        if let Some(scope_prefix) = in_child_scope {
+        if let Some(graph_prefix) = in_child_graph {
             let target_path = root.join(&edge.target);
             if target_path.is_file() {
                 let content = std::fs::read(&target_path)?;
@@ -274,12 +274,12 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     path: edge.target.clone(),
                     node_type: NodeType::Resource,
                     hash: Some(hash),
-                    graph: Some(scope_prefix.clone()),
+                    graph: Some(graph_prefix.clone()),
                 });
                 // Synthetic coupling edge: child-graph node → Graph node
                 implicit_edges.push(Edge {
                     source: edge.target.clone(),
-                    target: scope_prefix.clone(),
+                    target: graph_prefix.clone(),
                     edge_type: edge.edge_type.clone(),
                     synthetic: true,
                 });
@@ -342,7 +342,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
 /// Normalize a relative path by resolving `.` and `..` components using Path APIs.
 /// Does not touch the filesystem. Always returns forward-slash separated paths.
-/// Preserves leading `..` that escape above the root — these indicate scope escape.
+/// Preserves leading `..` that escape above the root — these indicate graph escape.
 pub fn normalize_relative_path(path: &str) -> String {
     let mut parts: Vec<String> = Vec::new();
     for component in Path::new(path).components() {
@@ -363,7 +363,7 @@ pub fn normalize_relative_path(path: &str) -> String {
     parts.join("/")
 }
 
-/// Resolve a link target relative to a source file, producing a path relative to the scope root.
+/// Resolve a link target relative to a source file, producing a path relative to the graph root.
 /// Uses Path::join for correct platform-aware path handling.
 pub fn resolve_link(source_file: &str, raw_target: &str) -> String {
     let source_path = Path::new(source_file);

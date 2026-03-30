@@ -3,7 +3,7 @@ use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use std::path::Path;
 
-/// Discover all files under `root`, stopping at child scope boundaries
+/// Discover all files under `root`, stopping at child graph boundaries
 /// (directories containing `drft.lock` or `drft.toml`). Respects `.gitignore` automatically.
 /// Returns paths relative to `root`, sorted.
 pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
@@ -28,7 +28,7 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
                 if entry.path() == root_owned {
                     return true;
                 }
-                // Stop at child scope boundaries
+                // Stop at child graph boundaries
                 if entry.path().join("drft.lock").exists()
                     || entry.path().join("drft.toml").exists()
                 {
@@ -65,11 +65,11 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
     Ok(files)
 }
 
-/// Find child scope directories (those containing `drft.lock` or `drft.toml`) under `root`.
+/// Find child graph directories (those containing `drft.lock` or `drft.toml`) under `root`.
 /// Returns relative paths with trailing slash (e.g., `"research/"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
 /// Respects `.gitignore` and `ignore_patterns` from config.
-pub fn find_child_scopes(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
+pub fn find_child_graphs(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
     let ignore_set = if ignore_patterns.is_empty() {
         None
     } else {
@@ -80,11 +80,11 @@ pub fn find_child_scopes(root: &Path, ignore_patterns: &[String]) -> Result<Vec<
         Some(builder.build()?)
     };
 
-    let mut scopes = Vec::new();
+    let mut child_graphs = Vec::new();
     let root_owned = root.to_path_buf();
 
     // Use the ignore crate to respect .gitignore, and stop recursing
-    // past child scope boundaries.
+    // past child graph boundaries.
     let walker = WalkBuilder::new(root)
         .follow_links(true)
         .sort_by_file_name(|a, b| a.cmp(b))
@@ -117,7 +117,7 @@ pub fn find_child_scopes(root: &Path, ignore_patterns: &[String]) -> Result<Vec<
             .to_string_lossy()
             .replace('\\', "/");
 
-        // Skip if inside an already-found child scope
+        // Skip if inside an already-found child graph
         let inside_existing = found_prefixes
             .iter()
             .any(|s| relative.starts_with(s.as_str()));
@@ -133,14 +133,14 @@ pub fn find_child_scopes(root: &Path, ignore_patterns: &[String]) -> Result<Vec<
                 continue;
             }
 
-            let scope_path = format!("{relative}/");
-            found_prefixes.push(scope_path.clone());
-            scopes.push(scope_path);
+            let graph_path = format!("{relative}/");
+            found_prefixes.push(graph_path.clone());
+            child_graphs.push(graph_path);
         }
     }
 
-    scopes.sort();
-    Ok(scopes)
+    child_graphs.sort();
+    Ok(child_graphs)
 }
 
 #[cfg(test)]
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn stops_at_scope_boundary() {
+    fn stops_at_graph_boundary() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_child_scopes() {
+    fn finds_child_graphs() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
@@ -214,28 +214,28 @@ mod tests {
         fs::create_dir(&beta).unwrap();
         fs::write(beta.join("drft.lock"), "").unwrap();
 
-        // No lockfile in gamma — not a child scope
+        // No lockfile in gamma — not a child graph
         let gamma = dir.path().join("gamma");
         fs::create_dir(&gamma).unwrap();
         fs::write(gamma.join("readme.md"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path(), &[]).unwrap();
-        assert_eq!(scopes, vec!["alpha/", "beta/"]);
+        let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
+        assert_eq!(child_graphs, vec!["alpha/", "beta/"]);
     }
 
     #[test]
-    fn child_scopes_stops_at_boundary() {
+    fn child_graphs_stops_at_boundary() {
         let dir = TempDir::new().unwrap();
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
         fs::write(child.join("drft.lock"), "").unwrap();
 
-        // Grandchild scope — should NOT appear from parent's perspective
+        // Grandchild graph — should NOT appear from parent's perspective
         let grandchild = child.join("nested");
         fs::create_dir(&grandchild).unwrap();
         fs::write(grandchild.join("drft.lock"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path(), &[]).unwrap();
-        assert_eq!(scopes, vec!["child/"]);
+        let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
+        assert_eq!(child_graphs, vec!["child/"]);
     }
 }
