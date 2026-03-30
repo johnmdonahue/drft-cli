@@ -1,0 +1,36 @@
+# containment
+
+Flags links that escape the scope boundary (reach outside the directory tracked by `drft.lock`).
+
+## Example
+
+```
+project/
+  drft.lock
+  index.md       # contains [notes](../notes.md)
+```
+
+The scope is sealed (has a lockfile), so linking outside it is a violation:
+
+```
+warn[containment]: index.md -> ../notes.md (links outside scope boundary)
+```
+
+This rule is vacuous if no `drft.lock` exists -- there is no boundary to enforce.
+
+## Configuration
+
+```toml
+[rules]
+containment = "warn"    # default
+```
+
+```toml
+[rules.containment]
+severity = "warn"
+ignore = ["README.md"]
+```
+
+## Analysis
+
+Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which identifies edges that cross scope boundaries.

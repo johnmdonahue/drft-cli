@@ -124,7 +124,10 @@ fn process_link(url: &str, link_type: &str) -> Option<RawLink> {
 }
 
 /// Extract file path references from YAML frontmatter.
+/// Operates on code-block-stripped content to avoid parsing frontmatter
+/// inside fenced code block examples.
 fn extract_frontmatter(content: &str) -> Vec<RawLink> {
+    let content = &strip_code_blocks(content);
     let mut links = Vec::new();
 
     if !content.starts_with("---") {

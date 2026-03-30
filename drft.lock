@@ -24,6 +24,10 @@ hash = "b3:36786de1ac03464e9494f558dd56fb9fc0094fa5d0e08b447ea2fa3ec114de6b"
 type = "source"
 hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
 
+[nodes."docs/README.md"]
+type = "source"
+hash = "b3:7ca093184a3be8b8d24f11b61c433db3da1cd38f557ef71553a23768c75ad057"
+
 [nodes."docs/analyses/README.md"]
 type = "source"
 hash = "b3:db3c7004bcb86cd7c26bae00af0f5fe053c92c77193725e5ead40f4f80e361a8"
@@ -71,6 +75,74 @@ hash = "b3:8c737ffe4f13c4c79fc59659e611025bc182ecaa19f0fbbd5b28135575e4302a"
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
 hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
+
+[nodes."docs/parsers/README.md"]
+type = "source"
+hash = "b3:dbceea65c926ffdc47c4036d9187c56d227c69b160668586a1af12aa06aad0ca"
+
+[nodes."docs/parsers/markdown.md"]
+type = "source"
+hash = "b3:a4c66d37877dfbbefee619f99256f69bdea05a9875eb409098c98b546564d025"
+
+[nodes."docs/parsers/script.md"]
+type = "source"
+hash = "b3:90510b2f5f51e55d6cddca642fd23ac8e81fece95c6b70ca60f3302d63faefca"
+
+[nodes."docs/rules/README.md"]
+type = "source"
+hash = "b3:a0ff854f10cac0ec76f485d2750c494c5b05d926f39360af0387a0b8b63d5b3e"
+
+[nodes."docs/rules/broken-link.md"]
+type = "source"
+hash = "b3:22c1ce9d6d2ee5fdd8a8c84b0efa04cdb6cc64a20aabf7846a1244d58c2810ff"
+
+[nodes."docs/rules/containment.md"]
+type = "source"
+hash = "b3:97791ca32a90fa2372139e8fe2db7fda3c466e66242b291986cf62d32a4e91ea"
+
+[nodes."docs/rules/cycle.md"]
+type = "source"
+hash = "b3:c23585cc63d8fe5f8a5d7b5830f2f2cc18353ac69479ad5c7cd3f8b25dbaf4f8"
+
+[nodes."docs/rules/directory-link.md"]
+type = "source"
+hash = "b3:dd5710b51d37967ea427c7193fc6970cdc6fa7939d752c834d161012a3b1870c"
+
+[nodes."docs/rules/encapsulation.md"]
+type = "source"
+hash = "b3:82e198a2f54dff30a492deb92fc36730cb621b5c721c05eae32b3e1ccfc94eda"
+
+[nodes."docs/rules/fragility.md"]
+type = "source"
+hash = "b3:dc46ab3d07a4bd761ad0777da564bb371adfa2e0711b75e55eb2345df19b7ca0"
+
+[nodes."docs/rules/fragmentation.md"]
+type = "source"
+hash = "b3:d01e72ecfe7eca1254679b9eb97a1183bc308dbfae59838ff80b73114dcfa6e7"
+
+[nodes."docs/rules/indirect-link.md"]
+type = "source"
+hash = "b3:adc220dbd4c9ef1f22e063f78e05118ee2fabb6ce9da9a7a40ee35ebc17a97f1"
+
+[nodes."docs/rules/layer-violation.md"]
+type = "source"
+hash = "b3:b9017096649a5f2346043aa36c86dc436057d7958047eb6b99d739d1b65b54ec"
+
+[nodes."docs/rules/orphan.md"]
+type = "source"
+hash = "b3:a001bbe0c0a33a80acf17a537f95b76ebaea7e0ac41f948e74a1278a0cfab1e0"
+
+[nodes."docs/rules/redundant-edge.md"]
+type = "source"
+hash = "b3:9f69cd5292fd8c758665da9743af08e73579cbfc55cce7611ce25acc84d23aa8"
+
+[nodes."docs/rules/script.md"]
+type = "source"
+hash = "b3:b89fc1e2e2a80e7fd28718c803a77bd2bbea0e266fce0d36ba6923a054da21a3"
+
+[nodes."docs/rules/stale.md"]
+type = "source"
+hash = "b3:7b599a8dbddd3e59dc90b4de72e5f56fa90d718e6f92e1f8a62893b0cea749bc"
 
 [nodes."examples/README.md"]
 type = "source"
