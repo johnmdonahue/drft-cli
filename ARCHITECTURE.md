@@ -235,6 +235,8 @@ Rules are evaluated at the configured severity. `--rule <name>` on the command l
 
 ## Module layout
 
+See [`src/README.md`](src/README.md) for the full module index.
+
 ```
 src/
 ├── main.rs          Command dispatch
