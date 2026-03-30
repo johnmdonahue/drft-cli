@@ -4,13 +4,15 @@ A structural integrity checker for linked file systems. Treats a directory of fi
 
 ## Dogfooding
 
-This repo runs drft on itself (`drft.toml` at root). A PostToolUse hook runs `drft check --format json` after every `.md` file edit.
+This repo runs drft on itself (`drft.toml` at root). A PostToolUse hook runs `drft impact <file> --format json` after every `.md` and `.rs` file edit.
 
-**When the hook reports diagnostics, STOP.** Read the output. If files are stale, identify the impacted dependents and review whether they need updating. If links are broken, fix them before continuing. Do not batch up drft warnings and address them later — each diagnostic is a signal that the edit you just made has structural consequences.
+**When the hook reports impacted files, STOP.** The output lists every file that transitively depends on the file you just edited. These are files whose content may now be out of date because of your change. Read each one and check whether it still accurately reflects the source it depends on.
+
+**Reviewing impacted files means reading them.** Check all content that could be affected by your change — not just prose, but code examples, JSON snippets, data structures, command invocations, and any content that mirrors or describes the file you changed. A doc that links to a source file is making a promise that its content reflects that source. When the source changes, verify the promise still holds.
 
 Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause (create missing files, fix broken references, restructure links). Do not run `drft lock` to clear staleness without first reviewing the impacted files.
 
-The workflow: edit → drft check fires → review diagnostics → fix impacts → drft lock (only after review) → commit.
+The workflow: edit → drft impact fires → read impacted dependents → fix impacts → drft lock (only after review) → commit.
 
 ## Architecture
 

@@ -257,26 +257,28 @@ Every diagnostic includes a `fix` field with actionable instructions an LLM can 
 
 ### Impact analysis
 
-Before editing a file, check what depends on it:
+After editing a file, check what depends on it:
 
 ```bash
-drft impact observations.md --format json
+drft impact src/main.rs --format json
 ```
 
 ```json
 {
-  "files": ["observations.md"],
+  "files": ["src/main.rs"],
   "total": 2,
   "impacted": [
-    { "node": "problem-statement.md", "via": "observations.md", "fix": "..." },
-    { "node": "design.md", "via": "problem-statement.md", "fix": "..." }
+    { "node": "docs/analyses/degree.md", "via": "src/main.rs", "fix": "..." },
+    { "node": "README.md", "via": "docs/analyses/degree.md", "fix": "..." }
   ]
 }
 ```
 
+This is the primary signal for LLM-assisted editing: after every file change, `drft impact` tells the agent exactly which files to review. Each impacted file may contain content — prose, code examples, JSON snippets — that mirrors or describes the changed source. The `fix` field provides actionable instructions.
+
 ### Claude Code hooks
 
-Add to your project's `.claude/settings.json` to run drft automatically after markdown edits:
+Add to your project's `.claude/settings.json` to run `drft impact` automatically after file edits:
 
 ```json
 {
@@ -287,7 +289,7 @@ Add to your project's `.claude/settings.json` to run drft automatically after ma
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$TOOL_INPUT_FILE_PATH\" == *.md ]] || [[ \"$TOOL_INPUT_file_path\" == *.md ]]; then npx drft check --format json 2>/dev/null; fi"
+            "command": "FILE=\"${TOOL_INPUT_FILE_PATH:-$TOOL_INPUT_file_path}\"; if [[ \"$FILE\" == *.md ]] || [[ \"$FILE\" == *.rs ]]; then npx drft impact \"$FILE\" --format json 2>/dev/null; fi"
           }
         ]
       }
@@ -295,6 +297,8 @@ Add to your project's `.claude/settings.json` to run drft automatically after ma
   }
 }
 ```
+
+When the hook reports impacted files, the agent should read each one and verify its content still reflects the source. Extend the glob patterns (`*.md`, `*.rs`) to match the file types in your project.
 
 If drft is installed globally (`cargo install drft-cli`), use `drft` instead of `npx drft`. For npm projects with `drft-cli` as a devDependency, `npx drft` ensures it resolves from `node_modules`.
 
@@ -307,7 +311,7 @@ npx drft lock --check --recursive   # verify lockfiles are committed
 
 Run `check` first — it catches broken links, cycles, and stale files. Then `lock --check` verifies the lockfile is committed (structural consistency). Both exit with code 1 on failure.
 
-The workflow: edit → `drft check` (see what's stale) → review impacted files → `drft lock` (acknowledge the changes) → commit. Lock is the "I've reviewed the impacts" step.
+The workflow: edit → `drft impact` (see what's affected) → review impacted files → fix impacts → `drft lock` (acknowledge the changes) → commit.
 
 ## License
 
