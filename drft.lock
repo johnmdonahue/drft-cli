@@ -90,7 +90,7 @@ hash = "b3:53c472cbb88f99c78adcb149b99c5e4624dbf545fafd1efa4ae6c030a9715a23"
 
 [nodes."docs/rules/README.md"]
 type = "source"
-hash = "b3:788958f8145bbea55921632dc41f00480ec48aedb2fb95fd7467f952f94d2e4e"
+hash = "b3:16cccef2afcb7cd30d03934f00287912509e4354cea127978461dbe9ce16b147"
 
 [nodes."docs/rules/broken-link.md"]
 type = "source"
