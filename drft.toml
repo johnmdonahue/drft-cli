@@ -1,10 +1,6 @@
 # drft.toml — drft dogfooding itself
 
-ignore = [
-  "examples/*",
-  "target/*",
-  ".scratch/*",
-]
+ignore = ["examples/*"]
 
 [parsers]
 markdown = true
