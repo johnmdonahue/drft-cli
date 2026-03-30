@@ -38,12 +38,12 @@ impl Rule for BrokenLinkRule {
                 // Target not in graph — filesystem checks
                 let target_path = root.join(&edge.target);
 
-                if target_path.is_dir() {
-                    return None; // Handled by directory-link rule
-                }
-
                 if target_path.is_symlink() {
                     return None; // Handled by indirect-link rule
+                }
+
+                if target_path.is_dir() {
+                    return None; // Handled by directory-link rule
                 }
 
                 if target_path.exists() {

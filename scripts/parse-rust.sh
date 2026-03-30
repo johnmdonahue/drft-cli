@@ -10,7 +10,9 @@ while IFS= read -r filepath; do
     grep -n '^\s*///\|^\s*//!' "$filepath" 2>/dev/null | while IFS= read -r line; do
         echo "$line" | grep -oE '\]\([^)]+\.md\)' | while IFS= read -r match; do
             target=$(echo "$match" | sed 's/^\](//;s/)$//')
-            printf '{"file":"%s","target":"%s","type":"comment"}\n' "$filepath" "$target"
+            filepath_esc=$(printf '%s' "$filepath" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            target_esc=$(printf '%s' "$target" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            printf '{"file":"%s","target":"%s","type":"comment"}\n' "$filepath_esc" "$target_esc"
         done
     done
 done

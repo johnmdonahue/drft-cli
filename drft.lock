@@ -304,7 +304,7 @@ hash = "b3:bbd954d91ac369f40886ab9a444d7d66762e7541634c5c8b1c939ee3f20c413f"
 
 [nodes."src/graph.rs"]
 type = "source"
-hash = "b3:ade17099138c354c7db27e05979291629345ab80d43e7a4eef4235968e6c3465"
+hash = "b3:8fd68d1ce89e8d7b8a9c16ff97ef254b03c109081c24e4aab384627bd7183344"
 
 [nodes."src/lib.rs"]
 type = "source"
@@ -328,15 +328,15 @@ hash = "b3:e77b47fc1e699fbfaf3c34d958f1cca1e4335a67777770f5581963832f64ec42"
 
 [nodes."src/parsers/mod.rs"]
 type = "source"
-hash = "b3:49a7221e5499ff65c16e040bb179d279e222897689cc68231b613600242112f8"
+hash = "b3:16862e6d9b92906fa5c64e6ba66459909f059d9a38901c00cc23acb85e1c38d7"
 
 [nodes."src/parsers/script.rs"]
 type = "source"
-hash = "b3:6aee59ad5cbd8e1b56c97e1d2527f6c1007a58b5e301b605c38c60afc9b0883d"
+hash = "b3:bf0d51fa95905fc3ce466473ab35aadb2a845b234817b217e72a4a43f3774d9c"
 
 [nodes."src/rules/broken_link.rs"]
 type = "source"
-hash = "b3:149a4361861cb1794a700ca4bfb8b75ee8677b99dc0b6fdf6d197ed6cee2df3d"
+hash = "b3:b48c5ade2fa4fd4ba65962d68c2733c0bfeb0634cb2e02aa4aec048a5ba8545b"
 
 [nodes."src/rules/containment.rs"]
 type = "source"
@@ -360,7 +360,7 @@ hash = "b3:df96c54f04fc0a2dbbdc04e18a178bfc5a951a78b44a23b45a21db76701a1672"
 
 [nodes."src/rules/fragmentation.rs"]
 type = "source"
-hash = "b3:b7f89297a35bc475063ea042e8d01a67d50a7bd909c81e61d7cc36f8898d1756"
+hash = "b3:7e036d73968e2c21734e5a796f04f5dabd6c72f9ea0f72fb376545fabe5577e7"
 
 [nodes."src/rules/indirect_link.rs"]
 type = "source"
@@ -384,7 +384,7 @@ hash = "b3:126ede3263ea4b1e4d49e981c00ec1beebde017684a00a1d502e178d5312e051"
 
 [nodes."src/rules/script.rs"]
 type = "source"
-hash = "b3:f36a6e303ec371a4e64b968b3a43a3bc2105f29ef78753677f70b2a31f5c9154"
+hash = "b3:2ed259a0183dea9a58e77928b0d6a348c2c48d46459c979d0ff7622887ea1f98"
 
 [nodes."src/rules/stale.rs"]
 type = "source"
@@ -428,7 +428,7 @@ hash = "b3:8c8763bd375c1449abdbd255c29f4013c6f0e065fa110fd464f96f3fbeaa5713"
 
 [nodes."tests/parsers.rs"]
 type = "source"
-hash = "b3:9958c8e3798a54f6d6919e51b55c4e617cb6572f4b63f4cfaf4cd77476b6d881"
+hash = "b3:bfe51d32c49b66d11bd242c6c767ede9863848bce233153a2bc1f633bb5f0fb0"
 
 [nodes."tests/rules.rs"]
 type = "source"

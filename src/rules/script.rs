@@ -258,4 +258,45 @@ mod tests {
         let result = run_one("bad-rule", &config, &graph, dir.path(), dir.path());
         assert!(result.is_err());
     }
+
+    #[test]
+    fn resolves_command_relative_to_config_dir() {
+        let dir = TempDir::new().unwrap();
+
+        // config_dir is the parent, root is a child subdirectory
+        let config_dir = dir.path();
+        let root = dir.path().join("docs");
+        fs::create_dir_all(&root).unwrap();
+
+        // Script lives relative to config_dir, not root
+        let scripts_dir = config_dir.join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        let script = scripts_dir.join("check.sh");
+        fs::write(
+            &script,
+            "#!/bin/sh\necho '{\"message\": \"found issue\", \"node\": \"index.md\"}'\n",
+        )
+        .unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let config = RuleConfig {
+            command: Some("./scripts/check.sh".to_string()),
+            severity: crate::config::RuleSeverity::Warn,
+            ignore: Vec::new(),
+            timeout: None,
+            ignore_compiled: None,
+        };
+
+        let graph = make_graph();
+        // config_dir != root — script should resolve relative to config_dir
+        let diagnostics = run_one("my-rule", &config, &graph, &root, config_dir).unwrap();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].message, "found issue");
+    }
 }
