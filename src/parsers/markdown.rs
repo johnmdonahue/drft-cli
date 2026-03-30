@@ -191,10 +191,41 @@ fn has_file_extension(path: &str) -> bool {
     }
 }
 
+/// Strip fenced code blocks from content, replacing them with whitespace
+/// to preserve offsets. Handles ``` and ~~~ fences.
+fn strip_code_blocks(content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let mut in_code_block = false;
+    let mut fence_marker = "";
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_code_block {
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                in_code_block = true;
+                fence_marker = if trimmed.starts_with("```") { "```" } else { "~~~" };
+                result.push_str(&" ".repeat(line.len()));
+            } else {
+                result.push_str(line);
+            }
+        } else if trimmed.starts_with(fence_marker) && trimmed.trim() == fence_marker {
+            in_code_block = false;
+            result.push_str(&" ".repeat(line.len()));
+        } else {
+            result.push_str(&" ".repeat(line.len()));
+        }
+        result.push('\n');
+    }
+
+    result
+}
+
 /// Extract wikilinks: [[page]] or [[page|display text]].
+/// Skips content inside fenced code blocks.
 fn extract_wikilinks(content: &str) -> Vec<RawLink> {
+    let clean = strip_code_blocks(content);
     let mut links = Vec::new();
-    let mut rest = content;
+    let mut rest = clean.as_str();
 
     while let Some(start) = rest.find("[[") {
         let after_open = &rest[start + 2..];
@@ -340,6 +371,16 @@ mod tests {
         let wl: Vec<_> = links.iter().filter(|l| l.link_type == "wikilink").collect();
         assert_eq!(wl.len(), 1);
         assert_eq!(wl[0].target, "setup.md");
+    }
+
+    #[test]
+    fn wikilink_skips_code_blocks() {
+        let content = "See [[real]].\n\n```json\n{\"cmd\": \"[[ $FOO == *.md ]]\"}\n```\n\nAnd [[also-real]].\n";
+        let links = parse(content);
+        let wl: Vec<_> = links.iter().filter(|l| l.link_type == "wikilink").collect();
+        assert_eq!(wl.len(), 2);
+        assert_eq!(wl[0].target, "real.md");
+        assert_eq!(wl[1].target, "also-real.md");
     }
 
     #[test]

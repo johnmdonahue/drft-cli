@@ -6,12 +6,8 @@ ignore = ["examples/*"]
 markdown = true
 
 [rules]
+broken-link = "warn"
 cycle = "warn"
 stale = "warn"
 containment = "warn"
 encapsulation = "warn"
-
-# README.md has false-positive broken links from JSON code block examples
-[rules.broken-link]
-severity = "warn"
-ignore = ["README.md"]
