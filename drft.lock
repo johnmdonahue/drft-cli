@@ -6,11 +6,11 @@ hash = "b3:62fd21ec21b1b2578c3dac85c72bf7b0e5dabe2413998ff4aee12081bc07a50c"
 
 [nodes."CHANGELOG.md"]
 type = "source"
-hash = "b3:b5d68ca2e8f093068248d61bf03740f07f480833379a91c92b5d0bde707e5537"
+hash = "b3:347fe6ca258f75e442f495eb008eb429ad8a64a2b977ff7b3c84035c949900fa"
 
 [nodes."CLAUDE.md"]
 type = "source"
-hash = "b3:67996086144fa8a82e3eeeb982e32df02693001ccf43004fa5c900ab090325c8"
+hash = "b3:582713b88461700a877283c34770e1ebc6184d2bbf8326815bf00b8f0a43dbe4"
 
 [nodes."CONTRIBUTING.md"]
 type = "source"
@@ -22,7 +22,7 @@ hash = "b3:035cb1ba82bd91e240d744902346525f0908efd7e5d8ae523ed4c66d64261003"
 
 [nodes."RELEASING.md"]
 type = "source"
-hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
+hash = "b3:a19242513f209cc06c4f861998eb903bfd7461721b149ddeceab07f4364e5782"
 
 [nodes."benches/pipeline.rs"]
 type = "source"
