@@ -26,7 +26,7 @@ hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
 
 [nodes."benches/pipeline.rs"]
 type = "source"
-hash = "b3:6de0b26a30e9dfe1e9b751d73a19c4d20e992cea01290036e0f724ad4931880a"
+hash = "b3:63126b62e192a90ebe2e56ebbf2217d66f1d305b389e904e7ee1c6eeed1bf9d1"
 
 [nodes."docs/README.md"]
 type = "source"
@@ -316,7 +316,7 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:85fe1f6435e9098778bf99d31a57f92690679441f2df3bed9b70f6a19c2749f3"
+hash = "b3:7597b57ae5d790922d563a5651a277b3b048ca7fab02aef4d4a537eec5e2a0cb"
 
 [nodes."src/metrics.rs"]
 type = "source"
@@ -324,7 +324,7 @@ hash = "b3:188b083617978717db7a52247fb6ed84ea65ce461ec1b3ea44c258a45239afe1"
 
 [nodes."src/parsers/markdown.rs"]
 type = "source"
-hash = "b3:9b997350ea787db70396ea691acbbea9b9b8405c72dce2829ccc160b501f4b4d"
+hash = "b3:e77b47fc1e699fbfaf3c34d958f1cca1e4335a67777770f5581963832f64ec42"
 
 [nodes."src/parsers/mod.rs"]
 type = "source"
