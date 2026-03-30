@@ -220,7 +220,7 @@ for node, count in ...:
 "
 ```
 
-See `examples/custom-rules/` for complete examples.
+See [examples/custom-rules](examples/custom-rules/drft.toml) for complete examples.
 
 **Security note:** Custom rules and custom parsers execute arbitrary shell commands defined in `drft.toml`. Review the `[rules]` and `[parsers]` sections before running `drft` in untrusted repositories, the same as you would review npm scripts or Makefiles.
 

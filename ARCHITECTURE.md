@@ -107,22 +107,22 @@ Pure analyses (SCC, PageRank, bridges) ignore root/config/lockfile. Stateful ana
 
 | Analysis | What it computes | Key output |
 |----------|-----------------|------------|
-| `degree` | In-degree and out-degree per node | `Vec<NodeDegree>` |
-| `scc` | Strongly connected components (Tarjan's) | Non-trivial SCCs, node-to-SCC map |
-| `connected-components` | Weakly connected components (BFS, undirected) | Component membership |
-| `depth` | Topological layer from roots, with cycle handling | Layer assignments |
-| `graph-stats` | Node/edge count, density, diameter, avg path length | Summary statistics |
-| `bridges` | Cut vertices and bridge edges (Tarjan's, undirected) | Critical nodes and edges |
-| `transitive-reduction` | Transitively redundant edges | Per-edge BFS |
-| `betweenness` | Betweenness centrality (Brandes' algorithm) | Centrality scores |
-| `pagerank` | PageRank scores (power iteration, d=0.85) | Rank scores |
+| [`degree`](docs/analyses/degree.md) | In-degree and out-degree per node | `Vec<NodeDegree>` |
+| [`scc`](docs/analyses/scc.md) | Strongly connected components (Tarjan's) | Non-trivial SCCs, node-to-SCC map |
+| [`connected-components`](docs/analyses/connected-components.md) | Weakly connected components (BFS, undirected) | Component membership |
+| [`depth`](docs/analyses/depth.md) | Topological layer from roots, with cycle handling | Layer assignments |
+| [`graph-stats`](docs/analyses/graph-stats.md) | Node/edge count, density, diameter, avg path length | Summary statistics |
+| [`bridges`](docs/analyses/bridges.md) | Cut vertices and bridge edges (Tarjan's, undirected) | Critical nodes and edges |
+| [`transitive-reduction`](docs/analyses/transitive-reduction.md) | Transitively redundant edges | Per-edge BFS |
+| [`betweenness`](docs/analyses/betweenness.md) | Betweenness centrality (Brandes' algorithm) | Centrality scores |
+| [`pagerank`](docs/analyses/pagerank.md) | PageRank scores (power iteration, d=0.85) | Rank scores |
 
 ### Stateful (graph + lockfile/config)
 
 | Analysis | What it computes | External state |
 |----------|-----------------|---------------|
-| `graph-boundaries` | Encapsulation violations, containment escapes | Child `drft.toml` interfaces |
-| `change-propagation` | Content changes, transitive staleness, node additions/removals | Lockfile hash comparison |
+| [`graph-boundaries`](docs/analyses/graph-boundaries.md) | Encapsulation violations, containment escapes | Child `drft.toml` interfaces |
+| [`change-propagation`](docs/analyses/change-propagation.md) | Content changes, transitive staleness, node additions/removals | Lockfile hash comparison |
 
 ## Metrics
 

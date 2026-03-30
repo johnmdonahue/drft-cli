@@ -19,28 +19,7 @@ cargo run -- check -C examples/simple
 
 ## Project structure
 
-```
-src/
-  main.rs          -- entry point, command wiring
-  cli.rs           -- clap argument definitions
-  config.rs        -- drft.toml loading and defaults
-  discovery.rs     -- file walking, .gitignore respect
-  parsing.rs       -- markdown link extraction
-  graph.rs         -- dependency graph construction
-  lockfile.rs      -- drft.lock serialization
-  diagnostic.rs    -- output formatting (text, json, color)
-  rules/
-    mod.rs         -- rule trait and registry
-    broken_link.rs
-    containment.rs
-    custom.rs      -- external script rules
-    cycle.rs
-    directory_link.rs
-    encapsulation.rs
-    indirect_link.rs
-    orphan.rs
-    stale.rs
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the module layout and design.
 
 ## Testing
 
@@ -61,11 +40,4 @@ cargo test scenario_5         # specific test
 
 ## Examples
 
-The `examples/` directory has sample projects for manual testing:
-- `simple/` -- clean project
-- `broken/` -- various violations
-- `cyclic/` -- circular dependencies
-- `monorepo/` -- nested scopes
-- `with-assets/` -- non-markdown references
-- `with-config/` -- ignore patterns
-- `custom-rules/` -- external script rules
+See the [examples](examples/README.md) for sample projects used in manual testing.

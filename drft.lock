@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:2388649574979b30d8b557be06284f09359cd7f9f16832916c84d8e5b0c57ac5"
+hash = "b3:e8cb89742cd3b87bd8e20c3e9e0ec9df8d48d4c86fa9ae03f7d8cc7a4a770915"
 
 [nodes."CHANGELOG.md"]
 type = "source"
@@ -14,11 +14,11 @@ hash = "b3:5d57c7dd441cc6e29e43068317dd2db77348144a540e7c3a1da0ca6587897a68"
 
 [nodes."CONTRIBUTING.md"]
 type = "source"
-hash = "b3:2fb6dc7ac78728600cea75ac714b8ba9e0acf36eca490fd3e3f8d0fe03e95d8c"
+hash = "b3:620bd26670ad54d4cc3dbf602e84fb3275883afa61f3acbe08564de12cdb3926"
 
 [nodes."README.md"]
 type = "source"
-hash = "b3:9dc1633ce0be41ed90b76e18492e6d606ffff9a7b9b5f3f49406c78ac07d0182"
+hash = "b3:36786de1ac03464e9494f558dd56fb9fc0094fa5d0e08b447ea2fa3ec114de6b"
 
 [nodes."RELEASING.md"]
 type = "source"
@@ -26,7 +26,7 @@ hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
 
 [nodes."docs/analyses/README.md"]
 type = "source"
-hash = "b3:abf2e10806875c85aff8ad54f1b0cba43e6c7ecbfa40689206777eb14c8015c6"
+hash = "b3:db3c7004bcb86cd7c26bae00af0f5fe053c92c77193725e5ead40f4f80e361a8"
 
 [nodes."docs/analyses/betweenness.md"]
 type = "source"
@@ -52,9 +52,9 @@ hash = "b3:b5e1f5bee07643448a42d651fdfb4c353c288fdbd0e63e77c5523d2959477bc3"
 type = "source"
 hash = "b3:a14cfcd2420d3cb454640ab497d183244bf548313339edea91274838b17e14bd"
 
-[nodes."docs/analyses/edge-classification.md"]
+[nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:ce6674d5222ad61e6011598496f438b8170ac9d5d7efb3a6afa88c236a6c9211"
+hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
@@ -68,34 +68,74 @@ hash = "b3:1a6aee4b996179b3d6cf039c087e33fa3f9809c6db71a89b8da834fd902a6743"
 type = "source"
 hash = "b3:8c737ffe4f13c4c79fc59659e611025bc182ecaa19f0fbbd5b28135575e4302a"
 
-[nodes."docs/analyses/scope-boundaries.md"]
-type = "source"
-hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
-
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
 hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
 
+[nodes."examples/README.md"]
+type = "source"
+hash = "b3:cf7afcda2681ce8d4b8ab8a061584781aa7df6c475d3621c98133aaa9aaaf515"
+
 [nodes."examples/broken/"]
 type = "graph"
+
+[nodes."examples/broken/README.md"]
+type = "resource"
+hash = "b3:1686a4acda5bf198cea1dd641ae75ea14279de784d9842f8c0f1c9918ff8f56e"
+graph = "examples/broken/"
 
 [nodes."examples/custom-rules/"]
 type = "graph"
 
+[nodes."examples/custom-rules/README.md"]
+type = "resource"
+hash = "b3:291b8a1b4ec977540a578bc88952f9de9c1eeec37d44772fe7d6068684f71e86"
+graph = "examples/custom-rules/"
+
+[nodes."examples/custom-rules/drft.toml"]
+type = "resource"
+hash = "b3:680da654aa960cb1155a1aad7ab14ab1f692bd691c831e0042b4b049001b3458"
+graph = "examples/custom-rules/"
+
 [nodes."examples/cyclic/"]
 type = "graph"
+
+[nodes."examples/cyclic/README.md"]
+type = "resource"
+hash = "b3:b5631eff4489dc892977ddcd3afe913160e22bb5b7021b99c116dd00e67e2556"
+graph = "examples/cyclic/"
 
 [nodes."examples/monorepo/"]
 type = "graph"
 
+[nodes."examples/monorepo/README.md"]
+type = "resource"
+hash = "b3:d3dc331fffce50dad63b5606e3f6bc4ff2f34aa8373cbd92939cbb74dd444ac1"
+graph = "examples/monorepo/"
+
 [nodes."examples/simple/"]
 type = "graph"
+
+[nodes."examples/simple/README.md"]
+type = "resource"
+hash = "b3:d9864e12a5d8cd41b302770a1505e14a61e06a54151df64f167e1c8c80e17f84"
+graph = "examples/simple/"
 
 [nodes."examples/with-assets/"]
 type = "graph"
 
+[nodes."examples/with-assets/README.md"]
+type = "resource"
+hash = "b3:c86dbeb3e58a6be13824ef257017fdf695d5047881e16b93af1aad416119c889"
+graph = "examples/with-assets/"
+
 [nodes."examples/with-config/"]
 type = "graph"
+
+[nodes."examples/with-config/README.md"]
+type = "resource"
+hash = "b3:482518ecf2ae9eb07ddbb55f420df6ce48bd360f453f94b05575fc1ecde65671"
+graph = "examples/with-config/"
 
 [nodes."https://en.wikipedia.org/wiki/Betweenness_centrality#Brandes'_algorithm"]
 type = "external"
