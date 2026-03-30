@@ -23,7 +23,7 @@ Only non-largest components are flagged. A fully connected graph produces no dia
 
 ```toml
 [rules]
-fragmentation = "off"    # default
+fragmentation = "warn"    # default
 ```
 
 ```toml

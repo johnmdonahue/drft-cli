@@ -20,7 +20,7 @@ warn[redundant-edge]: a.md -> c.md (transitively redundant, via b.md)
 
 ```toml
 [rules]
-redundant-edge = "off"    # default
+redundant-edge = "warn"    # default
 ```
 
 ```toml

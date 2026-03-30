@@ -22,7 +22,7 @@ Note that root entry points (like `index.md`) will also be flagged since they na
 
 ```toml
 [rules]
-orphan = "off"    # default
+orphan = "warn"    # default
 ```
 
 ```toml

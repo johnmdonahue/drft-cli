@@ -135,6 +135,8 @@ fn recursive_lock() {
 #[test]
 fn recursive_check_with_child_config() {
     let dir = TempDir::new().unwrap();
+    // Parent disables orphan so only child's config triggers it
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
     let child = dir.path().join("child");
@@ -152,7 +154,7 @@ fn recursive_check_with_child_config() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("orphan"),
-        "non-recursive should not show child diagnostics"
+        "non-recursive should not show child diagnostics, got: {stdout}"
     );
 
     // Recursive: child's orphan config kicks in

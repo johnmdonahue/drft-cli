@@ -189,13 +189,13 @@ impl Config {
             ("cycle", RuleSeverity::Warn),
             ("directory-link", RuleSeverity::Warn),
             ("encapsulation", RuleSeverity::Warn),
-            ("fragility", RuleSeverity::Off),
-            ("fragmentation", RuleSeverity::Off),
-            ("indirect-link", RuleSeverity::Off),
-            ("layer-violation", RuleSeverity::Off),
-            ("orphan", RuleSeverity::Off),
-            ("redundant-edge", RuleSeverity::Off),
-            ("stale", RuleSeverity::Error),
+            ("fragility", RuleSeverity::Warn),
+            ("fragmentation", RuleSeverity::Warn),
+            ("indirect-link", RuleSeverity::Warn),
+            ("layer-violation", RuleSeverity::Warn),
+            ("orphan", RuleSeverity::Warn),
+            ("redundant-edge", RuleSeverity::Warn),
+            ("stale", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -378,7 +378,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.rule_severity("broken-link"), RuleSeverity::Warn);
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Off);
+        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Warn);
         assert!(config.ignore.is_empty());
         assert!(config.parsers.contains_key("markdown"));
     }

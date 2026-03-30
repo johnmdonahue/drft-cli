@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:1e73249adba81efea34d0d9d780b513ff497bd7d2f7ec8dd2b0a4330b32b8cd2"
+hash = "b3:74199c862a452473749e64b916bf294b2a2aac4a649115f40ca66d86abda0fdf"
 
 [nodes."CHANGELOG.md"]
 type = "source"
@@ -74,7 +74,7 @@ hash = "b3:bb6a3d0595e6a116a43636b4cf92b03d9c59fe089116b0b7dd6a91ca9696a1b1"
 
 [nodes."docs/analyses/transitive-reduction.md"]
 type = "source"
-hash = "b3:a8b890afc7075ae14cae97d2d36987a708015f9434466e2cab1f86cc122440d9"
+hash = "b3:b7fc8c27664c3aba80e095ac955a52d67fcb57c506539b49b584c36beb237184"
 
 [nodes."docs/parsers/README.md"]
 type = "source"
@@ -114,27 +114,27 @@ hash = "b3:316b61ef97d15952a5625c26106c43ec5c5ec45177b7ccf16d0bcd0a30d635ca"
 
 [nodes."docs/rules/fragility.md"]
 type = "source"
-hash = "b3:21d2533d88bae57ba47989851155ad65ceddc491fb7ee34cd9b36d0282a613da"
+hash = "b3:af521ef2bf526e520e74569f4c62d85b35583494b770165ee5b9f5bb6c97879f"
 
 [nodes."docs/rules/fragmentation.md"]
 type = "source"
-hash = "b3:d9ee464219a252b438c5b56d3100df586f31d9511cbf32d21ce1acc097bc773f"
+hash = "b3:d35ffd6c286ecef125a8d35c783645e364167cec73e916e57491d21fd0550303"
 
 [nodes."docs/rules/indirect-link.md"]
 type = "source"
-hash = "b3:46827df8102a563995d29c828c55f8b8e7efa0cc8a868373bf9ca0205889f34e"
+hash = "b3:962b7ec17e216036f3e1b6fde4a0e35cf1c7cd6e9ba8f9cbb090439d9a0a3e8a"
 
 [nodes."docs/rules/layer-violation.md"]
 type = "source"
-hash = "b3:7472b60e438bc5224062b797dde3a3ade85849ca1e3620a616f21ab1c73abd9b"
+hash = "b3:8efa2190a71d3432eac7fca2f1bfd3a468356fcc0191c41d3166f8a7349ed57e"
 
 [nodes."docs/rules/orphan.md"]
 type = "source"
-hash = "b3:e508fa34ec0a44227081ce4a38b0a98a712731f035c5dfd9df2bd989a69e1b65"
+hash = "b3:6190079384a4cf2c60b625e49417d0f7238a03e6f892d1539d99648f75dd1a89"
 
 [nodes."docs/rules/redundant-edge.md"]
 type = "source"
-hash = "b3:5e5b1fb779b0e5861527889d4163278f6ba8e64b232713269e46491e1ddcea1d"
+hash = "b3:eadfd113c3a395796aaf15c292b34d312d91ae9aa5ce401e9f6b87fc60bea038"
 
 [nodes."docs/rules/script.md"]
 type = "source"
@@ -142,7 +142,7 @@ hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
 
 [nodes."docs/rules/stale.md"]
 type = "source"
-hash = "b3:50aed9cb33e90ab7ef6830de68750b1d22369cd9ac828506d1d9006e843237b3"
+hash = "b3:448380c216da4c8dfca2c50561ac26865b66b8d3cb083d1ac5ac4fdfd050a4e9"
 
 [nodes."examples/README.md"]
 type = "source"
@@ -296,7 +296,7 @@ hash = "b3:6b893e9286ee0969be16802658fcf0bb0ad7fa0cf7eed778fe7a7ace57dc6d5b"
 
 [nodes."src/config.rs"]
 type = "resource"
-hash = "b3:d5f0e5a547770885a13b1d79632e9885204ef4266a316057eb94f4537c48ecc2"
+hash = "b3:1c21c0bcf2cd9b60fa61a0ac3e07f5a6817f7a513e3aecbb0a3c69a199049b94"
 
 [nodes."src/diagnostic.rs"]
 type = "resource"
@@ -320,7 +320,7 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "resource"
-hash = "b3:abeadc6da5456c7626679b16930358e617757f18738f627b9a9313ab85b459cb"
+hash = "b3:b5e4e403cca7fb6242d8aee4982e04722b0cd62e3cce7b38ca32a9ddd3edff9e"
 
 [nodes."src/metrics.rs"]
 type = "resource"

@@ -27,7 +27,7 @@ Nodes involved in cycles are excluded from this rule, since their depth is ambig
 
 ```toml
 [rules]
-layer-violation = "off"    # default
+layer-violation = "warn"    # default
 ```
 
 ```toml
