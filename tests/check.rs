@@ -202,6 +202,7 @@ fn scenario_23_orphan_warn_by_default() {
         stdout.contains("orphan"),
         "orphan rule should warn by default, got: {stdout}"
     );
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 /// Scenario 7b: Orphan rule — enabled via config.

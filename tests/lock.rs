@@ -69,6 +69,7 @@ fn scenario_6_staleness_after_edit() {
         stdout.contains("index.md"),
         "expected index.md in stale output, got: {stdout}"
     );
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 /// Scenario 7a: File removed — both broken-link and stale fire.
@@ -101,6 +102,7 @@ fn scenario_7a_file_removed() {
         stdout.contains("stale"),
         "expected stale warning, got: {stdout}"
     );
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 // ── drft lock --check ──────────────────────────────────────────
