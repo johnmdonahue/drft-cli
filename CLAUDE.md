@@ -2,6 +2,10 @@
 
 A structural integrity checker for linked file systems. Treats a directory of files as a dependency graph — files are nodes, links are edges — and validates the graph against configurable rules.
 
+## Dogfooding
+
+This repo runs drft on itself (`drft.toml` at root). After any edit to markdown files or documentation, run `cargo run -- check` and fix all diagnostics before committing. Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause instead (create missing files, fix broken references, restructure links to point to actual files). We dogfood drft to experience the same friction our users will.
+
 ## Architecture
 
 - **Crate name**: `drft-cli` (on crates.io)
