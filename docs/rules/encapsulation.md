@@ -1,6 +1,6 @@
 # encapsulation
 
-Flags links from outside a sealed scope that bypass its declared interface.
+Flags links from outside a child graph that bypass its declared interface.
 
 ## Example
 
@@ -8,12 +8,12 @@ Flags links from outside a sealed scope that bypass its declared interface.
 project/
   index.md                # contains [internal](research/internal.md)
   research/
-    drft.lock             # interface: [overview.md]
+    drft.toml             # interface: [overview.md]
     overview.md
     internal.md
 ```
 
-`research/` is a sealed scope with `overview.md` as its interface. Linking directly to `internal.md` from outside violates encapsulation:
+`research/` is a child graph with `overview.md` as its interface. Linking directly to `internal.md` from outside violates encapsulation:
 
 ```
 warn[encapsulation]: index.md -> research/internal.md (not in research/ interface)
@@ -34,7 +34,7 @@ ignore = []
 
 ## Analysis
 
-Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child scope lockfiles to determine interface boundaries.
+Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child graph configurations to determine interface boundaries.
 
 ## Source
 

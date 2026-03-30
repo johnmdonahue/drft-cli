@@ -56,7 +56,7 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Only real nodes (Document and Asset) are included — external URLs, frontier boundaries, and virtual nodes are excluded. Degree counts only edges between real nodes.
+Nodes are sorted alphabetically by path. Only Source and Resource nodes are included — External and Graph nodes are excluded. Degree counts only edges between Source/Resource nodes.
 
 ### As a rule (`drft check`)
 

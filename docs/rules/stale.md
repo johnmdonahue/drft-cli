@@ -16,7 +16,7 @@ warn[stale]: setup.md (content changed)
 warn[stale]: index.md (stale via setup.md)
 ```
 
-The rule also detects scope boundary changes (new or removed child scopes). It is vacuous if no `drft.lock` exists.
+The rule also detects graph boundary changes (new or removed child graphs). It is vacuous if no `drft.lock` exists.
 
 ## Configuration
 

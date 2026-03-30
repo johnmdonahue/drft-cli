@@ -6,7 +6,7 @@ hash = "b3:e8cb89742cd3b87bd8e20c3e9e0ec9df8d48d4c86fa9ae03f7d8cc7a4a770915"
 
 [nodes."CHANGELOG.md"]
 type = "source"
-hash = "b3:d49b8f255e5e1f0a8cbbae014a65e61345bf7c27791e23ad2f488e5d96299b55"
+hash = "b3:b5d68ca2e8f093068248d61bf03740f07f480833379a91c92b5d0bde707e5537"
 
 [nodes."CLAUDE.md"]
 type = "source"
@@ -42,7 +42,7 @@ hash = "b3:58d481d6d06e01963448d6b92a08d7ef25b738a3f4a360d62e25998356308b86"
 
 [nodes."docs/analyses/change-propagation.md"]
 type = "source"
-hash = "b3:859858bb79f6bf1cfc46ee97e8d39e0e5ab4a48b1410029b1f87ffa18d0198a7"
+hash = "b3:87786b044901d3160f67714e0689aa8b0aa21a08c765b6f66869686431a30a21"
 
 [nodes."docs/analyses/connected-components.md"]
 type = "source"
@@ -50,7 +50,7 @@ hash = "b3:78764dc26af51c9d77a49f1948cc21d24b9445b50c0dd5a41dc0ab0b3712ef15"
 
 [nodes."docs/analyses/degree.md"]
 type = "source"
-hash = "b3:3d247d5943135f50bf4618299b2558e654a601182f9c1d82745fdbca909d7536"
+hash = "b3:33fd99eb4940ff1e4910c2881943ff25fc6bda924f3b6616f963736a402d9906"
 
 [nodes."docs/analyses/depth.md"]
 type = "source"
@@ -58,7 +58,7 @@ hash = "b3:87ea11dfba7cb9c7d9b47f16c40be8ec70b4a656fc928009ed63d9477e9386d9"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:a4fb0b48bf9a7a2a0580d3f42b069b544f34115ed6e0bedd3445416690a1e79a"
+hash = "b3:479238035912845e05e22306277ecdb1328884a259682226126b74bcface529f"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
@@ -90,7 +90,7 @@ hash = "b3:760a4ecc396697fbb3c65f869f64e4a85aa5a162cefd7fc1cfe22627907906df"
 
 [nodes."docs/rules/README.md"]
 type = "source"
-hash = "b3:a0ff854f10cac0ec76f485d2750c494c5b05d926f39360af0387a0b8b63d5b3e"
+hash = "b3:824a71dd9680c60e68aa08d3a91633a748a2d902f22438f4ea5406543867a089"
 
 [nodes."docs/rules/broken-link.md"]
 type = "source"
@@ -98,7 +98,7 @@ hash = "b3:b318b9d8966173637c56e4fe5d9ce835d04ae61fcae99224b29c95651056dda1"
 
 [nodes."docs/rules/containment.md"]
 type = "source"
-hash = "b3:ddd35647a8fc006b198e0e9147eed7f61db4220849ae7a05358787391e498a78"
+hash = "b3:b3f4795550f32f58d561e1c75ce776fdd7ca43a3f896305cad2a1eb1ba3fb65f"
 
 [nodes."docs/rules/cycle.md"]
 type = "source"
@@ -110,7 +110,7 @@ hash = "b3:2986ad4046028266aec9af1906c436db462185b157bc9802bebfc5269174b28d"
 
 [nodes."docs/rules/encapsulation.md"]
 type = "source"
-hash = "b3:da61c4818ba9079af925cb064e30d9d6809d83a2af54b2187e88ca200ce84a69"
+hash = "b3:316b61ef97d15952a5625c26106c43ec5c5ec45177b7ccf16d0bcd0a30d635ca"
 
 [nodes."docs/rules/fragility.md"]
 type = "source"
@@ -142,7 +142,7 @@ hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
 
 [nodes."docs/rules/stale.md"]
 type = "source"
-hash = "b3:b89c713e9e1994f9a2d8ee351b4c60cf7538d945cf223e6c2cca13f0ba653132"
+hash = "b3:448380c216da4c8dfca2c50561ac26865b66b8d3cb083d1ac5ac4fdfd050a4e9"
 
 [nodes."examples/README.md"]
 type = "source"
@@ -182,7 +182,7 @@ type = "graph"
 
 [nodes."examples/monorepo/README.md"]
 type = "resource"
-hash = "b3:d3dc331fffce50dad63b5606e3f6bc4ff2f34aa8373cbd92939cbb74dd444ac1"
+hash = "b3:1fe8430b118fde69d5bd4298ff41efdad15f5d2827f0468e39567913d8af95a5"
 graph = "examples/monorepo/"
 
 [nodes."examples/simple/"]

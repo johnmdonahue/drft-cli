@@ -16,10 +16,10 @@ fragility = "off"
 | Rule | Default | What it checks | Analysis |
 |------|---------|---------------|----------|
 | [broken-link](broken-link.md) | warn | Links to files that don't exist | graph (direct) |
-| [containment](containment.md) | warn | Links that escape the scope boundary | [graph-boundaries](../analyses/graph-boundaries.md) |
+| [containment](containment.md) | warn | Links that escape the graph boundary | [graph-boundaries](../analyses/graph-boundaries.md) |
 | [cycle](cycle.md) | warn | Circular dependencies between files | [scc](../analyses/scc.md) |
 | [directory-link](directory-link.md) | warn | Links that point to a directory instead of a file | graph (direct) |
-| [encapsulation](encapsulation.md) | warn | Links into a sealed scope that bypass its interface | [graph-boundaries](../analyses/graph-boundaries.md) |
+| [encapsulation](encapsulation.md) | warn | Links into a child graph that bypass its interface | [graph-boundaries](../analyses/graph-boundaries.md) |
 | [fragility](fragility.md) | off | Cut vertices and bridge edges (structural single points of failure) | [bridges](../analyses/bridges.md) |
 | [fragmentation](fragmentation.md) | off | Disconnected components in the graph | [connected-components](../analyses/connected-components.md) |
 | [indirect-link](indirect-link.md) | off | Links whose target is a symlink | graph (direct) |

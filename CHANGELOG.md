@@ -4,12 +4,12 @@ All notable changes to drft are documented here.
 
 ## 0.2.1 (2026-03-29)
 
-- Fix #9: containment rule now catches `../` links escaping scope boundary
+- Fix #9: containment rule now catches `../` links escaping graph boundary
 - Fix #11: custom rule commands resolve relative to config file, not CWD
 - Fix #8: required-frontmatter example adds file exemptions (SKIP_NAMES)
 - `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
-- Config inheritance: child scopes without `drft.toml` inherit from nearest ancestor
-- Manifest persisted in `drft.toml`: `manifest = "README.md"` is source of truth
+- Config inheritance: child graphs without `drft.toml` inherit from nearest ancestor
+- Interface persisted in `drft.toml`: `[interface]` section is source of truth
 - Failed custom rules now surface as diagnostics in JSON output
 
 ## 0.2.0 (2026-03-29)
@@ -25,8 +25,8 @@ All notable changes to drft are documented here.
 ## 0.1.2 (2026-03-29)
 
 - Add `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
-- Config inheritance: child scopes without `drft.toml` inherit from nearest ancestor
-- Persist manifest in `drft.toml`: `manifest = "README.md"` is the source of truth
+- Config inheritance: child graphs without `drft.toml` inherit from nearest ancestor
+- Persist interface in `drft.toml`: `[interface]` section is the source of truth
 - Add `drft impact` command for transitive dependency analysis
 - JSON summary envelope for `drft check --format json`
 - Structured JSON errors on stderr when `--format json` is set
@@ -43,7 +43,7 @@ All notable changes to drft are documented here.
 - Fixed: email links no longer flagged as broken links
 - Fixed: frontmatter parser rejects YAML objects/arrays/quoted strings
 - Fixed: cycle detection panic on DFS root nodes
-- Fixed: directory-link rule skips frontier nodes
+- Fixed: directory-link rule skips Graph nodes
 - Fixed: ignored files detected as "excluded by ignore pattern" in broken-link
 
 ## 0.1.1 (2026-03-28)
@@ -68,20 +68,20 @@ Initial release.
 
 ### Rules
 - `broken-link` -- missing link targets, including files excluded by ignore patterns
-- `containment` -- links escaping scope boundary
+- `containment` -- links escaping graph boundary
 - `cycle` -- circular dependencies
 - `directory-link` -- links to directories instead of files
-- `encapsulation` -- links into sealed scope's non-manifest files
+- `encapsulation` -- links into child graph's non-interface files
 - `indirect-link` -- symlink targets
 - `orphan` -- files with no inbound links
 - `stale` -- dependencies changed since last lock (direct + transitive)
 
 ### Features
 - 6 link source types: inline, reference, autolink, image, frontmatter, wikilink
-- 5 node types: document, asset, external, frontier, virtual
+- 4 node types: Source, Resource, External, Graph
 - BLAKE3 content hashing (`b3:` prefix)
-- Hierarchical scopes with frontier/virtual nodes
-- Manifest support for sealed scopes
+- Hierarchical graphs with child-graph projection
+- Interface support for child graphs
 - `.gitignore` respect
 - Per-rule path ignores (`[ignore-rules]`)
 - Custom rules via external scripts (`[custom-rules]`)

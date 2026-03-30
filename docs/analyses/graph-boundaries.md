@@ -1,32 +1,32 @@
-# Scope boundaries
+# Graph boundaries
 
 ## The concept
 
-drft scopes create **partitions** in the graph. A scope is a directory with its own `drft.lock` — a boundary that separates its internal structure from the outside. **Scope boundary analysis** identifies edges that cross these partitions:
+drft graphs create **partitions** in the dependency graph. A graph is a directory with its own `drft.lock` — a boundary that separates its internal structure from the outside. **Graph boundary analysis** identifies edges that cross these partitions:
 
-- **Escapes** — edges from inside a sealed scope to targets outside it (via `../` paths). These violate containment.
-- **Encapsulation violations** — edges from outside a child scope to non-manifest files inside it. These bypass the scope's declared interface.
+- **Escapes** — edges from inside a graph with interface to targets outside it (via `../` paths). These violate containment.
+- **Encapsulation violations** — edges from outside a child graph to non-interface files inside it. These bypass the graph's declared interface.
 
 ## Why it matters for knowledge systems
 
-Scopes let you decompose a large documentation system into independently manageable units. Boundary crossings undermine this:
+Graphs let you decompose a large documentation system into independently manageable units. Boundary crossings undermine this:
 
-- **Scope escapes** create hidden dependencies on parent/sibling content. If the scope is later moved or extracted, these links break.
-- **Encapsulation violations** reach into a scope's internals, bypassing the manifest that defines its public API. Changes to internal files can break consumers without warning.
+- **Graph escapes** create hidden dependencies on parent/sibling content. If the graph is later moved or extracted, these links break.
+- **Encapsulation violations** reach into a graph's internals, bypassing the interface that defines its public API. Changes to internal files can break consumers without warning.
 
 ## What drft surfaces
 
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis scope-boundaries
+drft report --analysis graph-boundaries
 ```
 
 ```
-=== scope-boundaries ===
-sealed: yes
+=== graph-boundaries ===
+has_interface: yes
 escape: index.md → ../README.md
-encapsulation: parent.md → research/internal.md (bypasses research/manifest)
+encapsulation: parent.md → research/internal.md (bypasses research/ interface)
 ```
 
 JSON output:
@@ -35,7 +35,7 @@ JSON output:
 {
   "analyses": {
     "scope-boundaries": {
-      "sealed": true,
+      "has_interface": true,
       "escapes": [
         { "source": "index.md", "target": "../README.md" }
       ],
@@ -55,12 +55,12 @@ JSON output:
 ### As rules (`drft check`)
 
 Two rules consume this analysis:
-- **`containment`** — flags scope escapes (only when sealed)
-- **`encapsulation`** — flags manifest bypasses
+- **`containment`** — flags graph escapes (only when interface is declared)
+- **`encapsulation`** — flags interface bypasses
 
 ## Algorithm
 
-For escapes: checks `drft.lock` existence (sealed scope), then scans edges for `../` target prefixes. For encapsulation: iterates Frontier nodes, reads each child scope's lockfile manifest, and identifies edges targeting non-manifest files inside the scope. Skips edges from Virtual nodes (implicit scope-internal edges).
+For escapes: checks for `[interface]` in `drft.toml` (graph with interface), then scans edges for `../` target prefixes. For encapsulation: iterates Graph nodes, reads each child graph's interface configuration, and identifies edges targeting non-interface files inside the graph. Skips edges from child-graph projections (Resources with a `graph` field).
 
 ## Source
 
