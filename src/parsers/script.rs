@@ -99,10 +99,10 @@ impl ScriptParser {
                     };
 
                     // Apply type filter
-                    if let Some(ref types) = self.type_filter {
-                        if !types.iter().any(|t| t == &link.link_type) {
-                            continue;
-                        }
+                    if let Some(ref types) = self.type_filter
+                        && !types.iter().any(|t| t == &link.link_type)
+                    {
+                        continue;
                     }
 
                     results.entry(sl.file).or_default().push(link);
