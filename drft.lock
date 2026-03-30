@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "file"
-hash = "b3:4f484282652ca7a94aa83bc7ba4616ebff11383129e02defa69b746afce99f6e"
+hash = "b3:7ac3b1986eedcac1b1686c59f59ddca90c1fef98ffdfbc40eeb09f2b30f9b694"
 
 [nodes."CHANGELOG.md"]
 type = "file"
@@ -272,7 +272,7 @@ hash = "b3:de246d46387a0a8158ccdeb5c500488e17a839d34e8b5b31b972558a5fabcd1c"
 
 [nodes."src/analyses/mod.rs"]
 type = "file"
-hash = "b3:467a52403996fb6c4e883def43b5cc44a0527be3234e95937d3133ddb339b974"
+hash = "b3:5788b4f04861ca17aa27aaf24490e2f0e177e623c1221237d763b8d7cca4ab40"
 
 [nodes."src/analyses/pagerank.rs"]
 type = "file"
@@ -316,7 +316,7 @@ hash = "b3:4070e5ff5a54453ed17d53f6f6ad250ac007d998e543a5e9bc04bee8e7323395"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:667df4233dfedb14ad0a6b8caff11adf24c2f81a4da5c89998007d1b49fc173f"
+hash = "b3:718eedfec9b4fc71c5da31c0cb9df16a86bb040bb1f14daa19b38139b45e19cd"
 
 [nodes."src/metrics.rs"]
 type = "file"

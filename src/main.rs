@@ -12,7 +12,6 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
-use analyses::Analysis;
 use cli::{Cli, ColorChoice, Commands, OutputFormat};
 use config::{Config, RuleSeverity};
 use diagnostic::Diagnostic;
@@ -242,54 +241,38 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
     }
 
     let config = Config::load(root)?;
-    let graph = build_graph(root, &config)?;
     let lockfile = lockfile::read_lockfile(root)?;
-    let ctx = analyses::AnalysisContext {
-        graph: &graph,
-        root,
-        config: &config,
-        lockfile: lockfile.as_ref(),
-    };
+    let enriched = analyses::enrich(root, &config, lockfile.as_ref())?;
 
     // Determine which analyses and metrics to output
     let show = |name: &str| filter.is_empty() || filter.iter().any(|f| f == name);
     let want_any_metrics =
         filter.is_empty() || filter.iter().any(|f| metric_names.contains(&f.as_str()));
 
-    // Run all analyses once (typed results), then serialize for output
-    let betweenness = analyses::betweenness::Betweenness.run(&ctx);
-    let bridges = analyses::bridges::Bridges.run(&ctx);
-    let change_propagation = analyses::change_propagation::ChangePropagation.run(&ctx);
-    let connected_components = analyses::connected_components::ConnectedComponents.run(&ctx);
-    let degree = analyses::degree::Degree.run(&ctx);
-    let depth = analyses::depth::Depth.run(&ctx);
-    let graph_boundaries = analyses::graph_boundaries::GraphBoundaries.run(&ctx);
-    let graph_stats = analyses::graph_stats::GraphStats.run(&ctx);
-    let pagerank = analyses::pagerank::PageRank.run(&ctx);
-    let scc = analyses::scc::StronglyConnectedComponents.run(&ctx);
-    let transitive_reduction = analyses::transitive_reduction::TransitiveReduction.run(&ctx);
-
-    // Serialize requested analyses for output
+    // Serialize requested analyses from enriched graph
     let all_analyses: Vec<(&str, serde_json::Value)> = vec![
-        ("betweenness", serde_json::to_value(&betweenness)?),
-        ("bridges", serde_json::to_value(&bridges)?),
+        ("betweenness", serde_json::to_value(&enriched.betweenness)?),
+        ("bridges", serde_json::to_value(&enriched.bridges)?),
         (
             "change-propagation",
-            serde_json::to_value(&change_propagation)?,
+            serde_json::to_value(&enriched.change_propagation)?,
         ),
         (
             "connected-components",
-            serde_json::to_value(&connected_components)?,
+            serde_json::to_value(&enriched.connected_components)?,
         ),
-        ("degree", serde_json::to_value(&degree)?),
-        ("depth", serde_json::to_value(&depth)?),
-        ("graph-boundaries", serde_json::to_value(&graph_boundaries)?),
-        ("graph-stats", serde_json::to_value(&graph_stats)?),
-        ("pagerank", serde_json::to_value(&pagerank)?),
-        ("scc", serde_json::to_value(&scc)?),
+        ("degree", serde_json::to_value(&enriched.degree)?),
+        ("depth", serde_json::to_value(&enriched.depth)?),
+        (
+            "graph-boundaries",
+            serde_json::to_value(&enriched.graph_boundaries)?,
+        ),
+        ("graph-stats", serde_json::to_value(&enriched.graph_stats)?),
+        ("pagerank", serde_json::to_value(&enriched.pagerank)?),
+        ("scc", serde_json::to_value(&enriched.scc)?),
         (
             "transitive-reduction",
-            serde_json::to_value(&transitive_reduction)?,
+            serde_json::to_value(&enriched.transitive_reduction)?,
         ),
     ];
 
@@ -298,19 +281,19 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
         .filter(|(name, _)| show(name))
         .collect();
 
-    // Compute metrics from the same typed results (no double computation)
+    // Compute metrics from enriched graph
     let output_metrics: Vec<_> = if want_any_metrics {
         let inputs = metrics::AnalysisInputs {
-            degree: &degree,
-            scc: &scc,
-            connected_components: &connected_components,
-            graph_stats: &graph_stats,
-            bridges: &bridges,
-            transitive_reduction: &transitive_reduction,
-            change_propagation: &change_propagation,
-            pagerank: &pagerank,
+            degree: &enriched.degree,
+            scc: &enriched.scc,
+            connected_components: &enriched.connected_components,
+            graph_stats: &enriched.graph_stats,
+            bridges: &enriched.bridges,
+            transitive_reduction: &enriched.transitive_reduction,
+            change_propagation: &enriched.change_propagation,
+            pagerank: &enriched.pagerank,
         };
-        metrics::compute_metrics(&inputs, &graph)
+        metrics::compute_metrics(&inputs, &enriched.graph)
             .into_iter()
             .filter(|m| show(&m.name))
             .collect()
@@ -845,7 +828,8 @@ fn check_graph(
     max_depth: Option<usize>,
 ) -> Result<Vec<Diagnostic>> {
     let config = Config::load(root)?;
-    let graph = build_graph(root, &config)?;
+    let lockfile = lockfile::read_lockfile(root)?;
+    let enriched = analyses::enrich(root, &config, lockfile.as_ref())?;
 
     let mut diagnostics = Vec::new();
 
@@ -869,10 +853,10 @@ fn check_graph(
         };
 
         let rule_ctx = rules::RuleContext {
-            graph: &graph,
+            graph: &enriched.graph,
             root,
             config: &config,
-            lockfile: None,
+            lockfile: lockfile.as_ref(),
         };
         let mut findings = rule.evaluate(&rule_ctx);
         findings.retain(|d| {
@@ -902,7 +886,7 @@ fn check_graph(
             .any(|(name, _)| rule_filter.iter().any(|f| f == name))
     };
     if run_script {
-        let mut script_findings = rules::script::run_script_rules(&graph, root, &config);
+        let mut script_findings = rules::script::run_script_rules(&enriched.graph, root, &config);
         // Filter to only requested rules if --rule is set
         if !rule_filter.is_empty() {
             script_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
@@ -926,7 +910,7 @@ fn check_graph(
     // Recursively check child graphs if --recursive
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_graph in &graph.child_graphs {
+        for child_graph in &enriched.graph.child_graphs {
             let child_dir = root.join(child_graph.trim_end_matches('/'));
             let child_prefix = match graph_prefix {
                 Some(parent) => format!("{parent}/{}", child_graph.trim_end_matches('/')),

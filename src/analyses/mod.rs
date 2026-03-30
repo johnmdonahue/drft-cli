@@ -52,3 +52,72 @@ pub trait Analysis {
 
     fn run(&self, ctx: &AnalysisContext) -> Self::Output;
 }
+
+/// The complete, enriched graph. Built once, enriched once.
+/// Carries the graph plus all structural analyses unconditionally.
+pub struct EnrichedGraph {
+    pub graph: Graph,
+    pub betweenness: betweenness::BetweennessResult,
+    pub bridges: bridges::BridgesResult,
+    pub change_propagation: change_propagation::ChangePropagationResult,
+    pub connected_components: connected_components::ConnectedComponentsResult,
+    pub degree: degree::DegreeResult,
+    pub depth: depth::DepthResult,
+    pub graph_boundaries: graph_boundaries::GraphBoundariesResult,
+    pub graph_stats: graph_stats::GraphStatsResult,
+    pub pagerank: pagerank::PageRankResult,
+    pub scc: scc::SccResult,
+    pub transitive_reduction: transitive_reduction::TransitiveReductionResult,
+}
+
+/// Build an enriched graph: construct the graph, then run all analyses unconditionally.
+pub fn enrich(
+    root: &Path,
+    config: &Config,
+    lockfile: Option<&Lockfile>,
+) -> anyhow::Result<EnrichedGraph> {
+    let graph = crate::graph::build_graph(root, config)?;
+    Ok(enrich_graph(graph, root, config, lockfile))
+}
+
+/// Enrich a pre-built graph with all analyses.
+pub fn enrich_graph(
+    graph: Graph,
+    root: &Path,
+    config: &Config,
+    lockfile: Option<&Lockfile>,
+) -> EnrichedGraph {
+    let ctx = AnalysisContext {
+        graph: &graph,
+        root,
+        config,
+        lockfile,
+    };
+
+    let betweenness = betweenness::Betweenness.run(&ctx);
+    let bridges = bridges::Bridges.run(&ctx);
+    let change_propagation = change_propagation::ChangePropagation.run(&ctx);
+    let connected_components = connected_components::ConnectedComponents.run(&ctx);
+    let degree = degree::Degree.run(&ctx);
+    let depth = depth::Depth.run(&ctx);
+    let graph_boundaries = graph_boundaries::GraphBoundaries.run(&ctx);
+    let graph_stats = graph_stats::GraphStats.run(&ctx);
+    let pagerank = pagerank::PageRank.run(&ctx);
+    let scc = scc::StronglyConnectedComponents.run(&ctx);
+    let transitive_reduction = transitive_reduction::TransitiveReduction.run(&ctx);
+
+    EnrichedGraph {
+        graph,
+        betweenness,
+        bridges,
+        change_propagation,
+        connected_components,
+        degree,
+        depth,
+        graph_boundaries,
+        graph_stats,
+        pagerank,
+        scc,
+        transitive_reduction,
+    }
+}
