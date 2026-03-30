@@ -237,17 +237,50 @@ fn run_analysis(root: &Path, format: OutputFormat, filter: &[String]) -> Result<
 
     // Run all analyses, serialize results to JSON values
     let all: Vec<(&str, serde_json::Value)> = vec![
-        ("degree", serde_json::to_value(analyses::degree::Degree.run(&ctx))?),
-        ("scc", serde_json::to_value(analyses::scc::StronglyConnectedComponents.run(&ctx))?),
-        ("connected-components", serde_json::to_value(analyses::connected_components::ConnectedComponents.run(&ctx))?),
-        ("depth", serde_json::to_value(analyses::depth::Depth.run(&ctx))?),
-        ("graph-stats", serde_json::to_value(analyses::graph_stats::GraphStats.run(&ctx))?),
-        ("bridges", serde_json::to_value(analyses::bridges::Bridges.run(&ctx))?),
-        ("transitive-reduction", serde_json::to_value(analyses::transitive_reduction::TransitiveReduction.run(&ctx))?),
-        ("betweenness", serde_json::to_value(analyses::betweenness::Betweenness.run(&ctx))?),
-        ("pagerank", serde_json::to_value(analyses::pagerank::PageRank.run(&ctx))?),
-        ("graph-boundaries", serde_json::to_value(analyses::graph_boundaries::GraphBoundaries.run(&ctx))?),
-        ("change-propagation", serde_json::to_value(analyses::change_propagation::ChangePropagation.run(&ctx))?),
+        (
+            "degree",
+            serde_json::to_value(analyses::degree::Degree.run(&ctx))?,
+        ),
+        (
+            "scc",
+            serde_json::to_value(analyses::scc::StronglyConnectedComponents.run(&ctx))?,
+        ),
+        (
+            "connected-components",
+            serde_json::to_value(analyses::connected_components::ConnectedComponents.run(&ctx))?,
+        ),
+        (
+            "depth",
+            serde_json::to_value(analyses::depth::Depth.run(&ctx))?,
+        ),
+        (
+            "graph-stats",
+            serde_json::to_value(analyses::graph_stats::GraphStats.run(&ctx))?,
+        ),
+        (
+            "bridges",
+            serde_json::to_value(analyses::bridges::Bridges.run(&ctx))?,
+        ),
+        (
+            "transitive-reduction",
+            serde_json::to_value(analyses::transitive_reduction::TransitiveReduction.run(&ctx))?,
+        ),
+        (
+            "betweenness",
+            serde_json::to_value(analyses::betweenness::Betweenness.run(&ctx))?,
+        ),
+        (
+            "pagerank",
+            serde_json::to_value(analyses::pagerank::PageRank.run(&ctx))?,
+        ),
+        (
+            "graph-boundaries",
+            serde_json::to_value(analyses::graph_boundaries::GraphBoundaries.run(&ctx))?,
+        ),
+        (
+            "change-propagation",
+            serde_json::to_value(analyses::change_propagation::ChangePropagation.run(&ctx))?,
+        ),
     ];
 
     let results: Vec<_> = if filter.is_empty() {
@@ -307,43 +340,116 @@ fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
     let mut all_metrics: Vec<Metric> = Vec::new();
 
     // Connectivity
-    let total_nodes = graph.nodes.values().filter(|n| graph.is_file_node(&n.path)).count() as f64;
+    let total_nodes = graph
+        .nodes
+        .values()
+        .filter(|n| graph.is_file_node(&n.path))
+        .count() as f64;
     if total_nodes > 0.0 {
         let orphans = degree.nodes.iter().filter(|n| n.in_degree == 0).count() as f64;
-        all_metrics.push(Metric { name: "orphan_ratio".into(), value: orphans / total_nodes, kind: MetricKind::Ratio, dimension: "connectivity".into() });
+        all_metrics.push(Metric {
+            name: "orphan_ratio".into(),
+            value: orphans / total_nodes,
+            kind: MetricKind::Ratio,
+            dimension: "connectivity".into(),
+        });
 
-        let islands = cc.components.iter().filter(|c| c.members.len() == 1).count() as f64;
-        all_metrics.push(Metric { name: "island_ratio".into(), value: islands / total_nodes, kind: MetricKind::Ratio, dimension: "connectivity".into() });
+        let islands = cc
+            .components
+            .iter()
+            .filter(|c| c.members.len() == 1)
+            .count() as f64;
+        all_metrics.push(Metric {
+            name: "island_ratio".into(),
+            value: islands / total_nodes,
+            kind: MetricKind::Ratio,
+            dimension: "connectivity".into(),
+        });
     }
 
     // Complexity
-    all_metrics.push(Metric { name: "component_count".into(), value: cc.component_count as f64, kind: MetricKind::Count, dimension: "complexity".into() });
-    all_metrics.push(Metric { name: "density".into(), value: stats.density, kind: MetricKind::Ratio, dimension: "complexity".into() });
-    all_metrics.push(Metric { name: "cyclomatic_complexity".into(), value: (graph.edges.len() as f64 - graph.nodes.len() as f64 + cc.components.len() as f64), kind: MetricKind::Count, dimension: "complexity".into() });
+    all_metrics.push(Metric {
+        name: "component_count".into(),
+        value: cc.component_count as f64,
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
+    all_metrics.push(Metric {
+        name: "density".into(),
+        value: stats.density,
+        kind: MetricKind::Ratio,
+        dimension: "complexity".into(),
+    });
+    all_metrics.push(Metric {
+        name: "cyclomatic_complexity".into(),
+        value: (graph.edges.len() as f64 - graph.nodes.len() as f64 + cc.components.len() as f64),
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
     if let Some(d) = stats.diameter {
-        all_metrics.push(Metric { name: "diameter".into(), value: d as f64, kind: MetricKind::Count, dimension: "complexity".into() });
+        all_metrics.push(Metric {
+            name: "diameter".into(),
+            value: d as f64,
+            kind: MetricKind::Count,
+            dimension: "complexity".into(),
+        });
     }
     if let Some(avg) = stats.average_path_length {
-        all_metrics.push(Metric { name: "average_path_length".into(), value: avg, kind: MetricKind::Score, dimension: "complexity".into() });
+        all_metrics.push(Metric {
+            name: "average_path_length".into(),
+            value: avg,
+            kind: MetricKind::Score,
+            dimension: "complexity".into(),
+        });
     }
 
     // Conciseness
     let total_edges = graph.edges.len() as f64;
     if total_edges > 0.0 {
-        all_metrics.push(Metric { name: "redundant_edge_ratio".into(), value: reduction.redundant_edges.len() as f64 / total_edges, kind: MetricKind::Ratio, dimension: "conciseness".into() });
+        all_metrics.push(Metric {
+            name: "redundant_edge_ratio".into(),
+            value: reduction.redundant_edges.len() as f64 / total_edges,
+            kind: MetricKind::Ratio,
+            dimension: "conciseness".into(),
+        });
     }
 
     // Resilience
-    all_metrics.push(Metric { name: "bridge_count".into(), value: bridges.bridges.len() as f64, kind: MetricKind::Count, dimension: "resilience".into() });
-    all_metrics.push(Metric { name: "cut_node_count".into(), value: bridges.cut_vertices.len() as f64, kind: MetricKind::Count, dimension: "resilience".into() });
+    all_metrics.push(Metric {
+        name: "bridge_count".into(),
+        value: bridges.bridges.len() as f64,
+        kind: MetricKind::Count,
+        dimension: "resilience".into(),
+    });
+    all_metrics.push(Metric {
+        name: "cut_node_count".into(),
+        value: bridges.cut_vertices.len() as f64,
+        kind: MetricKind::Count,
+        dimension: "resilience".into(),
+    });
 
     // Freshness
     if change.has_lockfile {
-        all_metrics.push(Metric { name: "directly_changed_count".into(), value: change.directly_changed.len() as f64, kind: MetricKind::Count, dimension: "freshness".into() });
-        all_metrics.push(Metric { name: "transitively_stale_count".into(), value: change.transitively_stale.len() as f64, kind: MetricKind::Count, dimension: "freshness".into() });
+        all_metrics.push(Metric {
+            name: "directly_changed_count".into(),
+            value: change.directly_changed.len() as f64,
+            kind: MetricKind::Count,
+            dimension: "freshness".into(),
+        });
+        all_metrics.push(Metric {
+            name: "transitively_stale_count".into(),
+            value: change.transitively_stale.len() as f64,
+            kind: MetricKind::Count,
+            dimension: "freshness".into(),
+        });
         if total_nodes > 0.0 {
             let stale = (change.directly_changed.len() + change.transitively_stale.len()) as f64;
-            all_metrics.push(Metric { name: "stale_ratio".into(), value: stale / total_nodes, kind: MetricKind::Ratio, dimension: "freshness".into() });
+            all_metrics.push(Metric {
+                name: "stale_ratio".into(),
+                value: stale / total_nodes,
+                kind: MetricKind::Ratio,
+                dimension: "freshness".into(),
+            });
         }
     }
 
@@ -351,11 +457,21 @@ fn run_metrics(root: &Path, format: OutputFormat) -> Result<i32> {
     if !pagerank.nodes.is_empty() {
         let scores: Vec<f64> = pagerank.nodes.iter().map(|n| n.score).collect();
         let max = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        all_metrics.push(Metric { name: "max_pagerank".into(), value: max, kind: MetricKind::Score, dimension: "complexity".into() });
+        all_metrics.push(Metric {
+            name: "max_pagerank".into(),
+            value: max,
+            kind: MetricKind::Score,
+            dimension: "complexity".into(),
+        });
     }
 
     // SCC
-    all_metrics.push(Metric { name: "cycle_count".into(), value: scc.nontrivial_count as f64, kind: MetricKind::Count, dimension: "complexity".into() });
+    all_metrics.push(Metric {
+        name: "cycle_count".into(),
+        value: scc.nontrivial_count as f64,
+        kind: MetricKind::Count,
+        dimension: "complexity".into(),
+    });
 
     match format {
         OutputFormat::Json => {

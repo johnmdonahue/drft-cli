@@ -207,7 +207,11 @@ fn strip_code(content: &str) -> String {
         if !in_code_block {
             if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
                 in_code_block = true;
-                fence_marker = if trimmed.starts_with("```") { "```" } else { "~~~" };
+                fence_marker = if trimmed.starts_with("```") {
+                    "```"
+                } else {
+                    "~~~"
+                };
                 result.push_str(&" ".repeat(line.len()));
             } else {
                 result.push_str(line);
@@ -440,8 +444,14 @@ mod tests {
     fn frontmatter_skips_code_block_examples() {
         let content = "# Doc\n\n```markdown\n---\nsources:\n  - ./fake.md\n---\n```\n";
         let links = parse(content);
-        let fm: Vec<_> = links.iter().filter(|l| l.link_type == "frontmatter").collect();
-        assert!(fm.is_empty(), "frontmatter inside code block should be ignored");
+        let fm: Vec<_> = links
+            .iter()
+            .filter(|l| l.link_type == "frontmatter")
+            .collect();
+        assert!(
+            fm.is_empty(),
+            "frontmatter inside code block should be ignored"
+        );
     }
 
     #[test]

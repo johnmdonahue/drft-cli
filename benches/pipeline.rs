@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use drft::analyses::{self, Analysis, AnalysisContext};
 use drft::config::Config;
 use drft::graph::build_graph;
