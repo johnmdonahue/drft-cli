@@ -4,7 +4,13 @@ A structural integrity checker for linked file systems. Treats a directory of fi
 
 ## Dogfooding
 
-This repo runs drft on itself (`drft.toml` at root). After any edit to markdown files or documentation, run `cargo run -- check` and fix all diagnostics before committing. Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause instead (create missing files, fix broken references, restructure links to point to actual files). We dogfood drft to experience the same friction our users will.
+This repo runs drft on itself (`drft.toml` at root). A PostToolUse hook runs `drft check --format json` after every `.md` file edit.
+
+**When the hook reports diagnostics, STOP.** Read the output. If files are stale, identify the impacted dependents and review whether they need updating. If links are broken, fix them before continuing. Do not batch up drft warnings and address them later — each diagnostic is a signal that the edit you just made has structural consequences.
+
+Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause (create missing files, fix broken references, restructure links). Do not run `drft lock` to clear staleness without first reviewing the impacted files.
+
+The workflow: edit → drft check fires → review diagnostics → fix impacts → drft lock (only after review) → commit.
 
 ## Architecture
 

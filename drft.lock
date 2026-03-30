@@ -10,7 +10,7 @@ hash = "b3:b5d68ca2e8f093068248d61bf03740f07f480833379a91c92b5d0bde707e5537"
 
 [nodes."CLAUDE.md"]
 type = "source"
-hash = "b3:dfafe4a66f8610d1792553a06f80ab01aab8c6790b7558b1827fdea8fe36a259"
+hash = "b3:67996086144fa8a82e3eeeb982e32df02693001ccf43004fa5c900ab090325c8"
 
 [nodes."CONTRIBUTING.md"]
 type = "source"
