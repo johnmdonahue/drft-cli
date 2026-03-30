@@ -250,69 +250,67 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
     };
 
     // Determine which analyses and metrics to output
-    let show_analysis = |name: &str| filter.is_empty() || filter.iter().any(|f| f == name);
-    let show_metric = |name: &str| filter.is_empty() || filter.iter().any(|f| f == name);
+    let show = |name: &str| filter.is_empty() || filter.iter().any(|f| f == name);
     let want_any_metrics =
         filter.is_empty() || filter.iter().any(|f| metric_names.contains(&f.as_str()));
 
-    // Run all analyses, collect the ones requested for output
+    // Run all analyses once (typed results), then serialize for output
+    let betweenness = analyses::betweenness::Betweenness.run(&ctx);
+    let bridges = analyses::bridges::Bridges.run(&ctx);
+    let change_propagation = analyses::change_propagation::ChangePropagation.run(&ctx);
+    let connected_components = analyses::connected_components::ConnectedComponents.run(&ctx);
+    let degree = analyses::degree::Degree.run(&ctx);
+    let depth = analyses::depth::Depth.run(&ctx);
+    let graph_boundaries = analyses::graph_boundaries::GraphBoundaries.run(&ctx);
+    let graph_stats = analyses::graph_stats::GraphStats.run(&ctx);
+    let pagerank = analyses::pagerank::PageRank.run(&ctx);
+    let scc = analyses::scc::StronglyConnectedComponents.run(&ctx);
+    let transitive_reduction = analyses::transitive_reduction::TransitiveReduction.run(&ctx);
+
+    // Serialize requested analyses for output
     let all_analyses: Vec<(&str, serde_json::Value)> = vec![
-        (
-            "betweenness",
-            serde_json::to_value(analyses::betweenness::Betweenness.run(&ctx))?,
-        ),
-        (
-            "bridges",
-            serde_json::to_value(analyses::bridges::Bridges.run(&ctx))?,
-        ),
+        ("betweenness", serde_json::to_value(&betweenness)?),
+        ("bridges", serde_json::to_value(&bridges)?),
         (
             "change-propagation",
-            serde_json::to_value(analyses::change_propagation::ChangePropagation.run(&ctx))?,
+            serde_json::to_value(&change_propagation)?,
         ),
         (
             "connected-components",
-            serde_json::to_value(analyses::connected_components::ConnectedComponents.run(&ctx))?,
+            serde_json::to_value(&connected_components)?,
         ),
-        (
-            "degree",
-            serde_json::to_value(analyses::degree::Degree.run(&ctx))?,
-        ),
-        (
-            "depth",
-            serde_json::to_value(analyses::depth::Depth.run(&ctx))?,
-        ),
-        (
-            "graph-boundaries",
-            serde_json::to_value(analyses::graph_boundaries::GraphBoundaries.run(&ctx))?,
-        ),
-        (
-            "graph-stats",
-            serde_json::to_value(analyses::graph_stats::GraphStats.run(&ctx))?,
-        ),
-        (
-            "pagerank",
-            serde_json::to_value(analyses::pagerank::PageRank.run(&ctx))?,
-        ),
-        (
-            "scc",
-            serde_json::to_value(analyses::scc::StronglyConnectedComponents.run(&ctx))?,
-        ),
+        ("degree", serde_json::to_value(&degree)?),
+        ("depth", serde_json::to_value(&depth)?),
+        ("graph-boundaries", serde_json::to_value(&graph_boundaries)?),
+        ("graph-stats", serde_json::to_value(&graph_stats)?),
+        ("pagerank", serde_json::to_value(&pagerank)?),
+        ("scc", serde_json::to_value(&scc)?),
         (
             "transitive-reduction",
-            serde_json::to_value(analyses::transitive_reduction::TransitiveReduction.run(&ctx))?,
+            serde_json::to_value(&transitive_reduction)?,
         ),
     ];
 
     let output_analyses: Vec<_> = all_analyses
         .into_iter()
-        .filter(|(name, _)| show_analysis(name))
+        .filter(|(name, _)| show(name))
         .collect();
 
-    // Run metrics if any are requested
+    // Compute metrics from the same typed results (no double computation)
     let output_metrics: Vec<_> = if want_any_metrics {
-        metrics::compute_metrics(&ctx, &graph)
+        let inputs = metrics::AnalysisInputs {
+            degree: &degree,
+            scc: &scc,
+            connected_components: &connected_components,
+            graph_stats: &graph_stats,
+            bridges: &bridges,
+            transitive_reduction: &transitive_reduction,
+            change_propagation: &change_propagation,
+            pagerank: &pagerank,
+        };
+        metrics::compute_metrics(&inputs, &graph)
             .into_iter()
-            .filter(|m| show_metric(&m.name))
+            .filter(|m| show(&m.name))
             .collect()
     } else {
         Vec::new()

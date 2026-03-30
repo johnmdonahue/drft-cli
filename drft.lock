@@ -316,11 +316,11 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:6976dd6e343a25c8fb230fb00a88184635977191de28ff18dcd84c75c4dd0b83"
+hash = "b3:42aae16df870e4f2dd0f0c5c410f5cac9ee55e5f53812fbeb5fc352239f52469"
 
 [nodes."src/metrics.rs"]
 type = "source"
-hash = "b3:fbc3bc0613792f3b408c738e7c9c1c6f152634f33c88767772974d7477225519"
+hash = "b3:d61de500e18236ed6e56b1a0ac1a9171627b7ead4fd7b7b9ee55726fc04fda7e"
 
 [nodes."src/parsers/markdown.rs"]
 type = "source"

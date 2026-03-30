@@ -1,5 +1,9 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
+use crate::analyses::{
+    bridges::BridgesResult, change_propagation::ChangePropagationResult,
+    connected_components::ConnectedComponentsResult, degree::DegreeResult,
+    graph_stats::GraphStatsResult, pagerank::PageRankResult, scc::SccResult,
+    transitive_reduction::TransitiveReductionResult,
+};
 use crate::graph::Graph;
 
 /// A scalar metric extracted from analysis results.
@@ -40,24 +44,20 @@ pub fn all_metric_names() -> &'static [&'static str] {
     ]
 }
 
-/// Compute all scalar health metrics from the graph.
-pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
-    use crate::analyses::{
-        bridges::Bridges, change_propagation::ChangePropagation,
-        connected_components::ConnectedComponents, degree::Degree, graph_stats::GraphStats,
-        pagerank::PageRank, scc::StronglyConnectedComponents,
-        transitive_reduction::TransitiveReduction,
-    };
+/// Pre-computed analysis results needed for metric extraction.
+pub struct AnalysisInputs<'a> {
+    pub degree: &'a DegreeResult,
+    pub scc: &'a SccResult,
+    pub connected_components: &'a ConnectedComponentsResult,
+    pub graph_stats: &'a GraphStatsResult,
+    pub bridges: &'a BridgesResult,
+    pub transitive_reduction: &'a TransitiveReductionResult,
+    pub change_propagation: &'a ChangePropagationResult,
+    pub pagerank: &'a PageRankResult,
+}
 
-    let degree = Degree.run(ctx);
-    let scc = StronglyConnectedComponents.run(ctx);
-    let cc = ConnectedComponents.run(ctx);
-    let stats = GraphStats.run(ctx);
-    let bridges = Bridges.run(ctx);
-    let reduction = TransitiveReduction.run(ctx);
-    let change = ChangePropagation.run(ctx);
-    let pagerank = PageRank.run(ctx);
-
+/// Compute all scalar health metrics from pre-computed analysis results.
+pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
     let mut metrics: Vec<Metric> = Vec::new();
 
     // Connectivity
@@ -67,7 +67,12 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
         .filter(|n| graph.is_file_node(&n.path))
         .count() as f64;
     if total_nodes > 0.0 {
-        let orphans = degree.nodes.iter().filter(|n| n.in_degree == 0).count() as f64;
+        let orphans = inputs
+            .degree
+            .nodes
+            .iter()
+            .filter(|n| n.in_degree == 0)
+            .count() as f64;
         metrics.push(Metric {
             name: "orphan_ratio".into(),
             value: orphans / total_nodes,
@@ -75,7 +80,8 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
             dimension: "connectivity".into(),
         });
 
-        let islands = cc
+        let islands = inputs
+            .connected_components
             .components
             .iter()
             .filter(|c| c.members.len() == 1)
@@ -91,23 +97,24 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
     // Complexity
     metrics.push(Metric {
         name: "component_count".into(),
-        value: cc.component_count as f64,
+        value: inputs.connected_components.component_count as f64,
         kind: MetricKind::Count,
         dimension: "complexity".into(),
     });
     metrics.push(Metric {
         name: "density".into(),
-        value: stats.density,
+        value: inputs.graph_stats.density,
         kind: MetricKind::Ratio,
         dimension: "complexity".into(),
     });
     metrics.push(Metric {
         name: "cyclomatic_complexity".into(),
-        value: (graph.edges.len() as f64 - graph.nodes.len() as f64 + cc.components.len() as f64),
+        value: (graph.edges.len() as f64 - graph.nodes.len() as f64
+            + inputs.connected_components.components.len() as f64),
         kind: MetricKind::Count,
         dimension: "complexity".into(),
     });
-    if let Some(d) = stats.diameter {
+    if let Some(d) = inputs.graph_stats.diameter {
         metrics.push(Metric {
             name: "diameter".into(),
             value: d as f64,
@@ -115,7 +122,7 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
             dimension: "complexity".into(),
         });
     }
-    if let Some(avg) = stats.average_path_length {
+    if let Some(avg) = inputs.graph_stats.average_path_length {
         metrics.push(Metric {
             name: "average_path_length".into(),
             value: avg,
@@ -129,7 +136,7 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
     if total_edges > 0.0 {
         metrics.push(Metric {
             name: "redundant_edge_ratio".into(),
-            value: reduction.redundant_edges.len() as f64 / total_edges,
+            value: inputs.transitive_reduction.redundant_edges.len() as f64 / total_edges,
             kind: MetricKind::Ratio,
             dimension: "conciseness".into(),
         });
@@ -138,33 +145,35 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
     // Resilience
     metrics.push(Metric {
         name: "bridge_count".into(),
-        value: bridges.bridges.len() as f64,
+        value: inputs.bridges.bridges.len() as f64,
         kind: MetricKind::Count,
         dimension: "resilience".into(),
     });
     metrics.push(Metric {
         name: "cut_node_count".into(),
-        value: bridges.cut_vertices.len() as f64,
+        value: inputs.bridges.cut_vertices.len() as f64,
         kind: MetricKind::Count,
         dimension: "resilience".into(),
     });
 
     // Freshness
-    if change.has_lockfile {
+    if inputs.change_propagation.has_lockfile {
         metrics.push(Metric {
             name: "directly_changed_count".into(),
-            value: change.directly_changed.len() as f64,
+            value: inputs.change_propagation.directly_changed.len() as f64,
             kind: MetricKind::Count,
             dimension: "freshness".into(),
         });
         metrics.push(Metric {
             name: "transitively_stale_count".into(),
-            value: change.transitively_stale.len() as f64,
+            value: inputs.change_propagation.transitively_stale.len() as f64,
             kind: MetricKind::Count,
             dimension: "freshness".into(),
         });
         if total_nodes > 0.0 {
-            let stale = (change.directly_changed.len() + change.transitively_stale.len()) as f64;
+            let stale = (inputs.change_propagation.directly_changed.len()
+                + inputs.change_propagation.transitively_stale.len())
+                as f64;
             metrics.push(Metric {
                 name: "stale_ratio".into(),
                 value: stale / total_nodes,
@@ -175,8 +184,9 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
     }
 
     // PageRank concentration
-    if !pagerank.nodes.is_empty() {
-        let max = pagerank
+    if !inputs.pagerank.nodes.is_empty() {
+        let max = inputs
+            .pagerank
             .nodes
             .iter()
             .map(|n| n.score)
@@ -192,7 +202,7 @@ pub fn compute_metrics(ctx: &AnalysisContext, graph: &Graph) -> Vec<Metric> {
     // SCC
     metrics.push(Metric {
         name: "cycle_count".into(),
-        value: scc.nontrivial_count as f64,
+        value: inputs.scc.nontrivial_count as f64,
         kind: MetricKind::Count,
         dimension: "complexity".into(),
     });
