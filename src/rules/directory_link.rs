@@ -1,6 +1,7 @@
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
+/// See `docs/rules/directory-link.md` for details.
 pub struct DirectoryLinkRule;
 
 impl Rule for DirectoryLinkRule {

@@ -2,6 +2,7 @@ use crate::diagnostic::Diagnostic;
 use crate::graph::NodeType;
 use crate::rules::{Rule, RuleContext};
 
+/// See `docs/rules/broken-link.md` for details.
 pub struct BrokenLinkRule;
 
 impl Rule for BrokenLinkRule {

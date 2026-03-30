@@ -27,7 +27,7 @@ pub struct AnalysisContext<'a> {
 /// An analysis computes structured data about the graph.
 /// Rules consume analysis results and map them to diagnostics.
 /// Metrics extract scalar values from analysis results.
-/// See `docs/analyses/` for conceptual documentation on each analysis.
+/// See `docs/analyses/README.md` for conceptual documentation on each analysis.
 pub trait Analysis {
     type Output: serde::Serialize;
 

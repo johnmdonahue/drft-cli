@@ -15,6 +15,8 @@ use crate::graph::Graph;
 ///
 /// All fields except `message` are optional. The `rule` and `severity` fields
 /// are set by drft from the config — the script doesn't need to provide them.
+///
+/// See `docs/rules/script.md` for details.
 pub fn run_script_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let config_dir = config.config_dir.as_deref().unwrap_or(root);

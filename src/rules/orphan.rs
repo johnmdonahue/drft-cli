@@ -4,6 +4,7 @@ use crate::analyses::degree::Degree;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
+/// See `docs/rules/orphan.md` for details.
 pub struct OrphanRule;
 
 impl Rule for OrphanRule {

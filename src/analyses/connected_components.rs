@@ -13,6 +13,7 @@ pub struct ConnectedComponentsResult {
     pub components: Vec<Component>,
 }
 
+/// See `docs/analyses/connected-components.md` for details.
 pub struct ConnectedComponents;
 
 impl Analysis for ConnectedComponents {

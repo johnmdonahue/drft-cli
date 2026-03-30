@@ -4,6 +4,7 @@ use crate::analyses::bridges::Bridges;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
+/// See `docs/rules/fragility.md` for details.
 pub struct FragilityRule;
 
 impl Rule for FragilityRule {

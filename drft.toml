@@ -3,6 +3,11 @@
 [parsers]
 markdown = true
 
+[parsers.rust]
+glob = "*.rs"
+command = "./scripts/parse-rust-docs.sh"
+types = ["comment"]
+
 [rules]
 broken-link = "warn"
 cycle = "warn"

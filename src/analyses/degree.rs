@@ -12,6 +12,7 @@ pub struct DegreeResult {
     pub nodes: Vec<NodeDegree>,
 }
 
+/// See `docs/analyses/degree.md` for details.
 pub struct Degree;
 
 impl Analysis for Degree {

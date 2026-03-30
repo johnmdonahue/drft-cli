@@ -4,6 +4,7 @@ use crate::analyses::connected_components::ConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
+/// See `docs/rules/fragmentation.md` for details.
 pub struct FragmentationRule;
 
 impl Rule for FragmentationRule {
