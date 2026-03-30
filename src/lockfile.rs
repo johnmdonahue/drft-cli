@@ -5,8 +5,6 @@ use std::path::Path;
 
 use crate::graph::{Graph, NodeType};
 
-const SUPPORTED_LOCKFILE_VERSION: u32 = 2;
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LockfileInterface {
     pub nodes: Vec<String>,
@@ -68,30 +66,8 @@ impl Lockfile {
         toml::to_string_pretty(self).context("failed to serialize lockfile")
     }
 
-    /// Deserialize from TOML string. Rejects v1 lockfiles with a migration message.
+    /// Deserialize from TOML string.
     pub fn from_toml(content: &str) -> Result<Self> {
-        // Quick version check before full parse
-        #[derive(Deserialize)]
-        struct VersionOnly {
-            lockfile_version: u32,
-        }
-        let version_check: VersionOnly =
-            toml::from_str(content).context("failed to parse lockfile")?;
-
-        if version_check.lockfile_version < 2 {
-            anyhow::bail!(
-                "drft.lock is v{} format — delete it and run `drft lock` to upgrade to v2",
-                version_check.lockfile_version
-            );
-        }
-        if version_check.lockfile_version > SUPPORTED_LOCKFILE_VERSION {
-            anyhow::bail!(
-                "drft.lock version {} is not supported (max supported: {}). upgrade drft to read this lockfile",
-                version_check.lockfile_version,
-                SUPPORTED_LOCKFILE_VERSION
-            );
-        }
-
         let lockfile: Self = toml::from_str(content).context("failed to parse lockfile")?;
         Ok(lockfile)
     }
@@ -219,28 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_v1_lockfile() {
-        let toml = "lockfile_version = 1\n";
-        let result = Lockfile::from_toml(toml);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("delete it"), "should suggest deletion: {err}");
-    }
-
-    #[test]
-    fn rejects_future_lockfile_version() {
-        let toml = "lockfile_version = 99\n";
-        let result = Lockfile::from_toml(toml);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("not supported"),
-            "error should mention version: {err}"
-        );
-    }
-
-    #[test]
-    fn accepts_current_lockfile_version() {
+    fn parses_current_lockfile_version() {
         let toml = "lockfile_version = 2\n";
         let result = Lockfile::from_toml(toml);
         assert!(result.is_ok());
