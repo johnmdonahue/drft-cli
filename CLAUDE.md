@@ -6,6 +6,8 @@ A structural integrity checker for linked file systems. Treats a directory of fi
 
 This repo runs drft on itself (`drft.toml` at root). A PostToolUse hook runs `drft impact <file> --format json` after every `.md` and `.rs` file edit.
 
+**When planning changes, run `drft impact <files> --format json` on the files you intend to modify.** This shows the transitive dependency chain *before* you start editing. Document impacted files in the plan so the implementation accounts for downstream effects.
+
 **When the hook reports impacted files, STOP.** The output lists every file that transitively depends on the file you just edited. These are files whose content may now be out of date because of your change. Read each one and check whether it still accurately reflects the source it depends on.
 
 **Reviewing impacted files means reading them.** Check all content that could be affected by your change — not just prose, but code examples, JSON snippets, data structures, command invocations, and any content that mirrors or describes the file you changed. A doc that links to a source file is making a promise that its content reflects that source. When the source changes, verify the promise still holds.
