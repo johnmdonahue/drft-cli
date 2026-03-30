@@ -2,11 +2,11 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:74199c862a452473749e64b916bf294b2a2aac4a649115f40ca66d86abda0fdf"
+hash = "b3:815debf798d72114eb141553f54c618a9904a9a948739aaec95bfc8278ff124a"
 
 [nodes."CHANGELOG.md"]
 type = "source"
-hash = "b3:fa1e17f3709fea33172c69aca29686c849e2b0f731c97e79cf1c1ded1240ab97"
+hash = "b3:589ee07f003b7ec4ca5dac762b233cad6e2ce7a84944d49cca158153bb91700e"
 
 [nodes."CLAUDE.md"]
 type = "source"
@@ -18,7 +18,7 @@ hash = "b3:620bd26670ad54d4cc3dbf602e84fb3275883afa61f3acbe08564de12cdb3926"
 
 [nodes."README.md"]
 type = "source"
-hash = "b3:7f13532166c359552e7a4f289c4f9b59f81b7437717d4cc21969e2096ce3498c"
+hash = "b3:e69d5ec6674ed0d25bda9dfff3a0c5e18a99c4f42d4d9668b8f1b3149c35ecc2"
 
 [nodes."RELEASING.md"]
 type = "source"
@@ -90,27 +90,27 @@ hash = "b3:53c472cbb88f99c78adcb149b99c5e4624dbf545fafd1efa4ae6c030a9715a23"
 
 [nodes."docs/rules/README.md"]
 type = "source"
-hash = "b3:16cccef2afcb7cd30d03934f00287912509e4354cea127978461dbe9ce16b147"
+hash = "b3:62850d3e0e48da009a8bf0a4fd8bd360a2d9593b5f38fe6f2528d54813fb2a6e"
 
-[nodes."docs/rules/broken-link.md"]
+[nodes."docs/rules/boundary-violation.md"]
 type = "source"
-hash = "b3:b318b9d8966173637c56e4fe5d9ce835d04ae61fcae99224b29c95651056dda1"
+hash = "b3:26899675ef8502ffb6e3d4cea19dd0f292f226681ac7199dc9dbd111dacab452"
 
-[nodes."docs/rules/containment.md"]
+[nodes."docs/rules/dangling-edge.md"]
 type = "source"
-hash = "b3:b3f4795550f32f58d561e1c75ce776fdd7ca43a3f896305cad2a1eb1ba3fb65f"
+hash = "b3:b5592cba30e4394fc169e43636e45d29215322d979fa0e3c1e7b597bb888e9ad"
 
-[nodes."docs/rules/cycle.md"]
+[nodes."docs/rules/directed-cycle.md"]
 type = "source"
-hash = "b3:cd7213f79340d45e49d758617641acc348b4fe80768e6f4cd8695b6c05aa78ce"
+hash = "b3:356f8b6b9cf50d038e041e4bd252cbc3696eefaa8cc43e64552e77119c9ff794"
 
-[nodes."docs/rules/directory-link.md"]
+[nodes."docs/rules/directory-edge.md"]
 type = "source"
-hash = "b3:2986ad4046028266aec9af1906c436db462185b157bc9802bebfc5269174b28d"
+hash = "b3:cd37becd1446cd3be4fc407323f610d425173a4674a976691dce30e996c14b9b"
 
-[nodes."docs/rules/encapsulation.md"]
+[nodes."docs/rules/encapsulation-violation.md"]
 type = "source"
-hash = "b3:316b61ef97d15952a5625c26106c43ec5c5ec45177b7ccf16d0bcd0a30d635ca"
+hash = "b3:5a7c90f2dc9f99b02940d351ef9fa340029cb16a02a99ed7a97c9f58484c839b"
 
 [nodes."docs/rules/fragility.md"]
 type = "source"
@@ -120,17 +120,13 @@ hash = "b3:af521ef2bf526e520e74569f4c62d85b35583494b770165ee5b9f5bb6c97879f"
 type = "source"
 hash = "b3:d35ffd6c286ecef125a8d35c783645e364167cec73e916e57491d21fd0550303"
 
-[nodes."docs/rules/indirect-link.md"]
-type = "source"
-hash = "b3:962b7ec17e216036f3e1b6fde4a0e35cf1c7cd6e9ba8f9cbb090439d9a0a3e8a"
-
 [nodes."docs/rules/layer-violation.md"]
 type = "source"
 hash = "b3:8efa2190a71d3432eac7fca2f1bfd3a468356fcc0191c41d3166f8a7349ed57e"
 
-[nodes."docs/rules/orphan.md"]
+[nodes."docs/rules/orphan-node.md"]
 type = "source"
-hash = "b3:6190079384a4cf2c60b625e49417d0f7238a03e6f892d1539d99648f75dd1a89"
+hash = "b3:f162f780e03821cc31fea67526fd8c914bfdbea15f9ecfe725604e204e03e3ec"
 
 [nodes."docs/rules/redundant-edge.md"]
 type = "source"
@@ -143,6 +139,10 @@ hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
 [nodes."docs/rules/stale.md"]
 type = "source"
 hash = "b3:448380c216da4c8dfca2c50561ac26865b66b8d3cb083d1ac5ac4fdfd050a4e9"
+
+[nodes."docs/rules/symlink-edge.md"]
+type = "source"
+hash = "b3:fdbbbad0080859cdec4aebc9e7238fc15a5a89578530f84518ee2c99f7099824"
 
 [nodes."examples/README.md"]
 type = "source"
@@ -166,7 +166,7 @@ graph = "examples/custom-rules/"
 
 [nodes."examples/custom-rules/drft.toml"]
 type = "resource"
-hash = "b3:680da654aa960cb1155a1aad7ab14ab1f692bd691c831e0042b4b049001b3458"
+hash = "b3:48af7cb6cb3ee862a44b700862e8596835517d47323a30840f66380092f72598"
 graph = "examples/custom-rules/"
 
 [nodes."examples/cyclic/"]
@@ -296,11 +296,11 @@ hash = "b3:6b893e9286ee0969be16802658fcf0bb0ad7fa0cf7eed778fe7a7ace57dc6d5b"
 
 [nodes."src/config.rs"]
 type = "resource"
-hash = "b3:1c21c0bcf2cd9b60fa61a0ac3e07f5a6817f7a513e3aecbb0a3c69a199049b94"
+hash = "b3:aa976f3a488d67cdf377cb33742b4edc02e15d0b3764434e5f320538324e4dd9"
 
 [nodes."src/diagnostic.rs"]
 type = "resource"
-hash = "b3:df29671a042f0200bdfa7533a1f413d1ffc010cafd931ff1fab8aec2427dacaa"
+hash = "b3:1f505f9a49fce8e5362b67baaa379c83938e9c23e2b93e9a1b27ad21fb0b1d75"
 
 [nodes."src/discovery.rs"]
 type = "resource"
@@ -344,27 +344,27 @@ hash = "b3:bf0d51fa95905fc3ce466473ab35aadb2a845b234817b217e72a4a43f3774d9c"
 
 [nodes."src/rules/README.md"]
 type = "source"
-hash = "b3:f9ecf86c3b70e55450dcb6e597972e1832f1de9b54964d2763ab0ea29c976de4"
+hash = "b3:fdf8830caf848453cc5331501b5a04c7fc90c368af4bb0522151daa372464fc4"
 
-[nodes."src/rules/broken_link.rs"]
+[nodes."src/rules/boundary_violation.rs"]
 type = "resource"
-hash = "b3:b48c5ade2fa4fd4ba65962d68c2733c0bfeb0634cb2e02aa4aec048a5ba8545b"
+hash = "b3:9252a5e23136eb4458e3539094f425326df24fb02a134421486bac3702d36c5d"
 
-[nodes."src/rules/containment.rs"]
+[nodes."src/rules/dangling_edge.rs"]
 type = "resource"
-hash = "b3:919b3f53b3e3418e1ed89a757c36b7826c2fe02a2ee4ef4eeea481e2edd65c05"
+hash = "b3:a64a2dbdbc1abbccf52e56fa4b0dfb2f38e6490f7c1827010300f9190e0699ba"
 
-[nodes."src/rules/cycle.rs"]
+[nodes."src/rules/directed_cycle.rs"]
 type = "resource"
-hash = "b3:c0ef2515fc3fdadcf4ff9286fc8dd28ea8864e9cb71b403862365bd590bfab06"
+hash = "b3:81d1294842af7675ea45e1317c5b33ac5e13d31749741ea5bf64feb205b0ccfb"
 
-[nodes."src/rules/directory_link.rs"]
+[nodes."src/rules/directory_edge.rs"]
 type = "resource"
-hash = "b3:89228e9e28c7f4460830704abbba432f35101bfd1d1ac0c733fdb3b5c01f28bb"
+hash = "b3:050ca88b48c2b4923a2deb6e4e85c43437dae927dbce21bfa0125666d57d47c3"
 
-[nodes."src/rules/encapsulation.rs"]
+[nodes."src/rules/encapsulation_violation.rs"]
 type = "resource"
-hash = "b3:44eb03c25cc96225a4a781941e524439e6da9f9837c7b950bce7758754ff9827"
+hash = "b3:c3fa70c22b89756c34f42c12bc4ff38d14d15f3ff05cca46bd0789e8e9a92db3"
 
 [nodes."src/rules/fragility.rs"]
 type = "resource"
@@ -374,21 +374,17 @@ hash = "b3:df96c54f04fc0a2dbbdc04e18a178bfc5a951a78b44a23b45a21db76701a1672"
 type = "resource"
 hash = "b3:7e036d73968e2c21734e5a796f04f5dabd6c72f9ea0f72fb376545fabe5577e7"
 
-[nodes."src/rules/indirect_link.rs"]
-type = "resource"
-hash = "b3:5a0d06dffd2a4257d16d4a90136f0805179adb79b364eb2a492b0336929a17b1"
-
 [nodes."src/rules/layer_violation.rs"]
 type = "resource"
 hash = "b3:d8aaa6e139939ca2cabde2ab4cf4fdf1793bdd47c9b7130e3b8e513c52e045dd"
 
 [nodes."src/rules/mod.rs"]
 type = "resource"
-hash = "b3:da7340a7c8495dc5c852f3c334731dde729df54305b9cb7a5baff83b1d096e4e"
+hash = "b3:99d3f405b1176bef7b10d6a5b6baa295acce86a1287e48800cf540e97d4413e7"
 
-[nodes."src/rules/orphan.rs"]
+[nodes."src/rules/orphan_node.rs"]
 type = "resource"
-hash = "b3:e90eee2fe847dfa5a28212496f4dc91df555445c6eed7b0aa60c4e3d56d8559e"
+hash = "b3:a3a55a4dd9d6dab2b3b6a809ccb9cd798781d4433026c44e6f36b363abba1403"
 
 [nodes."src/rules/redundant_edge.rs"]
 type = "resource"
@@ -401,3 +397,7 @@ hash = "b3:2ed259a0183dea9a58e77928b0d6a348c2c48d46459c979d0ff7622887ea1f98"
 [nodes."src/rules/stale.rs"]
 type = "resource"
 hash = "b3:6e5a7fa38be46bd6ca5bd66040a86725c3518f4cfa8758b5bb81fb2d45d65f07"
+
+[nodes."src/rules/symlink_edge.rs"]
+type = "resource"
+hash = "b3:7130eee62e741e485cdbb3505054c463c9224dd4c04aefffcd7d9342028e23fb"

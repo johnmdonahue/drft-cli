@@ -1,6 +1,6 @@
-# indirect-link
+# symlink-edge
 
-Flags links whose target is a symlink rather than a regular file.
+Flags edges whose target is a symlink rather than a regular file.
 
 ## Example
 
@@ -11,7 +11,7 @@ docs/
 ```
 
 ```
-warn[indirect-link]: index.md -> setup.md (target is a symlink to ../shared/setup.md)
+warn[symlink-edge]: index.md -> setup.md (target is a symlink to ../shared/setup.md)
 ```
 
 The fix suggests linking to the actual file directly instead of going through the symlink.
@@ -20,11 +20,11 @@ The fix suggests linking to the actual file directly instead of going through th
 
 ```toml
 [rules]
-indirect-link = "warn"    # default
+symlink-edge = "warn"    # default
 ```
 
 ```toml
-[rules.indirect-link]
+[rules.symlink-edge]
 severity = "warn"
 ignore = []
 ```
@@ -35,4 +35,4 @@ This rule inspects the graph edges directly -- it does not consume a separate an
 
 ## Source
 
-[`src/rules/indirect_link.rs`](../../src/rules/indirect_link.rs)
+[`src/rules/symlink_edge.rs`](../../src/rules/symlink_edge.rs)

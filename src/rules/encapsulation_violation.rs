@@ -4,11 +4,11 @@ use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct EncapsulationRule;
+pub struct EncapsulationViolationRule;
 
-impl Rule for EncapsulationRule {
+impl Rule for EncapsulationViolationRule {
     fn name(&self) -> &str {
-        "encapsulation"
+        "encapsulation-violation"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -24,7 +24,7 @@ impl Rule for EncapsulationRule {
             .encapsulation_violations
             .iter()
             .map(|v| Diagnostic {
-                rule: "encapsulation".into(),
+                rule: "encapsulation-violation".into(),
                 message: format!("not in {}interface", v.graph),
                 source: Some(v.source.clone()),
                 target: Some(v.target.clone()),
@@ -132,7 +132,7 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = EncapsulationRule.evaluate(&ctx);
+        let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -163,9 +163,9 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = EncapsulationRule.evaluate(&ctx);
+        let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "encapsulation");
+        assert_eq!(diagnostics[0].rule, "encapsulation-violation");
         assert_eq!(
             diagnostics[0].target.as_deref(),
             Some("research/internal.md")

@@ -4,11 +4,11 @@ use crate::analyses::degree::Degree;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct OrphanRule;
+pub struct OrphanNodeRule;
 
-impl Rule for OrphanRule {
+impl Rule for OrphanNodeRule {
     fn name(&self) -> &str {
-        "orphan"
+        "orphan-node"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -25,7 +25,7 @@ impl Rule for OrphanRule {
             .iter()
             .filter(|nd| nd.in_degree == 0)
             .map(|nd| Diagnostic {
-                rule: "orphan".into(),
+                rule: "orphan-node".into(),
                 message: "no inbound links".into(),
                 node: Some(nd.node.clone()),
                 fix: Some(format!(
@@ -64,7 +64,7 @@ mod tests {
         graph.add_edge(make_edge("index.md", "setup.md"));
 
         let config = Config::defaults();
-        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
+        let diagnostics = OrphanNodeRule.evaluate(&make_ctx(&graph, &config));
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()
@@ -82,7 +82,7 @@ mod tests {
         graph.add_edge(make_edge("index.md", "setup.md"));
 
         let config = Config::defaults();
-        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
+        let diagnostics = OrphanNodeRule.evaluate(&make_ctx(&graph, &config));
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()

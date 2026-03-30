@@ -1,11 +1,12 @@
 use crate::diagnostic::Diagnostic;
+use crate::graph::NodeType;
 use crate::rules::{Rule, RuleContext};
 
-pub struct DirectoryLinkRule;
+pub struct DanglingEdgeRule;
 
-impl Rule for DirectoryLinkRule {
+impl Rule for DanglingEdgeRule {
     fn name(&self) -> &str {
-        "directory-link"
+        "dangling-edge"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -21,29 +22,57 @@ impl Rule for DirectoryLinkRule {
                     return None;
                 }
 
-                // If target is in the graph as a known node, skip
-                if graph.nodes.contains_key(&edge.target) {
-                    return None;
+                // If target exists in graph, it's valid
+                if let Some(node) = graph.nodes.get(&edge.target) {
+                    if node.node_type == NodeType::Graph {
+                        return None; // Frontier nodes are valid
+                    }
+                    // Check if target is a symlink (not broken)
+                    let target_path = root.join(&edge.target);
+                    if target_path.is_symlink() {
+                        return None; // Handled by symlink-edge rule
+                    }
+                    return None; // Valid
                 }
 
-                // Check if target is a directory on the filesystem
+                // Target not in graph — filesystem checks
                 let target_path = root.join(&edge.target);
+
+                if target_path.is_symlink() {
+                    return None; // Handled by symlink-edge rule
+                }
+
                 if target_path.is_dir() {
-                    Some(Diagnostic {
-                        rule: "directory-link".into(),
-                        message: "links to directory, not file".into(),
+                    return None; // Handled by directory-edge rule
+                }
+
+                if target_path.exists() {
+                    // File exists but was excluded by ignore pattern
+                    return Some(Diagnostic {
+                        rule: "dangling-edge".into(),
+                        message: "file excluded by ignore pattern".into(),
                         source: Some(edge.source.clone()),
                         target: Some(edge.target.clone()),
                         fix: Some(format!(
-                            "{}/ is a directory \u{2014} link to the specific file (e.g., {}/README.md)",
-                            edge.target.trim_end_matches('/'),
-                            edge.target.trim_end_matches('/')
+                            "{} exists but is excluded by an ignore pattern \u{2014} either remove the link from {} or update the ignore config",
+                            edge.target, edge.source
                         )),
                         ..Default::default()
-                    })
-                } else {
-                    None
+                    });
                 }
+
+                // Truly broken
+                Some(Diagnostic {
+                    rule: "dangling-edge".into(),
+                    message: "file not found".into(),
+                    source: Some(edge.source.clone()),
+                    target: Some(edge.target.clone()),
+                    fix: Some(format!(
+                        "{} does not exist \u{2014} either create it or update the link in {}",
+                        edge.target, edge.source
+                    )),
+                    ..Default::default()
+                })
             })
             .collect()
     }
@@ -69,12 +98,9 @@ mod tests {
     }
 
     #[test]
-    fn detects_directory_link() {
+    fn detects_dangling_edge() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "").unwrap();
-        let guides = dir.path().join("guides");
-        fs::create_dir(&guides).unwrap();
-        fs::write(guides.join("README.md"), "").unwrap();
 
         let mut graph = Graph::new();
         graph.add_node(Node {
@@ -85,21 +111,22 @@ mod tests {
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
-            target: "guides".into(),
+            target: "gone.md".into(),
             edge_type: EdgeType::new("markdown", "inline"),
             synthetic: false,
         });
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = DirectoryLinkRule.evaluate(&ctx);
+        let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "directory-link");
-        assert_eq!(diagnostics[0].target.as_deref(), Some("guides"));
+        assert_eq!(diagnostics[0].rule, "dangling-edge");
+        assert_eq!(diagnostics[0].source.as_deref(), Some("index.md"));
+        assert_eq!(diagnostics[0].target.as_deref(), Some("gone.md"));
     }
 
     #[test]
-    fn no_diagnostic_for_file_link() {
+    fn no_diagnostic_for_valid_link() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "").unwrap();
         fs::write(dir.path().join("setup.md"), "").unwrap();
@@ -126,7 +153,7 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = DirectoryLinkRule.evaluate(&ctx);
+        let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 }

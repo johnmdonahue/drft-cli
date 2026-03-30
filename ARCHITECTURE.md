@@ -154,18 +154,18 @@ pub struct RuleContext<'a> {
 
 | Rule | Source | Default severity |
 |------|-------|-----------------|
-| `broken-link` | graph | warn |
-| `containment` | analysis: `graph-boundaries` | warn |
-| `cycle` | analysis: `scc` | warn |
-| `directory-link` | graph | warn |
-| `encapsulation` | analysis: `graph-boundaries` | warn |
+| `boundary-violation` | analysis: `graph-boundaries` | warn |
+| `dangling-edge` | graph | warn |
+| `directed-cycle` | analysis: `scc` | warn |
+| `directory-edge` | graph | warn |
+| `encapsulation-violation` | analysis: `graph-boundaries` | warn |
 | `fragility` | analysis: `bridges` | warn |
 | `fragmentation` | analysis: `connected-components` | warn |
-| `indirect-link` | graph | warn |
 | `layer-violation` | analysis: `depth` | warn |
-| `orphan` | analysis: `degree` | warn |
+| `orphan-node` | analysis: `degree` | warn |
 | `redundant-edge` | analysis: `transitive-reduction` | warn |
 | `stale` | analysis: `change-propagation` | warn |
+| `symlink-edge` | graph | warn |
 
 All rules default to `warn` for immediate discoverability. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -217,10 +217,10 @@ glob = "*.tsx"
 command = "./scripts/parse-tsx.sh"
 
 [rules]
-broken-link = "warn"            # "error", "warn", or "off"
-orphan = "off"
+dangling-edge = "warn"          # "error", "warn", or "off"
+orphan-node = "off"
 
-[rules.orphan]                  # expanded: severity + ignore
+[rules.orphan-node]             # expanded: severity + ignore
 severity = "warn"
 ignore = ["README.md"]
 
@@ -229,7 +229,7 @@ command = "./scripts/check.sh"
 severity = "warn"
 ```
 
-Parsers and rules use the same config pattern. Shorthand (`markdown = true`, `cycle = "warn"`) for the common case. Table form (`[parsers.tsx]`, `[rules.orphan]`) for options or custom scripts. The `command` field is the discriminant -- present means custom, absent means built-in.
+Parsers and rules use the same config pattern. Shorthand (`markdown = true`, `directed-cycle = "warn"`) for the common case. Table form (`[parsers.tsx]`, `[rules.orphan-node]`) for options or custom scripts. The `command` field is the discriminant -- present means custom, absent means built-in.
 
 Rules are evaluated at the configured severity. `--rule <name>` on the command line overrides `off` to `warn` for on-demand checks without config changes.
 
@@ -266,18 +266,18 @@ src/
 ├── metrics.rs       Metric type, MetricKind, compute_metrics()
 ├── rules/
 │   ├── mod.rs       Rule trait, all_rules() registry
-│   ├── broken_link.rs
-│   ├── containment.rs
-│   ├── cycle.rs
-│   ├── directory_link.rs
-│   ├── encapsulation.rs
+│   ├── boundary_violation.rs
+│   ├── dangling_edge.rs
+│   ├── directed_cycle.rs
+│   ├── directory_edge.rs
+│   ├── encapsulation_violation.rs
 │   ├── fragility.rs
 │   ├── fragmentation.rs
-│   ├── indirect_link.rs
 │   ├── layer_violation.rs
-│   ├── orphan.rs
+│   ├── orphan_node.rs
 │   ├── redundant_edge.rs
 │   ├── stale.rs
+│   ├── symlink_edge.rs
 │   └── script.rs    Script-based rule runner
 tests/
 └── scenarios.rs     Integration tests

@@ -1,4 +1,4 @@
-# cycle
+# directed-cycle
 
 Flags circular dependencies between files.
 
@@ -12,7 +12,7 @@ docs/
 ```
 
 ```
-warn[cycle]: cycle detected (a.md -> b.md -> c.md -> a.md)
+warn[directed-cycle]: cycle detected (a.md -> b.md -> c.md -> a.md)
 ```
 
 Each strongly connected component with more than one member produces one diagnostic showing the cycle path.
@@ -21,11 +21,11 @@ Each strongly connected component with more than one member produces one diagnos
 
 ```toml
 [rules]
-cycle = "warn"    # default
+directed-cycle = "warn"    # default
 ```
 
 ```toml
-[rules.cycle]
+[rules.directed-cycle]
 severity = "warn"
 ignore = ["glossary.md"]
 ```
@@ -36,4 +36,4 @@ Powered by the [scc](../analyses/scc.md) (strongly connected components) analysi
 
 ## Source
 
-[`src/rules/cycle.rs`](../../src/rules/cycle.rs)
+[`src/rules/directed_cycle.rs`](../../src/rules/directed_cycle.rs)

@@ -1,6 +1,6 @@
-# containment
+# boundary-violation
 
-Flags links that escape the graph boundary (reach outside the directory tracked by `drft.lock`).
+Flags edges that escape the graph boundary (reach outside the directory tracked by `drft.lock`).
 
 ## Example
 
@@ -13,7 +13,7 @@ project/
 The graph has a lockfile, so linking outside it is a violation:
 
 ```
-warn[containment]: index.md -> ../notes.md (links outside graph boundary)
+warn[boundary-violation]: index.md -> ../notes.md (links outside graph boundary)
 ```
 
 This rule is vacuous if no `drft.lock` exists -- there is no boundary to enforce.
@@ -22,11 +22,11 @@ This rule is vacuous if no `drft.lock` exists -- there is no boundary to enforce
 
 ```toml
 [rules]
-containment = "warn"    # default
+boundary-violation = "warn"    # default
 ```
 
 ```toml
-[rules.containment]
+[rules.boundary-violation]
 severity = "warn"
 ignore = ["README.md"]
 ```
@@ -37,4 +37,4 @@ Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, whi
 
 ## Source
 
-[`src/rules/containment.rs`](../../src/rules/containment.rs)
+[`src/rules/boundary_violation.rs`](../../src/rules/boundary_violation.rs)

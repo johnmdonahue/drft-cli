@@ -38,14 +38,14 @@ drft discovers files, runs configurable parsers to extract links between them, a
 
 | Rule | Default | Description |
 |------|---------|-------------|
-| `broken-link` | warn | Link target does not exist |
-| `cycle` | warn | Circular dependency detected |
-| `directory-link` | warn | Link points to a directory, not a file |
+| `dangling-edge` | warn | Edge target does not exist |
+| `directed-cycle` | warn | Circular dependency detected |
+| `directory-edge` | warn | Edge points to a directory, not a file |
 | `stale` | error | Dependency changed since last lock |
-| `containment` | warn | Link escapes the graph boundary |
-| `encapsulation` | warn | Link reaches into a child graph's non-interface files |
-| `orphan` | off | File has no inbound links |
-| `indirect-link` | off | Link target is a symlink |
+| `boundary-violation` | warn | Edge escapes the graph boundary |
+| `encapsulation-violation` | warn | Edge reaches into a child graph's non-interface files |
+| `orphan-node` | off | Node has no inbound edges |
+| `symlink-edge` | off | Edge target is a symlink |
 
 See the [full documentation](docs/README.md) for details on parsers, analyses, and rules.
 
@@ -59,7 +59,7 @@ Validate the graph against all enabled rules.
 drft check                    # check current directory
 drft check -C path/to/docs   # check a different directory
 drft check --recursive        # include child graphs
-drft check --rule orphan      # run only specific rules
+drft check --rule orphan-node  # run only specific rules
 drft check --watch            # re-check on file changes
 drft check --format json      # machine-readable output
 ```
@@ -128,11 +128,11 @@ command = "./scripts/parse-tsx-links.sh"
 # Rule severities: "error", "warn", or "off"
 # Table form for per-rule options or custom rules
 [rules]
-broken-link = "error"
-cycle = "error"
+dangling-edge = "error"
+directed-cycle = "error"
 stale = "error"
 
-[rules.orphan]
+[rules.orphan-node]
 severity = "warn"
 ignore = ["README.md", "CLAUDE.md"]
 
@@ -168,15 +168,15 @@ Use `--recursive` to check or lock all graphs in one command. Use `[interface]` 
 Text format (default):
 
 ```
-error[broken-link]: index.md -> gone.md (file not found)
+error[dangling-edge]: index.md -> gone.md (file not found)
 error[stale]: index.md (stale via setup.md)
-warn[cycle]: cycle detected: a.md -> b.md -> c.md -> a.md
+warn[directed-cycle]: cycle detected: a.md -> b.md -> c.md -> a.md
 ```
 
 JSON format (`--format json`):
 
 ```json
-{"rule":"broken-link","severity":"error","source":"index.md","target":"gone.md","message":"file not found","fix":"gone.md does not exist -- either create it or update the link in index.md"}
+{"rule":"dangling-edge","severity":"error","source":"index.md","target":"gone.md","message":"file not found","fix":"gone.md does not exist -- either create it or update the link in index.md"}
 ```
 
 Every JSON diagnostic includes a `fix` field with actionable instructions.

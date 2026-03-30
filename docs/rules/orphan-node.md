@@ -1,6 +1,6 @@
-# orphan
+# orphan-node
 
-Flags files with no inbound links (in-degree = 0).
+Flags nodes with no inbound edges (in-degree = 0).
 
 ## Example
 
@@ -12,8 +12,8 @@ docs/
 ```
 
 ```
-warn[orphan]: stray.md (no inbound links)
-warn[orphan]: index.md (no inbound links)
+warn[orphan-node]: stray.md (no inbound links)
+warn[orphan-node]: index.md (no inbound links)
 ```
 
 Note that root entry points (like `index.md`) will also be flagged since they naturally have zero in-degree. Use the ignore list to suppress expected roots.
@@ -22,11 +22,11 @@ Note that root entry points (like `index.md`) will also be flagged since they na
 
 ```toml
 [rules]
-orphan = "warn"    # default
+orphan-node = "warn"    # default
 ```
 
 ```toml
-[rules.orphan]
+[rules.orphan-node]
 severity = "warn"
 ignore = ["index.md", "README.md"]
 ```
@@ -37,4 +37,4 @@ Powered by the [degree](../analyses/degree.md) analysis, which computes in-degre
 
 ## Source
 
-[`src/rules/orphan.rs`](../../src/rules/orphan.rs)
+[`src/rules/orphan_node.rs`](../../src/rules/orphan_node.rs)

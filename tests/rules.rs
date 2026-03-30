@@ -10,7 +10,7 @@ fn ignore_rules_suppresses_diagnostics() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules.orphan]\nseverity = \"warn\"\nignore = [\"README.md\"]\n",
+        "[rules.orphan-node]\nseverity = \"warn\"\nignore = [\"README.md\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("README.md"), "# Readme").unwrap();
@@ -266,9 +266,9 @@ fn fragmentation_rule_fires() {
 
 // ── Containment escape ─────────────────────────────────────────
 
-/// Issue #9: ../  links should trigger containment rule.
+/// Issue #9: ../  links should trigger boundary-violation rule.
 #[test]
-fn containment_catches_escape() {
+fn boundary_violation_catches_escape() {
     let dir = TempDir::new().unwrap();
     let child = dir.path().join("docs");
     fs::create_dir(&child).unwrap();
@@ -283,7 +283,7 @@ fn containment_catches_escape() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("containment"),
-        "expected containment violation for ../README.md, got: {stdout}"
+        stdout.contains("boundary-violation"),
+        "expected boundary-violation for ../README.md, got: {stdout}"
     );
 }

@@ -2,5 +2,5 @@
 markdown = true
 
 [rules]
-broken-link = "error"
-orphan = "warn"
+dangling-edge = "error"
+orphan-node = "warn"

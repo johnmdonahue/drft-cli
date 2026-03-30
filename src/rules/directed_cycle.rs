@@ -4,11 +4,11 @@ use crate::analyses::scc::StronglyConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct CycleRule;
+pub struct DirectedCycleRule;
 
-impl Rule for CycleRule {
+impl Rule for DirectedCycleRule {
     fn name(&self) -> &str {
-        "cycle"
+        "directed-cycle"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -35,7 +35,7 @@ impl Rule for CycleRule {
                 );
 
                 Diagnostic {
-                    rule: "cycle".into(),
+                    rule: "directed-cycle".into(),
                     message: "cycle detected".into(),
                     path: Some(path),
                     fix: Some(fix),
@@ -75,9 +75,9 @@ mod tests {
         graph.add_edge(make_edge("c.md", "a.md"));
 
         let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let diagnostics = DirectedCycleRule.evaluate(&make_ctx(&graph, &config));
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "cycle");
+        assert_eq!(diagnostics[0].rule, "directed-cycle");
 
         let path = diagnostics[0].path.as_ref().unwrap();
         assert_eq!(path.first(), path.last());
@@ -96,7 +96,7 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
 
         let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let diagnostics = DirectedCycleRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
@@ -107,7 +107,7 @@ mod tests {
         graph.add_edge(make_edge("a.md", "missing.md"));
 
         let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let diagnostics = DirectedCycleRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 }

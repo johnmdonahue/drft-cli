@@ -8,11 +8,11 @@ markdown = true
 
 # Rules: "error", "warn", or "off"
 [rules]
-broken-link = "warn"
-containment = "warn"
-cycle = "warn"
-directory-link = "warn"
-encapsulation = "warn"
-indirect-link = "off"
-orphan = "off"
+dangling-edge = "warn"
+boundary-violation = "warn"
+directed-cycle = "warn"
+directory-edge = "warn"
+encapsulation-violation = "warn"
+symlink-edge = "off"
+orphan-node = "off"
 stale = "warn"

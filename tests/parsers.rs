@@ -63,8 +63,8 @@ fn wikilinks_create_edges() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("broken-link"),
-        "broken wikilink should fire broken-link, got: {stdout}"
+        stdout.contains("dangling-edge"),
+        "broken wikilink should fire dangling-edge, got: {stdout}"
     );
 }
 

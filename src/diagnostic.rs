@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn text_format_edge_rule() {
         let d = Diagnostic {
-            rule: "broken-link".into(),
+            rule: "dangling-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -148,14 +148,14 @@ mod tests {
         };
         assert_eq!(
             d.format_text(),
-            "warn[broken-link]: index.md \u{2192} gone.md (file not found)"
+            "warn[dangling-edge]: index.md \u{2192} gone.md (file not found)"
         );
     }
 
     #[test]
     fn json_serialization() {
         let d = Diagnostic {
-            rule: "broken-link".into(),
+            rule: "dangling-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -163,7 +163,7 @@ mod tests {
             ..Default::default()
         };
         let json = serde_json::to_string(&d).unwrap();
-        assert!(json.contains("\"rule\":\"broken-link\""));
+        assert!(json.contains("\"rule\":\"dangling-edge\""));
         assert!(json.contains("\"severity\":\"warn\""));
         assert!(json.contains("\"source\":\"index.md\""));
         assert!(json.contains("\"target\":\"gone.md\""));
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn text_format_with_graph_prefix() {
         let d = Diagnostic {
-            rule: "orphan".into(),
+            rule: "orphan-node".into(),
             severity: RuleSeverity::Warn,
             message: "no inbound links".into(),
             node: Some("orphan.md".into()),
@@ -183,7 +183,7 @@ mod tests {
         // Scope is handled by the output loop, not format_text
         assert_eq!(
             d.format_text(),
-            "warn[orphan]: orphan.md (no inbound links)"
+            "warn[orphan-node]: orphan.md (no inbound links)"
         );
     }
 }

@@ -24,7 +24,7 @@ fn scenario_1_zero_setup_clean() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("broken-link"),
+        !stdout.contains("dangling-edge"),
         "expected no broken links, got: {stdout}"
     );
     assert!(
@@ -53,8 +53,8 @@ fn scenario_2_broken_link() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[broken-link]"),
-        "expected broken-link warning, got: {stdout}"
+        stdout.contains("warn[dangling-edge]"),
+        "expected dangling-edge warning, got: {stdout}"
     );
     assert!(
         stdout.contains("gone.md"),
@@ -90,8 +90,8 @@ fn scenario_2_broken_link_json() {
     let diagnostics = v["diagnostics"].as_array().unwrap();
     let broken = diagnostics
         .iter()
-        .find(|d| d["rule"] == "broken-link")
-        .expect("expected broken-link diagnostic");
+        .find(|d| d["rule"] == "dangling-edge")
+        .expect("expected dangling-edge diagnostic");
     assert_eq!(broken["severity"], "warn");
     assert_eq!(broken["source"], "index.md");
     assert_eq!(broken["target"], "gone.md");
@@ -106,7 +106,7 @@ fn scenario_3_broken_link_error_severity() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\nbroken-link = \"error\"\n",
+        "[rules]\ndangling-edge = \"error\"\n",
     )
     .unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
@@ -118,8 +118,8 @@ fn scenario_3_broken_link_error_severity() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("error[broken-link]"),
-        "expected error-level broken-link, got: {stdout}"
+        stdout.contains("error[dangling-edge]"),
+        "expected error-level dangling-edge, got: {stdout}"
     );
     assert_eq!(output.status.code(), Some(1), "expected exit code 1");
 }
@@ -140,7 +140,7 @@ fn scenario_4_cycle_detection() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[cycle]"),
+        stdout.contains("warn[directed-cycle]"),
         "expected cycle warning, got: {stdout}"
     );
     assert!(
@@ -160,7 +160,7 @@ fn scenario_4_cycle_detection() {
 /// Scenario 20: Directory links.
 /// A link to a directory should warn.
 #[test]
-fn scenario_20_directory_link() {
+fn scenario_20_directory_edge() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.md"), "[guides](guides/)").unwrap();
     let guides = dir.path().join("guides");
@@ -174,8 +174,8 @@ fn scenario_20_directory_link() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[directory-link]"),
-        "expected directory-link warning, got: {stdout}"
+        stdout.contains("warn[directory-edge]"),
+        "expected directory-edge warning, got: {stdout}"
     );
     assert!(
         stdout.contains("guides"),
@@ -209,7 +209,7 @@ fn scenario_23_orphan_warn_by_default() {
 #[test]
 fn scenario_7b_orphan_enabled() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"warn\"\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"warn\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
@@ -221,8 +221,8 @@ fn scenario_7b_orphan_enabled() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[orphan]: orphan.md (no inbound links)"),
-        "expected orphan warning for orphan.md, got: {stdout}"
+        stdout.contains("warn[orphan-node]: orphan.md (no inbound links)"),
+        "expected orphan-node warning for orphan.md, got: {stdout}"
     );
     assert!(output.status.success());
 }
@@ -232,18 +232,18 @@ fn scenario_7b_orphan_enabled() {
 #[test]
 fn scenario_29_rule_filtering() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"warn\"\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"warn\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 
-    // Only run orphan rule — broken-link should not appear
+    // Only run orphan-node rule — dangling-edge should not appear
     let output = drft_bin()
         .args([
             "-C",
             dir.path().to_str().unwrap(),
             "check",
             "--rule",
-            "orphan",
+            "orphan-node",
         ])
         .output()
         .unwrap();
@@ -254,8 +254,8 @@ fn scenario_29_rule_filtering() {
         "orphan rule should run, got: {stdout}"
     );
     assert!(
-        !stdout.contains("broken-link"),
-        "broken-link should not run when --rule orphan is specified"
+        !stdout.contains("dangling-edge"),
+        "dangling-edge should not run when --rule orphan-node is specified"
     );
     assert!(output.status.success());
 }
@@ -265,7 +265,7 @@ fn scenario_29_rule_filtering() {
 fn rule_flag_overrides_off_to_warn() {
     let dir = TempDir::new().unwrap();
     // Explicitly disable orphan in config
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 
@@ -275,14 +275,14 @@ fn rule_flag_overrides_off_to_warn() {
             dir.path().to_str().unwrap(),
             "check",
             "--rule",
-            "orphan",
+            "orphan-node",
         ])
         .output()
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[orphan]"),
+        stdout.contains("warn[orphan-node]"),
         "orphan should run at warn when specified via --rule, got: {stdout}"
     );
     assert!(output.status.success());

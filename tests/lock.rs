@@ -72,7 +72,7 @@ fn scenario_6_staleness_after_edit() {
     assert!(output.status.success(), "warnings should exit 0");
 }
 
-/// Scenario 7a: File removed — both broken-link and stale fire.
+/// Scenario 7a: File removed — both dangling-edge and stale fire.
 #[test]
 fn scenario_7a_file_removed() {
     let dir = TempDir::new().unwrap();
@@ -95,8 +95,8 @@ fn scenario_7a_file_removed() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("broken-link"),
-        "expected broken-link warning, got: {stdout}"
+        stdout.contains("dangling-edge"),
+        "expected dangling-edge warning, got: {stdout}"
     );
     assert!(
         stdout.contains("stale"),

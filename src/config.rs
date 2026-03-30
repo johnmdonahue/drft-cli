@@ -155,18 +155,18 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
-    "broken-link",
-    "containment",
-    "cycle",
-    "directory-link",
-    "encapsulation",
+    "boundary-violation",
+    "dangling-edge",
+    "directed-cycle",
+    "directory-edge",
+    "encapsulation-violation",
     "fragility",
     "fragmentation",
-    "indirect-link",
     "layer-violation",
-    "orphan",
+    "orphan-node",
     "redundant-edge",
     "stale",
+    "symlink-edge",
 ];
 
 impl Config {
@@ -184,18 +184,18 @@ impl Config {
         );
 
         let rules = [
-            ("broken-link", RuleSeverity::Warn),
-            ("containment", RuleSeverity::Warn),
-            ("cycle", RuleSeverity::Warn),
-            ("directory-link", RuleSeverity::Warn),
-            ("encapsulation", RuleSeverity::Warn),
+            ("boundary-violation", RuleSeverity::Warn),
+            ("dangling-edge", RuleSeverity::Warn),
+            ("directed-cycle", RuleSeverity::Warn),
+            ("directory-edge", RuleSeverity::Warn),
+            ("encapsulation-violation", RuleSeverity::Warn),
             ("fragility", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
-            ("indirect-link", RuleSeverity::Warn),
             ("layer-violation", RuleSeverity::Warn),
-            ("orphan", RuleSeverity::Warn),
+            ("orphan-node", RuleSeverity::Warn),
             ("redundant-edge", RuleSeverity::Warn),
             ("stale", RuleSeverity::Warn),
+            ("symlink-edge", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -377,8 +377,8 @@ mod tests {
     fn defaults_when_no_config() {
         let dir = TempDir::new().unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("broken-link"), RuleSeverity::Warn);
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Warn);
+        assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Warn);
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
         assert!(config.ignore.is_empty());
         assert!(config.parsers.contains_key("markdown"));
     }
@@ -388,13 +388,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\nbroken-link = \"error\"\norphan = \"warn\"\n",
+            "[rules]\ndangling-edge = \"error\"\norphan-node = \"warn\"\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("broken-link"), RuleSeverity::Error);
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Warn);
-        assert_eq!(config.rule_severity("cycle"), RuleSeverity::Warn);
+        assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Error);
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
+        assert_eq!(config.rule_severity("directed-cycle"), RuleSeverity::Warn);
     }
 
     #[test]
@@ -402,15 +402,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules.orphan]\nseverity = \"warn\"\nignore = [\"README.md\", \"index.md\"]\n",
+            "[rules.orphan-node]\nseverity = \"warn\"\nignore = [\"README.md\", \"index.md\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Warn);
-        assert!(config.is_rule_ignored("orphan", "README.md"));
-        assert!(config.is_rule_ignored("orphan", "index.md"));
-        assert!(!config.is_rule_ignored("orphan", "other.md"));
-        assert!(!config.is_rule_ignored("broken-link", "README.md"));
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
+        assert!(config.is_rule_ignored("orphan-node", "README.md"));
+        assert!(config.is_rule_ignored("orphan-node", "index.md"));
+        assert!(!config.is_rule_ignored("orphan-node", "other.md"));
+        assert!(!config.is_rule_ignored("dangling-edge", "README.md"));
     }
 
     #[test]
@@ -508,7 +508,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\norphan = \"error\"\n",
+            "[rules]\norphan-node = \"error\"\n",
         )
         .unwrap();
 
@@ -516,7 +516,7 @@ mod tests {
         fs::create_dir(&child).unwrap();
 
         let config = Config::load(&child).unwrap();
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Error);
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Error);
     }
 
     #[test]
@@ -524,15 +524,15 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\norphan = \"error\"\n",
+            "[rules]\norphan-node = \"error\"\n",
         )
         .unwrap();
 
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
-        fs::write(child.join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
+        fs::write(child.join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
 
         let config = Config::load(&child).unwrap();
-        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Off);
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Off);
     }
 }

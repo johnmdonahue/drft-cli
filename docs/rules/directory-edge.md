@@ -1,6 +1,6 @@
-# directory-link
+# directory-edge
 
-Flags links that point to a directory instead of a specific file.
+Flags edges that point to a directory instead of a specific file.
 
 ## Example
 
@@ -13,7 +13,7 @@ docs/
 ```
 
 ```
-warn[directory-link]: index.md -> guides (links to directory, not file)
+warn[directory-edge]: index.md -> guides (links to directory, not file)
 ```
 
 The fix suggestion recommends linking to a specific file, e.g. `guides/README.md`.
@@ -22,11 +22,11 @@ The fix suggestion recommends linking to a specific file, e.g. `guides/README.md
 
 ```toml
 [rules]
-directory-link = "warn"    # default
+directory-edge = "warn"    # default
 ```
 
 ```toml
-[rules.directory-link]
+[rules.directory-edge]
 severity = "warn"
 ignore = []
 ```
@@ -37,4 +37,4 @@ This rule inspects the graph edges directly -- it does not consume a separate an
 
 ## Source
 
-[`src/rules/directory_link.rs`](../../src/rules/directory_link.rs)
+[`src/rules/directory_edge.rs`](../../src/rules/directory_edge.rs)

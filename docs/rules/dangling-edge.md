@@ -1,6 +1,6 @@
-# broken-link
+# dangling-edge
 
-Flags links whose target file does not exist.
+Flags edges whose target node does not exist.
 
 ## Example
 
@@ -12,7 +12,7 @@ docs/
 `setup.md` doesn't exist, so `drft check` reports:
 
 ```
-warn[broken-link]: index.md -> setup.md (file not found)
+warn[dangling-edge]: index.md -> setup.md (file not found)
 ```
 
 If the target file exists but is excluded by an ignore pattern, the diagnostic says "file excluded by ignore pattern" instead.
@@ -21,11 +21,11 @@ If the target file exists but is excluded by an ignore pattern, the diagnostic s
 
 ```toml
 [rules]
-broken-link = "warn"    # default
+dangling-edge = "warn"    # default
 ```
 
 ```toml
-[rules.broken-link]
+[rules.dangling-edge]
 severity = "warn"
 ignore = ["drafts/"]
 ```
@@ -36,4 +36,4 @@ This rule inspects the graph edges directly -- it does not consume a separate an
 
 ## Source
 
-[`src/rules/broken_link.rs`](../../src/rules/broken_link.rs)
+[`src/rules/dangling_edge.rs`](../../src/rules/dangling_edge.rs)

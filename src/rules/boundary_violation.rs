@@ -4,11 +4,11 @@ use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct ContainmentRule;
+pub struct BoundaryViolationRule;
 
-impl Rule for ContainmentRule {
+impl Rule for BoundaryViolationRule {
     fn name(&self) -> &str {
-        "containment"
+        "boundary-violation"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -28,7 +28,7 @@ impl Rule for ContainmentRule {
             .escapes
             .iter()
             .map(|e| Diagnostic {
-                rule: "containment".into(),
+                rule: "boundary-violation".into(),
                 message: "links outside graph boundary".into(),
                 source: Some(e.source.clone()),
                 target: Some(e.target.clone()),
@@ -82,9 +82,9 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = ContainmentRule.evaluate(&ctx);
+        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "containment");
+        assert_eq!(diagnostics[0].rule, "boundary-violation");
         assert_eq!(diagnostics[0].target.as_deref(), Some("../README.md"));
     }
 
@@ -109,7 +109,7 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = ContainmentRule.evaluate(&ctx);
+        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
 
@@ -134,7 +134,7 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = ContainmentRule.evaluate(&ctx);
+        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -152,7 +152,7 @@ mod tests {
 
         let config = Config::defaults();
         let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = ContainmentRule.evaluate(&ctx);
+        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(
             diagnostics.is_empty(),
             "no lockfile means no boundary to enforce"

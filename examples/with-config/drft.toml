@@ -4,6 +4,6 @@ ignore = ["drafts/*"]
 markdown = true
 
 [rules]
-broken-link = "error"
-cycle = "error"
-orphan = "warn"
+dangling-edge = "error"
+directed-cycle = "error"
+orphan-node = "warn"

@@ -40,7 +40,7 @@ fn scenario_10_child_graph_open() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("encapsulation"),
+        !stdout.contains("encapsulation-violation"),
         "open graph (no interface) should not trigger encapsulation"
     );
     assert!(output.status.success());
@@ -86,8 +86,8 @@ fn scenario_12_encapsulation_violation() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("encapsulation"),
-        "expected encapsulation violation, got: {stdout}"
+        stdout.contains("encapsulation-violation"),
+        "expected encapsulation-violation, got: {stdout}"
     );
     assert!(
         stdout.contains("research/internal.md"),
@@ -136,12 +136,12 @@ fn recursive_lock() {
 fn recursive_check_with_child_config() {
     let dir = TempDir::new().unwrap();
     // Parent disables orphan so only child's config triggers it
-    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "# Root").unwrap();
 
     let child = dir.path().join("child");
     fs::create_dir(&child).unwrap();
-    fs::write(child.join("drft.toml"), "[rules]\norphan = \"warn\"\n").unwrap();
+    fs::write(child.join("drft.toml"), "[rules]\norphan-node = \"warn\"\n").unwrap();
     fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
     fs::write(child.join("linked.md"), "# Linked").unwrap();
     fs::write(child.join("orphan.md"), "# Orphan").unwrap();
