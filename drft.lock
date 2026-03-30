@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "source"
-hash = "b3:e8cb89742cd3b87bd8e20c3e9e0ec9df8d48d4c86fa9ae03f7d8cc7a4a770915"
+hash = "b3:62fd21ec21b1b2578c3dac85c72bf7b0e5dabe2413998ff4aee12081bc07a50c"
 
 [nodes."CHANGELOG.md"]
 type = "source"
@@ -18,7 +18,7 @@ hash = "b3:620bd26670ad54d4cc3dbf602e84fb3275883afa61f3acbe08564de12cdb3926"
 
 [nodes."README.md"]
 type = "source"
-hash = "b3:ae4ef08b3ed31f8acdfeb34650c4748e657e137db5232df79e5c419348cd4317"
+hash = "b3:035cb1ba82bd91e240d744902346525f0908efd7e5d8ae523ed4c66d64261003"
 
 [nodes."RELEASING.md"]
 type = "source"
@@ -90,7 +90,7 @@ hash = "b3:760a4ecc396697fbb3c65f869f64e4a85aa5a162cefd7fc1cfe22627907906df"
 
 [nodes."docs/rules/README.md"]
 type = "source"
-hash = "b3:824a71dd9680c60e68aa08d3a91633a748a2d902f22438f4ea5406543867a089"
+hash = "b3:788958f8145bbea55921632dc41f00480ec48aedb2fb95fd7467f952f94d2e4e"
 
 [nodes."docs/rules/broken-link.md"]
 type = "source"
@@ -142,7 +142,7 @@ hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
 
 [nodes."docs/rules/stale.md"]
 type = "source"
-hash = "b3:448380c216da4c8dfca2c50561ac26865b66b8d3cb083d1ac5ac4fdfd050a4e9"
+hash = "b3:50aed9cb33e90ab7ef6830de68750b1d22369cd9ac828506d1d9006e843237b3"
 
 [nodes."examples/README.md"]
 type = "source"
@@ -288,7 +288,7 @@ hash = "b3:b662f1cf67b3ae80babbaf148088c02cc65be827ab1ca20bc5dc53374c07c67e"
 
 [nodes."src/config.rs"]
 type = "source"
-hash = "b3:a31d062e63ac7a452d260ac83e805b25b5aadc3a56a6c39aa3ec140600df531b"
+hash = "b3:24f3cb7fb3cf75ba4e546d8b0cec29220ec9cf2ec869f49bb83dfe1ddc6f5907"
 
 [nodes."src/diagnostic.rs"]
 type = "source"
@@ -308,7 +308,7 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:d9a9e5949d6061bf1e9e3fb05dd71650bcaedc402cea0637a67c01f463a83059"
+hash = "b3:f25497b66a8f99aae6abf33ede6413d8b3d28e0d90112d0533933149908e4230"
 
 [nodes."src/metrics.rs"]
 type = "source"

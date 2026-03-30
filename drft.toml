@@ -11,6 +11,6 @@ types = ["comment"]
 [rules]
 broken-link = "warn"
 cycle = "warn"
-stale = "warn"
+stale = "error"
 containment = "warn"
 encapsulation = "warn"

@@ -59,10 +59,10 @@ fn scenario_6_staleness_after_edit() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[stale]: index.md (stale via setup.md)"),
-        "expected stale warning, got: {stdout}"
+        stdout.contains("error[stale]: index.md (stale via setup.md)"),
+        "expected stale error, got: {stdout}"
     );
-    assert!(output.status.success(), "expected exit 0 (warning only)");
+    assert!(!output.status.success(), "expected exit 1 (stale is error)");
 }
 
 /// Scenario 7a: File removed — both broken-link and stale fire.
@@ -93,9 +93,9 @@ fn scenario_7a_file_removed() {
     );
     assert!(
         stdout.contains("stale"),
-        "expected stale warning, got: {stdout}"
+        "expected stale error, got: {stdout}"
     );
-    assert!(output.status.success());
+    assert!(!output.status.success(), "expected exit 1 (stale is error)");
 }
 
 // ── drft lock --check ──────────────────────────────────────────

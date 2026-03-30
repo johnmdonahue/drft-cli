@@ -132,7 +132,7 @@ markdown = true
 [rules]
 broken-link = "warn"
 cycle = "warn"
-stale = "warn"
+stale = "error"
 "#,
     );
 

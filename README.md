@@ -41,7 +41,7 @@ drft discovers files, runs configurable parsers to extract links between them, a
 | `broken-link` | warn | Link target does not exist |
 | `cycle` | warn | Circular dependency detected |
 | `directory-link` | warn | Link points to a directory, not a file |
-| `stale` | warn | Dependency changed since last lock |
+| `stale` | error | Dependency changed since last lock |
 | `containment` | warn | Link escapes the graph boundary |
 | `encapsulation` | warn | Link reaches into a child graph's non-interface files |
 | `orphan` | off | File has no inbound links |
@@ -130,7 +130,7 @@ command = "./scripts/parse-tsx-links.sh"
 [rules]
 broken-link = "error"
 cycle = "error"
-stale = "warn"
+stale = "error"
 
 [rules.orphan]
 severity = "warn"
@@ -169,7 +169,7 @@ Text format (default):
 
 ```
 error[broken-link]: index.md -> gone.md (file not found)
-warn[stale]: index.md (stale via setup.md)
+error[stale]: index.md (stale via setup.md)
 warn[cycle]: cycle detected: a.md -> b.md -> c.md -> a.md
 ```
 

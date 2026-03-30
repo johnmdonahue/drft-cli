@@ -26,7 +26,7 @@ fragility = "off"
 | [layer-violation](layer-violation.md) | off | Upward or skip-layer links in the depth hierarchy | [depth](../analyses/depth.md) |
 | [orphan](orphan.md) | off | Files with no inbound links | [degree](../analyses/degree.md) |
 | [redundant-edge](redundant-edge.md) | off | Direct links that are transitively redundant | [transitive-reduction](../analyses/transitive-reduction.md) |
-| [stale](stale.md) | warn | Files whose content has changed since the last lock | [change-propagation](../analyses/change-propagation.md) |
+| [stale](stale.md) | error | Files whose content has changed since the last lock | [change-propagation](../analyses/change-propagation.md) |
 
 ## Script rules
 

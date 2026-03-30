@@ -197,7 +197,7 @@ impl Config {
             ("layer-violation", RuleSeverity::Off),
             ("orphan", RuleSeverity::Off),
             ("redundant-edge", RuleSeverity::Off),
-            ("stale", RuleSeverity::Warn),
+            ("stale", RuleSeverity::Error),
         ]
         .into_iter()
         .map(|(k, v)| {

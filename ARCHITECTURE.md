@@ -165,9 +165,9 @@ pub struct RuleContext<'a> {
 | `layer-violation` | analysis: `depth` | off |
 | `orphan` | analysis: `degree` | off |
 | `redundant-edge` | analysis: `transitive-reduction` | off |
-| `stale` | analysis: `change-propagation` | warn |
+| `stale` | analysis: `change-propagation` | error |
 
-Rules default to `off` when they report structural insights (fragility, fragmentation, orphan, etc.) vs. `warn` when they report likely errors (broken links, cycles, staleness).
+Rules default to `off` when they report structural insights (fragility, fragmentation, orphan, etc.) vs. `warn`/`error` when they report likely errors (broken links, cycles, staleness).
 
 ## Graph nesting
 

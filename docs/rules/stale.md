@@ -22,7 +22,7 @@ The rule also detects graph boundary changes (new or removed child graphs). It i
 
 ```toml
 [rules]
-stale = "warn"    # default
+stale = "error"   # default
 ```
 
 ```toml
