@@ -1,16 +1,12 @@
-// TODO: Remove these allows after Phase 6 re-wires the analysis/metrics pipeline
-#[allow(dead_code)]
-mod analyses;
 mod cli;
-mod config;
-mod diagnostic;
-mod discovery;
-mod graph;
-mod lockfile;
-#[allow(dead_code)]
-mod metrics;
-mod parsers;
-mod rules;
+
+use drft::analyses;
+use drft::config;
+use drft::diagnostic;
+use drft::graph;
+use drft::lockfile;
+use drft::metrics;
+use drft::rules;
 
 use anyhow::{Context, Result};
 use clap::Parser;

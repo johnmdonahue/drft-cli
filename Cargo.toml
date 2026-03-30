@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["graph", "linter", "dependency-graph", "structural-integrity"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "drft"
+path = "src/lib.rs"
+
 [[bin]]
 name = "drft"
 path = "src/main.rs"
@@ -30,6 +34,11 @@ notify-debouncer-mini = "0.5"
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "pipeline"
+harness = false
 
 # The profile that 'dist' will build with
 [profile.dist]

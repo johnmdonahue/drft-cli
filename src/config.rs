@@ -77,8 +77,6 @@ impl From<RawParserValue> for Option<ParserConfig> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct InterfaceConfig {
-    // TODO: Used in Phase 5 when graph construction resolves interface globs
-    #[allow(dead_code)]
     pub nodes: Vec<String>,
 }
 

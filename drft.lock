@@ -24,6 +24,10 @@ hash = "b3:035cb1ba82bd91e240d744902346525f0908efd7e5d8ae523ed4c66d64261003"
 type = "source"
 hash = "b3:0147dd639f4aa5f96adaa158c86dad145de1a8ea69eeb549cf39619582bee90e"
 
+[nodes."benches/pipeline.rs"]
+type = "source"
+hash = "b3:6de0b26a30e9dfe1e9b751d73a19c4d20e992cea01290036e0f724ad4931880a"
+
 [nodes."docs/README.md"]
 type = "source"
 hash = "b3:7ca093184a3be8b8d24f11b61c433db3da1cd38f557ef71553a23768c75ad057"
@@ -146,7 +150,7 @@ hash = "b3:50aed9cb33e90ab7ef6830de68750b1d22369cd9ac828506d1d9006e843237b3"
 
 [nodes."examples/README.md"]
 type = "source"
-hash = "b3:cf7afcda2681ce8d4b8ab8a061584781aa7df6c475d3621c98133aaa9aaaf515"
+hash = "b3:e146412063d47b153c82144e4bf80f5b2327de625179a0b5b1ad3663ddff82ae"
 
 [nodes."examples/broken/"]
 type = "graph"
@@ -288,7 +292,7 @@ hash = "b3:b662f1cf67b3ae80babbaf148088c02cc65be827ab1ca20bc5dc53374c07c67e"
 
 [nodes."src/config.rs"]
 type = "source"
-hash = "b3:24f3cb7fb3cf75ba4e546d8b0cec29220ec9cf2ec869f49bb83dfe1ddc6f5907"
+hash = "b3:d5f0e5a547770885a13b1d79632e9885204ef4266a316057eb94f4537c48ecc2"
 
 [nodes."src/diagnostic.rs"]
 type = "source"
@@ -302,13 +306,17 @@ hash = "b3:bbd954d91ac369f40886ab9a444d7d66762e7541634c5c8b1c939ee3f20c413f"
 type = "source"
 hash = "b3:8133b19cce2ead901e3eb2d0d946e814d18c02fb0977e64ba73589549c21a911"
 
+[nodes."src/lib.rs"]
+type = "source"
+hash = "b3:4f687059fe439b13e542d5cd3265f647e49eb71067a65cf9119250acbcf43834"
+
 [nodes."src/lockfile.rs"]
 type = "source"
 hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:f25497b66a8f99aae6abf33ede6413d8b3d28e0d90112d0533933149908e4230"
+hash = "b3:85fe1f6435e9098778bf99d31a57f92690679441f2df3bed9b70f6a19c2749f3"
 
 [nodes."src/metrics.rs"]
 type = "source"
@@ -412,7 +420,7 @@ hash = "b3:e5407771a501b6acad778a725dcef63dd37b224cb629c867e793ca694e8ae6ed"
 
 [nodes."tests/lock.rs"]
 type = "source"
-hash = "b3:32c40afb7f6c95bb5c16f7aa4ad87a8c5bea372c104905568a5409f87e18582a"
+hash = "b3:57597760f9e080009e23b586f77b686154f0bb3af926fa575414adeee6ae9b3f"
 
 [nodes."tests/output.rs"]
 type = "source"
