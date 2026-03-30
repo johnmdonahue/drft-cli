@@ -76,34 +76,6 @@ hash = "b3:380148218c2573407edccd6f78d346158994d86899137b2a9a6e56b98f9e7c09"
 type = "source"
 hash = "b3:4d0ff90d26197183a19dad530e063ce18bfc5aa3497e1e2fbd350b84e899cc7f"
 
-[nodes."examples/broken/"]
-type = "graph"
-hash = "b3:7a3bc3a6250633d7165e2e784d1aa7cb24a2614875d5838cc1813dd448b6d87c"
-
-[nodes."examples/custom-rules/"]
-type = "graph"
-hash = "b3:ad5b6fa19f364bccd2a2dc47156f37bc8d32584508dc27175c7c2bb3c57e1207"
-
-[nodes."examples/cyclic/"]
-type = "graph"
-hash = "b3:c97fa869906887cae5961525ee5f697f3e028ce3696011bdf7a3984ac1f091fe"
-
-[nodes."examples/monorepo/"]
-type = "graph"
-hash = "b3:ae74b2f2152b743b7666b20f33d1c0825e2c83b4c2e66e82d5a046d33500f24a"
-
-[nodes."examples/simple/"]
-type = "graph"
-hash = "b3:66ab3959b3d87691fa3889403446cc725ea243f4b99157febf40bf0bf0d18aa0"
-
-[nodes."examples/with-assets/"]
-type = "graph"
-hash = "b3:b13427025164225a155aea4b08cff35392821241f392f2453968d1703d04cac3"
-
-[nodes."examples/with-config/"]
-type = "graph"
-hash = "b3:dd2e3f3cafda0b338a72fcd3aec30a928ed7aeac017673577cec6eb144d3a2bb"
-
 [nodes."https://en.wikipedia.org/wiki/Betweenness_centrality#Brandes'_algorithm"]
 type = "external"
 

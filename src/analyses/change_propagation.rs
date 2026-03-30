@@ -82,7 +82,7 @@ impl Analysis for ChangePropagation {
 
         // Boundary changes
         let mut boundary_changes = Vec::new();
-        let current_scopes: HashSet<String> = find_child_scopes(root)
+        let current_scopes: HashSet<String> = find_child_scopes(root, &ctx.config.ignore)
             .unwrap_or_default()
             .into_iter()
             .collect();

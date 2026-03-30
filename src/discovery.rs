@@ -65,11 +65,21 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
     Ok(files)
 }
 
-/// Find child scope directories (those containing `drft.lock`) under `root`.
+/// Find child scope directories (those containing `drft.lock` or `drft.toml`) under `root`.
 /// Returns relative paths with trailing slash (e.g., `"research/"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
-/// Respects `.gitignore` to avoid walking ignored directories.
-pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
+/// Respects `.gitignore` and `ignore_patterns` from config.
+pub fn find_child_scopes(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
+    let ignore_set = if ignore_patterns.is_empty() {
+        None
+    } else {
+        let mut builder = GlobSetBuilder::new();
+        for pattern in ignore_patterns {
+            builder.add(Glob::new(pattern)?);
+        }
+        Some(builder.build()?)
+    };
+
     let mut scopes = Vec::new();
     let root_owned = root.to_path_buf();
 
@@ -116,6 +126,13 @@ pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
         }
 
         if entry.path().join("drft.lock").exists() || entry.path().join("drft.toml").exists() {
+            // Skip if matched by ignore patterns
+            if let Some(ref set) = ignore_set
+                && set.is_match(&relative)
+            {
+                continue;
+            }
+
             let scope_path = format!("{relative}/");
             found_prefixes.push(scope_path.clone());
             scopes.push(scope_path);
@@ -202,7 +219,7 @@ mod tests {
         fs::create_dir(&gamma).unwrap();
         fs::write(gamma.join("readme.md"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path()).unwrap();
+        let scopes = find_child_scopes(dir.path(), &[]).unwrap();
         assert_eq!(scopes, vec!["alpha/", "beta/"]);
     }
 
@@ -218,7 +235,7 @@ mod tests {
         fs::create_dir(&grandchild).unwrap();
         fs::write(grandchild.join("drft.lock"), "").unwrap();
 
-        let scopes = find_child_scopes(dir.path()).unwrap();
+        let scopes = find_child_scopes(dir.path(), &[]).unwrap();
         assert_eq!(scopes, vec!["child/"]);
     }
 }

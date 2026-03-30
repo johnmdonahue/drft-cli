@@ -163,7 +163,7 @@ pub fn hash_bytes(content: &[u8]) -> String {
 /// Computes BLAKE3 content hashes for all nodes.
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let all_files = discover(root, &config.ignore)?;
-    let child_scopes = find_child_scopes(root)?;
+    let child_scopes = find_child_scopes(root, &config.ignore)?;
     let mut graph = Graph::new();
     graph.child_scopes = child_scopes;
     let mut pending_edges = Vec::new();
