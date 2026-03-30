@@ -12,6 +12,7 @@ pub struct ScriptParser {
     pub type_filter: Option<Vec<String>>,
     pub command: String,
     pub timeout_ms: u64,
+    pub scope_dir: std::path::PathBuf,
 }
 
 impl Parser for ScriptParser {
@@ -56,6 +57,7 @@ impl ScriptParser {
         let mut child = Command::new("sh")
             .arg("-c")
             .arg(&self.command)
+            .current_dir(&self.scope_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -132,28 +134,38 @@ fn wait_with_timeout(
     child: &mut std::process::Child,
     timeout: Duration,
 ) -> Result<std::process::Output, ()> {
+    // Take pipes before the poll loop so reader threads can drain them
+    // concurrently. This prevents deadlock when a script fills the OS
+    // pipe buffer (~64 KB) — without concurrent draining, the child
+    // blocks on write while the parent blocks waiting for exit.
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+
+    let stdout_thread = std::thread::spawn(move || {
+        stdout_pipe
+            .map(|mut s| {
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut s, &mut buf).ok();
+                buf
+            })
+            .unwrap_or_default()
+    });
+    let stderr_thread = std::thread::spawn(move || {
+        stderr_pipe
+            .map(|mut s| {
+                let mut buf = Vec::new();
+                std::io::Read::read_to_end(&mut s, &mut buf).ok();
+                buf
+            })
+            .unwrap_or_default()
+    });
+
     let start = std::time::Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let stdout = child
-                    .stdout
-                    .take()
-                    .map(|mut s| {
-                        let mut buf = Vec::new();
-                        std::io::Read::read_to_end(&mut s, &mut buf).ok();
-                        buf
-                    })
-                    .unwrap_or_default();
-                let stderr = child
-                    .stderr
-                    .take()
-                    .map(|mut s| {
-                        let mut buf = Vec::new();
-                        std::io::Read::read_to_end(&mut s, &mut buf).ok();
-                        buf
-                    })
-                    .unwrap_or_default();
+                let stdout = stdout_thread.join().unwrap_or_default();
+                let stderr = stderr_thread.join().unwrap_or_default();
                 return Ok(std::process::Output {
                     status,
                     stdout,

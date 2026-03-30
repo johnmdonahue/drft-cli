@@ -48,6 +48,7 @@ fn default_glob(parser_name: &str) -> Option<&'static str> {
 pub fn build_parsers(
     parsers_config: &HashMap<String, ParserConfig>,
     config_dir: Option<&std::path::Path>,
+    root: &std::path::Path,
 ) -> Vec<Box<dyn Parser>> {
     let mut parsers: Vec<Box<dyn Parser>> = Vec::new();
 
@@ -87,6 +88,7 @@ pub fn build_parsers(
                 type_filter,
                 command: resolved_command,
                 timeout_ms: config.timeout.unwrap_or(5000),
+                scope_dir: root.to_path_buf(),
             }));
         } else {
             // Built-in parser

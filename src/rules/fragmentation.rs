@@ -33,7 +33,7 @@ impl Rule for FragmentationRule {
                 Diagnostic {
                     rule: "fragmentation".into(),
                     message: format!("disconnected component ({} nodes)", c.members.len()),
-                    node: Some(members.clone()),
+                    node: c.members.first().cloned(),
                     fix: Some(format!(
                         "these nodes are disconnected from the main graph: {members} \u{2014} add links to connect them"
                     )),

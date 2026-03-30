@@ -169,7 +169,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let mut pending_edges = Vec::new();
 
     // Build parser registry from config
-    let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref());
+    let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
 
     // Read all files and determine which parsers match each
     let mut file_contents: HashMap<String, (String, String)> = HashMap::new(); // path → (content, hash)
