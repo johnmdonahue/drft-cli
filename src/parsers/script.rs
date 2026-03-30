@@ -1,10 +1,11 @@
 use super::{Parser, RawLink};
+use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Script-based parser. Runs an external command that receives the file path
-/// on stdin and emits NDJSON links on stdout.
+/// Script-based parser. Runs an external command that receives file paths
+/// on stdin (one per line) and emits NDJSON links on stdout.
 pub struct ScriptParser {
     pub parser_name: String,
     pub glob: globset::GlobMatcher,
@@ -24,18 +25,34 @@ impl Parser for ScriptParser {
     }
 
     fn parse(&self, path: &str, _content: &str) -> Vec<RawLink> {
-        match self.run_script(path) {
-            Ok(links) => links,
+        // Single-file fallback — used when parse_batch isn't called
+        match self.run_batch(&[path]) {
+            Ok(mut results) => results.remove(path).unwrap_or_default(),
             Err(e) => {
                 eprintln!("warn: parser {}: {path}: {e}", self.parser_name);
                 Vec::new()
             }
         }
     }
+
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+        let paths: Vec<&str> = files.iter().map(|(path, _)| *path).collect();
+        match self.run_batch(&paths) {
+            Ok(results) => results,
+            Err(e) => {
+                eprintln!("warn: parser {}: batch failed: {e}", self.parser_name);
+                HashMap::new()
+            }
+        }
+    }
 }
 
 impl ScriptParser {
-    fn run_script(&self, path: &str) -> anyhow::Result<Vec<RawLink>> {
+    fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, Vec<RawLink>>> {
+        if paths.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let mut child = Command::new("sh")
             .arg("-c")
             .arg(&self.command)
@@ -44,9 +61,11 @@ impl ScriptParser {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        // Send file path on stdin
+        // Send all file paths on stdin, one per line
         if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(path.as_bytes());
+            for path in paths {
+                let _ = writeln!(stdin, "{path}");
+            }
         }
 
         // Wait with timeout
@@ -64,7 +83,7 @@ impl ScriptParser {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut links = Vec::new();
+        let mut results: HashMap<String, Vec<RawLink>> = HashMap::new();
 
         for line in stdout.lines() {
             let line = line.trim();
@@ -73,11 +92,20 @@ impl ScriptParser {
             }
             match serde_json::from_str::<ScriptLink>(line) {
                 Ok(sl) => {
-                    links.push(RawLink {
+                    let link = RawLink {
                         target: sl.target,
                         link_type: sl.link_type,
                         is_external: false,
-                    });
+                    };
+
+                    // Apply type filter
+                    if let Some(ref types) = self.type_filter
+                        && !types.iter().any(|t| t == &link.link_type)
+                    {
+                        continue;
+                    }
+
+                    results.entry(sl.file).or_default().push(link);
                 }
                 Err(e) => {
                     eprintln!(
@@ -88,17 +116,13 @@ impl ScriptParser {
             }
         }
 
-        // Apply type filter
-        if let Some(ref types) = self.type_filter {
-            links.retain(|l| types.iter().any(|t| t == &l.link_type));
-        }
-
-        Ok(links)
+        Ok(results)
     }
 }
 
 #[derive(serde::Deserialize)]
 struct ScriptLink {
+    file: String,
     target: String,
     #[serde(rename = "type")]
     link_type: String,
@@ -108,7 +132,6 @@ fn wait_with_timeout(
     child: &mut std::process::Child,
     timeout: Duration,
 ) -> Result<std::process::Output, ()> {
-    // Simple polling approach — fine for file-level parsing timeouts
     let start = std::time::Instant::now();
     loop {
         match child.try_wait() {

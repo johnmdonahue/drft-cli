@@ -90,7 +90,7 @@ hash = "b3:a47a30282b7939f1ee843d401fde2302b8c68ecd5cbca34f61c6c8ce00ee3b72"
 
 [nodes."docs/parsers/script.md"]
 type = "source"
-hash = "b3:760a4ecc396697fbb3c65f869f64e4a85aa5a162cefd7fc1cfe22627907906df"
+hash = "b3:53c472cbb88f99c78adcb149b99c5e4624dbf545fafd1efa4ae6c030a9715a23"
 
 [nodes."docs/rules/README.md"]
 type = "source"
@@ -304,7 +304,7 @@ hash = "b3:bbd954d91ac369f40886ab9a444d7d66762e7541634c5c8b1c939ee3f20c413f"
 
 [nodes."src/graph.rs"]
 type = "source"
-hash = "b3:8133b19cce2ead901e3eb2d0d946e814d18c02fb0977e64ba73589549c21a911"
+hash = "b3:ade17099138c354c7db27e05979291629345ab80d43e7a4eef4235968e6c3465"
 
 [nodes."src/lib.rs"]
 type = "source"
@@ -328,11 +328,11 @@ hash = "b3:e77b47fc1e699fbfaf3c34d958f1cca1e4335a67777770f5581963832f64ec42"
 
 [nodes."src/parsers/mod.rs"]
 type = "source"
-hash = "b3:88401c0afaebb994374490b83c0e2121a0386393c4b0080013964b7bb691e3f6"
+hash = "b3:49a7221e5499ff65c16e040bb179d279e222897689cc68231b613600242112f8"
 
 [nodes."src/parsers/script.rs"]
 type = "source"
-hash = "b3:a463b550e2b973df2cc000236f532c3aed1db79ef0170294bd4cbb27d354ad9e"
+hash = "b3:6aee59ad5cbd8e1b56c97e1d2527f6c1007a58b5e301b605c38c60afc9b0883d"
 
 [nodes."src/rules/broken_link.rs"]
 type = "source"

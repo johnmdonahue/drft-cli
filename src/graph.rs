@@ -171,33 +171,54 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     // Build parser registry from config
     let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref());
 
-    // For each file, find matching parsers, run them, collect links
+    // Read all files and determine which parsers match each
+    let mut file_contents: HashMap<String, (String, String)> = HashMap::new(); // path → (content, hash)
+    let mut parser_files: Vec<Vec<String>> = vec![Vec::new(); parser_list.len()];
+
     for file in &all_files {
-        // Find all parsers that match this file
-        let matching: Vec<&dyn parsers::Parser> = parser_list
+        let mut matched = false;
+        for (i, parser) in parser_list.iter().enumerate() {
+            if parser.matches(file) {
+                parser_files[i].push(file.clone());
+                matched = true;
+            }
+        }
+        if matched {
+            let file_path = root.join(file);
+            let content = std::fs::read_to_string(&file_path)?;
+            let hash = hash_bytes(content.as_bytes());
+            file_contents.insert(file.clone(), (content, hash));
+        }
+    }
+
+    // Create Source nodes for all matched files
+    for (path, (_, hash)) in &file_contents {
+        graph.add_node(Node {
+            path: path.clone(),
+            node_type: NodeType::Source,
+            hash: Some(hash.clone()),
+            graph: None,
+        });
+    }
+
+    // Run each parser in batch mode
+    for (i, parser) in parser_list.iter().enumerate() {
+        let files: Vec<(&str, &str)> = parser_files[i]
             .iter()
-            .filter(|p| p.matches(file))
-            .map(|p| p.as_ref())
+            .filter_map(|path| {
+                file_contents
+                    .get(path)
+                    .map(|(content, _)| (path.as_str(), content.as_str()))
+            })
             .collect();
 
-        if matching.is_empty() {
+        if files.is_empty() {
             continue;
         }
 
-        let file_path = root.join(file);
-        let content = std::fs::read_to_string(&file_path)?;
-        let hash = hash_bytes(content.as_bytes());
+        let batch_results = parser.parse_batch(&files);
 
-        graph.add_node(Node {
-            path: file.clone(),
-            node_type: NodeType::Source,
-            hash: Some(hash),
-            graph: None,
-        });
-
-        // Run all matching parsers
-        for parser in &matching {
-            let links = parser.parse(file, &content);
+        for (file, links) in batch_results {
             for link in links {
                 let edge_type = EdgeType::new(parser.name(), &link.link_type);
                 if link.is_external {
@@ -208,7 +229,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         synthetic: false,
                     });
                 } else {
-                    let resolved = resolve_link(file, &link.target);
+                    let resolved = resolve_link(&file, &link.target);
                     pending_edges.push(Edge {
                         source: file.clone(),
                         target: resolved,
