@@ -125,9 +125,8 @@ ignore = []
 markdown = true
 
 [rules]
-broken-link = "warn"
-cycle = "warn"
-stale = "error"
+# All rules default to warn. Override only what you need.
+# stale = "error"  # recommended for LLM workflows and CI
 "#,
     );
 

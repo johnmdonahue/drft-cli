@@ -159,15 +159,15 @@ pub struct RuleContext<'a> {
 | `cycle` | analysis: `scc` | warn |
 | `directory-link` | graph | warn |
 | `encapsulation` | analysis: `graph-boundaries` | warn |
-| `fragility` | analysis: `bridges` | off |
-| `fragmentation` | analysis: `connected-components` | off |
-| `indirect-link` | graph | off |
-| `layer-violation` | analysis: `depth` | off |
-| `orphan` | analysis: `degree` | off |
-| `redundant-edge` | analysis: `transitive-reduction` | off |
-| `stale` | analysis: `change-propagation` | error |
+| `fragility` | analysis: `bridges` | warn |
+| `fragmentation` | analysis: `connected-components` | warn |
+| `indirect-link` | graph | warn |
+| `layer-violation` | analysis: `depth` | warn |
+| `orphan` | analysis: `degree` | warn |
+| `redundant-edge` | analysis: `transitive-reduction` | warn |
+| `stale` | analysis: `change-propagation` | warn |
 
-Rules default to `off` when they report structural insights (fragility, fragmentation, orphan, etc.) vs. `warn`/`error` when they report likely errors (broken links, cycles, staleness).
+All rules default to `warn` for immediate discoverability. Override to `error` for CI enforcement or `off` to suppress.
 
 ## Graph nesting
 

@@ -25,13 +25,16 @@ fn scenario_5_first_lock() {
     assert!(lockfile.contains("b3:"));
     assert!(lockfile.contains(r#"type = "source""#));
 
-    // Check should be clean
+    // Check should show no staleness after lock
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(stdout, "", "expected clean check after lock, got: {stdout}");
+    assert!(
+        !stdout.contains("stale"),
+        "expected no staleness after lock, got: {stdout}"
+    );
     assert!(output.status.success());
 }
 
@@ -59,10 +62,14 @@ fn scenario_6_staleness_after_edit() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("error[stale]: index.md (stale via setup.md)"),
-        "expected stale error, got: {stdout}"
+        stdout.contains("warn[stale]"),
+        "expected stale warning, got: {stdout}"
     );
-    assert!(!output.status.success(), "expected exit 1 (stale is error)");
+    assert!(
+        stdout.contains("index.md"),
+        "expected index.md in stale output, got: {stdout}"
+    );
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 /// Scenario 7a: File removed — both broken-link and stale fire.
@@ -93,9 +100,9 @@ fn scenario_7a_file_removed() {
     );
     assert!(
         stdout.contains("stale"),
-        "expected stale error, got: {stdout}"
+        "expected stale warning, got: {stdout}"
     );
-    assert!(!output.status.success(), "expected exit 1 (stale is error)");
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 // ── drft lock --check ──────────────────────────────────────────

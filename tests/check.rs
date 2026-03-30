@@ -4,7 +4,7 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Scenario 1: Zero setup — just markdown files, all links valid.
-/// drft check should produce no output and exit 0.
+/// drft check should exit 0 with no broken links or errors.
 #[test]
 fn scenario_1_zero_setup_clean() {
     let dir = TempDir::new().unwrap();
@@ -15,18 +15,21 @@ fn scenario_1_zero_setup_clean() {
     .unwrap();
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
-    fs::write(dir.path().join("faq.md"), "# FAQ").unwrap();
-    fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
+    fs::write(dir.path().join("faq.md"), "[index](index.md)").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
 
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "",
-        "expected no output for clean check"
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("broken-link"),
+        "expected no broken links, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("error["),
+        "expected no errors, got: {stdout}"
     );
     assert!(output.status.success(), "expected exit code 0");
 }
@@ -49,9 +52,13 @@ fn scenario_2_broken_link() {
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        stdout.trim(),
-        "warn[broken-link]: index.md \u{2192} gone.md (file not found)",
+    assert!(
+        stdout.contains("warn[broken-link]"),
+        "expected broken-link warning, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("gone.md"),
+        "expected gone.md in output, got: {stdout}"
     );
     assert!(
         output.status.success(),
@@ -79,15 +86,16 @@ fn scenario_2_broken_link_json() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
     assert_eq!(v["status"], "warn");
-    assert_eq!(v["total"], 1);
     assert_eq!(v["errors"], 0);
-    assert_eq!(v["warnings"], 1);
-    let diag = &v["diagnostics"][0];
-    assert_eq!(diag["rule"], "broken-link");
-    assert_eq!(diag["severity"], "warn");
-    assert_eq!(diag["source"], "index.md");
-    assert_eq!(diag["target"], "gone.md");
-    assert_eq!(diag["message"], "file not found");
+    let diagnostics = v["diagnostics"].as_array().unwrap();
+    let broken = diagnostics
+        .iter()
+        .find(|d| d["rule"] == "broken-link")
+        .expect("expected broken-link diagnostic");
+    assert_eq!(broken["severity"], "warn");
+    assert_eq!(broken["source"], "index.md");
+    assert_eq!(broken["target"], "gone.md");
+    assert_eq!(broken["message"], "file not found");
     assert!(output.status.success());
 }
 
@@ -109,9 +117,9 @@ fn scenario_3_broken_link_error_severity() {
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        stdout.trim(),
-        "error[broken-link]: index.md \u{2192} gone.md (file not found)",
+    assert!(
+        stdout.contains("error[broken-link]"),
+        "expected error-level broken-link, got: {stdout}"
     );
     assert_eq!(output.status.code(), Some(1), "expected exit code 1");
 }
@@ -176,10 +184,10 @@ fn scenario_20_directory_link() {
     assert!(output.status.success(), "expected exit code 0");
 }
 
-/// Scenario 7b/23: Orphan rule — off by default.
-/// orphan.md has no inbound links but orphan rule is off, so no output.
+/// Scenario 23: Orphan rule — warn by default.
+/// orphan.md has no inbound links and orphan rule is warn, so it should appear.
 #[test]
-fn scenario_23_orphan_off_by_default() {
+fn scenario_23_orphan_warn_by_default() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
@@ -191,10 +199,10 @@ fn scenario_23_orphan_off_by_default() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("orphan"),
-        "orphan rule should be off by default"
+        stdout.contains("orphan"),
+        "orphan rule should warn by default, got: {stdout}"
     );
-    assert!(output.status.success());
+    assert!(output.status.success(), "warnings should exit 0");
 }
 
 /// Scenario 7b: Orphan rule — enabled via config.
@@ -252,11 +260,12 @@ fn scenario_29_rule_filtering() {
     assert!(output.status.success());
 }
 
-/// --rule with off rule overrides to warn.
+/// --rule with explicitly-off rule overrides to warn.
 #[test]
 fn rule_flag_overrides_off_to_warn() {
     let dir = TempDir::new().unwrap();
-    // orphan is off by default
+    // Explicitly disable orphan in config
+    fs::write(dir.path().join("drft.toml"), "[rules]\norphan = \"off\"\n").unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 

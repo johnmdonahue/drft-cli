@@ -50,9 +50,9 @@ fn lockfile_contains_version() {
 
 // ── Redundant edge ────────────────────────────────────────────
 
-/// redundant-edge is off by default — no output even with redundant edges.
+/// redundant-edge warns by default.
 #[test]
-fn redundant_edge_off_by_default() {
+fn redundant_edge_warn_by_default() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
     fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
@@ -65,8 +65,8 @@ fn redundant_edge_off_by_default() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("redundant-edge"),
-        "redundant-edge should be off by default"
+        stdout.contains("redundant-edge"),
+        "redundant-edge should warn by default, got: {stdout}"
     );
 }
 
@@ -107,10 +107,16 @@ fn redundant_edge_enabled_via_config() {
     );
 }
 
-/// --rule redundant-edge overrides off to warn.
+/// --rule flag overrides explicitly-off rule to warn.
 #[test]
 fn redundant_edge_via_rule_flag() {
     let dir = TempDir::new().unwrap();
+    // Explicitly disable, then override with --rule
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[rules]\nredundant-edge = \"off\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
     fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
     fs::write(dir.path().join("c.md"), "# C").unwrap();

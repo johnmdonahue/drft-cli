@@ -22,7 +22,7 @@ warn[fragility]: b.md -> c.md (bridge edge)
 
 ```toml
 [rules]
-fragility = "off"    # default
+fragility = "warn"    # default
 ```
 
 ```toml

@@ -14,7 +14,7 @@ fn init_creates_config() {
     assert!(output.status.success(), "expected exit code 0");
     let config = fs::read_to_string(dir.path().join("drft.toml")).unwrap();
     assert!(config.contains("[rules]"));
-    assert!(config.contains("broken-link"));
+    assert!(config.contains("stale"));
 }
 
 #[test]
