@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 /// Scenario 10: Child graph — open (no interface). Parent links to child file, no violation.
 #[test]
-fn scenario_10_child_scope_unsealed() {
+fn scenario_10_child_graph_open() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.md"),

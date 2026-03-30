@@ -58,7 +58,7 @@ hash = "b3:87ea11dfba7cb9c7d9b47f16c40be8ec70b4a656fc928009ed63d9477e9386d9"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "source"
-hash = "b3:479238035912845e05e22306277ecdb1328884a259682226126b74bcface529f"
+hash = "b3:db1fd9fd623fe6cc97c639c4bda1e948f67bf179e1f0529de31ec0db5624eadd"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "source"
@@ -260,7 +260,7 @@ hash = "b3:9d06abdaa68f8e6128804b73673001e3be0e7d95a418c0b203877e79ccde518d"
 
 [nodes."src/analyses/graph_boundaries.rs"]
 type = "source"
-hash = "b3:2b9b8dc5c41191d13ec71d6e0def6d38d5fdd485cc7510c039f84575280f776f"
+hash = "b3:fbcd641b914b6d4389abefcb6e8ce3fdc44214dcb512ca5962abc9ebdfd3215c"
 
 [nodes."src/analyses/graph_stats.rs"]
 type = "source"
@@ -292,7 +292,7 @@ hash = "b3:a31d062e63ac7a452d260ac83e805b25b5aadc3a56a6c39aa3ec140600df531b"
 
 [nodes."src/diagnostic.rs"]
 type = "source"
-hash = "b3:d3adf5e756f582c5d7793487da119dc9bd8a4c0b63f2baa9b6e0fd901f454640"
+hash = "b3:df29671a042f0200bdfa7533a1f413d1ffc010cafd931ff1fab8aec2427dacaa"
 
 [nodes."src/discovery.rs"]
 type = "source"
@@ -308,7 +308,7 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:35e7333484444dceeb89c4960f19c868104e51688368facc74e6895a7f1c2283"
+hash = "b3:d9a9e5949d6061bf1e9e3fb05dd71650bcaedc402cea0637a67c01f463a83059"
 
 [nodes."src/metrics.rs"]
 type = "source"
@@ -344,7 +344,7 @@ hash = "b3:89228e9e28c7f4460830704abbba432f35101bfd1d1ac0c733fdb3b5c01f28bb"
 
 [nodes."src/rules/encapsulation.rs"]
 type = "source"
-hash = "b3:012f72513a1dae46973e18be870fc4fcd1ef9f5a777801864ad21f20f6d13b09"
+hash = "b3:44eb03c25cc96225a4a781941e524439e6da9f9837c7b950bce7758754ff9827"
 
 [nodes."src/rules/fragility.rs"]
 type = "source"
@@ -400,7 +400,7 @@ hash = "b3:97eff4359275de4e7ae66d062be4deb3969d8c6360fafa72449cd8d472930bd9"
 
 [nodes."tests/graphs.rs"]
 type = "source"
-hash = "b3:cda1aa42d5cb144d93b4119b540a4f42e1b956c83aaea7b552e10ee7316316ac"
+hash = "b3:3da1ee1f778b47bf08cd76c73a831c4144e40a9b56374035292a096f289b5023"
 
 [nodes."tests/impact.rs"]
 type = "source"

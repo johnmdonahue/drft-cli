@@ -12,7 +12,7 @@ pub struct GraphEscape {
 pub struct EncapsulationViolation {
     pub source: String,
     pub target: String,
-    pub scope: String,
+    pub graph: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -102,7 +102,7 @@ impl Analysis for GraphBoundaries {
                     encapsulation_violations.push(EncapsulationViolation {
                         source: edge.source.clone(),
                         target: edge.target.clone(),
-                        scope: graph_prefix.to_string(),
+                        graph: graph_prefix.to_string(),
                     });
                 }
             }
@@ -214,7 +214,7 @@ mod tests {
             result.encapsulation_violations[0].target,
             "research/internal.md"
         );
-        assert_eq!(result.encapsulation_violations[0].scope, "research/");
+        assert_eq!(result.encapsulation_violations[0].graph, "research/");
     }
 
     #[test]

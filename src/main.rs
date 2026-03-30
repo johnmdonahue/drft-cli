@@ -648,8 +648,8 @@ fn run_check(
     let mut diagnostics = check_graph(&graph_root, rule_filter, None, recursive, max_depth)?;
 
     diagnostics.sort_by(|a, b| {
-        a.scope
-            .cmp(&b.scope)
+        a.graph
+            .cmp(&b.graph)
             .then_with(|| a.rule.cmp(&b.rule))
             .then_with(|| a.source.cmp(&b.source))
             .then_with(|| a.target.cmp(&b.target))
@@ -662,18 +662,18 @@ fn run_check(
         match format {
             OutputFormat::Text | OutputFormat::Dot => {
                 // Print graph header when graph changes
-                if current_graph != Some(&d.scope) {
-                    if let Some(scope) = &d.scope {
+                if current_graph != Some(&d.graph) {
+                    if let Some(g) = &d.graph {
                         if current_graph.is_some() {
                             println!();
                         }
                         if colorize {
-                            println!("\x1b[1m[{scope}]\x1b[0m");
+                            println!("\x1b[1m[{g}]\x1b[0m");
                         } else {
-                            println!("[{scope}]");
+                            println!("[{g}]");
                         }
                     }
-                    current_graph = Some(&d.scope);
+                    current_graph = Some(&d.graph);
                 }
                 if colorize {
                     println!("{}", d.format_text_color());
@@ -880,7 +880,7 @@ fn check_graph(
         for d in &mut findings {
             d.severity = severity;
             if graph_prefix.is_some() {
-                d.scope = graph_prefix.map(|s| s.to_string());
+                d.graph = graph_prefix.map(|s| s.to_string());
             }
         }
         diagnostics.extend(findings);
@@ -911,7 +911,7 @@ fn check_graph(
         });
         for d in &mut script_findings {
             if graph_prefix.is_some() {
-                d.scope = graph_prefix.map(|s| s.to_string());
+                d.graph = graph_prefix.map(|s| s.to_string());
             }
         }
         diagnostics.extend(script_findings);

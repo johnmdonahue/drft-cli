@@ -25,12 +25,12 @@ impl Rule for EncapsulationRule {
             .iter()
             .map(|v| Diagnostic {
                 rule: "encapsulation".into(),
-                message: format!("not in {}interface", v.scope),
+                message: format!("not in {}interface", v.graph),
                 source: Some(v.source.clone()),
                 target: Some(v.target.clone()),
                 fix: Some(format!(
                     "{} is not exposed by the {}interface \u{2014} either add it to the interface or remove the link from {}",
-                    v.target, v.scope, v.source
+                    v.target, v.graph, v.source
                 )),
                 ..Default::default()
             })

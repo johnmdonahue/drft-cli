@@ -34,7 +34,7 @@ JSON output:
 ```json
 {
   "analyses": {
-    "scope-boundaries": {
+    "graph-boundaries": {
       "has_interface": true,
       "escapes": [
         { "source": "index.md", "target": "../README.md" }
@@ -43,8 +43,7 @@ JSON output:
         {
           "source": "parent.md",
           "target": "research/internal.md",
-          "scope": "research/",
-          "manifest_file": "overview.md"
+          "graph": "research/"
         }
       ]
     }
