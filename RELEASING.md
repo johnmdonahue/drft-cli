@@ -4,9 +4,10 @@
 
 1. **Bump version** in `Cargo.toml`
 2. **Update CHANGELOG.md** with the new version and date
-3. **Commit**: `git commit -am "Release v0.x.x"`
-4. **Tag**: `git tag v0.x.x`
-5. **Push**: `git push && git push origin v0.x.x`
+3. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
+4. **Merge** after CI passes
+5. **Tag on main**: `git checkout main && git pull && git tag v0.x.x`
+6. **Push tag**: `git push origin v0.x.x`
 
 That's it. Everything else is automated.
 
@@ -35,10 +36,15 @@ npm uses **trusted publishing** (OIDC) — no token needed. Configure at https:/
 ## Quick example
 
 ```bash
-# Edit Cargo.toml: version = "0.2.0"
-# Edit CHANGELOG.md: add ## 0.2.0 section
-git commit -am "Release v0.2.0"
-git tag v0.2.0
-git push && git push origin v0.2.0
+# Edit Cargo.toml: version = "0.3.0"
+# Edit CHANGELOG.md: add ## 0.3.0 section
+git checkout -b release/v0.3.0
+git commit -am "Release v0.3.0"
+git push -u origin release/v0.3.0
+gh pr create --title "Release v0.3.0"
+# Merge PR, then:
+git checkout main && git pull
+git tag v0.3.0
+git push origin v0.3.0
 # Done. Go get coffee.
 ```

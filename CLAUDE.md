@@ -56,3 +56,7 @@ cargo run -- check    # runs as `drft check`
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
 - Pipeline: `src/parsers/` (parse links) → `src/graph.rs` (build graph) → `src/analyses/` (compute properties) → `src/metrics.rs` (extract scalars) → `src/rules/` (emit diagnostics)
+
+## Releasing
+
+See [RELEASING.md](RELEASING.md). Main is protected — releases go through a PR, then tag on main after merge.
