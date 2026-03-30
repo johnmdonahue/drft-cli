@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "file"
-hash = "b3:7ac3b1986eedcac1b1686c59f59ddca90c1fef98ffdfbc40eeb09f2b30f9b694"
+hash = "b3:400ffb1d17d6255d9f18acde33c8d96ad567ad25587909dd5eb4d4cdcbc6f723"
 
 [nodes."CHANGELOG.md"]
 type = "file"
@@ -10,11 +10,11 @@ hash = "b3:589ee07f003b7ec4ca5dac762b233cad6e2ce7a84944d49cca158153bb91700e"
 
 [nodes."CLAUDE.md"]
 type = "file"
-hash = "b3:a0f9d8866aa47e2dcb002d3ad02525da25bd45f95dbc456b6fe95ef5e6e25456"
+hash = "b3:e89b592278410df99a3e52fc394488c5807d00e78898a0f1b7e3cc47ab3dbe70"
 
 [nodes."CONTRIBUTING.md"]
 type = "file"
-hash = "b3:620bd26670ad54d4cc3dbf602e84fb3275883afa61f3acbe08564de12cdb3926"
+hash = "b3:737498fac43a3de8a228a29e089c910182061402d1866f54475ea994c7c2a76d"
 
 [nodes."README.md"]
 type = "file"
@@ -23,6 +23,10 @@ hash = "b3:36c80025c09a0eb9caefacbdde2982bc8d2b824ad39564e3760818f1363cac70"
 [nodes."RELEASING.md"]
 type = "file"
 hash = "b3:a19242513f209cc06c4f861998eb903bfd7461721b149ddeceab07f4364e5782"
+
+[nodes."benches/README.md"]
+type = "file"
+hash = "b3:68986a0031dfd91f014b0c3786c86db344189a851bc02ea2b62cdb4627f6ef0c"
 
 [nodes."benches/pipeline.rs"]
 type = "file"
@@ -397,6 +401,10 @@ hash = "b3:b754066eaf6302296a9c4aea4431068452a84e1a5f4a9785e91f6b096b172ef5"
 [nodes."src/rules/symlink_edge.rs"]
 type = "file"
 hash = "b3:b32a751f9cb014199297fb7d06d092828e5f44400d565adbf9f2d644fc68a622"
+
+[nodes."tests/README.md"]
+type = "file"
+hash = "b3:8d3a0aa78b61de91495db21740a5e707d08fa9140e1e2a55ab91fef17cd31660"
 
 [nodes."tests/check.rs"]
 type = "file"

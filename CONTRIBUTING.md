@@ -23,7 +23,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the module layout and design.
 
 ## Testing
 
-Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in `tests/scenarios.rs` and run the binary as a subprocess against temp directories.
+Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in [`tests/`](tests/README.md) and run the binary as a subprocess against temp directories.
 
 ```bash
 cargo test                    # all tests

@@ -70,10 +70,10 @@ The pipeline: **Parsing → Graph → Analyses → Metrics → Rules**. Each lay
 
 Each layer has its own directory and concerns:
 
-- **`src/parsers/`** — link extraction. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
-- **`src/analyses/`** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
-- **`src/metrics.rs`** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
-- **`src/rules/`** — diagnostic mapping. Each rule implements the `Rule` trait, receives a `RuleContext` with full evaluated state, and emits `Diagnostic` structs with severity and fix suggestions.
+- **[`src/parsers/`](src/parsers/README.md)** — link extraction. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
+- **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
+- **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
+- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives a `RuleContext` with full evaluated state, and emits `Diagnostic` structs with severity and fix suggestions.
 
 This separation means:
 - Analyses are reusable. Multiple rules and metrics can consume the same analysis.
@@ -127,7 +127,7 @@ Pure analyses (SCC, PageRank, bridges) ignore root/config/lockfile. Stateful ana
 
 Metrics extract named scalar values from analysis results. They are flat -- no dimension grouping, no taxonomy. Each metric is derived from a specific analysis.
 
-Metrics live in `src/metrics.rs` as a single module. The `compute_metrics()` function takes pre-computed analysis results (via `AnalysisInputs`) and returns `Vec<Metric>`. Analyses run unconditionally during graph enrichment; metrics are derived from their outputs.
+Metrics live in [`src/metrics.rs`](src/metrics.rs) as a single module. The `compute_metrics()` function takes pre-computed analysis results (via `AnalysisInputs`) and returns `Vec<Metric>`. Analyses run unconditionally during graph enrichment; metrics are derived from their outputs.
 
 Each `Metric` carries a `MetricKind` (`Ratio`, `Count`, or `Score`) that indicates how to interpret and normalize the value.
 
@@ -235,67 +235,21 @@ Rules are evaluated at the configured severity. `--rule <name>` on the command l
 
 ## Module layout
 
-See [`src/README.md`](src/README.md) for the full module index.
-
-```
-src/
-├── main.rs          Command dispatch
-├── cli.rs           Clap-derived CLI definition
-├── config.rs        Config loading, defaults
-├── graph.rs         Graph, Node, Edge, EdgeType types; construction
-├── discovery.rs     .gitignore-aware file discovery
-├── lockfile.rs      Lockfile read/write
-├── diagnostic.rs    Diagnostic struct, text/JSON formatting
-├── parsers/
-│   ├── mod.rs       Parser trait, registry, RawLink type
-│   ├── markdown.rs  Built-in markdown parser
-│   └── script.rs    Script-based parser runner
-├── analyses/
-│   ├── mod.rs       Analysis trait, AnalysisContext
-│   ├── degree.rs
-│   ├── scc.rs
-│   ├── connected_components.rs
-│   ├── depth.rs
-│   ├── graph_stats.rs
-│   ├── bridges.rs
-│   ├── betweenness.rs
-│   ├── pagerank.rs
-│   ├── transitive_reduction.rs
-│   ├── graph_boundaries.rs
-│   └── change_propagation.rs
-├── metrics.rs       Metric type, MetricKind, compute_metrics()
-├── rules/
-│   ├── mod.rs       Rule trait, all_rules() registry
-│   ├── boundary_violation.rs
-│   ├── dangling_edge.rs
-│   ├── directed_cycle.rs
-│   ├── directory_edge.rs
-│   ├── encapsulation_violation.rs
-│   ├── fragility.rs
-│   ├── fragmentation.rs
-│   ├── layer_violation.rs
-│   ├── orphan_node.rs
-│   ├── redundant_edge.rs
-│   ├── stale.rs
-│   ├── symlink_edge.rs
-│   └── script.rs    Script-based rule runner
-tests/
-└── scenarios.rs     Integration tests
-docs/
-└── analyses/        Per-analysis conceptual documentation
-```
+- [`src/README.md`](src/README.md) — source module index
+- [`tests/README.md`](tests/README.md) — integration test index
+- [`benches/README.md`](benches/README.md) — benchmark index
 
 ## Adding a new analysis
 
 1. Create `src/analyses/<name>.rs` with a struct implementing `Analysis`. Define the output type and implement `run()` taking `&AnalysisContext`.
-2. Add `pub mod <name>` to `src/analyses/mod.rs`.
-3. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in `config.rs`, add to the `drft init` template.
-4. Add unit tests in the analysis module, integration tests in `tests/scenarios.rs`.
-5. Document in `docs/analyses/<name>.md` and update `docs/analyses/README.md`.
+2. Add `pub mod <name>` to [`src/analyses/mod.rs`](src/analyses/mod.rs).
+3. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in [`src/config.rs`](src/config.rs), add to the `drft init` template.
+4. Add unit tests in the analysis module, integration tests in [`tests/`](tests/README.md).
+5. Document in `docs/analyses/<name>.md` and update [`docs/analyses/README.md`](docs/analyses/README.md).
 
 ## Adding a new metric
 
-Add the metric extraction to `src/metrics.rs` inside `compute_metrics()`. The metric reads from analysis results and returns a `Metric` with name, value, and kind. It automatically appears in `drft report` output. Add the metric name to `all_metric_names()`.
+Add the metric extraction to [`src/metrics.rs`](src/metrics.rs) inside `compute_metrics()`. The metric reads from analysis results and returns a `Metric` with name, value, and kind. It automatically appears in `drft report` output. Add the metric name to `all_metric_names()`.
 
 ## Design principles
 
