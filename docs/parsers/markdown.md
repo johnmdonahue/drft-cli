@@ -78,9 +78,9 @@ Link to [[guides/intro]] with paths.
 Display text: [[setup|Setup Guide]].
 ```
 
-A wikilink resolves to `{target}.md`. If the target already ends in `.md`, no suffix is added. The pipe syntax uses the portion before `|` as the target.
+`[[page]]` resolves to `page.md`. If the target already ends in `.md`, no suffix is added. The pipe syntax `[[page|display text]]` uses the portion before `|` as the target.
 
-Wikilinks inside fenced code blocks are ignored. The parser strips code block content before scanning for double-bracket patterns, so shell test syntax inside code blocks will not produce false edges.
+Wikilinks inside code (fenced blocks and inline backtick spans) are ignored. The parser strips all code content before scanning for `[[...]]` patterns, so shell syntax like `[[ $FOO == *.md ]]` in code will not produce false edges.
 
 ## Configuration
 

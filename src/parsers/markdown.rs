@@ -127,7 +127,7 @@ fn process_link(url: &str, link_type: &str) -> Option<RawLink> {
 /// Operates on code-block-stripped content to avoid parsing frontmatter
 /// inside fenced code block examples.
 fn extract_frontmatter(content: &str) -> Vec<RawLink> {
-    let content = &strip_code_blocks(content);
+    let content = &strip_code(content);
     let mut links = Vec::new();
 
     if !content.starts_with("---") {
@@ -194,9 +194,10 @@ fn has_file_extension(path: &str) -> bool {
     }
 }
 
-/// Strip fenced code blocks from content, replacing them with whitespace
-/// to preserve offsets. Handles ``` and ~~~ fences.
-fn strip_code_blocks(content: &str) -> String {
+/// Strip all code content (fenced blocks and inline backtick spans),
+/// replacing with spaces to preserve offsets.
+fn strip_code(content: &str) -> String {
+    // First strip fenced code blocks (``` and ~~~)
     let mut result = String::with_capacity(content.len());
     let mut in_code_block = false;
     let mut fence_marker = "";
@@ -220,13 +221,53 @@ fn strip_code_blocks(content: &str) -> String {
         result.push('\n');
     }
 
-    result
+    // Then strip inline code spans (single and double backticks)
+    let mut cleaned = String::with_capacity(result.len());
+    let chars: Vec<char> = result.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '`' {
+            // Count opening backticks
+            let mut ticks = 0;
+            while i + ticks < chars.len() && chars[i + ticks] == '`' {
+                ticks += 1;
+            }
+            // Find matching closing backticks in the char array
+            let after = i + ticks;
+            let mut found = None;
+            let mut j = after;
+            while j + ticks <= chars.len() {
+                if chars[j..j + ticks].iter().all(|c| *c == '`') {
+                    found = Some(j);
+                    break;
+                }
+                j += 1;
+            }
+            if let Some(close_start) = found {
+                // Replace entire span (backticks + content + backticks) with spaces
+                let total = close_start + ticks - i;
+                for _ in 0..total {
+                    cleaned.push(' ');
+                }
+                i += total;
+            } else {
+                // No closing — keep the backtick as-is
+                cleaned.push(chars[i]);
+                i += 1;
+            }
+        } else {
+            cleaned.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    cleaned
 }
 
 /// Extract wikilinks: [[page]] or [[page|display text]].
 /// Skips content inside fenced code blocks.
 fn extract_wikilinks(content: &str) -> Vec<RawLink> {
-    let clean = strip_code_blocks(content);
+    let clean = strip_code(content);
     let mut links = Vec::new();
     let mut rest = clean.as_str();
 
@@ -384,6 +425,23 @@ mod tests {
         assert_eq!(wl.len(), 2);
         assert_eq!(wl[0].target, "real.md");
         assert_eq!(wl[1].target, "also-real.md");
+    }
+
+    #[test]
+    fn wikilink_skips_inline_code() {
+        let content = "See [[real]] and `[[not-a-link]]` here. Also ``[[also-not]]`` end.\n";
+        let links = parse(content);
+        let wl: Vec<_> = links.iter().filter(|l| l.link_type == "wikilink").collect();
+        assert_eq!(wl.len(), 1);
+        assert_eq!(wl[0].target, "real.md");
+    }
+
+    #[test]
+    fn frontmatter_skips_code_block_examples() {
+        let content = "# Doc\n\n```markdown\n---\nsources:\n  - ./fake.md\n---\n```\n";
+        let links = parse(content);
+        let fm: Vec<_> = links.iter().filter(|l| l.link_type == "frontmatter").collect();
+        assert!(fm.is_empty(), "frontmatter inside code block should be ignored");
     }
 
     #[test]

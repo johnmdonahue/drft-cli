@@ -82,7 +82,7 @@ hash = "b3:dbceea65c926ffdc47c4036d9187c56d227c69b160668586a1af12aa06aad0ca"
 
 [nodes."docs/parsers/markdown.md"]
 type = "source"
-hash = "b3:a4c66d37877dfbbefee619f99256f69bdea05a9875eb409098c98b546564d025"
+hash = "b3:bc1150e14c2912057500f29b94e9f9891f13cecfbe0e98890cedb973b8bcead7"
 
 [nodes."docs/parsers/script.md"]
 type = "source"
