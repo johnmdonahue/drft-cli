@@ -316,7 +316,7 @@ hash = "b3:fb614aca73c5a7d35d40d609b63796389217aeee10986226d574f429472e21f7"
 
 [nodes."src/main.rs"]
 type = "source"
-hash = "b3:42aae16df870e4f2dd0f0c5c410f5cac9ee55e5f53812fbeb5fc352239f52469"
+hash = "b3:abeadc6da5456c7626679b16930358e617757f18738f627b9a9313ab85b459cb"
 
 [nodes."src/metrics.rs"]
 type = "source"

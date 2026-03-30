@@ -316,6 +316,30 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
         Vec::new()
     };
 
+    // Find requested names that produced no output (conditional metrics
+    // like diameter or freshness may not be available for every graph).
+    let missing_names: Vec<&str> = if filter.is_empty() {
+        Vec::new()
+    } else {
+        let produced: std::collections::HashSet<&str> = output_analyses
+            .iter()
+            .map(|(name, _)| *name)
+            .chain(output_metrics.iter().map(|m| m.name.as_str()))
+            .collect();
+        filter
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|name| !produced.contains(name))
+            .collect()
+    };
+
+    if !missing_names.is_empty() {
+        eprintln!(
+            "note: no results for {} \u{2014} some metrics are only available when the graph meets certain conditions (e.g. lockfile present, graph connected)",
+            missing_names.join(", ")
+        );
+    }
+
     match format {
         OutputFormat::Json => {
             let mut map = serde_json::Map::new();
@@ -331,6 +355,9 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
                         "dimension": m.dimension,
                     }),
                 );
+            }
+            for name in &missing_names {
+                map.insert(name.to_string(), serde_json::Value::Null);
             }
             println!(
                 "{}",
