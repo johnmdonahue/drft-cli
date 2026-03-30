@@ -19,7 +19,7 @@ Betweenness identifies **bridge documents** — files that connect different par
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis betweenness
+drft report betweenness
 ```
 
 ```
@@ -36,13 +36,11 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "betweenness": {
-      "nodes": [
-        { "node": "hub.md", "score": 0.72 },
-        { "node": "index.md", "score": 0.45 }
-      ]
-    }
+  "betweenness": {
+    "nodes": [
+      { "node": "hub.md", "score": 0.72 },
+      { "node": "index.md", "score": 0.45 }
+    ]
   }
 }
 ```

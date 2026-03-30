@@ -26,7 +26,7 @@ In systems with intentional layering — like research → observations → desi
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis depth
+drft report depth
 ```
 
 ```
@@ -41,18 +41,16 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "depth": {
-      "max_depth": 2,
-      "nodes": [
-        { "node": "index.md", "depth": 0, "in_cycle": false },
-        { "node": "overview.md", "depth": 1, "in_cycle": false },
-        { "node": "setup.md", "depth": 1, "in_cycle": false },
-        { "node": "a.md", "depth": 1, "in_cycle": true },
-        { "node": "b.md", "depth": 1, "in_cycle": true },
-        { "node": "details/install.md", "depth": 2, "in_cycle": false }
-      ]
-    }
+  "depth": {
+    "max_depth": 2,
+    "nodes": [
+      { "node": "index.md", "depth": 0, "in_cycle": false },
+      { "node": "overview.md", "depth": 1, "in_cycle": false },
+      { "node": "setup.md", "depth": 1, "in_cycle": false },
+      { "node": "a.md", "depth": 1, "in_cycle": true },
+      { "node": "b.md", "depth": 1, "in_cycle": true },
+      { "node": "details/install.md", "depth": 2, "in_cycle": false }
+    ]
   }
 }
 ```

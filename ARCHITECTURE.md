@@ -128,7 +128,7 @@ Pure analyses (SCC, PageRank, bridges) ignore root/config/lockfile. Stateful ana
 
 Metrics extract named scalar values from analysis results. They are flat -- no dimension grouping, no taxonomy. Each metric is derived from a specific analysis.
 
-Metrics live in `src/metrics.rs` as a single module. The `collect_all()` function reads from an `AnalysisResults` struct (containing all analysis outputs) and returns `Vec<Metric>`.
+Metrics live in `src/metrics.rs` as a single module. The `compute_metrics()` function takes pre-computed analysis results (via `AnalysisInputs`) and returns `Vec<Metric>`. Analyses are run by the `report` command; metrics are derived from their outputs.
 
 Each `Metric` carries a `MetricKind` (`Ratio`, `Count`, or `Score`) that indicates how to interpret and normalize the value.
 
@@ -197,6 +197,7 @@ Edges are not stored in the lockfile. If a file's links change, its content hash
 | `drft lock` | Snapshot current graph state to `drft.lock` |
 | `drft graph` | Export the dependency graph (JSON Graph Format) |
 | `drft impact <files>` | Show transitive dependents of given files |
+| `drft report [names]` | [unstable] Run graph analyses and health metrics |
 
 ## Config
 
@@ -260,7 +261,7 @@ src/
 │   ├── transitive_reduction.rs
 │   ├── graph_boundaries.rs
 │   └── change_propagation.rs
-├── metrics.rs       Metric type, MetricKind, collect_all()
+├── metrics.rs       Metric type, MetricKind, compute_metrics()
 ├── rules/
 │   ├── mod.rs       Rule trait, all_rules() registry
 │   ├── broken_link.rs
@@ -292,9 +293,7 @@ docs/
 
 ## Adding a new metric
 
-Add the metric extraction to `src/metrics.rs`. The metric reads from `AnalysisResults` and returns a `Metric` with name, value, and kind. It automatically appears in metrics output.
-
-If the metric needs a new analysis result, add the field to `AnalysisResults` in `src/metrics.rs` and update the caller to provide it.
+Add the metric extraction to `src/metrics.rs` inside `compute_metrics()`. The metric reads from analysis results and returns a `Metric` with name, value, and kind. It automatically appears in `drft report` output. Add the metric name to `all_metric_names()`.
 
 ## Design principles
 

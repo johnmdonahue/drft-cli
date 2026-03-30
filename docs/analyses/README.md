@@ -8,17 +8,17 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 
 | Analysis | Command | Description |
 |----------|---------|-------------|
-| [Betweenness centrality](betweenness.md) | `drft report --analysis betweenness` | Bridge document identification |
-| [Bridges / articulation points](bridges.md) | `drft report --analysis bridges` | Structural single points of failure |
-| [Change propagation](change-propagation.md) | `drft report --analysis change-propagation` | Direct changes and transitive staleness |
-| [Connected components](connected-components.md) | `drft report --analysis connected-components` | Finds disconnected clusters |
-| [Degree distribution](degree.md) | `drft report --analysis degree` | In-degree and out-degree per node |
-| [Topological depth](depth.md) | `drft report --analysis depth` | Layer assignment from roots |
-| [Graph stats](graph-stats.md) | `drft report --analysis graph-stats` | Density, diameter, average path length |
-| [PageRank](pagerank.md) | `drft report --analysis pagerank` | Structural importance ranking |
-| [Graph boundaries](graph-boundaries.md) | `drft report --analysis graph-boundaries` | Graph escapes and encapsulation violations |
-| [Strongly connected components](scc.md) | `drft report --analysis scc` | Finds groups of mutually reachable nodes |
-| [Transitive reduction](transitive-reduction.md) | `drft report --analysis transitive-reduction` | Finds edges that are structurally redundant |
+| [Betweenness centrality](betweenness.md) | `drft report betweenness` | Bridge document identification |
+| [Bridges / articulation points](bridges.md) | `drft report bridges` | Structural single points of failure |
+| [Change propagation](change-propagation.md) | `drft report change-propagation` | Direct changes and transitive staleness |
+| [Connected components](connected-components.md) | `drft report connected-components` | Finds disconnected clusters |
+| [Degree distribution](degree.md) | `drft report degree` | In-degree and out-degree per node |
+| [Topological depth](depth.md) | `drft report depth` | Layer assignment from roots |
+| [Graph stats](graph-stats.md) | `drft report graph-stats` | Density, diameter, average path length |
+| [PageRank](pagerank.md) | `drft report pagerank` | Structural importance ranking |
+| [Graph boundaries](graph-boundaries.md) | `drft report graph-boundaries` | Graph escapes and encapsulation violations |
+| [Strongly connected components](scc.md) | `drft report scc` | Finds groups of mutually reachable nodes |
+| [Transitive reduction](transitive-reduction.md) | `drft report transitive-reduction` | Finds edges that are structurally redundant |
 
 ## Graph theory and knowledge systems
 

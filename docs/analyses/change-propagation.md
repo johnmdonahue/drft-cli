@@ -17,7 +17,7 @@ When a file changes, its dependents may need review:
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis change-propagation
+drft report change-propagation
 ```
 
 ```
@@ -30,17 +30,15 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "change-propagation": {
-      "has_lockfile": true,
-      "directly_changed": [
-        { "node": "setup.md", "reason": "content changed" }
-      ],
-      "transitively_stale": [
-        { "node": "index.md", "via": "setup.md" }
-      ],
-      "boundary_changes": []
-    }
+  "change-propagation": {
+    "has_lockfile": true,
+    "directly_changed": [
+      { "node": "setup.md", "reason": "content changed" }
+    ],
+    "transitively_stale": [
+      { "node": "index.md", "via": "setup.md" }
+    ],
+    "boundary_changes": []
   }
 }
 ```

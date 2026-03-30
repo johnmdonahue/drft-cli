@@ -38,7 +38,7 @@ Not every redundant edge is a mistake. In some structures, direct links are inte
 ### As an analysis (`drft report`)
 
 ```bash
-drft report --analysis transitive-reduction
+drft report transitive-reduction
 ```
 
 ```
@@ -50,16 +50,14 @@ JSON output:
 
 ```json
 {
-  "analyses": {
-    "transitive-reduction": {
-      "redundant_edges": [
-        {
-          "source": "synthesis.md",
-          "target": "evidence/EVD-01.md",
-          "via": "observations.md"
-        }
-      ]
-    }
+  "transitive-reduction": {
+    "redundant_edges": [
+      {
+        "source": "synthesis.md",
+        "target": "evidence/EVD-01.md",
+        "via": "observations.md"
+      }
+    ]
   }
 }
 ```
