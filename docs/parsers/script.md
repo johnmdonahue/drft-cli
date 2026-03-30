@@ -27,33 +27,39 @@ If the command path is relative, drft resolves it against the directory containi
 
 ## Protocol
 
-For each matched file, drft runs the command via `sh -c` and sends the file path on stdin. The script reads the path, extracts links, and prints one JSON object per line on stdout.
+drft runs the command once via `sh -c` and sends all matched file paths on stdin (one per line). The script processes each file and prints NDJSON links on stdout, each tagged with the source file.
 
 ### Input (stdin)
 
-The file path, as a plain string with no trailing newline guarantee. Example:
+File paths, one per line:
 
 ```
-docs/guide.yaml
+src/analyses/mod.rs
+src/rules/mod.rs
+src/parsers/mod.rs
 ```
 
 ### Output (stdout)
 
-One JSON object per line (NDJSON). Each object must have two fields:
+One JSON object per line (NDJSON). Each object must have three fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `file` | string | The source file path (as received on stdin) |
 | `target` | string | The link target (relative file path) |
 | `type` | string | Link type label (your choice, e.g. `"import"`, `"ref"`) |
 
 Example output:
 
 ```json
-{"target": "shared/types.yaml", "type": "import"}
-{"target": "../schemas/base.yaml", "type": "ref"}
+{"file": "src/api.yaml", "target": "shared/types.yaml", "type": "import"}
+{"file": "src/api.yaml", "target": "../schemas/base.yaml", "type": "ref"}
+{"file": "src/models.yaml", "target": "shared/types.yaml", "type": "import"}
 ```
 
 Empty lines are silently skipped. The `type` value becomes part of the edge type in the graph as `<parser-name>:<type>` -- so the above would produce edges of type `yaml-refs:import` and `yaml-refs:ref`.
+
+The batch approach (one process for all files) is much faster than per-file spawning.
 
 ### Error handling
 

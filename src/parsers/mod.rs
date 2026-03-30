@@ -25,6 +25,14 @@ pub trait Parser {
     fn matches(&self, path: &str) -> bool;
     /// Parse a file's content and return discovered links.
     fn parse(&self, path: &str, content: &str) -> Vec<RawLink>;
+    /// Parse multiple files in one call. Default falls back to per-file parsing.
+    /// Script parsers override this to spawn one process for all files.
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+        files
+            .iter()
+            .map(|(path, content)| (path.to_string(), self.parse(path, content)))
+            .collect()
+    }
 }
 
 /// Default glob patterns for built-in parsers.
