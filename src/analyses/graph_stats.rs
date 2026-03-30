@@ -1,7 +1,6 @@
-use super::Analysis;
+use super::{Analysis, AnalysisContext};
 use crate::graph::Graph;
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GraphStatsResult {
@@ -21,11 +20,12 @@ impl Analysis for GraphStats {
         "graph-stats"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> GraphStatsResult {
+    fn run(&self, ctx: &AnalysisContext) -> GraphStatsResult {
+        let graph = ctx.graph;
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -35,7 +35,7 @@ impl Analysis for GraphStats {
         let edge_count = graph
             .edges
             .iter()
-            .filter(|e| graph.is_real_node(&e.source) && graph.is_real_node(&e.target))
+            .filter(|e| graph.is_file_node(&e.source) && graph.is_file_node(&e.target))
             .count();
 
         // Density for directed graph: |E| / (|V| * (|V| - 1))
@@ -118,7 +118,7 @@ fn bfs_distances<'a>(graph: &'a Graph, source: &'a str) -> HashMap<&'a str, usiz
         if let Some(edge_indices) = graph.forward.get(current) {
             for &idx in edge_indices {
                 let target = graph.edges[idx].target.as_str();
-                if graph.is_real_node(target) && !distances.contains_key(target) {
+                if graph.is_file_node(target) && !distances.contains_key(target) {
                     distances.insert(target, current_dist + 1);
                     queue.push_back(target);
                 }
@@ -132,13 +132,25 @@ fn bfs_distances<'a>(graph: &'a Graph, source: &'a str) -> HashMap<&'a str, usiz
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::Graph;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = GraphStats.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = GraphStats.run(&make_ctx(&graph, &config));
         assert_eq!(result.node_count, 0);
         assert_eq!(result.edge_count, 0);
         assert_eq!(result.density, 0.0);
@@ -149,7 +161,8 @@ mod tests {
     fn single_node() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
-        let result = GraphStats.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = GraphStats.run(&make_ctx(&graph, &config));
         assert_eq!(result.node_count, 1);
         assert_eq!(result.density, 0.0);
         assert_eq!(result.diameter, Some(0));
@@ -157,7 +170,6 @@ mod tests {
 
     #[test]
     fn linear_chain() {
-        // a → b → c (strongly connected? no — diameter is None for directed)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -165,18 +177,16 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = GraphStats.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = GraphStats.run(&make_ctx(&graph, &config));
         assert_eq!(result.node_count, 3);
         assert_eq!(result.edge_count, 2);
-        // density = 2 / (3 * 2) = 0.333...
         assert!((result.density - 1.0 / 3.0).abs() < 1e-10);
-        // Not strongly connected (c can't reach a), so diameter is None
         assert_eq!(result.diameter, None);
     }
 
     #[test]
     fn complete_bidirectional() {
-        // a ↔ b ↔ c ↔ a (fully connected cycle)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -188,7 +198,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = GraphStats.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = GraphStats.run(&make_ctx(&graph, &config));
         assert_eq!(result.node_count, 3);
         assert_eq!(result.edge_count, 6);
         assert!((result.density - 1.0).abs() < 1e-10);
@@ -198,7 +209,6 @@ mod tests {
 
     #[test]
     fn cycle_has_diameter() {
-        // a → b → c → a (cycle, strongly connected)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -207,9 +217,9 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = GraphStats.run(&graph, Path::new("."));
-        assert_eq!(result.diameter, Some(2)); // a→b→c is longest shortest path
-        // 6 pairs: a→b=1, a→c=2, b→c=1, b→a=2, c→a=1, c→b=2 = 9/6 = 1.5
+        let config = Config::defaults();
+        let result = GraphStats.run(&make_ctx(&graph, &config));
+        assert_eq!(result.diameter, Some(2));
         assert!((result.average_path_length.unwrap() - 1.5).abs() < 1e-10);
     }
 }

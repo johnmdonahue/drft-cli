@@ -1,8 +1,6 @@
-use super::Analysis;
+use super::{Analysis, AnalysisContext};
 use crate::analyses::scc::StronglyConnectedComponents;
-use crate::graph::Graph;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NodeDepth {
@@ -26,9 +24,10 @@ impl Analysis for Depth {
         "depth"
     }
 
-    fn run(&self, graph: &Graph, root: &Path) -> DepthResult {
+    fn run(&self, ctx: &AnalysisContext) -> DepthResult {
+        let graph = ctx.graph;
         // Step 1: Run SCC analysis to identify cycles
-        let scc_result = StronglyConnectedComponents.run(graph, root);
+        let scc_result = StronglyConnectedComponents.run(ctx);
 
         // Identify which nodes are in non-trivial SCCs
         let nontrivial_nodes: HashSet<&str> = scc_result
@@ -54,7 +53,7 @@ impl Analysis for Depth {
         }
 
         for edge in &graph.edges {
-            if !graph.is_real_node(&edge.source) || !graph.is_real_node(&edge.target) {
+            if !graph.is_file_node(&edge.source) || !graph.is_file_node(&edge.target) {
                 continue;
             }
             let src_super = node_to_super[&edge.source];
@@ -108,7 +107,7 @@ impl Analysis for Depth {
         let mut real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
         real_nodes.sort();
@@ -135,12 +134,23 @@ impl Analysis for Depth {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn linear_chain() {
-        // a → b → c
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -148,7 +158,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = Depth.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
         assert_eq!(result.max_depth, 2);
 
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
@@ -161,7 +172,6 @@ mod tests {
 
     #[test]
     fn diamond() {
-        // a → b, a → c, b → d, c → d
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -172,15 +182,14 @@ mod tests {
         graph.add_edge(make_edge("b.md", "d.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
 
-        let result = Depth.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
         let d = result.nodes.iter().find(|n| n.node == "d.md").unwrap();
-        // d is reachable at depth 2 via both paths
         assert_eq!(d.depth, 2);
     }
 
     #[test]
     fn cycle_gets_depth_and_flag() {
-        // a → b → c → b (cycle: b,c)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -189,7 +198,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "b.md"));
 
-        let result = Depth.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
 
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
         assert_eq!(a.depth, 0);
@@ -197,16 +207,15 @@ mod tests {
 
         let b = result.nodes.iter().find(|n| n.node == "b.md").unwrap();
         assert!(b.in_cycle);
-        assert_eq!(b.depth, 1); // SCC contracted, depth from a
+        assert_eq!(b.depth, 1);
 
         let c = result.nodes.iter().find(|n| n.node == "c.md").unwrap();
         assert!(c.in_cycle);
-        assert_eq!(c.depth, 1); // Same SCC as b
+        assert_eq!(c.depth, 1);
     }
 
     #[test]
     fn entirely_cyclic() {
-        // a → b → c → a
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -215,8 +224,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let result = Depth.run(&graph, Path::new("."));
-        // All in one SCC, all at depth 0 (root of condensation)
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
         for nd in &result.nodes {
             assert_eq!(nd.depth, 0);
             assert!(nd.in_cycle);
@@ -226,14 +235,14 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = Depth.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
         assert_eq!(result.max_depth, 0);
         assert!(result.nodes.is_empty());
     }
 
     #[test]
     fn multiple_roots() {
-        // a → c, b → c (two roots)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -241,7 +250,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = Depth.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Depth.run(&make_ctx(&graph, &config));
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
         let b = result.nodes.iter().find(|n| n.node == "b.md").unwrap();
         let c = result.nodes.iter().find(|n| n.node == "c.md").unwrap();

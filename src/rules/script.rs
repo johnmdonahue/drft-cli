@@ -1,12 +1,13 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::config::{Config, CustomRuleConfig};
+use crate::config::{Config, RuleConfig};
 use crate::diagnostic::Diagnostic;
 use crate::graph::Graph;
 
-/// Run all custom rules defined in the config against the graph.
-/// Each custom rule receives the graph as JGF JSON on stdin and
+/// Run all script rules defined in the config against the graph.
+/// Script rules are rules with a `command` field in `[rules]`.
+/// Each script rule receives the graph as JGF JSON on stdin and
 /// emits diagnostics as newline-delimited JSON on stdout.
 ///
 /// Expected output format per line:
@@ -14,22 +15,22 @@ use crate::graph::Graph;
 ///
 /// All fields except `message` are optional. The `rule` and `severity` fields
 /// are set by drft from the config — the script doesn't need to provide them.
-pub fn run_custom_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
+pub fn run_script_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let config_dir = config.config_dir.as_deref().unwrap_or(root);
 
-    for (rule_name, rule_config) in &config.custom_rules {
+    for (rule_name, rule_config) in config.script_rules() {
         match run_one(rule_name, rule_config, graph, root, config_dir) {
             Ok(mut results) => diagnostics.append(&mut results),
             Err(e) => {
-                eprintln!("warn: custom rule \"{rule_name}\" failed: {e}");
+                eprintln!("warn: script rule \"{rule_name}\" failed: {e}");
                 // Surface failures as diagnostics so JSON consumers see them
                 diagnostics.push(Diagnostic {
-                    rule: rule_name.clone(),
+                    rule: rule_name.to_string(),
                     severity: rule_config.severity,
-                    message: format!("custom rule failed: {e}"),
+                    message: format!("script rule failed: {e}"),
                     fix: Some(format!(
-                        "custom rule \"{rule_name}\" failed to execute — check the command path and script"
+                        "script rule \"{rule_name}\" failed to execute — check the command path and script"
                     )),
                     ..Default::default()
                 });
@@ -42,16 +43,21 @@ pub fn run_custom_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diag
 
 fn run_one(
     rule_name: &str,
-    rule_config: &CustomRuleConfig,
+    rule_config: &RuleConfig,
     graph: &Graph,
     root: &Path,
     config_dir: &Path,
 ) -> anyhow::Result<Vec<Diagnostic>> {
+    let command = rule_config
+        .command
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("rule \"{rule_name}\" has no command"))?;
+
     // Build the graph JSON to pass on stdin
     let graph_json = build_graph_json(graph);
 
     // Parse command string (split on whitespace for simple commands)
-    let parts: Vec<&str> = rule_config.command.split_whitespace().collect();
+    let parts: Vec<&str> = command.split_whitespace().collect();
     if parts.is_empty() {
         anyhow::bail!("empty command");
     }
@@ -106,7 +112,7 @@ fn run_one(
                 });
             }
             Err(e) => {
-                eprintln!("warn: custom rule \"{rule_name}\": failed to parse output line: {e}");
+                eprintln!("warn: script rule \"{rule_name}\": failed to parse output line: {e}");
             }
         }
     }
@@ -173,18 +179,21 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some("b3:aaa".into()),
+            graph: None,
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some("b3:bbb".into()),
+            graph: None,
         });
         g.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
         g
     }
@@ -207,9 +216,12 @@ mod tests {
             fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let config = CustomRuleConfig {
-            command: script.to_string_lossy().to_string(),
+        let config = RuleConfig {
+            command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            ignore: Vec::new(),
+            timeout: None,
+            ignore_compiled: None,
         };
 
         let graph = make_graph();
@@ -234,9 +246,12 @@ mod tests {
             fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let config = CustomRuleConfig {
-            command: script.to_string_lossy().to_string(),
+        let config = RuleConfig {
+            command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            ignore: Vec::new(),
+            timeout: None,
+            ignore_compiled: None,
         };
 
         let graph = make_graph();

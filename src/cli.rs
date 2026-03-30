@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "drft",
-    about = "Structural integrity checker for markdown directories"
+    about = "Structural integrity checker for linked file systems"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -26,21 +26,21 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Create a drft.toml config file
-    Init,
+    Init {
+        /// Derive interface nodes from a file's outbound links
+        #[arg(long, value_name = "FILE")]
+        interface_from: Option<String>,
+
+        /// Create config without interface (open graph)
+        #[arg(long)]
+        no_interface: bool,
+    },
 
     /// Snapshot the current state to drft.lock
     Lock {
         /// Verify lockfile is up to date without writing
         #[arg(long)]
         check: bool,
-
-        /// Seal the scope by declaring a manifest file
-        #[arg(long, value_name = "FILE")]
-        manifest: Option<String>,
-
-        /// Unseal the scope by removing the manifest
-        #[arg(long)]
-        no_manifest: bool,
 
         /// Lock child scopes recursively (bottom-up)
         #[arg(long, short = 'r')]
@@ -69,18 +69,7 @@ pub enum Commands {
         files: Vec<String>,
     },
 
-    /// Run graph analyses and output structured results
-    Report {
-        /// Analyses to run (defaults to all)
-        #[arg(long = "analysis", conflicts_with = "metrics")]
-        analyses: Vec<String>,
-
-        /// Output extracted scalar metrics instead of full analysis results
-        #[arg(long)]
-        metrics: bool,
-    },
-
-    /// Check markdown structure for rule violations
+    /// Check structure for rule violations
     Check {
         /// Run only specific rules (can be repeated)
         #[arg(long = "rule")]

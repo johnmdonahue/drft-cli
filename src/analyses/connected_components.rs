@@ -1,7 +1,5 @@
-use super::Analysis;
-use crate::graph::Graph;
+use super::{Analysis, AnalysisContext};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Component {
@@ -24,12 +22,13 @@ impl Analysis for ConnectedComponents {
         "connected-components"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> ConnectedComponentsResult {
+    fn run(&self, ctx: &AnalysisContext) -> ConnectedComponentsResult {
+        let graph = ctx.graph;
         // Build undirected adjacency among real nodes
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -39,7 +38,7 @@ impl Analysis for ConnectedComponents {
         }
 
         for edge in &graph.edges {
-            if graph.is_real_node(&edge.source) && graph.is_real_node(&edge.target) {
+            if graph.is_file_node(&edge.source) && graph.is_file_node(&edge.target) {
                 adj.entry(edge.source.as_str())
                     .or_default()
                     .insert(edge.target.as_str());
@@ -104,9 +103,21 @@ impl Analysis for ConnectedComponents {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Node, NodeType};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn single_component() {
@@ -117,7 +128,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 1);
         assert_eq!(result.components[0].members.len(), 3);
     }
@@ -132,9 +144,9 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 2);
-        // Both components have 2 members
         assert_eq!(result.components[0].members.len(), 2);
         assert_eq!(result.components[1].members.len(), 2);
     }
@@ -146,9 +158,9 @@ mod tests {
         graph.add_node(make_node("b.md"));
         graph.add_node(make_node("c.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
-        // c.md is isolated
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 2);
         assert_eq!(result.components[0].members, vec!["a.md", "b.md"]);
         assert_eq!(result.components[1].members, vec!["c.md"]);
@@ -162,10 +174,12 @@ mod tests {
             path: "https://example.com".into(),
             node_type: NodeType::External,
             hash: None,
+            graph: None,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 1);
         assert_eq!(result.components[0].members, vec!["a.md"]);
     }
@@ -173,14 +187,14 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 0);
         assert!(result.components.is_empty());
     }
 
     #[test]
     fn undirected_connectivity() {
-        // a → b and c → b: all three should be in one component (undirected)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -188,7 +202,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("c.md", "b.md"));
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 1);
         assert_eq!(result.components[0].members.len(), 3);
     }
@@ -203,12 +218,12 @@ mod tests {
         graph.add_node(make_node("e.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("a.md", "c.md"));
-        // d and e are isolated
 
-        let result = ConnectedComponents.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = ConnectedComponents.run(&make_ctx(&graph, &config));
         assert_eq!(result.component_count, 3);
-        assert_eq!(result.components[0].members.len(), 3); // a, b, c
-        assert_eq!(result.components[1].members.len(), 1); // d
-        assert_eq!(result.components[2].members.len(), 1); // e
+        assert_eq!(result.components[0].members.len(), 3);
+        assert_eq!(result.components[1].members.len(), 1);
+        assert_eq!(result.components[2].members.len(), 1);
     }
 }

@@ -12,56 +12,179 @@ pub enum RuleSeverity {
     Off,
 }
 
+// ── Parser config ──────────────────────────────────────────────
+
+/// Configuration for a single parser under `[parsers]`.
+/// Supports shorthand (`markdown = true`, `markdown = ["frontmatter"]`)
+/// and expanded table form (`[parsers.markdown]` with fields).
+#[derive(Debug, Clone)]
+pub struct ParserConfig {
+    pub glob: Option<String>,
+    pub types: Option<Vec<String>>,
+    pub command: Option<String>,
+    pub timeout: Option<u64>,
+}
+
+/// Serde helper: untagged enum to parse shorthand or table forms.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawParserValue {
+    /// `markdown = true`
+    Bool(bool),
+    /// `markdown = ["frontmatter", "wikilink"]`
+    Types(Vec<String>),
+    /// `[parsers.markdown]` with fields
+    Table {
+        glob: Option<String>,
+        types: Option<Vec<String>>,
+        command: Option<String>,
+        timeout: Option<u64>,
+    },
+}
+
+impl From<RawParserValue> for Option<ParserConfig> {
+    fn from(val: RawParserValue) -> Self {
+        match val {
+            RawParserValue::Bool(false) => None,
+            RawParserValue::Bool(true) => Some(ParserConfig {
+                glob: None,
+                types: None,
+                command: None,
+                timeout: None,
+            }),
+            RawParserValue::Types(types) => Some(ParserConfig {
+                glob: None,
+                types: Some(types),
+                command: None,
+                timeout: None,
+            }),
+            RawParserValue::Table {
+                glob,
+                types,
+                command,
+                timeout,
+            } => Some(ParserConfig {
+                glob,
+                types,
+                command,
+                timeout,
+            }),
+        }
+    }
+}
+
+// ── Interface config ───────────────────────────────────────────
+
 #[derive(Debug, Clone, Deserialize)]
-pub struct CustomRuleConfig {
-    pub command: String,
-    #[serde(default = "default_warn")]
+pub struct InterfaceConfig {
+    // TODO: Used in Phase 5 when graph construction resolves interface globs
+    #[allow(dead_code)]
+    pub nodes: Vec<String>,
+}
+
+// ── Rule config ────────────────────────────────────────────────
+
+/// Configuration for a single rule under `[rules]`.
+/// Supports shorthand (`cycle = "warn"`) and table form (`[rules.orphan]`).
+#[derive(Debug, Clone)]
+pub struct RuleConfig {
     pub severity: RuleSeverity,
+    #[allow(dead_code)]
+    pub ignore: Vec<String>,
+    pub command: Option<String>,
+    #[allow(dead_code)]
+    pub timeout: Option<u64>,
+    pub(crate) ignore_compiled: Option<GlobSet>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct CustomAnalysisConfig {
-    pub command: String,
+impl RuleConfig {
+    pub fn is_path_ignored(&self, path: &str) -> bool {
+        if let Some(ref glob_set) = self.ignore_compiled {
+            glob_set.is_match(path)
+        } else {
+            false
+        }
+    }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct CustomMetricConfig {
-    pub command: String,
+/// Serde helper: untagged enum for shorthand or table forms.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawRuleValue {
+    /// `cycle = "warn"`
+    Severity(RuleSeverity),
+    /// `[rules.orphan]` with fields
+    Table {
+        #[serde(default = "default_warn")]
+        severity: RuleSeverity,
+        #[serde(default)]
+        ignore: Vec<String>,
+        command: Option<String>,
+        timeout: Option<u64>,
+    },
 }
 
 fn default_warn() -> RuleSeverity {
     RuleSeverity::Warn
 }
 
+// ── Config ─────────────────────────────────────────────────────
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub ignore: Vec<String>,
-    pub manifest: Option<String>,
-    pub rules: HashMap<String, RuleSeverity>,
-    pub ignore_rules: HashMap<String, Vec<String>>,
-    pub custom_rules: HashMap<String, CustomRuleConfig>,
-    pub custom_analyses: HashMap<String, CustomAnalysisConfig>,
-    pub custom_metrics: HashMap<String, CustomMetricConfig>,
+    pub interface: Option<InterfaceConfig>,
+    pub parsers: HashMap<String, ParserConfig>,
+    pub rules: HashMap<String, RuleConfig>,
     /// Directory containing the drft.toml this config was loaded from.
-    /// Used to resolve relative paths in custom commands.
     pub config_dir: Option<std::path::PathBuf>,
-    ignore_rules_compiled: HashMap<String, Option<GlobSet>>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct RawConfig {
     ignore: Option<Vec<String>>,
-    manifest: Option<String>,
-    rules: Option<HashMap<String, RuleSeverity>>,
-    ignore_rules: Option<HashMap<String, Vec<String>>>,
-    custom_rules: Option<HashMap<String, CustomRuleConfig>>,
-    custom_analyses: Option<HashMap<String, CustomAnalysisConfig>>,
-    custom_metrics: Option<HashMap<String, CustomMetricConfig>>,
+    interface: Option<InterfaceConfig>,
+    parsers: Option<HashMap<String, RawParserValue>>,
+    rules: Option<HashMap<String, RawRuleValue>>,
+    // v0.2 keys — detected for migration warnings
+    manifest: Option<toml::Value>,
+    custom_rules: Option<toml::Value>,
+    custom_analyses: Option<toml::Value>,
+    custom_metrics: Option<toml::Value>,
+    ignore_rules: Option<toml::Value>,
 }
+
+/// Names of all built-in rules (for unknown-rule warnings).
+const BUILTIN_RULES: &[&str] = &[
+    "broken-link",
+    "containment",
+    "cycle",
+    "directory-link",
+    "encapsulation",
+    "fragility",
+    "fragmentation",
+    "indirect-link",
+    "layer-violation",
+    "orphan",
+    "redundant-edge",
+    "stale",
+];
 
 impl Config {
     pub fn defaults() -> Self {
+        // When no drft.toml exists, default to markdown parser enabled
+        let mut parsers = HashMap::new();
+        parsers.insert(
+            "markdown".to_string(),
+            ParserConfig {
+                glob: None,
+                types: None,
+                command: None,
+                timeout: None,
+            },
+        );
+
         let rules = [
             ("broken-link", RuleSeverity::Warn),
             ("containment", RuleSeverity::Warn),
@@ -72,30 +195,35 @@ impl Config {
             ("fragmentation", RuleSeverity::Off),
             ("indirect-link", RuleSeverity::Off),
             ("layer-violation", RuleSeverity::Off),
-            ("lockfile-outdated", RuleSeverity::Warn),
             ("orphan", RuleSeverity::Off),
             ("redundant-edge", RuleSeverity::Off),
             ("stale", RuleSeverity::Warn),
         ]
         .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                RuleConfig {
+                    severity: v,
+                    ignore: Vec::new(),
+                    command: None,
+                    timeout: None,
+                    ignore_compiled: None,
+                },
+            )
+        })
         .collect();
 
         Config {
             ignore: Vec::new(),
-            manifest: None,
+            interface: None,
+            parsers,
             rules,
-            ignore_rules: HashMap::new(),
-            custom_rules: HashMap::new(),
-            custom_analyses: HashMap::new(),
-            custom_metrics: HashMap::new(),
             config_dir: None,
-            ignore_rules_compiled: HashMap::new(),
         }
     }
 
     pub fn load(root: &Path) -> Result<Self> {
-        // Look for drft.toml in root, then walk up to find an ancestor's config
         let config_path = Self::find_config(root);
         let config_path = match config_path {
             Some(p) => p,
@@ -108,6 +236,31 @@ impl Config {
         let raw: RawConfig = toml::from_str(&content)
             .with_context(|| format!("failed to parse {}", config_path.display()))?;
 
+        // Warn about v0.2 config keys
+        if raw.manifest.is_some() {
+            eprintln!("warn: drft.toml uses v0.2 'manifest' key — migrate to [interface] section");
+        }
+        if raw.custom_rules.is_some() {
+            eprintln!(
+                "warn: drft.toml uses v0.2 [custom-rules] — migrate to [rules] with 'command' field"
+            );
+        }
+        if raw.custom_analyses.is_some() {
+            eprintln!(
+                "warn: drft.toml uses v0.2 [custom-analyses] — custom analyses are no longer supported"
+            );
+        }
+        if raw.custom_metrics.is_some() {
+            eprintln!(
+                "warn: drft.toml uses v0.2 [custom-metrics] — custom metrics are no longer supported"
+            );
+        }
+        if raw.ignore_rules.is_some() {
+            eprintln!(
+                "warn: drft.toml uses v0.2 [ignore-rules] — migrate to per-rule 'ignore' field"
+            );
+        }
+
         let mut config = Self::defaults();
         config.config_dir = config_path.parent().map(|p| p.to_path_buf());
 
@@ -115,46 +268,64 @@ impl Config {
             config.ignore = ignore;
         }
 
-        config.manifest = raw.manifest;
+        config.interface = raw.interface;
 
-        if let Some(custom_rules) = raw.custom_rules {
-            config.custom_rules = custom_rules;
-        }
-        if let Some(custom_analyses) = raw.custom_analyses {
-            config.custom_analyses = custom_analyses;
-        }
-        if let Some(custom_metrics) = raw.custom_metrics {
-            config.custom_metrics = custom_metrics;
-        }
-
-        if let Some(ignore_rules) = raw.ignore_rules {
-            for (rule_name, patterns) in &ignore_rules {
-                let mut builder = GlobSetBuilder::new();
-                for pattern in patterns {
-                    builder
-                        .add(Glob::new(pattern).with_context(|| {
-                            format!("invalid glob in ignore-rules.{rule_name}")
-                        })?);
+        // Parse parsers
+        if let Some(raw_parsers) = raw.parsers {
+            config.parsers.clear();
+            for (name, value) in raw_parsers {
+                if let Some(parser_config) = Option::<ParserConfig>::from(value) {
+                    config.parsers.insert(name, parser_config);
                 }
-                let compiled = builder.build().with_context(|| {
-                    format!("failed to compile globs for ignore-rules.{rule_name}")
-                })?;
-                config
-                    .ignore_rules_compiled
-                    .insert(rule_name.clone(), Some(compiled));
             }
-            config.ignore_rules = ignore_rules;
         }
 
-        if let Some(rules) = raw.rules {
-            let known_rules: Vec<&str> = config.rules.keys().map(|s| s.as_str()).collect();
-            for name in rules.keys() {
-                if !known_rules.contains(&name.as_str()) {
+        // Parse rules (unified: built-in severities + table form + script rules)
+        if let Some(raw_rules) = raw.rules {
+            for (name, value) in raw_rules {
+                let rule_config = match value {
+                    RawRuleValue::Severity(severity) => RuleConfig {
+                        severity,
+                        ignore: Vec::new(),
+                        command: None,
+                        timeout: None,
+                        ignore_compiled: None,
+                    },
+                    RawRuleValue::Table {
+                        severity,
+                        ignore,
+                        command,
+                        timeout,
+                    } => {
+                        let compiled = if ignore.is_empty() {
+                            None
+                        } else {
+                            let mut builder = GlobSetBuilder::new();
+                            for pattern in &ignore {
+                                builder.add(Glob::new(pattern).with_context(|| {
+                                    format!("invalid glob in rules.{name}.ignore")
+                                })?);
+                            }
+                            Some(builder.build().with_context(|| {
+                                format!("failed to compile globs for rules.{name}.ignore")
+                            })?)
+                        };
+                        RuleConfig {
+                            severity,
+                            ignore,
+                            command,
+                            timeout,
+                            ignore_compiled: compiled,
+                        }
+                    }
+                };
+
+                // Warn about unknown built-in rules (but allow script rules with command)
+                if rule_config.command.is_none() && !BUILTIN_RULES.contains(&name.as_str()) {
                     eprintln!("warn: unknown rule \"{name}\" in drft.toml (ignored)");
                 }
-            }
-            for (name, severity) in rules {
-                config.rules.insert(name, severity);
+
+                config.rules.insert(name, rule_config);
             }
         }
 
@@ -162,7 +333,6 @@ impl Config {
     }
 
     /// Find the nearest drft.toml by walking up from `root`.
-    /// Returns None if no config file is found.
     fn find_config(root: &Path) -> Option<std::path::PathBuf> {
         let mut current = root.to_path_buf();
         loop {
@@ -177,16 +347,25 @@ impl Config {
     }
 
     pub fn rule_severity(&self, name: &str) -> RuleSeverity {
-        self.rules.get(name).copied().unwrap_or(RuleSeverity::Off)
+        self.rules
+            .get(name)
+            .map(|r| r.severity)
+            .unwrap_or(RuleSeverity::Off)
     }
 
     /// Check if a path should be ignored for a specific rule.
     pub fn is_rule_ignored(&self, rule: &str, path: &str) -> bool {
-        if let Some(Some(glob_set)) = self.ignore_rules_compiled.get(rule) {
-            glob_set.is_match(path)
-        } else {
-            false
-        }
+        self.rules
+            .get(rule)
+            .is_some_and(|r| r.is_path_ignored(path))
+    }
+
+    /// Get script rules (rules with a command field).
+    pub fn script_rules(&self) -> impl Iterator<Item = (&str, &RuleConfig)> {
+        self.rules
+            .iter()
+            .filter(|(_, r)| r.command.is_some())
+            .map(|(name, config)| (name.as_str(), config))
     }
 }
 
@@ -203,10 +382,11 @@ mod tests {
         assert_eq!(config.rule_severity("broken-link"), RuleSeverity::Warn);
         assert_eq!(config.rule_severity("orphan"), RuleSeverity::Off);
         assert!(config.ignore.is_empty());
+        assert!(config.parsers.contains_key("markdown"));
     }
 
     #[test]
-    fn loads_config_file() {
+    fn loads_rule_severities() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
@@ -220,14 +400,15 @@ mod tests {
     }
 
     #[test]
-    fn loads_ignore_rules() {
+    fn loads_rule_with_ignore() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\norphan = \"warn\"\n\n[ignore-rules]\norphan = [\"README.md\", \"index.md\"]\n",
+            "[rules.orphan]\nseverity = \"warn\"\nignore = [\"README.md\", \"index.md\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.rule_severity("orphan"), RuleSeverity::Warn);
         assert!(config.is_rule_ignored("orphan", "README.md"));
         assert!(config.is_rule_ignored("orphan", "index.md"));
         assert!(!config.is_rule_ignored("orphan", "other.md"));
@@ -235,16 +416,86 @@ mod tests {
     }
 
     #[test]
-    fn ignore_rules_supports_globs() {
+    fn loads_parser_shorthand_bool() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), "[parsers]\nmarkdown = true\n").unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert!(config.parsers.contains_key("markdown"));
+        let p = &config.parsers["markdown"];
+        assert!(p.glob.is_none());
+        assert!(p.types.is_none());
+        assert!(p.command.is_none());
+    }
+
+    #[test]
+    fn loads_parser_shorthand_types() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[ignore-rules]\nbroken-link = [\"drafts/*\"]\n",
+            "[parsers]\nmarkdown = [\"frontmatter\", \"wikilink\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert!(config.is_rule_ignored("broken-link", "drafts/wip.md"));
-        assert!(!config.is_rule_ignored("broken-link", "index.md"));
+        let p = &config.parsers["markdown"];
+        assert_eq!(
+            p.types.as_deref(),
+            Some(vec!["frontmatter".to_string(), "wikilink".to_string()]).as_deref()
+        );
+    }
+
+    #[test]
+    fn loads_parser_table() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[parsers.tsx]\nglob = \"*.tsx\"\ncommand = \"./parse.sh\"\ntimeout = 10000\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let p = &config.parsers["tsx"];
+        assert_eq!(p.glob.as_deref(), Some("*.tsx"));
+        assert_eq!(p.command.as_deref(), Some("./parse.sh"));
+        assert_eq!(p.timeout, Some(10000));
+    }
+
+    #[test]
+    fn parser_false_disables() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[parsers]\nmarkdown = false\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert!(!config.parsers.contains_key("markdown"));
+    }
+
+    #[test]
+    fn loads_interface() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[interface]\nnodes = [\"overview.md\", \"api/*.md\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let iface = config.interface.unwrap();
+        assert_eq!(iface.nodes, vec!["overview.md", "api/*.md"]);
+    }
+
+    #[test]
+    fn loads_script_rule() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules.my-check]\ncommand = \"./check.sh\"\nseverity = \"warn\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let script_rules: Vec<_> = config.script_rules().collect();
+        assert_eq!(script_rules.len(), 1);
+        assert_eq!(script_rules[0].0, "my-check");
+        assert_eq!(script_rules[0].1.command.as_deref(), Some("./check.sh"));
     }
 
     #[test]
@@ -263,7 +514,6 @@ mod tests {
         )
         .unwrap();
 
-        // Child has no drft.toml — should inherit parent's config
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
 

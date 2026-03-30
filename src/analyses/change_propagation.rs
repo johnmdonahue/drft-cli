@@ -1,6 +1,6 @@
-use super::Analysis;
+use super::{Analysis, AnalysisContext};
 use crate::discovery::find_child_scopes;
-use crate::graph::{Graph, NodeType, hash_bytes};
+use crate::graph::{NodeType, hash_bytes};
 use crate::lockfile::read_lockfile;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -40,7 +40,9 @@ impl Analysis for ChangePropagation {
         "change-propagation"
     }
 
-    fn run(&self, _graph: &Graph, root: &Path) -> ChangePropagationResult {
+    fn run(&self, ctx: &AnalysisContext) -> ChangePropagationResult {
+        let graph = ctx.graph;
+        let root = ctx.root;
         let lockfile = match read_lockfile(root) {
             Ok(Some(lf)) => lf,
             _ => {
@@ -86,7 +88,7 @@ impl Analysis for ChangePropagation {
             .collect();
 
         for (path, node) in &lockfile.nodes {
-            if node.node_type == NodeType::Frontier && !current_scopes.contains(path.as_str()) {
+            if node.node_type == NodeType::Graph && !current_scopes.contains(path.as_str()) {
                 boundary_changes.push(BoundaryChange {
                     node: path.clone(),
                     reason: "scope removed".into(),
@@ -97,7 +99,7 @@ impl Analysis for ChangePropagation {
         let lockfile_frontiers: HashSet<&str> = lockfile
             .nodes
             .iter()
-            .filter(|(_, n)| n.node_type == NodeType::Frontier)
+            .filter(|(_, n)| n.node_type == NodeType::Graph)
             .map(|(p, _)| p.as_str())
             .collect();
         for scope in &current_scopes {
@@ -109,12 +111,12 @@ impl Analysis for ChangePropagation {
             }
         }
 
-        // Transitive staleness: BFS over reverse dependency edges from lockfile
+        // Transitive staleness: BFS over reverse dependency edges from current graph
         let mut transitively_stale = Vec::new();
 
         if !directly_stale.is_empty() {
             let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
-            for edge in &lockfile.edges {
+            for edge in &graph.edges {
                 dependents
                     .entry(edge.target.as_str())
                     .or_default()
@@ -173,10 +175,21 @@ fn compute_current_hash(root: &Path, relative_path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, write_lockfile};
     use std::fs;
     use tempfile::TempDir;
+
+    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root,
+            config,
+            lockfile: None,
+        }
+    }
 
     fn setup_locked_dir() -> TempDir {
         let dir = TempDir::new().unwrap();
@@ -189,21 +202,24 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some(index_hash),
+            graph: None,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some(setup_hash),
+            graph: None,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let lockfile = Lockfile::from_graph(&graph, None);
+        let lockfile = Lockfile::from_graph(&graph);
         write_lockfile(dir.path(), &lockfile).unwrap();
         dir
     }
@@ -212,7 +228,9 @@ mod tests {
     fn no_changes_when_unchanged() {
         let dir = setup_locked_dir();
         let graph = Graph::new();
-        let result = ChangePropagation.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = ChangePropagation.run(&ctx);
         assert!(result.has_lockfile);
         assert!(result.directly_changed.is_empty());
         assert!(result.transitively_stale.is_empty());
@@ -223,8 +241,10 @@ mod tests {
         let dir = setup_locked_dir();
         fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
 
-        let graph = Graph::new();
-        let result = ChangePropagation.run(&graph, dir.path());
+        let config = Config::defaults();
+        let graph = crate::graph::build_graph(dir.path(), &config).unwrap();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = ChangePropagation.run(&ctx);
         assert_eq!(result.directly_changed.len(), 1);
         assert_eq!(result.directly_changed[0].node, "setup.md");
         assert_eq!(result.transitively_stale.len(), 1);
@@ -236,7 +256,9 @@ mod tests {
     fn no_lockfile_returns_empty() {
         let dir = TempDir::new().unwrap();
         let graph = Graph::new();
-        let result = ChangePropagation.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = ChangePropagation.run(&ctx);
         assert!(!result.has_lockfile);
         assert!(result.directly_changed.is_empty());
     }
@@ -247,7 +269,9 @@ mod tests {
         fs::remove_file(dir.path().join("setup.md")).unwrap();
 
         let graph = Graph::new();
-        let result = ChangePropagation.run(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let result = ChangePropagation.run(&ctx);
         assert_eq!(result.directly_changed.len(), 1);
         assert_eq!(result.directly_changed[0].reason, "file deleted");
     }

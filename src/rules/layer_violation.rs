@@ -1,10 +1,9 @@
-use super::Rule;
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::depth::Depth;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
+use crate::rules::{Rule, RuleContext};
 use std::collections::HashMap;
-use std::path::Path;
 
 pub struct LayerViolationRule;
 
@@ -13,10 +12,16 @@ impl Rule for LayerViolationRule {
         "layer-violation"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = Depth.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let graph = ctx.graph;
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = Depth.run(&analysis_ctx);
 
-        // Build lookup maps
         let depth_map: HashMap<&str, usize> = result
             .nodes
             .iter()
@@ -31,11 +36,10 @@ impl Rule for LayerViolationRule {
         let mut diagnostics = Vec::new();
 
         for edge in &graph.edges {
-            if !graph.is_real_node(&edge.source) || !graph.is_real_node(&edge.target) {
+            if !graph.is_file_node(&edge.source) || !graph.is_file_node(&edge.target) {
                 continue;
             }
 
-            // Skip edges involving cyclic nodes
             if cycle_map.get(edge.source.as_str()) == Some(&true)
                 || cycle_map.get(edge.target.as_str()) == Some(&true)
             {
@@ -50,7 +54,6 @@ impl Rule for LayerViolationRule {
             };
 
             if tgt_depth < src_depth {
-                // Upward link
                 diagnostics.push(Diagnostic {
                     rule: "layer-violation".into(),
                     message: format!(
@@ -66,7 +69,6 @@ impl Rule for LayerViolationRule {
                     ..Default::default()
                 });
             } else if tgt_depth > src_depth + 1 {
-                // Skip-layer link
                 diagnostics.push(Diagnostic {
                     rule: "layer-violation".into(),
                     message: format!(
@@ -95,12 +97,23 @@ impl Rule for LayerViolationRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use crate::rules::RuleContext;
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn no_violation_in_clean_hierarchy() {
-        // a → b → c (each at depth +1)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -108,13 +121,13 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let diagnostics = LayerViolationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = LayerViolationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
     #[test]
     fn detects_upward_link() {
-        // a → b → c, c → a (upward)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -123,48 +136,44 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
-        graph.add_edge(make_edge("d.md", "a.md")); // upward — but d→a creates a cycle
+        graph.add_edge(make_edge("d.md", "a.md"));
 
-        // Since d→a creates a cycle (a,b,c,d all in one SCC), all nodes are in_cycle
-        // and the rule skips them. So no violations.
-        let diagnostics = LayerViolationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = LayerViolationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
     #[test]
     fn detects_skip_layer() {
-        // a → b → c, a → c (skip layer: depth 0 → depth 2)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
         graph.add_node(make_node("c.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
-        graph.add_edge(make_edge("a.md", "c.md")); // skip layer
+        graph.add_edge(make_edge("a.md", "c.md"));
 
-        let diagnostics = LayerViolationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = LayerViolationRule.evaluate(&make_ctx(&graph, &config));
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("skip-layer"));
     }
 
     #[test]
     fn skips_cyclic_nodes() {
-        // a → b → a (cycle), no layer violations reported
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "a.md"));
 
-        let diagnostics = LayerViolationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = LayerViolationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 
     #[test]
     fn same_layer_link_is_not_violation() {
-        // a → b, a → c (b and c both at depth 1), b → c is depth 1→1 (same layer)
-        // But max depth: c gets depth 2 from b→c path. Need different graph.
-        // Use: a → b, a → c (no link between b and c). Same layer, no violations.
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -172,7 +181,8 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("a.md", "c.md"));
 
-        let diagnostics = LayerViolationRule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = LayerViolationRule.evaluate(&make_ctx(&graph, &config));
         assert!(diagnostics.is_empty());
     }
 }

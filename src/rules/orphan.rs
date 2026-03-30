@@ -1,9 +1,8 @@
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::degree::Degree;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::rules::Rule;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct OrphanRule;
 
@@ -12,8 +11,14 @@ impl Rule for OrphanRule {
         "orphan"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = Degree.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = Degree.run(&analysis_ctx);
 
         result
             .nodes
@@ -36,8 +41,20 @@ impl Rule for OrphanRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use crate::rules::RuleContext;
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn detects_orphan() {
@@ -46,15 +63,14 @@ mod tests {
         graph.add_node(make_node("orphan.md"));
         graph.add_edge(make_edge("index.md", "setup.md"));
 
-        let rule = OrphanRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()
             .map(|d| d.node.as_deref().unwrap())
             .collect();
         assert!(orphan_nodes.contains(&"orphan.md"));
-        // index.md is also an orphan (nothing links to it), which is expected
         assert!(orphan_nodes.contains(&"index.md"));
     }
 
@@ -65,16 +81,14 @@ mod tests {
         graph.add_node(make_node("setup.md"));
         graph.add_edge(make_edge("index.md", "setup.md"));
 
-        let rule = OrphanRule;
-        let diagnostics = rule.evaluate(&graph, Path::new("."));
+        let config = Config::defaults();
+        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()
             .map(|d| d.node.as_deref().unwrap())
             .collect();
-        // setup.md has an inbound link — not an orphan
         assert!(!orphan_nodes.contains(&"setup.md"));
-        // index.md has no inbound links — is an orphan
         assert!(orphan_nodes.contains(&"index.md"));
     }
 }

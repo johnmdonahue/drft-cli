@@ -1,13 +1,13 @@
 [package]
 name = "drft-cli"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
-description = "A structural integrity checker for markdown directories"
+description = "A structural integrity checker for linked file systems"
 license = "MIT"
 repository = "https://github.com/johnmdonahue/drft-cli"
 homepage = "https://github.com/johnmdonahue/drft-cli"
 readme = "README.md"
-keywords = ["markdown", "linter", "dependency-graph", "documentation"]
+keywords = ["graph", "linter", "dependency-graph", "structural-integrity"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]

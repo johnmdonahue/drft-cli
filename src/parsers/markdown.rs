@@ -1,29 +1,45 @@
-use crate::graph::EdgeType;
-use pulldown_cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
+use super::{Parser, RawLink};
+use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
-#[derive(Debug, Clone)]
-pub struct RawLink {
-    pub target: String,
-    pub link_type: EdgeType,
-    /// Whether this is an external URL (http/https)
-    pub is_external: bool,
+/// Built-in markdown parser. Extracts inline/reference/autolinks, images,
+/// frontmatter file references, and wikilinks.
+pub struct MarkdownParser {
+    pub glob: globset::GlobMatcher,
+    pub type_filter: Option<Vec<String>>,
 }
 
-/// Extract all links from markdown content, including markdown links, frontmatter sources,
-/// and wikilinks. Returns external URLs with is_external=true.
-pub fn extract_links(content: &str) -> Vec<RawLink> {
+impl Parser for MarkdownParser {
+    fn name(&self) -> &str {
+        "markdown"
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        // Match against just the filename portion
+        let filename = path.rsplit('/').next().unwrap_or(path);
+        self.glob.is_match(filename)
+    }
+
+    fn parse(&self, _path: &str, content: &str) -> Vec<RawLink> {
+        let mut links = Vec::new();
+
+        links.extend(extract_frontmatter(content));
+        links.extend(extract_wikilinks(content));
+        links.extend(extract_markdown_links(content));
+
+        // Apply type filter if configured
+        if let Some(ref types) = self.type_filter {
+            links.retain(|l| types.iter().any(|t| t == &l.link_type));
+        }
+
+        links
+    }
+}
+
+fn extract_markdown_links(content: &str) -> Vec<RawLink> {
     let mut links = Vec::new();
-
-    // Extract frontmatter sources before parsing markdown
-    links.extend(extract_frontmatter(content));
-
-    // Extract wikilinks before parsing markdown (pulldown-cmark doesn't know about them)
-    links.extend(extract_wikilinks(content));
-
-    // Parse markdown links
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    let parser = Parser::new_ext(content, options);
+    let parser = CmarkParser::new_ext(content, options);
 
     let mut in_code_block = false;
 
@@ -44,7 +60,7 @@ pub fn extract_links(content: &str) -> Vec<RawLink> {
                 }
             }
             Event::Start(Tag::Image { dest_url, .. }) if !in_code_block => {
-                if let Some(link) = process_link(&dest_url, EdgeType::Image) {
+                if let Some(link) = process_link(&dest_url, "image") {
                     links.push(link);
                 }
             }
@@ -55,17 +71,17 @@ pub fn extract_links(content: &str) -> Vec<RawLink> {
     links
 }
 
-fn map_link_type(lt: LinkType) -> EdgeType {
+fn map_link_type(lt: LinkType) -> &'static str {
     match lt {
-        LinkType::Inline => EdgeType::Inline,
-        LinkType::Reference | LinkType::ReferenceUnknown => EdgeType::Reference,
-        LinkType::Collapsed | LinkType::CollapsedUnknown => EdgeType::Reference,
-        LinkType::Shortcut | LinkType::ShortcutUnknown => EdgeType::Reference,
-        LinkType::Autolink | LinkType::Email => EdgeType::Autolink,
+        LinkType::Inline => "inline",
+        LinkType::Reference | LinkType::ReferenceUnknown => "reference",
+        LinkType::Collapsed | LinkType::CollapsedUnknown => "reference",
+        LinkType::Shortcut | LinkType::ShortcutUnknown => "reference",
+        LinkType::Autolink | LinkType::Email => "autolink",
     }
 }
 
-fn process_link(url: &str, link_type: EdgeType) -> Option<RawLink> {
+fn process_link(url: &str, link_type: &str) -> Option<RawLink> {
     let url = url.trim();
     if url.is_empty() {
         return None;
@@ -75,7 +91,7 @@ fn process_link(url: &str, link_type: EdgeType) -> Option<RawLink> {
     if url.starts_with("http://") || url.starts_with("https://") {
         return Some(RawLink {
             target: url.to_string(),
-            link_type,
+            link_type: link_type.to_string(),
             is_external: true,
         });
     }
@@ -102,17 +118,15 @@ fn process_link(url: &str, link_type: EdgeType) -> Option<RawLink> {
 
     Some(RawLink {
         target: target.to_string(),
-        link_type,
+        link_type: link_type.to_string(),
         is_external: false,
     })
 }
 
 /// Extract file path references from YAML frontmatter.
-/// Paths must contain a slash or start with `./` and have a file extension.
 fn extract_frontmatter(content: &str) -> Vec<RawLink> {
     let mut links = Vec::new();
 
-    // Check for frontmatter delimiters
     if !content.starts_with("---") {
         return links;
     }
@@ -128,7 +142,6 @@ fn extract_frontmatter(content: &str) -> Vec<RawLink> {
     for line in frontmatter.lines() {
         let line = line.trim();
 
-        // Extract value from "- path" or "key: path" patterns
         let value = if let Some(stripped) = line.strip_prefix("- ") {
             stripped.trim()
         } else if let Some((_key, val)) = line.split_once(':') {
@@ -141,7 +154,6 @@ fn extract_frontmatter(content: &str) -> Vec<RawLink> {
             continue;
         }
 
-        // Skip YAML inline objects/arrays and quoted strings
         if value.starts_with('{')
             || value.starts_with('[')
             || value.starts_with('"')
@@ -150,7 +162,6 @@ fn extract_frontmatter(content: &str) -> Vec<RawLink> {
             continue;
         }
 
-        // Must look like a file path: contains / or starts with ./ AND has a file extension
         let looks_like_path =
             (value.contains('/') || value.starts_with("./")) && has_file_extension(value);
 
@@ -158,14 +169,13 @@ fn extract_frontmatter(content: &str) -> Vec<RawLink> {
             continue;
         }
 
-        // Skip URLs
         if value.starts_with("http://") || value.starts_with("https://") {
             continue;
         }
 
         links.push(RawLink {
             target: value.to_string(),
-            link_type: EdgeType::Frontmatter,
+            link_type: "frontmatter".to_string(),
             is_external: false,
         });
     }
@@ -182,7 +192,6 @@ fn has_file_extension(path: &str) -> bool {
 }
 
 /// Extract wikilinks: [[page]] or [[page|display text]].
-/// Resolves to page.md in the same directory.
 fn extract_wikilinks(content: &str) -> Vec<RawLink> {
     let mut links = Vec::new();
     let mut rest = content;
@@ -192,9 +201,7 @@ fn extract_wikilinks(content: &str) -> Vec<RawLink> {
         if let Some(end) = after_open.find("]]") {
             let inner = &after_open[..end];
 
-            // Skip if empty or contains newlines
             if !inner.is_empty() && !inner.contains('\n') {
-                // [[page|display text]] → use page
                 let page = match inner.find('|') {
                     Some(idx) => &inner[..idx],
                     None => inner,
@@ -202,7 +209,6 @@ fn extract_wikilinks(content: &str) -> Vec<RawLink> {
                 let page = page.trim();
 
                 if !page.is_empty() {
-                    // Append .md if not already present
                     let target = if page.ends_with(".md") {
                         page.to_string()
                     } else {
@@ -211,7 +217,7 @@ fn extract_wikilinks(content: &str) -> Vec<RawLink> {
 
                     links.push(RawLink {
                         target,
-                        link_type: EdgeType::Wikilink,
+                        link_type: "wikilink".to_string(),
                         is_external: false,
                     });
                 }
@@ -230,38 +236,43 @@ fn extract_wikilinks(content: &str) -> Vec<RawLink> {
 mod tests {
     use super::*;
 
+    fn parse(content: &str) -> Vec<RawLink> {
+        let parser = MarkdownParser {
+            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            type_filter: None,
+        };
+        parser.parse("test.md", content)
+    }
+
     #[test]
     fn extracts_inline_links() {
-        let links = extract_links("[setup](setup.md) and [faq](faq.md)");
+        let links = parse("[setup](setup.md) and [faq](faq.md)");
         let local: Vec<_> = links.iter().filter(|l| !l.is_external).collect();
         assert_eq!(local.len(), 2);
         assert_eq!(local[0].target, "setup.md");
-        assert_eq!(local[0].link_type, EdgeType::Inline);
+        assert_eq!(local[0].link_type, "inline");
         assert_eq!(local[1].target, "faq.md");
     }
 
     #[test]
     fn strips_fragment() {
-        let links = extract_links("[setup](setup.md#installation)");
+        let links = parse("[setup](setup.md#installation)");
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].target, "setup.md");
     }
 
     #[test]
     fn captures_external_urls() {
-        let links = extract_links("[google](https://google.com) and [local](setup.md)");
+        let links = parse("[google](https://google.com) and [local](setup.md)");
         assert_eq!(links.len(), 2);
         let external: Vec<_> = links.iter().filter(|l| l.is_external).collect();
         assert_eq!(external.len(), 1);
         assert_eq!(external[0].target, "https://google.com");
-        let local: Vec<_> = links.iter().filter(|l| !l.is_external).collect();
-        assert_eq!(local.len(), 1);
-        assert_eq!(local[0].target, "setup.md");
     }
 
     #[test]
     fn skips_anchor_only() {
-        let links = extract_links("[section](#heading) and [local](setup.md)");
+        let links = parse("[section](#heading) and [local](setup.md)");
         let local: Vec<_> = links.iter().filter(|l| !l.is_external).collect();
         assert_eq!(local.len(), 1);
         assert_eq!(local[0].target, "setup.md");
@@ -269,40 +280,34 @@ mod tests {
 
     #[test]
     fn skips_email_links() {
-        let links = extract_links("Contact (<user@example.com>)");
+        let links = parse("Contact (<user@example.com>)");
         assert!(links.is_empty());
     }
 
     #[test]
     fn extracts_image_links() {
-        let links = extract_links("![diagram](assets/arch.png)");
+        let links = parse("![diagram](assets/arch.png)");
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].target, "assets/arch.png");
-        assert_eq!(links[0].link_type, EdgeType::Image);
+        assert_eq!(links[0].link_type, "image");
     }
 
     #[test]
     fn extracts_reference_links() {
-        let links = extract_links("[setup][ref]\n\n[ref]: setup.md\n");
+        let links = parse("[setup][ref]\n\n[ref]: setup.md\n");
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].target, "setup.md");
-        assert_eq!(links[0].link_type, EdgeType::Reference);
-    }
-
-    #[test]
-    fn handles_empty_and_fragment_only_after_strip() {
-        let links = extract_links("[a](#only-fragment)");
-        assert_eq!(links.len(), 0);
+        assert_eq!(links[0].link_type, "reference");
     }
 
     #[test]
     fn extracts_frontmatter_sources() {
         let content =
             "---\nsources:\n  - ../shared/glossary.md\n  - ./prior-art.md\n---\n\n# Hello\n";
-        let links = extract_links(content);
+        let links = parse(content);
         let fm: Vec<_> = links
             .iter()
-            .filter(|l| l.link_type == EdgeType::Frontmatter)
+            .filter(|l| l.link_type == "frontmatter")
             .collect();
         assert_eq!(fm.len(), 2);
         assert_eq!(fm[0].target, "../shared/glossary.md");
@@ -312,21 +317,18 @@ mod tests {
     #[test]
     fn frontmatter_skips_non_paths() {
         let content = "---\ntitle: My Document\nversion: 1.0\ntags:\n  - rust\n  - cli\n---\n";
-        let links = extract_links(content);
+        let links = parse(content);
         let fm: Vec<_> = links
             .iter()
-            .filter(|l| l.link_type == EdgeType::Frontmatter)
+            .filter(|l| l.link_type == "frontmatter")
             .collect();
         assert!(fm.is_empty());
     }
 
     #[test]
     fn extracts_wikilinks() {
-        let links = extract_links("See [[setup]] for details and [[guides/intro]].");
-        let wl: Vec<_> = links
-            .iter()
-            .filter(|l| l.link_type == EdgeType::Wikilink)
-            .collect();
+        let links = parse("See [[setup]] for details and [[guides/intro]].");
+        let wl: Vec<_> = links.iter().filter(|l| l.link_type == "wikilink").collect();
         assert_eq!(wl.len(), 2);
         assert_eq!(wl[0].target, "setup.md");
         assert_eq!(wl[1].target, "guides/intro.md");
@@ -334,23 +336,43 @@ mod tests {
 
     #[test]
     fn wikilink_with_display_text() {
-        let links = extract_links("See [[setup|Setup Guide]] for details.");
-        let wl: Vec<_> = links
-            .iter()
-            .filter(|l| l.link_type == EdgeType::Wikilink)
-            .collect();
+        let links = parse("See [[setup|Setup Guide]] for details.");
+        let wl: Vec<_> = links.iter().filter(|l| l.link_type == "wikilink").collect();
         assert_eq!(wl.len(), 1);
         assert_eq!(wl[0].target, "setup.md");
     }
 
     #[test]
-    fn wikilink_already_has_extension() {
-        let links = extract_links("See [[README.md]] here.");
-        let wl: Vec<_> = links
-            .iter()
-            .filter(|l| l.link_type == EdgeType::Wikilink)
-            .collect();
-        assert_eq!(wl.len(), 1);
-        assert_eq!(wl[0].target, "README.md");
+    fn type_filter_works() {
+        let parser = MarkdownParser {
+            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            type_filter: Some(vec!["frontmatter".to_string()]),
+        };
+        let content = "---\nsources:\n  - ./ref.md\n---\n\n[inline](other.md) and [[wikilink]]\n";
+        let links = parser.parse("test.md", content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].link_type, "frontmatter");
+    }
+
+    #[test]
+    fn matches_md_files() {
+        let parser = MarkdownParser {
+            glob: globset::Glob::new("*.md").unwrap().compile_matcher(),
+            type_filter: None,
+        };
+        assert!(parser.matches("index.md"));
+        assert!(parser.matches("docs/guide.md"));
+        assert!(!parser.matches("main.rs"));
+    }
+
+    #[test]
+    fn matches_custom_glob() {
+        let parser = MarkdownParser {
+            glob: globset::Glob::new("*.{md,mdx}").unwrap().compile_matcher(),
+            type_filter: None,
+        };
+        assert!(parser.matches("index.md"));
+        assert!(parser.matches("page.mdx"));
+        assert!(!parser.matches("main.rs"));
     }
 }

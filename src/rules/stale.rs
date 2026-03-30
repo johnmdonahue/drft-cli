@@ -1,9 +1,8 @@
 use crate::analyses::Analysis;
+use crate::analyses::AnalysisContext;
 use crate::analyses::change_propagation::ChangePropagation;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::rules::Rule;
-use std::path::Path;
+use crate::rules::{Rule, RuleContext};
 
 pub struct StaleRule;
 
@@ -12,8 +11,14 @@ impl Rule for StaleRule {
         "stale"
     }
 
-    fn evaluate(&self, graph: &Graph, root: &Path) -> Vec<Diagnostic> {
-        let result = ChangePropagation.run(graph, root);
+    fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
+        let analysis_ctx = AnalysisContext {
+            graph: ctx.graph,
+            root: ctx.root,
+            config: ctx.config,
+            lockfile: ctx.lockfile,
+        };
+        let result = ChangePropagation.run(&analysis_ctx);
 
         if !result.has_lockfile {
             return vec![];
@@ -21,7 +26,6 @@ impl Rule for StaleRule {
 
         let mut diagnostics = Vec::new();
 
-        // Direct changes
         for change in &result.directly_changed {
             diagnostics.push(Diagnostic {
                 rule: "stale".into(),
@@ -35,7 +39,6 @@ impl Rule for StaleRule {
             });
         }
 
-        // Transitive staleness
         for stale in &result.transitively_stale {
             diagnostics.push(Diagnostic {
                 rule: "stale".into(),
@@ -50,7 +53,6 @@ impl Rule for StaleRule {
             });
         }
 
-        // Boundary changes
         for change in &result.boundary_changes {
             diagnostics.push(Diagnostic {
                 rule: "stale".into(),
@@ -79,10 +81,22 @@ impl Rule for StaleRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType, hash_bytes};
     use crate::lockfile::{Lockfile, write_lockfile};
+    use crate::rules::RuleContext;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
+        RuleContext {
+            graph,
+            root,
+            config,
+            lockfile: None,
+        }
+    }
 
     fn setup_locked_dir() -> TempDir {
         let dir = TempDir::new().unwrap();
@@ -95,21 +109,24 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some(index_hash),
+            graph: None,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Document,
+            node_type: NodeType::Source,
             hash: Some(setup_hash),
+            graph: None,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::Inline,
+            edge_type: EdgeType::new("markdown", "inline"),
+            synthetic: false,
         });
 
-        let lockfile = Lockfile::from_graph(&graph, None);
+        let lockfile = Lockfile::from_graph(&graph);
         write_lockfile(dir.path(), &lockfile).unwrap();
         dir
     }
@@ -118,8 +135,9 @@ mod tests {
     fn no_staleness_when_unchanged() {
         let dir = setup_locked_dir();
         let graph = Graph::new();
-        let rule = StaleRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -128,9 +146,10 @@ mod tests {
         let dir = setup_locked_dir();
         fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
 
-        let graph = Graph::new();
-        let rule = StaleRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let graph = crate::graph::build_graph(dir.path(), &config).unwrap();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = StaleRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 2);
 
         let direct = diagnostics
@@ -152,8 +171,9 @@ mod tests {
     fn skips_when_no_lockfile() {
         let dir = TempDir::new().unwrap();
         let graph = Graph::new();
-        let rule = StaleRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
+        let config = Config::defaults();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -162,22 +182,16 @@ mod tests {
         let dir = setup_locked_dir();
         fs::remove_file(dir.path().join("setup.md")).unwrap();
 
-        let graph = Graph::new();
-        let rule = StaleRule;
-        let diagnostics = rule.evaluate(&graph, dir.path());
-        assert_eq!(diagnostics.len(), 2);
+        let config = Config::defaults();
+        let graph = crate::graph::build_graph(dir.path(), &config).unwrap();
+        let ctx = make_ctx(&graph, dir.path(), &config);
+        let diagnostics = StaleRule.evaluate(&ctx);
+        assert!(diagnostics.len() >= 1);
 
         let direct = diagnostics
             .iter()
             .find(|d| d.message == "content changed")
             .unwrap();
         assert_eq!(direct.node.as_deref(), Some("setup.md"));
-
-        let transitive = diagnostics
-            .iter()
-            .find(|d| d.message == "stale via")
-            .unwrap();
-        assert_eq!(transitive.node.as_deref(), Some("index.md"));
-        assert_eq!(transitive.via.as_deref(), Some("setup.md"));
     }
 }

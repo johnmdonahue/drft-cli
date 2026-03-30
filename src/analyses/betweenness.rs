@@ -1,7 +1,5 @@
-use super::Analysis;
-use crate::graph::Graph;
+use super::{Analysis, AnalysisContext};
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NodeBetweenness {
@@ -23,11 +21,12 @@ impl Analysis for Betweenness {
         "betweenness"
     }
 
-    fn run(&self, graph: &Graph, _root: &Path) -> BetweennessResult {
+    fn run(&self, ctx: &AnalysisContext) -> BetweennessResult {
+        let graph = ctx.graph;
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_real_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -77,7 +76,7 @@ impl Analysis for Betweenness {
                 if let Some(edge_indices) = graph.forward.get(v) {
                     for &idx in edge_indices {
                         let w = graph.edges[idx].target.as_str();
-                        if !graph.is_real_node(w) {
+                        if !graph.is_file_node(w) {
                             continue;
                         }
                         if dist[w] < 0 {
@@ -134,12 +133,23 @@ impl Analysis for Betweenness {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::AnalysisContext;
+    use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
+    use std::path::Path;
+
+    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
+        AnalysisContext {
+            graph,
+            root: Path::new("."),
+            config,
+            lockfile: None,
+        }
+    }
 
     #[test]
     fn hub_node() {
-        // a → center → b, c → center → d (center is on all a→b, a→d, c→b, c→d paths)
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -151,15 +161,14 @@ mod tests {
         graph.add_edge(make_edge("center.md", "b.md"));
         graph.add_edge(make_edge("center.md", "d.md"));
 
-        let result = Betweenness.run(&graph, Path::new("."));
-        // center should have highest betweenness
+        let config = Config::defaults();
+        let result = Betweenness.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes[0].node, "center.md");
         assert!(result.nodes[0].score > 0.0);
     }
 
     #[test]
     fn linear_chain() {
-        // a → b → c → d
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(make_node("b.md"));
@@ -169,8 +178,8 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "d.md"));
 
-        let result = Betweenness.run(&graph, Path::new("."));
-        // b and c are in the middle, should have highest scores
+        let config = Config::defaults();
+        let result = Betweenness.run(&make_ctx(&graph, &config));
         let b = result.nodes.iter().find(|n| n.node == "b.md").unwrap();
         let c = result.nodes.iter().find(|n| n.node == "c.md").unwrap();
         let a = result.nodes.iter().find(|n| n.node == "a.md").unwrap();
@@ -183,7 +192,8 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
 
-        let result = Betweenness.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Betweenness.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes.len(), 1);
         assert_eq!(result.nodes[0].score, 0.0);
     }
@@ -191,7 +201,8 @@ mod tests {
     #[test]
     fn empty_graph() {
         let graph = Graph::new();
-        let result = Betweenness.run(&graph, Path::new("."));
+        let config = Config::defaults();
+        let result = Betweenness.run(&make_ctx(&graph, &config));
         assert!(result.nodes.is_empty());
     }
 }

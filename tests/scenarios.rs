@@ -334,11 +334,11 @@ fn scenario_5_first_lock() {
 
     // Verify lockfile exists and has correct format
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
-    assert!(lockfile.contains("lockfile_version = 1"));
+    assert!(lockfile.contains("lockfile_version = 2"));
     assert!(lockfile.contains("index.md"));
     assert!(lockfile.contains("setup.md"));
     assert!(lockfile.contains("b3:"));
-    assert!(lockfile.contains(r#"type = "document""#));
+    assert!(lockfile.contains(r#"type = "source""#));
 
     // Check should be clean
     let output = drft_bin()
@@ -515,10 +515,10 @@ fn scenario_10_child_scope_unsealed() {
         .output()
         .unwrap();
 
-    // Verify lockfile has frontier + virtual nodes
+    // Verify lockfile has graph + child-graph resource nodes
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
-    assert!(lockfile.contains("type = \"frontier\""));
-    assert!(lockfile.contains("type = \"virtual\""));
+    assert!(lockfile.contains(r#"type = "graph""#));
+    assert!(lockfile.contains(r#"type = "resource""#));
 
     // Check should be clean (unsealed = no encapsulation)
     let output = drft_bin()
@@ -533,10 +533,11 @@ fn scenario_10_child_scope_unsealed() {
     assert!(output.status.success());
 }
 
-/// Scenario 12: Encapsulation violation — link to non-manifest file in sealed scope.
+/// Scenario 12: Encapsulation violation — link to non-interface file in child graph.
 #[test]
 fn scenario_12_encapsulation_violation() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "[parsers]\nmarkdown = true\n").unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[overview](research/overview.md)\n[internal](research/internal.md)",
@@ -548,15 +549,16 @@ fn scenario_12_encapsulation_violation() {
     fs::write(research.join("overview.md"), "# Overview").unwrap();
     fs::write(research.join("internal.md"), "# Internal").unwrap();
 
-    // Lock child with manifest (only overview exposed)
+    // Child config with interface (only overview exposed)
+    fs::write(
+        research.join("drft.toml"),
+        "[parsers]\nmarkdown = true\n\n[interface]\nnodes = [\"overview.md\"]\n",
+    )
+    .unwrap();
+
+    // Lock child, then parent
     drft_bin()
-        .args([
-            "-C",
-            research.to_str().unwrap(),
-            "lock",
-            "--manifest",
-            "overview.md",
-        ])
+        .args(["-C", research.to_str().unwrap(), "lock"])
         .output()
         .unwrap();
     drft_bin()
@@ -625,7 +627,7 @@ fn recursive_check_with_child_config() {
     let child = dir.path().join("child");
     fs::create_dir(&child).unwrap();
     fs::write(child.join("drft.toml"), "[rules]\norphan = \"warn\"\n").unwrap();
-    fs::write(child.join("drft.lock"), "lockfile_version = 1\n").unwrap();
+    fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
     fs::write(child.join("linked.md"), "# Linked").unwrap();
     fs::write(child.join("orphan.md"), "# Orphan").unwrap();
 
@@ -779,7 +781,7 @@ fn custom_rule_integration() {
 
     fs::write(
         dir.path().join("drft.toml"),
-        "[custom-rules.count-nodes]\ncommand = \"./scripts/count-nodes.sh\"\nseverity = \"warn\"\n",
+        "[rules.count-nodes]\ncommand = \"./scripts/count-nodes.sh\"\nseverity = \"warn\"\n",
     )
     .unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
@@ -821,10 +823,7 @@ fn frontmatter_sources_create_edges() {
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains("analysis.md"));
     assert!(lockfile.contains("data/notes.md"));
-    assert!(
-        lockfile.contains(r#"type = "frontmatter""#),
-        "edge should be frontmatter type"
-    );
+    // v2 lockfile has no edges — edge types verified at check time
 
     // Edit the source, check for staleness
     fs::write(data.join("notes.md"), "# Notes (edited)").unwrap();
@@ -853,10 +852,7 @@ fn wikilinks_create_edges() {
 
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains("setup.md"));
-    assert!(
-        lockfile.contains(r#"type = "wikilink""#),
-        "edge should be wikilink type"
-    );
+    // v2 lockfile has no edges — edge types verified at check time
 
     // Broken wikilink should be caught
     fs::write(dir.path().join("index.md"), "See [[missing]] here.").unwrap();
@@ -893,7 +889,7 @@ fn graph_json_follows_jgf() {
     assert!(v["graph"]["nodes"]["setup.md"].is_object());
     assert_eq!(
         v["graph"]["nodes"]["index.md"]["metadata"]["type"],
-        "document"
+        "source"
     );
     assert!(!v["graph"]["edges"].as_array().unwrap().is_empty());
 }
@@ -906,7 +902,7 @@ fn graph_recursive_produces_multiple_graphs() {
     let child = dir.path().join("child");
     fs::create_dir(&child).unwrap();
     fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.lock"), "lockfile_version = 1\n").unwrap();
+    fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
@@ -955,7 +951,7 @@ fn ignore_rules_suppresses_diagnostics() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\norphan = \"warn\"\n\n[ignore-rules]\norphan = [\"README.md\"]\n",
+        "[rules.orphan]\nseverity = \"warn\"\nignore = [\"README.md\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("README.md"), "# Readme").unwrap();
@@ -990,7 +986,7 @@ fn lockfile_contains_version() {
         .unwrap();
 
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
-    assert!(lockfile.starts_with("lockfile_version = 1"));
+    assert!(lockfile.starts_with("lockfile_version = 2"));
 }
 
 // ── Redundant edge ────────────────────────────────────────────
@@ -1116,467 +1112,8 @@ fn redundant_edge_json() {
     assert!(redundant[0]["fix"].is_string());
 }
 
-// ── Report command ────────────────────────────────────────────
-
-#[test]
-fn report_text_output() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "report"])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("=== degree ==="),
-        "expected degree header, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("=== transitive-reduction ==="),
-        "expected transitive-reduction header, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("a.md"),
-        "expected source in report, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_json_output() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-
-    // Degree analysis is present
-    assert!(
-        v["analyses"]["degree"]["nodes"].is_array(),
-        "expected degree analysis in JSON output"
-    );
-
-    // Transitive reduction analysis is present
-    let tr = &v["analyses"]["transitive-reduction"];
-    let edges = tr["redundant_edges"].as_array().unwrap();
-    assert_eq!(edges.len(), 1);
-    assert_eq!(edges[0]["source"], "a.md");
-    assert_eq!(edges[0]["target"], "c.md");
-}
-
-#[test]
-fn report_no_redundancy() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "report"])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("no redundant edges"),
-        "expected clean report, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_unknown_analysis_exits_2() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "# A").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "nonexistent",
-        ])
-        .output()
-        .unwrap();
-
-    assert_eq!(output.status.code(), Some(2));
-}
-
-#[test]
-fn report_metrics_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "report", "--metrics"])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("=== metrics ==="),
-        "expected metrics header, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("orphan_ratio"),
-        "expected orphan_ratio, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("completeness"),
-        "expected completeness dimension, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("consistency"),
-        "expected consistency dimension, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_metrics_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--metrics",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let metrics = v["metrics"].as_array().unwrap();
-    assert!(!metrics.is_empty());
-
-    // Check that metrics have expected structure
-    let first = &metrics[0];
-    assert!(first["name"].is_string());
-    assert!(first["value"].is_f64());
-    assert!(first["kind"].is_string());
-    assert!(first["dimension"].is_string());
-
-    // Check specific metric exists
-    let has_orphan = metrics.iter().any(|m| m["name"] == "orphan_ratio");
-    assert!(has_orphan, "expected orphan_ratio metric in output");
-}
-
-#[test]
-fn report_degree_text_output() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "degree",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("=== degree ==="),
-        "expected degree header, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("a.md"),
-        "expected a.md in degree output, got: {stdout}"
-    );
-    // a.md has out:2 (links to b and c)
-    assert!(
-        stdout.contains("out:2"),
-        "expected out:2 for a.md, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_degree_json_output() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "degree",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let deg = &v["analyses"]["degree"];
-    let nodes = deg["nodes"].as_array().unwrap();
-    assert_eq!(nodes.len(), 3);
-
-    let a = nodes.iter().find(|n| n["node"] == "a.md").unwrap();
-    assert_eq!(a["in_degree"], 0);
-    assert_eq!(a["out_degree"], 2);
-
-    let c = nodes.iter().find(|n| n["node"] == "c.md").unwrap();
-    assert_eq!(c["in_degree"], 2);
-    assert_eq!(c["out_degree"], 0);
-}
-
-#[test]
-fn report_graph_stats_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "graph-stats",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("=== graph-stats ==="), "got: {stdout}");
-    assert!(stdout.contains("nodes: 2"), "got: {stdout}");
-    assert!(stdout.contains("edges: 2"), "got: {stdout}");
-    assert!(stdout.contains("density:"), "got: {stdout}");
-    assert!(stdout.contains("diameter: 1"), "got: {stdout}");
-}
-
-#[test]
-fn report_graph_stats_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "graph-stats",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let gs = &v["analyses"]["graph-stats"];
-    assert_eq!(gs["node_count"], 2);
-    assert_eq!(gs["edge_count"], 2);
-    assert_eq!(gs["diameter"], 1);
-    assert!(gs["density"].as_f64().unwrap() > 0.0);
-}
-
-#[test]
-fn report_connected_components_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap(); // isolated
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "connected-components",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("=== connected-components ==="),
-        "expected header, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("2 components"),
-        "expected 2 components, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_connected_components_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "connected-components",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let cc = &v["analyses"]["connected-components"];
-    assert_eq!(cc["component_count"], 2);
-    assert_eq!(cc["components"].as_array().unwrap().len(), 2);
-}
-
-#[test]
-fn report_scc_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "[a](a.md)").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "scc",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("=== scc ==="), "got: {stdout}");
-    assert!(stdout.contains("1 non-trivial SCC"), "got: {stdout}");
-    assert!(stdout.contains("3 nodes"), "got: {stdout}");
-}
-
-#[test]
-fn report_scc_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "scc",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let scc = &v["analyses"]["scc"];
-    assert_eq!(scc["nontrivial_count"], 1);
-    assert_eq!(scc["sccs"][0]["members"].as_array().unwrap().len(), 2);
-}
-
-#[test]
-fn report_depth_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "depth",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("=== depth ==="), "got: {stdout}");
-    assert!(stdout.contains("depth 0:"), "got: {stdout}");
-    assert!(stdout.contains("depth 2:"), "got: {stdout}");
-}
-
-#[test]
-fn report_depth_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "depth",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let dep = &v["analyses"]["depth"];
-    assert_eq!(dep["max_depth"], 1);
-    let nodes = dep["nodes"].as_array().unwrap();
-    assert_eq!(nodes.len(), 2);
-}
+// ── Report command (removed in v0.3) ─────────────────────────
+// Report tests removed — drft report and drft metrics are deferred.
 
 #[test]
 fn layer_violation_rule_fires() {
@@ -1608,86 +1145,6 @@ fn layer_violation_rule_fires() {
 }
 
 #[test]
-fn report_scc_acyclic() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "# B").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "scc",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("no non-trivial SCCs"),
-        "expected acyclic message, got: {stdout}"
-    );
-}
-
-#[test]
-fn report_betweenness_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "betweenness",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let bw = &v["analyses"]["betweenness"];
-    let nodes = bw["nodes"].as_array().unwrap();
-    assert_eq!(nodes.len(), 3);
-    // b.md should have the highest score (middle of chain)
-    assert_eq!(nodes[0]["node"], "b.md");
-}
-
-#[test]
-fn report_bridges_text() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
-    fs::write(dir.path().join("c.md"), "# C").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "report",
-            "--analysis",
-            "bridges",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("=== bridges ==="), "got: {stdout}");
-    assert!(stdout.contains("cut vertex: b.md"), "got: {stdout}");
-    assert!(stdout.contains("bridge:"), "got: {stdout}");
-}
-
-#[test]
 fn fragility_rule_fires() {
     let dir = TempDir::new().unwrap();
     fs::write(
@@ -1709,37 +1166,6 @@ fn fragility_rule_fires() {
         stdout.contains("fragility"),
         "expected fragility warning, got: {stdout}"
     );
-}
-
-#[test]
-fn report_pagerank_json() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
-    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "report",
-            "--analysis",
-            "pagerank",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    let pr = &v["analyses"]["pagerank"];
-    assert!(pr["converged"].as_bool().unwrap());
-    let nodes = pr["nodes"].as_array().unwrap();
-    assert_eq!(nodes.len(), 2);
-    // Scores should sum to ~1.0
-    let sum: f64 = nodes.iter().map(|n| n["score"].as_f64().unwrap()).sum();
-    assert!((sum - 1.0).abs() < 0.01);
 }
 
 #[test]
@@ -1778,7 +1204,7 @@ fn containment_catches_escape() {
     let dir = TempDir::new().unwrap();
     let child = dir.path().join("docs");
     fs::create_dir(&child).unwrap();
-    fs::write(child.join("drft.lock"), "lockfile_version = 1\n").unwrap();
+    fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
     fs::write(child.join("index.md"), "[escape](../README.md)").unwrap();
     fs::write(dir.path().join("README.md"), "# Root").unwrap();
 

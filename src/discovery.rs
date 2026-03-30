@@ -3,8 +3,8 @@ use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use std::path::Path;
 
-/// Discover all markdown files under `root`, stopping at child scope boundaries
-/// (directories containing `drft.lock`). Respects `.gitignore` automatically.
+/// Discover all files under `root`, stopping at child scope boundaries
+/// (directories containing `drft.lock` or `drft.toml`). Respects `.gitignore` automatically.
 /// Returns paths relative to `root`, sorted.
 pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
     let ignore_set = if ignore_patterns.is_empty() {
@@ -28,7 +28,10 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
                 if entry.path() == root_owned {
                     return true;
                 }
-                if entry.path().join("drft.lock").exists() {
+                // Stop at child scope boundaries
+                if entry.path().join("drft.lock").exists()
+                    || entry.path().join("drft.toml").exists()
+                {
                     return false;
                 }
             }
@@ -42,9 +45,6 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
             continue;
         }
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
 
         let relative = path
             .strip_prefix(root)
@@ -115,7 +115,7 @@ pub fn find_child_scopes(root: &Path) -> Result<Vec<String>> {
             continue;
         }
 
-        if entry.path().join("drft.lock").exists() {
+        if entry.path().join("drft.lock").exists() || entry.path().join("drft.toml").exists() {
             let scope_path = format!("{relative}/");
             found_prefixes.push(scope_path.clone());
             scopes.push(scope_path);
@@ -133,14 +133,14 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn discovers_md_files() {
+    fn discovers_all_files() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Hello").unwrap();
         fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
         fs::write(dir.path().join("notes.txt"), "not markdown").unwrap();
 
         let files = discover(dir.path(), &[]).unwrap();
-        assert_eq!(files, vec!["index.md", "setup.md"]);
+        assert_eq!(files, vec!["index.md", "notes.txt", "setup.md"]);
     }
 
     #[test]
