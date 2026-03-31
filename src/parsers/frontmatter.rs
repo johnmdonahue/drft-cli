@@ -1,4 +1,4 @@
-use super::{has_file_extension, strip_code, ParseResult, Parser};
+use super::{ParseResult, Parser, has_file_extension, strip_code};
 
 /// Built-in frontmatter parser. Extracts YAML frontmatter as links and metadata.
 pub struct FrontmatterParser {
@@ -153,17 +153,13 @@ mod tests {
     use super::*;
 
     fn parse(content: &str) -> ParseResult {
-        let parser = FrontmatterParser {
-            file_filter: None,
-        };
+        let parser = FrontmatterParser { file_filter: None };
         parser.parse("test.md", content)
     }
 
     #[test]
     fn parser_name() {
-        let parser = FrontmatterParser {
-            file_filter: None,
-        };
+        let parser = FrontmatterParser { file_filter: None };
         assert_eq!(parser.name(), "frontmatter");
     }
 
@@ -197,7 +193,8 @@ mod tests {
 
     #[test]
     fn extracts_metadata() {
-        let content = "---\ntitle: My Doc\nstatus: draft\ntags:\n  - rust\n  - cli\n---\n\n# Hello\n";
+        let content =
+            "---\ntitle: My Doc\nstatus: draft\ntags:\n  - rust\n  - cli\n---\n\n# Hello\n";
         let result = parse(content);
         let meta = result.metadata.unwrap();
         assert_eq!(meta["title"], "My Doc");
@@ -222,9 +219,7 @@ mod tests {
 
     #[test]
     fn no_filter_matches_everything() {
-        let parser = FrontmatterParser {
-            file_filter: None,
-        };
+        let parser = FrontmatterParser { file_filter: None };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("main.rs"));
     }

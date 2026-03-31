@@ -61,7 +61,10 @@ mod tests {
         graph.add_edge(make_edge("c.md", "a.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "directed-cycle");
@@ -83,7 +86,10 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -95,7 +101,10 @@ mod tests {
         graph.add_edge(make_edge("a.md", "missing.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

@@ -63,11 +63,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../README.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "boundary-violation");
@@ -90,11 +94,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../../other.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
@@ -115,11 +123,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -132,11 +144,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../escape.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(
             diagnostics.is_empty(),

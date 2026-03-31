@@ -131,7 +131,11 @@ impl ScriptParser {
                 results.entry(file).or_default().metadata = Some(metadata.clone());
             } else if let Some(target) = json.get("target").and_then(|v| v.as_str()) {
                 // Edge line: { file, target }
-                results.entry(file).or_default().links.push(target.to_string());
+                results
+                    .entry(file)
+                    .or_default()
+                    .links
+                    .push(target.to_string());
             } else {
                 eprintln!(
                     "warn: parser {}: JSON line has neither 'target' nor 'metadata'",

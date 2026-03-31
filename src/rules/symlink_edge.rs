@@ -79,11 +79,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "symlink-edge");
@@ -103,11 +107,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

@@ -218,7 +218,8 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let lockfile = Lockfile::from_graph(&graph);

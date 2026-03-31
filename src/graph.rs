@@ -34,7 +34,6 @@ pub enum NodeType {
     Graph,
 }
 
-
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Node {
     pub path: String,
@@ -133,7 +132,6 @@ impl Graph {
     }
 }
 
-
 /// Hash file contents with BLAKE3, returning `b3:<hex>`.
 pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
@@ -209,8 +207,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             if let Some(metadata) = result.metadata
                 && let Some(node) = graph.nodes.get_mut(&file)
             {
-                node.metadata
-                    .insert(parser.name().to_string(), metadata);
+                node.metadata.insert(parser.name().to_string(), metadata);
             }
 
             for link in result.links {

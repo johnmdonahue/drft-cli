@@ -137,7 +137,8 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         }
     }
 

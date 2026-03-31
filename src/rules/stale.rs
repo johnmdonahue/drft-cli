@@ -106,7 +106,8 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let lockfile = Lockfile::from_graph(&graph);
@@ -119,9 +120,11 @@ mod tests {
         let dir = setup_locked_dir();
         let config = Config::defaults();
         let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
-        let enriched =
-            crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -133,9 +136,11 @@ mod tests {
 
         let config = Config::defaults();
         let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
-        let enriched =
-            crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 2);
 
@@ -160,7 +165,10 @@ mod tests {
         fs::write(dir.path().join("dummy.md"), "").unwrap();
         let config = Config::defaults();
         let enriched = crate::analyses::enrich(dir.path(), &config, None).unwrap();
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -172,9 +180,11 @@ mod tests {
 
         let config = Config::defaults();
         let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
-        let enriched =
-            crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.len() >= 1);
 

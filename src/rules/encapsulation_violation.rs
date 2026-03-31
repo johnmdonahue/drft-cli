@@ -108,16 +108,21 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/overview.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research/".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -145,11 +150,15 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/internal.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "encapsulation-violation");

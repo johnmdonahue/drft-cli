@@ -108,7 +108,10 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = LayerViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -126,7 +129,10 @@ mod tests {
         graph.add_edge(make_edge("d.md", "a.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = LayerViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -142,7 +148,10 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = LayerViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("skip-layer"));
@@ -157,7 +166,10 @@ mod tests {
         graph.add_edge(make_edge("b.md", "a.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = LayerViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -172,7 +184,10 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = LayerViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

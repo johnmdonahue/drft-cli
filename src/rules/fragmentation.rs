@@ -56,7 +56,10 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = FragmentationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -70,7 +73,10 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = FragmentationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "fragmentation");
@@ -81,7 +87,10 @@ mod tests {
     fn no_diagnostic_for_empty_graph() {
         let graph = Graph::new();
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched, options: None };
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = FragmentationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

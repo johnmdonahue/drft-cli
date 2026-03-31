@@ -65,15 +65,12 @@ fn extract_markdown_links(content: &str) -> Vec<String> {
     links
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn parse(content: &str) -> Vec<String> {
-        let parser = MarkdownParser {
-            file_filter: None,
-        };
+        let parser = MarkdownParser { file_filter: None };
         parser.parse("test.md", content).links
     }
 
@@ -141,9 +138,7 @@ mod tests {
 
     #[test]
     fn no_filter_matches_everything() {
-        let parser = MarkdownParser {
-            file_filter: None,
-        };
+        let parser = MarkdownParser { file_filter: None };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("main.rs"));
         assert!(parser.matches("docs/guide.md"));
@@ -161,5 +156,4 @@ mod tests {
         assert!(parser.matches("page.mdx"));
         assert!(!parser.matches("main.rs"));
     }
-
 }

@@ -35,7 +35,6 @@ pub trait Parser {
     }
 }
 
-
 /// Build a GlobSet from file patterns (for parser routing).
 /// Returns None if no patterns → parser receives all File nodes.
 fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globset::GlobSet> {
@@ -180,14 +179,10 @@ pub fn build_parsers(
             // Built-in parser
             match name.as_str() {
                 "markdown" => {
-                    parsers.push(Box::new(markdown::MarkdownParser {
-                        file_filter,
-                    }));
+                    parsers.push(Box::new(markdown::MarkdownParser { file_filter }));
                 }
                 "frontmatter" => {
-                    parsers.push(Box::new(frontmatter::FrontmatterParser {
-                        file_filter,
-                    }));
+                    parsers.push(Box::new(frontmatter::FrontmatterParser { file_filter }));
                 }
                 _ => {
                     eprintln!(
