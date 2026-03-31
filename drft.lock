@@ -18,7 +18,7 @@ hash = "b3:737498fac43a3de8a228a29e089c910182061402d1866f54475ea994c7c2a76d"
 
 [nodes."README.md"]
 type = "file"
-hash = "b3:c552bf685458b6d1ada6f1739cf42d6ee8bd90dd1a7bcb92acc0245ed568f9ba"
+hash = "b3:2f8f61bfc1a1308c0c857f72f00f70f758faba7631c7aa77fa5ee615d88af4be"
 
 [nodes."RELEASING.md"]
 type = "file"
@@ -30,7 +30,7 @@ hash = "b3:68986a0031dfd91f014b0c3786c86db344189a851bc02ea2b62cdb4627f6ef0c"
 
 [nodes."benches/pipeline.rs"]
 type = "file"
-hash = "b3:63126b62e192a90ebe2e56ebbf2217d66f1d305b389e904e7ee1c6eeed1bf9d1"
+hash = "b3:4315c4154002f70f07534debd2000d5ae6e4d4528a186896a53cfd65166105a6"
 
 [nodes."docs/README.md"]
 type = "file"
@@ -54,11 +54,11 @@ hash = "b3:083ba3a306d209eaa665cbc8564129e858e0954fdb99023cafc570dc16744d00"
 
 [nodes."docs/analyses/connected-components.md"]
 type = "file"
-hash = "b3:59fc2cdc01c8571652aae48f83014c27a4c70202373df75527e1407a5977d37f"
+hash = "b3:8006c3bc2aa99f6b3917204b105a7c09ede525bb2677a01cb9c0968db0038e2b"
 
 [nodes."docs/analyses/degree.md"]
 type = "file"
-hash = "b3:291104c6f7cbcbd59eda0b4b3829403963fe992a44ab1d9ac62d278a7367ff36"
+hash = "b3:905d10d14470693e514c69211efcbb2a846372c7c83a98f12da0265647d0e3ae"
 
 [nodes."docs/analyses/depth.md"]
 type = "file"
@@ -66,7 +66,7 @@ hash = "b3:2bbb1481797d414e29cefaa379ae50663a86a0e552df8f577913cb107806c372"
 
 [nodes."docs/analyses/graph-boundaries.md"]
 type = "file"
-hash = "b3:20dd82156a35ed64a68d6e56708229d9b90bb2b48adba23f73db6a0290127d5c"
+hash = "b3:21d929666029e454cd073a2f0119f9eb5ce6be016bfb38ffdcacaede5727ab00"
 
 [nodes."docs/analyses/graph-stats.md"]
 type = "file"
@@ -94,15 +94,15 @@ hash = "b3:9b67bba516ff0a988ae571f25a49a090a57692cc90e4ce70ab5a98fda7928a88"
 
 [nodes."docs/parsers/frontmatter.md"]
 type = "file"
-hash = "b3:59ff7c4ee200cad15216770a5b9ee21706bd8e756ef900974a4463cf1bcccb62"
+hash = "b3:77df2dc562516a45eafc26d27db8d66f9b202d8de8a77b7b85eacf20a4d20344"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
-hash = "b3:1ce3301153901d40a3f12cf288e4f9d953ad3e83c8d25ecec8f6b0ab74cf916f"
+hash = "b3:739319d2266df1683d00e11bd6497b8a269a08a2b153eea6f9a724161976bada"
 
 [nodes."docs/parsers/script.md"]
 type = "file"
-hash = "b3:7a76a9a99d702b8666ea5cce7e16ade88db633b9cea642efaa007d33b272ad6a"
+hash = "b3:a99da0fde2e4e3bc62cd65cf318bec25f43177df329b9370563a2c026182a989"
 
 [nodes."docs/rules/README.md"]
 type = "file"

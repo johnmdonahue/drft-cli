@@ -1,4 +1,4 @@
-ignore = ["drafts/*"]
+exclude = ["drafts/*"]
 
 [parsers]
 markdown = true

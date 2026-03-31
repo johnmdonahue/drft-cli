@@ -1,24 +1,26 @@
 lockfile_version = 2
 
+[nodes."README.md"]
+type = "file"
+hash = "b3:c86dbeb3e58a6be13824ef257017fdf695d5047881e16b93af1aad416119c889"
+
 [nodes."assets/architecture.png"]
-type = "resource"
-hash = "b3:880031aabab70d51f1ff08762ad3c457bdaa2bf2687f4e864a33f63889a5ed1b"
+type = "external"
 
 [nodes."assets/data.csv"]
-type = "resource"
-hash = "b3:46a84d8206ad99a32257f30978b2cbb00023e98683a274ee0a197151cc441818"
+type = "external"
 
 [nodes."https://example.com/docs"]
 type = "external"
 
 [nodes."index.md"]
-type = "source"
+type = "file"
 hash = "b3:7975c23806c5ae679d5fb5a75c656e127f5e5d076d9ca507abc2d2bbf9e1e761"
 
 [nodes."notes.md"]
-type = "source"
+type = "file"
 hash = "b3:94b9b287a94ff0ced5c7e39f3379dcbda1ba21f49d89806ead2c8636549fb9c3"
 
 [nodes."setup.md"]
-type = "source"
+type = "file"
 hash = "b3:2f7887c0e88b2a6645f9dfb28a3329469b583276bcc8100baa5819a454a5be27"

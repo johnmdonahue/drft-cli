@@ -51,7 +51,6 @@ One JSON object per line (NDJSON). Two kinds of lines:
 |-------|------|-------------|
 | `file` | string | The source file path (as received on stdin) |
 | `target` | string | The link target (relative file path) |
-| `type` | string | Link type label (your choice, e.g. `"import"`, `"ref"`) |
 
 **Metadata lines** — structured data on a node:
 
@@ -65,13 +64,13 @@ drft distinguishes the two by checking for a `target` or `metadata` field.
 Example output:
 
 ```json
-{"file": "src/api.yaml", "target": "shared/types.yaml", "type": "import"}
-{"file": "src/api.yaml", "target": "../schemas/base.yaml", "type": "ref"}
+{"file": "src/api.yaml", "target": "shared/types.yaml"}
+{"file": "src/api.yaml", "target": "../schemas/base.yaml"}
 {"file": "src/api.yaml", "metadata": {"version": "3.0", "title": "API Spec"}}
-{"file": "src/models.yaml", "target": "shared/types.yaml", "type": "import"}
+{"file": "src/models.yaml", "target": "shared/types.yaml"}
 ```
 
-Empty lines are silently skipped. The `type` value becomes part of the edge type in the graph as `<parser-name>:<type>` -- so the above would produce edges of type `yaml-refs:import` and `yaml-refs:ref`. Metadata is namespaced by parser name on the node as `node.metadata["yaml-refs"]`.
+Empty lines are silently skipped. Each edge carries the parser name as provenance — so edges from this parser would have `parser: "yaml-refs"`. Metadata is namespaced by parser name on the node as `node.metadata["yaml-refs"]`.
 
 The batch approach (one process for all files) is much faster than per-file spawning.
 
@@ -85,21 +84,6 @@ The batch approach (one process for all files) is much faster than per-file spaw
 | Command not found | Warning printed, file produces no links |
 
 Errors are non-fatal. A failing script parser does not cause `drft check` to exit with an error -- it just means that file contributes no edges from that parser.
-
-## Type filtering
-
-You can restrict which link types are kept via parser options:
-
-```toml
-[parsers.yaml-refs]
-files = ["*.yaml"]
-command = "./scripts/parse-yaml-refs.sh"
-
-[parsers.yaml-refs.options]
-types = ["import"]
-```
-
-This runs the script and keeps only links where `type` matches one of the listed values. The `types` option is the one parser option that drft interprets itself (for filtering); all other options are passed through to the script.
 
 ## Timeout
 
@@ -132,7 +116,7 @@ while IFS= read -r filepath; do
     case "$ref" in
       http://*|https://*) continue ;;
     esac
-    printf '{"file": "%s", "target": "%s", "type": "ref"}\n' "$filepath" "$ref"
+    printf '{"file": "%s", "target": "%s"}\n' "$filepath" "$ref"
   done
 done
 ```

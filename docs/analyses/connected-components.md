@@ -53,7 +53,7 @@ JSON output:
 }
 ```
 
-Components are sorted by size (largest first). Members within each component are sorted alphabetically. Only real nodes (Document and Asset) are included.
+Components are sorted by size (largest first). Members within each component are sorted alphabetically. Only File nodes are included — External and Graph nodes are excluded.
 
 ### As a rule (`drft check`)
 

@@ -1,0 +1,16 @@
+lockfile_version = 2
+
+[nodes."README.md"]
+type = "file"
+hash = "b3:482518ecf2ae9eb07ddbb55f420df6ce48bd360f453f94b05575fc1ecde65671"
+
+[nodes."drafts/wip.md"]
+type = "external"
+
+[nodes."index.md"]
+type = "file"
+hash = "b3:9c29dd9aa31340c0273854ebcfc0f18a36b6d60c98ddf72709de8567552b9ac5"
+
+[nodes."setup.md"]
+type = "file"
+hash = "b3:caae5d263cf608bf1057ee58b609c2e15ee0665fab62eaf3d873b79a320684b4"

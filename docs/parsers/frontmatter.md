@@ -6,7 +6,7 @@ The frontmatter parser extracts YAML frontmatter from files. It serves two purpo
 
 ## Link types
 
-The parser extracts one type of link. Each becomes an edge with type `frontmatter:link` in the graph.
+The parser extracts one type of link. Each becomes an edge with parser provenance `frontmatter` in the graph.
 
 ### link
 

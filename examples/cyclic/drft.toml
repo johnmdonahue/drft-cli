@@ -1,7 +1,7 @@
 # drft.toml
 
-# Glob patterns for files to exclude from discovery
-ignore = []
+# Glob patterns to exclude from the graph
+exclude = []
 
 [parsers]
 markdown = true

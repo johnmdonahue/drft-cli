@@ -52,12 +52,12 @@ JSON output:
 ### As rules (`drft check`)
 
 Two rules consume this analysis:
-- **`containment`** — flags graph escapes (only when interface is declared)
-- **`encapsulation`** — flags interface bypasses
+- **`boundary-violation`** — flags graph escapes (only when interface is declared)
+- **`encapsulation-violation`** — flags interface bypasses
 
 ## Algorithm
 
-For escapes: checks for `[interface]` in `drft.toml` (graph with interface), then scans edges for `../` target prefixes. For encapsulation: iterates Graph nodes, reads each child graph's interface configuration, and identifies edges targeting non-interface files inside the graph. Skips edges from child-graph projections (Resources with a `graph` field).
+For escapes: checks for `[interface]` in `drft.toml` (graph with interface), then scans edges for `../` target prefixes. For encapsulation: iterates Graph nodes, reads each child graph's interface configuration, and identifies edges targeting non-interface files inside the graph. Skips edges from Graph node projections.
 
 ## Source
 
