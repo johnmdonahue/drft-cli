@@ -4,7 +4,7 @@ Core modules for the drft CLI.
 
 ## Entry points
 
-- [main.rs](main.rs) — command dispatch, `run_check`, `run_report`, `run_lock`, etc.
+- [main.rs](main.rs) — command dispatch, `run_parse`, `run_graph`, `run_check`, `run_report`, `run_lock`, etc.
 - [cli.rs](cli.rs) — clap-derived CLI definition and argument parsing
 - [lib.rs](lib.rs) — library crate root, re-exports public modules
 

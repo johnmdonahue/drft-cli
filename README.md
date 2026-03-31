@@ -36,16 +36,22 @@ drft lock --check
 
 drft discovers files, runs configurable parsers to extract links between them, and builds a dependency graph. It then validates that graph against a set of rules:
 
-| Rule | Default | Description |
-|------|---------|-------------|
-| `dangling-edge` | warn | Edge target does not exist |
-| `directed-cycle` | warn | Circular dependency detected |
-| `directory-edge` | warn | Edge points to a directory, not a file |
-| `stale` | error | Dependency changed since last lock |
-| `boundary-violation` | warn | Edge escapes the graph boundary |
-| `encapsulation-violation` | warn | Edge reaches into a child graph's non-interface files |
-| `orphan-node` | off | Node has no inbound edges |
-| `symlink-edge` | off | Edge target is a symlink |
+| Rule | Description |
+|------|-------------|
+| `dangling-edge` | Edge target does not exist |
+| `directed-cycle` | Circular dependency detected |
+| `directory-edge` | Edge points to a directory, not a file |
+| `stale` | Dependency changed since last lock |
+| `boundary-violation` | Edge escapes the graph boundary |
+| `encapsulation-violation` | Edge reaches into a child graph's non-interface files |
+| `orphan-node` | Node has no inbound edges |
+| `symlink-edge` | Edge target is a symlink |
+| `fragility` | Structural single point of failure |
+| `fragmentation` | Disconnected graph component |
+| `layer-violation` | Edge violates depth hierarchy |
+| `redundant-edge` | Edge is transitively redundant |
+
+All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
 See the [full documentation](docs/README.md) for details on parsers, analyses, and rules.
 
@@ -72,6 +78,16 @@ Snapshot file hashes to `drft.lock`. This enables staleness detection -- when a 
 drft lock                     # create/update drft.lock
 drft lock --check             # verify lockfile is current (CI)
 drft lock --recursive         # lock all graphs bottom-up
+```
+
+### `drft parse`
+
+Show raw parser output — what edges each parser found, before graph construction.
+
+```bash
+drft parse                    # all parsers, text output
+drft parse --parser markdown  # only the markdown parser
+drft parse --format json      # machine-readable output
 ```
 
 ### `drft graph`

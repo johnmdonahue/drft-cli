@@ -51,6 +51,13 @@ pub enum Commands {
         max_depth: Option<usize>,
     },
 
+    /// Show raw parser output (edges and metadata)
+    Parse {
+        /// Run only a specific parser
+        #[arg(long)]
+        parser: Option<String>,
+    },
+
     /// Export the dependency graph
     Graph {
         /// Include child graphs

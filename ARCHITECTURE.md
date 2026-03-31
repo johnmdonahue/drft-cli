@@ -187,14 +187,7 @@ Edges are not stored in the lockfile. If a file's links change, its content hash
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `drft init` | Create `drft.toml` with default config |
-| `drft check` | Run rules, emit diagnostics. Exit 0 (clean) or 1 (violations). |
-| `drft lock` | Snapshot current graph state to `drft.lock` |
-| `drft graph` | Export the dependency graph (JSON Graph Format) |
-| `drft impact <files>` | Show transitive dependents of given files |
-| `drft report [names]` | [unstable] Run graph analyses and health metrics |
+See [Commands](README.md#commands) in the README.
 
 ## Config
 

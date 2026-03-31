@@ -3,9 +3,11 @@ mod cli;
 use drft::analyses;
 use drft::config;
 use drft::diagnostic;
+use drft::discovery;
 use drft::graph;
 use drft::lockfile;
 use drft::metrics;
+use drft::parsers;
 use drft::rules;
 
 use anyhow::{Context, Result};
@@ -75,6 +77,7 @@ fn try_main() -> Result<i32> {
         } => run_lock(&root, *check, *recursive, *max_depth),
         Commands::Report { names } => run_report(&root, cli.format, names),
         Commands::Impact { files } => run_impact(&root, cli.format, files),
+        Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
         Commands::Graph {
             recursive,
             max_depth,
@@ -362,6 +365,116 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
                     format!("{:.4}", m.value)
                 };
                 println!("{:<30} {:>10}  ({})", m.name, val, m.dimension);
+            }
+        }
+    }
+
+    Ok(0)
+}
+
+fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> Result<i32> {
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+
+    // Validate --parser filter
+    if let Some(name) = parser_filter
+        && !config.parsers.contains_key(name)
+    {
+        anyhow::bail!(
+            "unknown parser \"{name}\" (available: {})",
+            config
+                .parsers
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    // 1. Discover files
+    let included_files = discovery::discover(&graph_root, &config.include, &config.exclude)?;
+
+    // 2. Read text content (binary files skipped)
+    let mut file_text: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for file in &included_files {
+        if let Ok(text) = std::fs::read_to_string(graph_root.join(file)) {
+            file_text.insert(file.clone(), text);
+        }
+    }
+
+    // 3. Build parser registry, apply --parser filter
+    let parser_list =
+        parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), &graph_root);
+
+    // 4. Route files to parsers and run
+    let mut results: Vec<serde_json::Value> = Vec::new();
+
+    for parser in &parser_list {
+        if let Some(name) = parser_filter
+            && parser.name() != name
+        {
+            continue;
+        }
+
+        let files: Vec<(&str, &str)> = included_files
+            .iter()
+            .filter(|f| parser.matches(f))
+            .filter_map(|f| file_text.get(f).map(|content| (f.as_str(), content.as_str())))
+            .collect();
+
+        if files.is_empty() {
+            continue;
+        }
+
+        let batch_results = parser.parse_batch(&files);
+
+        for (file, links) in batch_results {
+            for link in links {
+                results.push(serde_json::json!({
+                    "parser": parser.name(),
+                    "file": file,
+                    "target": link.target,
+                    "type": link.link_type,
+                    "external": link.is_external,
+                }));
+            }
+        }
+    }
+
+    // Sort for deterministic output
+    results.sort_by(|a, b| {
+        a["parser"]
+            .as_str()
+            .cmp(&b["parser"].as_str())
+            .then_with(|| a["file"].as_str().cmp(&b["file"].as_str()))
+            .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
+    });
+
+    match format {
+        OutputFormat::Json => {
+            let output = serde_json::json!({
+                "edges": results,
+                "total": results.len(),
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        _ => {
+            if results.is_empty() {
+                println!("no edges found");
+            } else {
+                for edge in &results {
+                    let parser = edge["parser"].as_str().unwrap_or("");
+                    let file = edge["file"].as_str().unwrap_or("");
+                    let target = edge["target"].as_str().unwrap_or("");
+                    let link_type = edge["type"].as_str().unwrap_or("");
+                    let ext = if edge["external"].as_bool() == Some(true) {
+                        " [external]"
+                    } else {
+                        ""
+                    };
+                    println!("{file} → {target} ({parser}:{link_type}){ext}");
+                }
+                eprintln!("\n{} edges", results.len());
             }
         }
     }
