@@ -6,6 +6,7 @@ pub mod degree;
 pub mod depth;
 pub mod graph_boundaries;
 pub mod graph_stats;
+pub mod impact_radius;
 pub mod pagerank;
 pub mod scc;
 pub mod transitive_reduction;
@@ -35,6 +36,7 @@ pub fn all_analysis_names() -> &'static [&'static str] {
         "depth",
         "graph-boundaries",
         "graph-stats",
+        "impact-radius",
         "pagerank",
         "scc",
         "transitive-reduction",
@@ -65,6 +67,7 @@ pub struct EnrichedGraph {
     pub depth: depth::DepthResult,
     pub graph_boundaries: graph_boundaries::GraphBoundariesResult,
     pub graph_stats: graph_stats::GraphStatsResult,
+    pub impact_radius: impact_radius::ImpactRadiusResult,
     pub pagerank: pagerank::PageRankResult,
     pub scc: scc::SccResult,
     pub transitive_reduction: transitive_reduction::TransitiveReductionResult,
@@ -102,6 +105,7 @@ pub fn enrich_graph(
     let depth = depth::Depth.run(&ctx);
     let graph_boundaries = graph_boundaries::GraphBoundaries.run(&ctx);
     let graph_stats = graph_stats::GraphStats.run(&ctx);
+    let impact_radius = impact_radius::ImpactRadius.run(&ctx);
     let pagerank = pagerank::PageRank.run(&ctx);
     let scc = scc::StronglyConnectedComponents.run(&ctx);
     let transitive_reduction = transitive_reduction::TransitiveReduction.run(&ctx);
@@ -116,6 +120,7 @@ pub fn enrich_graph(
         depth,
         graph_boundaries,
         graph_stats,
+        impact_radius,
         pagerank,
         scc,
         transitive_reduction,

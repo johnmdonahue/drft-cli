@@ -103,13 +103,26 @@ drft graph --recursive        # include child graphs
 
 ### `drft impact`
 
-Show what depends on the given files (transitively).
+Show what depends on the given files (transitively), sorted by review priority. Each dependent is annotated with its depth from the changed file, impact radius (its own transitive dependents), and betweenness centrality.
 
 ```bash
 drft impact setup.md              # text output
-drft impact --format json setup.md  # JSON with fix instructions
+drft impact --format json setup.md  # JSON with structural context
 drft impact config.md faq.md      # multiple files
 ```
+
+### `drft report`
+
+Query structural analyses of the graph — degree, betweenness, SCC, depth, and more.
+
+```bash
+drft report                       # all analyses, text output
+drft report degree                # single analysis
+drft report betweenness pagerank  # multiple analyses
+drft report --format json degree  # machine-readable output
+```
+
+See [analyses documentation](docs/analyses/README.md) for the full list.
 
 ### `drft init`
 
@@ -289,13 +302,29 @@ drft impact src/main.rs --format json
   "files": ["src/main.rs"],
   "total": 2,
   "impacted": [
-    { "node": "docs/analyses/degree.md", "via": "src/main.rs", "fix": "..." },
-    { "node": "README.md", "via": "docs/analyses/degree.md", "fix": "..." }
+    {
+      "node": "docs/analyses/degree.md",
+      "via": "src/main.rs",
+      "depth": 1,
+      "impact_radius": 4,
+      "betweenness": 0.01,
+      "fix": "..."
+    },
+    {
+      "node": "README.md",
+      "via": "docs/analyses/degree.md",
+      "depth": 2,
+      "impact_radius": 0,
+      "betweenness": 0.005,
+      "fix": "..."
+    }
   ]
 }
 ```
 
-This is the primary signal for LLM-assisted editing: after every file change, `drft impact` tells the agent exactly which files to review. Each impacted file may contain content — prose, code examples, JSON snippets — that mirrors or describes the changed source. The `fix` field provides actionable instructions.
+Results are sorted by review priority — high-radius nodes at shallow depth first. `impact_radius` tells you how many files cascade if you miss this one. `depth` tells you how far from the original change. `betweenness` signals structural centrality. The `fix` field provides actionable instructions.
+
+This is the primary signal for LLM-assisted editing: after every file change, `drft impact` tells the agent exactly which files to review, in priority order.
 
 ### Claude Code hooks
 

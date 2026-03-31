@@ -23,5 +23,5 @@ Core modules for the drft CLI.
 ## Subdirectories
 
 - [parsers/](parsers/README.md) — parser trait, built-in markdown + frontmatter parsers, script-based parser runner
-- [analyses/](analyses/README.md) — analysis trait, 11 graph analyses
+- [analyses/](analyses/README.md) — analysis trait, 12 graph analyses
 - [rules/](rules/README.md) — rule trait, 13 built-in rules, script-based rule runner

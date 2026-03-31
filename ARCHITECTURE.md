@@ -97,6 +97,7 @@ Pure analyses (SCC, PageRank, bridges) ignore root/config/lockfile. Stateful ana
 | [`bridges`](docs/analyses/bridges.md) | Cut vertices and bridge edges (Tarjan's, undirected) | Critical nodes and edges |
 | [`transitive-reduction`](docs/analyses/transitive-reduction.md) | Transitively redundant edges | Per-edge BFS |
 | [`betweenness`](docs/analyses/betweenness.md) | Betweenness centrality (Brandes' algorithm) | Centrality scores |
+| [`impact-radius`](docs/analyses/impact-radius.md) | Transitive dependent count, blast zone depth | Radius per node |
 | [`pagerank`](docs/analyses/pagerank.md) | PageRank scores (power iteration, d=0.85) | Rank scores |
 
 ### Stateful (graph + lockfile/config)
@@ -222,10 +223,11 @@ Rules are evaluated at the configured severity. `--rule <name>` on the command l
 ## Adding a new analysis
 
 1. Create `src/analyses/<name>.rs` with a struct implementing `Analysis`. Define the output type and implement `run()` taking `&AnalysisContext`.
-2. Add `pub mod <name>` to [`src/analyses/mod.rs`](src/analyses/mod.rs).
-3. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in [`src/config.rs`](src/config.rs), add to the `drft init` template.
-4. Add unit tests in the analysis module, integration tests in [`tests/`](tests/README.md).
-5. Document in `docs/analyses/<name>.md` and update [`docs/analyses/README.md`](docs/analyses/README.md).
+2. Add `pub mod <name>` to [`src/analyses/mod.rs`](src/analyses/mod.rs). Add the name to `all_analysis_names()`, add a field to `EnrichedGraph`, and wire it in `enrich_graph()`.
+3. Register in the report command's `all_analyses` list in [`src/main.rs`](src/main.rs).
+4. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in [`src/config.rs`](src/config.rs), add to the `drft init` template.
+5. Add unit tests in the analysis module, integration tests in [`tests/`](tests/README.md).
+6. Document in `docs/analyses/<name>.md` and update [`docs/analyses/README.md`](docs/analyses/README.md).
 
 ## Adding a new metric
 

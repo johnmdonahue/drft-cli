@@ -238,6 +238,10 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
             serde_json::to_value(&enriched.graph_boundaries)?,
         ),
         ("graph-stats", serde_json::to_value(&enriched.graph_stats)?),
+        (
+            "impact-radius",
+            serde_json::to_value(&enriched.impact_radius)?,
+        ),
         ("pagerank", serde_json::to_value(&enriched.pagerank)?),
         ("scc", serde_json::to_value(&enriched.scc)?),
         (
@@ -644,7 +648,9 @@ fn collect_jgf_graphs(
 fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
-    let graph = build_graph(&graph_root, &config)?;
+    let lockfile = lockfile::read_lockfile(&graph_root)?;
+    let enriched = analyses::enrich(&graph_root, &config, lockfile.as_ref())?;
+    let graph = &enriched.graph;
 
     // Resolve file args (try with .md extension if not found)
     let mut seeds: Vec<String> = Vec::new();
@@ -661,42 +667,65 @@ fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32
         }
     }
 
-    // BFS: walk reverse edges to find all transitive dependents
+    // BFS: walk reverse edges to find all transitive dependents, tracking depth
     let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+    let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
 
-    // Seeds are the starting points — don't include them in the output
     for seed in &seeds {
         visited.insert(seed.clone());
-        queue.push_back(seed.clone());
+        queue.push_back((seed.clone(), 0));
     }
 
-    let mut impacted: Vec<(String, String)> = Vec::new(); // (node, via)
+    // (node, via, depth)
+    let mut impacted: Vec<(String, String, usize)> = Vec::new();
 
-    while let Some(node) = queue.pop_front() {
+    while let Some((node, depth)) = queue.pop_front() {
         if let Some(edge_indices) = graph.reverse.get(node.as_str()) {
             for &idx in edge_indices {
                 let dependent = &graph.edges[idx].source;
                 if !visited.contains(dependent.as_str()) {
                     visited.insert(dependent.clone());
-                    impacted.push((dependent.clone(), node.clone()));
-                    queue.push_back(dependent.clone());
+                    let next_depth = depth + 1;
+                    impacted.push((dependent.clone(), node.clone(), next_depth));
+                    queue.push_back((dependent.clone(), next_depth));
                 }
             }
         }
     }
 
-    impacted.sort();
+    // Build lookup maps for enrichment data
+    let radius_map: std::collections::HashMap<&str, &drft::analyses::impact_radius::ImpactRadiusNode> =
+        enriched.impact_radius.nodes.iter().map(|n| (n.node.as_str(), n)).collect();
+    let betweenness_map: std::collections::HashMap<&str, f64> =
+        enriched.betweenness.nodes.iter().map(|n| (n.node.as_str(), n.score)).collect();
+
+    // Sort by review priority: high-radius nodes at shallow depth first
+    impacted.sort_by(|a, b| {
+        let a_radius = radius_map.get(a.0.as_str()).map(|n| n.radius).unwrap_or(0);
+        let b_radius = radius_map.get(b.0.as_str()).map(|n| n.radius).unwrap_or(0);
+        let a_betweenness = betweenness_map.get(a.0.as_str()).copied().unwrap_or(0.0);
+        let b_betweenness = betweenness_map.get(b.0.as_str()).copied().unwrap_or(0.0);
+
+        // Priority: impact_radius / depth + betweenness (higher = more important = sorts first)
+        let a_priority = (a_radius as f64) / (a.2 as f64) + a_betweenness;
+        let b_priority = (b_radius as f64) / (b.2 as f64) + b_betweenness;
+        b_priority.partial_cmp(&a_priority).unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     match format {
         OutputFormat::Json => {
             let output = serde_json::json!({
                 "files": seeds,
                 "total": impacted.len(),
-                "impacted": impacted.iter().map(|(node, via)| {
+                "impacted": impacted.iter().map(|(node, via, depth)| {
+                    let radius = radius_map.get(node.as_str()).map(|n| n.radius).unwrap_or(0);
+                    let betweenness = betweenness_map.get(node.as_str()).copied().unwrap_or(0.0);
                     serde_json::json!({
                         "node": node,
                         "via": via,
+                        "depth": depth,
+                        "impact_radius": radius,
+                        "betweenness": betweenness,
                         "fix": format!("{via} may change — review {node} to ensure it still accurately reflects {via}")
                     })
                 }).collect::<Vec<_>>()
@@ -707,8 +736,9 @@ fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32
             if impacted.is_empty() {
                 println!("no dependents found");
             } else {
-                for (node, via) in &impacted {
-                    println!("{node} (via {via})");
+                for (node, via, depth) in &impacted {
+                    let radius = radius_map.get(node.as_str()).map(|n| n.radius).unwrap_or(0);
+                    println!("{node} (via {via}, depth {depth}, radius {radius})");
                 }
             }
         }
