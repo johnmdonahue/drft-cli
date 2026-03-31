@@ -6,7 +6,7 @@ hash = "b3:79ebd4adcd3a64c09ba8cac4915f00f7ed9677dfdbb9ef676056ccf92ae3a2a2"
 
 [nodes."CHANGELOG.md"]
 type = "file"
-hash = "b3:589ee07f003b7ec4ca5dac762b233cad6e2ce7a84944d49cca158153bb91700e"
+hash = "b3:e531805c1cf1c5f894d0ad1612d9602c0688560d7b31059889b5523bebad1398"
 
 [nodes."CLAUDE.md"]
 type = "file"
