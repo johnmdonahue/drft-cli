@@ -2,6 +2,35 @@
 
 All notable changes to drft are documented here.
 
+## 0.4.0 (2026-03-31)
+
+Graph model redesign — explicit graph declaration, pure rules, parser metadata, and enriched impact analysis.
+
+### Breaking changes
+- **Graph declaration**: `include`/`exclude` replaces implicit parser-glob union. `ignore` renamed to `exclude`.
+- **Node types**: `Source` → `File`, `Resource` removed. Three types: File, External, Graph.
+- **Rule renames**: `broken-link` → `dangling-edge`, `cycle` → `directed-cycle`, `containment` → `boundary-violation`, `encapsulation` → `encapsulation-violation`, `orphan` → `orphan-node`, `indirect-link` → `symlink-edge`, `directory-link` → `directory-edge`.
+- **Parser contract**: `glob` replaced by `files` (array of globs), `types` replaced by `options` (arbitrary structured data). Parsers return raw link strings — graph builder owns normalization.
+- **Edge model simplified**: `RawLink`/`EdgeType` removed. Edge = `{ source, target, link?, parser }`.
+- **RuleContext**: reduced to `{ graph: &EnrichedGraph, options }`. No filesystem access, no config.
+- **Lockfile**: regenerated with new node types.
+
+### New features
+- **`drft parse`** command: raw parser output for debugging script parsers and the options envelope protocol.
+- **Frontmatter parser**: standalone built-in parser for YAML frontmatter (links + structured metadata).
+- **Schema-violation rule**: validates node metadata against glob-scoped schemas with required/allowed fields. First consumer of parser metadata and rule options.
+- **Impact-radius analysis**: per-node blast zone (transitive dependents, depth, direct count).
+- **Enriched `drft impact`**: output annotated with depth, impact_radius, and betweenness; sorted by review priority.
+- **Rule options**: `[rules.<name>.options]` for arbitrary structured data passed through to rules.
+- **Parser options**: `[parsers.<name>.options]` passed to script parsers as JSON envelope on stdin.
+- **Script rule enrichment**: script rules receive `{ graph, options }` with all 12 analyses.
+
+### Fixes
+- Replace deprecated `serde_yaml` with maintained `serde_yml` fork.
+- Deterministic metadata merge across parser namespaces (sorted by key).
+- Warning on invalid glob patterns in schema-violation options.
+- `drft graph --dot` replaces `--format dot` (DOT output is graph-only).
+
 ## 0.3.0 (2026-03-30)
 
 Major architecture overhaul: drft is now a structural integrity checker for any linked file system, not just markdown.
