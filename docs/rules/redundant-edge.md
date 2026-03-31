@@ -20,7 +20,7 @@ warn[redundant-edge]: a.md -> c.md (transitively redundant, via b.md)
 
 ```toml
 [rules]
-redundant-edge = "warn"    # default
+redundant-edge = "warn" # default
 ```
 
 ```toml
@@ -31,7 +31,7 @@ ignore = ["index.md"]
 
 ## Analysis
 
-Powered by the [transitive-reduction](../analyses/transitive-reduction.md) analysis, which computes the minimal edge set that preserves all reachability.
+Uses the [transitive-reduction](../analyses/transitive-reduction.md) analysis, which computes the minimal edge set that preserves all reachability.
 
 ## Source
 

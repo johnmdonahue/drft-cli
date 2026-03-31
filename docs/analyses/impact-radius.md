@@ -24,13 +24,13 @@ This is the reverse complement of depth. Depth asks "how far is this node from a
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `radius` | Count of transitive dependents (nodes reachable via reverse edges) |
-| `direct_dependents` | Count of direct dependents (immediate reverse neighbors) |
-| `max_depth` | Longest reverse path from this node to a dependent |
+| Field               | Description                                                        |
+| ------------------- | ------------------------------------------------------------------ |
+| `radius`            | Count of transitive dependents (nodes reachable via reverse edges) |
+| `direct_dependents` | Count of direct dependents (immediate reverse neighbors)           |
+| `max_depth`         | Longest reverse path from this node to a dependent                 |
 
-Nodes are sorted alphabetically by path. Only File nodes are included — External and Graph nodes are excluded.
+Nodes are sorted alphabetically by path. Only File nodes are included — External and Directory nodes are excluded.
 
 ## Used by `drft impact`
 

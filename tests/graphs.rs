@@ -30,7 +30,7 @@ fn scenario_10_child_graph_open() {
 
     // Verify lockfile has graph + child-graph resource nodes
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
-    assert!(lockfile.contains(r#"type = "graph""#));
+    assert!(lockfile.contains(r#"type = "directory""#));
     assert!(lockfile.contains(r#"type = "external""#));
 
     // Check should be clean (unsealed = no encapsulation)
@@ -65,7 +65,7 @@ fn scenario_12_encapsulation_violation() {
     // Child config with interface (only overview exposed)
     fs::write(
         research.join("drft.toml"),
-        "[parsers]\nmarkdown = true\n\n[interface]\nnodes = [\"overview.md\"]\n",
+        "[parsers]\nmarkdown = true\n\n[interface]\nfiles = [\"overview.md\"]\n",
     )
     .unwrap();
 

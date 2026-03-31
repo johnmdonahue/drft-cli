@@ -30,8 +30,8 @@ pub fn is_uri(target: &str) -> bool {
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
     File,
+    Directory,
     External,
-    Graph,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -39,9 +39,13 @@ pub struct Node {
     pub path: String,
     pub node_type: NodeType,
     pub hash: Option<String>,
-    /// If set, this node lives in a child graph (value is the child graph's path).
+    /// Which graph this node belongs to — mirrors filesystem directory entries:
+    /// `"."` = local, `".."` = parent (escape), `"child"` = child graph, `None` = not on filesystem.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph: Option<String>,
+    /// True when this Directory node has a drft.toml (is a drft graph).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_graph: bool,
     /// Structured metadata from parsers, keyed by parser name.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, serde_json::Value>,
@@ -87,25 +91,11 @@ impl Graph {
         Self::default()
     }
 
-    /// Child graphs (nodes with type Graph).
-    #[allow(dead_code)]
-    pub fn children(&self) -> impl Iterator<Item = &Node> {
-        self.nodes
-            .values()
-            .filter(|n| n.node_type == NodeType::Graph)
-    }
-
-    /// Whether a node is part of this graph's interface.
-    #[allow(dead_code)]
-    pub fn is_interfaced(&self, path: &str) -> bool {
-        self.interface.iter().any(|e| e == path)
-    }
-
     pub fn add_node(&mut self, node: Node) {
         self.nodes.insert(node.path.clone(), node);
     }
 
-    /// Returns true for File nodes (excludes External and Graph).
+    /// Returns true for File nodes (excludes External and Directory).
     /// Used by structural analyses that operate only on declared file-backed nodes.
     pub fn is_file_node(&self, path: &str) -> bool {
         self.nodes
@@ -163,7 +153,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             path: file.clone(),
             node_type: NodeType::File,
             hash: Some(hash),
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
 
@@ -233,60 +224,86 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 4. Create Graph nodes for child graphs
+    // 4. Edge-driven node creation.
+    //    Child graph directories are NOT pre-created — they only get nodes when
+    //    an edge references them or a file inside them. This keeps the model
+    //    uniform: edges create nodes, discovery creates files.
     let graph_prefixes: Vec<String> = graph.child_graphs.clone();
-    for graph_dir in &graph_prefixes {
-        graph.add_node(Node {
-            path: graph_dir.clone(),
-            node_type: NodeType::Graph,
-            hash: None,
-            graph: None,
-            metadata: HashMap::new(),
-        });
-    }
 
     // 5. Classify edge targets not already in the graph.
     //    edge.target is already the node identity (fragment-stripped).
-    //    - URIs → External
-    //    - Child graph files (exist on disk) → External with graph field
-    //    - Files on disk outside include → External
-    //    - Doesn't exist / is directory → no node (dangling-edge / directory-edge candidates)
+    //    graph field uses filesystem-relative convention:
+    //      "."           — belongs to current graph
+    //      ".."          — escaped to parent graph
+    //      "research"    — belongs to child graph "research"
+    //      None          — not on the filesystem (URI)
     let mut implicit_edges = Vec::new();
     for edge in &pending_edges {
         if graph.nodes.contains_key(&edge.target) {
             continue;
         }
 
-        // URIs → External
+        // URIs → External (not on filesystem)
         if is_uri(&edge.target) {
             graph.add_node(Node {
                 path: edge.target.clone(),
                 node_type: NodeType::External,
                 hash: None,
                 graph: None,
+                is_graph: false,
                 metadata: HashMap::new(),
             });
             continue;
         }
 
-        // Target inside a child graph → External with graph field (if file exists)
+        // Boundary escape (../ targets) → External with graph: ".."
+        if edge.target.starts_with("../") || edge.target == ".." {
+            graph.add_node(Node {
+                path: edge.target.clone(),
+                node_type: NodeType::External,
+                hash: None,
+                graph: Some("..".into()),
+                is_graph: false,
+                metadata: HashMap::new(),
+            });
+            continue;
+        }
+
+        // Target inside a child graph → External with graph: "child"
         let in_child_graph = graph_prefixes
             .iter()
-            .find(|s| edge.target.starts_with(s.as_str()));
-        if let Some(graph_prefix) = in_child_graph {
+            .find(|s| edge.target.starts_with(&format!("{s}/")));
+        if let Some(child_name) = in_child_graph {
             let target_path = root.join(&edge.target);
             if target_path.is_file() {
+                let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
                 graph.add_node(Node {
                     path: edge.target.clone(),
                     node_type: NodeType::External,
-                    hash: None,
-                    graph: Some(graph_prefix.clone()),
+                    hash,
+                    graph: Some(child_name.clone()),
+                    is_graph: false,
                     metadata: HashMap::new(),
                 });
-                // Synthetic coupling edge: child-graph file → Graph node
+                // Ensure the child graph Directory node exists
+                if !graph.nodes.contains_key(child_name) {
+                    let child_dir = root.join(child_name);
+                    let lock_hash = std::fs::read(child_dir.join("drft.lock"))
+                        .ok()
+                        .map(|c| hash_bytes(&c));
+                    graph.add_node(Node {
+                        path: child_name.clone(),
+                        node_type: NodeType::Directory,
+                        hash: lock_hash,
+                        graph: Some(".".into()),
+                        is_graph: true,
+                        metadata: HashMap::new(),
+                    });
+                }
+                // Synthetic coupling edge: child-graph file → Directory node
                 implicit_edges.push(Edge {
                     source: edge.target.clone(),
-                    target: graph_prefix.clone(),
+                    target: child_name.clone(),
                     link: None,
                     parser: edge.parser.clone(),
                 });
@@ -294,19 +311,37 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // File exists on disk but not in include → External (validated, not tracked)
         let target_path = root.join(&edge.target);
+
+        // Directory on disk → Directory node
+        if target_path.is_dir() {
+            let has_config = target_path.join("drft.toml").exists();
+            let lockfile_path = target_path.join("drft.lock");
+            let hash = std::fs::read(&lockfile_path).ok().map(|c| hash_bytes(&c));
+            graph.add_node(Node {
+                path: edge.target.clone(),
+                node_type: NodeType::Directory,
+                hash,
+                graph: Some(".".into()),
+                is_graph: has_config,
+                metadata: HashMap::new(),
+            });
+            continue;
+        }
+
+        // File exists on disk but not in include → External (local)
         if target_path.is_file() {
+            let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
             graph.add_node(Node {
                 path: edge.target.clone(),
                 node_type: NodeType::External,
-                hash: None,
-                graph: None,
+                hash,
+                graph: Some(".".into()),
+                is_graph: false,
                 metadata: HashMap::new(),
             });
         }
-        // If doesn't exist or is a directory: no node created.
-        // dangling-edge and directory-edge rules handle these cases.
+        // If doesn't exist: no node created. dangling-edge rule handles this.
     }
 
     // Probe filesystem properties for non-URI edge targets (stored per-target, not per-edge)
@@ -340,10 +375,12 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         graph.add_edge(edge);
     }
 
-    // Resolve interface from config
+    // Resolve interface from config (files included, ignore excluded)
     if let Some(ref iface) = config.interface {
+        let ignore_set = crate::config::compile_globs(&iface.ignore)?;
+
         let mut resolved = Vec::new();
-        for pattern in &iface.nodes {
+        for pattern in &iface.files {
             if let Ok(glob) = globset::Glob::new(pattern) {
                 let matcher = glob.compile_matcher();
                 for path in graph.nodes.keys() {
@@ -352,12 +389,16 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     }
                 }
             } else {
-                // Treat as literal path
                 if graph.nodes.contains_key(pattern) {
                     resolved.push(pattern.clone());
                 }
             }
         }
+
+        if let Some(ref ignore) = ignore_set {
+            resolved.retain(|p| !ignore.is_match(p));
+        }
+
         resolved.sort();
         resolved.dedup();
         graph.interface = resolved;
@@ -446,7 +487,8 @@ pub mod test_helpers {
             path: path.into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         }
     }
@@ -458,6 +500,22 @@ pub mod test_helpers {
             link: None,
             parser: "markdown".into(),
         }
+    }
+
+    pub fn make_enriched(graph: Graph) -> crate::analyses::EnrichedGraph {
+        crate::analyses::enrich_graph(
+            graph,
+            std::path::Path::new("."),
+            &crate::config::Config::defaults(),
+            None,
+        )
+    }
+
+    pub fn make_enriched_with_root(
+        graph: Graph,
+        root: &std::path::Path,
+    ) -> crate::analyses::EnrichedGraph {
+        crate::analyses::enrich_graph(graph, root, &crate::config::Config::defaults(), None)
     }
 }
 
@@ -525,6 +583,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g.add_node(Node {
@@ -532,6 +591,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g.add_edge(Edge {

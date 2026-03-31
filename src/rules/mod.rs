@@ -1,7 +1,7 @@
 pub mod boundary_violation;
+pub mod custom;
 pub mod dangling_edge;
 pub mod directed_cycle;
-pub mod directory_edge;
 pub mod encapsulation_violation;
 pub mod fragility;
 pub mod fragmentation;
@@ -9,9 +9,9 @@ pub mod layer_violation;
 pub mod orphan_node;
 pub mod redundant_edge;
 pub mod schema_violation;
-pub mod script;
 pub mod stale;
 pub mod symlink_edge;
+pub mod untrackable_target;
 
 use crate::analyses::EnrichedGraph;
 use crate::diagnostic::Diagnostic;
@@ -36,7 +36,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(boundary_violation::BoundaryViolationRule),
         Box::new(dangling_edge::DanglingEdgeRule),
         Box::new(directed_cycle::DirectedCycleRule),
-        Box::new(directory_edge::DirectoryEdgeRule),
+        Box::new(untrackable_target::UntrackableTargetRule),
         Box::new(encapsulation_violation::EncapsulationViolationRule),
         Box::new(fragility::FragilityRule),
         Box::new(fragmentation::FragmentationRule),

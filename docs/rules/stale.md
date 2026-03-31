@@ -16,13 +16,13 @@ warn[stale]: setup.md (content changed)
 warn[stale]: index.md (stale via setup.md)
 ```
 
-The rule also detects graph boundary changes (new or removed child graphs). It is vacuous if no `drft.lock` exists.
+The rule also detects graph boundary changes (new or removed child graphs). Without a `drft.lock`, this rule has nothing to check.
 
 ## Configuration
 
 ```toml
 [rules]
-stale = "warn"    # default
+stale = "warn" # default
 ```
 
 ```toml
@@ -33,7 +33,7 @@ ignore = ["CHANGELOG.md"]
 
 ## Analysis
 
-Powered by the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges.
+Uses the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges.
 
 ## Source
 

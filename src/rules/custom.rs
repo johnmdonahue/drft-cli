@@ -5,9 +5,9 @@ use crate::analyses::EnrichedGraph;
 use crate::config::{Config, RuleConfig};
 use crate::diagnostic::Diagnostic;
 
-/// Run all script rules defined in the config against the enriched graph.
-/// Script rules are rules with a `command` field in `[rules]`.
-/// Each script rule receives `{ graph, options }` as JSON on stdin —
+/// Run all custom rules defined in the config against the enriched graph.
+/// Custom rules are rules with a `command` field in `[rules]`.
+/// Each custom rule receives `{ graph, options }` as JSON on stdin —
 /// the enriched graph (nodes, edges, analyses) plus the rule's options —
 /// and emits diagnostics as newline-delimited JSON on stdout.
 ///
@@ -15,23 +15,23 @@ use crate::diagnostic::Diagnostic;
 /// {"message": "...", "source": "...", "target": "...", "node": "...", "fix": "..."}
 ///
 /// All fields except `message` are optional. The `rule` and `severity` fields
-/// are set by drft from the config — the script doesn't need to provide them.
-pub fn run_script_rules(enriched: &EnrichedGraph, root: &Path, config: &Config) -> Vec<Diagnostic> {
+/// are set by drft from the config — the command doesn't need to provide them.
+pub fn run_custom_rules(enriched: &EnrichedGraph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let config_dir = config.config_dir.as_deref().unwrap_or(root);
 
-    for (rule_name, rule_config) in config.script_rules() {
+    for (rule_name, rule_config) in config.custom_rules() {
         match run_one(rule_name, rule_config, enriched, root, config_dir) {
             Ok(mut results) => diagnostics.append(&mut results),
             Err(e) => {
-                eprintln!("warn: script rule \"{rule_name}\" failed: {e}");
+                eprintln!("warn: custom rule \"{rule_name}\" failed: {e}");
                 // Surface failures as diagnostics so JSON consumers see them
                 diagnostics.push(Diagnostic {
                     rule: rule_name.to_string(),
                     severity: rule_config.severity,
-                    message: format!("script rule failed: {e}"),
+                    message: format!("custom rule failed: {e}"),
                     fix: Some(format!(
-                        "script rule \"{rule_name}\" failed to execute — check the command path and script"
+                        "custom rule \"{rule_name}\" failed to execute — check the command path and script"
                     )),
                     ..Default::default()
                 });
@@ -113,7 +113,7 @@ fn run_one(
                 });
             }
             Err(e) => {
-                eprintln!("warn: script rule \"{rule_name}\": failed to parse output line: {e}");
+                eprintln!("warn: custom rule \"{rule_name}\": failed to parse output line: {e}");
             }
         }
     }
@@ -134,7 +134,7 @@ struct CustomDiagnostic {
     fix: Option<String>,
 }
 
-/// Build the JSON envelope sent to script rules: `{ graph, options }`.
+/// Build the JSON envelope sent to custom rules: `{ graph, options }`.
 ///
 /// The `graph` object contains the full enriched graph — nodes, edges,
 /// and all analysis results. `options` carries the rule's `[rules.<name>.options]`.
@@ -212,6 +212,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g.add_node(Node {
@@ -219,6 +220,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g.add_edge(Edge {
@@ -259,8 +261,10 @@ mod tests {
         let config = RuleConfig {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            files: Vec::new(),
             ignore: Vec::new(),
             options: None,
+            files_compiled: None,
             ignore_compiled: None,
         };
 
@@ -289,8 +293,10 @@ mod tests {
         let config = RuleConfig {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            files: Vec::new(),
             ignore: Vec::new(),
             options: None,
+            files_compiled: None,
             ignore_compiled: None,
         };
 
@@ -327,8 +333,10 @@ mod tests {
         let config = RuleConfig {
             command: Some("./scripts/check.sh".to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            files: Vec::new(),
             ignore: Vec::new(),
             options: None,
+            files_compiled: None,
             ignore_compiled: None,
         };
 
@@ -371,8 +379,10 @@ fi
         let config = RuleConfig {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            files: Vec::new(),
             ignore: Vec::new(),
             options: Some(options),
+            files_compiled: None,
             ignore_compiled: None,
         };
 
@@ -413,8 +423,10 @@ fi
         let config = RuleConfig {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
+            files: Vec::new(),
             ignore: Vec::new(),
             options: None,
+            files_compiled: None,
             ignore_compiled: None,
         };
 

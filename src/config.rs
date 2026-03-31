@@ -4,6 +4,18 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Compile a list of glob patterns into a GlobSet. Returns None if patterns is empty.
+pub fn compile_globs(patterns: &[String]) -> Result<Option<GlobSet>> {
+    if patterns.is_empty() {
+        return Ok(None);
+    }
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(Glob::new(pattern)?);
+    }
+    Ok(Some(builder.build()?))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RuleSeverity {
@@ -126,7 +138,9 @@ impl From<RawParserValue> for Option<ParserConfig> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct InterfaceConfig {
-    pub nodes: Vec<String>,
+    pub files: Vec<String>,
+    #[serde(default)]
+    pub ignore: Vec<String>,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -136,14 +150,45 @@ pub struct InterfaceConfig {
 #[derive(Debug, Clone)]
 pub struct RuleConfig {
     pub severity: RuleSeverity,
+    /// Scope which nodes the rule evaluates (default: all).
+    pub files: Vec<String>,
+    /// Exclude nodes from diagnostics (default: none).
     pub ignore: Vec<String>,
     pub command: Option<String>,
     /// Arbitrary structured data passed through to the rule. drft doesn't interpret it.
     pub options: Option<toml::Value>,
+    pub(crate) files_compiled: Option<GlobSet>,
     pub(crate) ignore_compiled: Option<GlobSet>,
 }
 
 impl RuleConfig {
+    pub fn new(
+        severity: RuleSeverity,
+        files: Vec<String>,
+        ignore: Vec<String>,
+        command: Option<String>,
+        options: Option<toml::Value>,
+    ) -> Result<Self> {
+        let files_compiled = compile_globs(&files).context("failed to compile files globs")?;
+        let ignore_compiled = compile_globs(&ignore).context("failed to compile ignore globs")?;
+        Ok(Self {
+            severity,
+            files,
+            ignore,
+            command,
+            options,
+            files_compiled,
+            ignore_compiled,
+        })
+    }
+
+    pub fn is_path_in_scope(&self, path: &str) -> bool {
+        match self.files_compiled {
+            Some(ref glob_set) => glob_set.is_match(path),
+            None => true, // no files = all in scope
+        }
+    }
+
     pub fn is_path_ignored(&self, path: &str) -> bool {
         if let Some(ref glob_set) = self.ignore_compiled {
             glob_set.is_match(path)
@@ -163,6 +208,8 @@ enum RawRuleValue {
     Table {
         #[serde(default = "default_warn")]
         severity: RuleSeverity,
+        #[serde(default)]
+        files: Vec<String>,
         #[serde(default)]
         ignore: Vec<String>,
         command: Option<String>,
@@ -214,7 +261,7 @@ const BUILTIN_RULES: &[&str] = &[
     "boundary-violation",
     "dangling-edge",
     "directed-cycle",
-    "directory-edge",
+    "untrackable-target",
     "encapsulation-violation",
     "fragility",
     "fragmentation",
@@ -243,7 +290,7 @@ impl Config {
             ("boundary-violation", RuleSeverity::Warn),
             ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
-            ("directory-edge", RuleSeverity::Warn),
+            ("untrackable-target", RuleSeverity::Warn),
             ("encapsulation-violation", RuleSeverity::Warn),
             ("fragility", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
@@ -257,13 +304,8 @@ impl Config {
         .map(|(k, v)| {
             (
                 k.to_string(),
-                RuleConfig {
-                    severity: v,
-                    ignore: Vec::new(),
-                    command: None,
-                    options: None,
-                    ignore_compiled: None,
-                },
+                RuleConfig::new(v, Vec::new(), Vec::new(), None, None)
+                    .expect("default rule config"),
             )
         })
         .collect();
@@ -349,47 +391,24 @@ impl Config {
             }
         }
 
-        // Parse rules (unified: built-in severities + table form + script rules)
+        // Parse rules (unified: built-in severities + table form + custom rules)
         if let Some(raw_rules) = raw.rules {
             for (name, value) in raw_rules {
                 let rule_config = match value {
-                    RawRuleValue::Severity(severity) => RuleConfig {
-                        severity,
-                        ignore: Vec::new(),
-                        command: None,
-                        options: None,
-                        ignore_compiled: None,
-                    },
+                    RawRuleValue::Severity(severity) => {
+                        RuleConfig::new(severity, Vec::new(), Vec::new(), None, None)?
+                    }
                     RawRuleValue::Table {
                         severity,
+                        files,
                         ignore,
                         command,
                         options,
-                    } => {
-                        let compiled = if ignore.is_empty() {
-                            None
-                        } else {
-                            let mut builder = GlobSetBuilder::new();
-                            for pattern in &ignore {
-                                builder.add(Glob::new(pattern).with_context(|| {
-                                    format!("invalid glob in rules.{name}.ignore")
-                                })?);
-                            }
-                            Some(builder.build().with_context(|| {
-                                format!("failed to compile globs for rules.{name}.ignore")
-                            })?)
-                        };
-                        RuleConfig {
-                            severity,
-                            ignore,
-                            command,
-                            options,
-                            ignore_compiled: compiled,
-                        }
-                    }
+                    } => RuleConfig::new(severity, files, ignore, command, options)
+                        .with_context(|| format!("invalid globs in rules.{name}"))?,
                 };
 
-                // Warn about unknown built-in rules (but allow script rules with command)
+                // Warn about unknown built-in rules (but allow custom rules with command)
                 if rule_config.command.is_none() && !BUILTIN_RULES.contains(&name.as_str()) {
                     eprintln!("warn: unknown rule \"{name}\" in drft.toml (ignored)");
                 }
@@ -401,18 +420,10 @@ impl Config {
         Ok(config)
     }
 
-    /// Find the nearest drft.toml by walking up from `root`.
+    /// Find drft.toml in `root`. No directory walking — if it's not here, use defaults.
     fn find_config(root: &Path) -> Option<std::path::PathBuf> {
-        let mut current = root.to_path_buf();
-        loop {
-            let candidate = current.join("drft.toml");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-            if !current.pop() {
-                return None;
-            }
-        }
+        let candidate = root.join("drft.toml");
+        candidate.exists().then_some(candidate)
     }
 
     pub fn rule_severity(&self, name: &str) -> RuleSeverity {
@@ -420,6 +431,13 @@ impl Config {
             .get(name)
             .map(|r| r.severity)
             .unwrap_or(RuleSeverity::Off)
+    }
+
+    /// Check if a path is in scope for a specific rule (passes `files` filter).
+    pub fn is_rule_in_scope(&self, rule: &str, path: &str) -> bool {
+        self.rules
+            .get(rule)
+            .is_none_or(|r| r.is_path_in_scope(path))
     }
 
     /// Check if a path should be ignored for a specific rule.
@@ -434,8 +452,8 @@ impl Config {
         self.rules.get(name).and_then(|r| r.options.as_ref())
     }
 
-    /// Get script rules (rules with a command field).
-    pub fn script_rules(&self) -> impl Iterator<Item = (&str, &RuleConfig)> {
+    /// Get custom rules (rules with a command field).
+    pub fn custom_rules(&self) -> impl Iterator<Item = (&str, &RuleConfig)> {
         self.rules
             .iter()
             .filter(|(_, r)| r.command.is_some())
@@ -621,16 +639,16 @@ required = ["title", "date", "status"]
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[interface]\nnodes = [\"overview.md\", \"api/*.md\"]\n",
+            "[interface]\nfiles = [\"overview.md\", \"api/*.md\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         let iface = config.interface.unwrap();
-        assert_eq!(iface.nodes, vec!["overview.md", "api/*.md"]);
+        assert_eq!(iface.files, vec!["overview.md", "api/*.md"]);
     }
 
     #[test]
-    fn loads_script_rule() {
+    fn loads_custom_rule() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
@@ -638,10 +656,10 @@ required = ["title", "date", "status"]
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        let script_rules: Vec<_> = config.script_rules().collect();
-        assert_eq!(script_rules.len(), 1);
-        assert_eq!(script_rules[0].0, "my-check");
-        assert_eq!(script_rules[0].1.command.as_deref(), Some("./check.sh"));
+        let custom_rules: Vec<_> = config.custom_rules().collect();
+        assert_eq!(custom_rules.len(), 1);
+        assert_eq!(custom_rules[0].0, "my-check");
+        assert_eq!(custom_rules[0].1.command.as_deref(), Some("./check.sh"));
     }
 
     #[test]
@@ -684,8 +702,9 @@ required = ["title", "date", "status"]
     }
 
     #[test]
-    fn inherits_config_from_parent() {
+    fn no_config_uses_defaults() {
         let dir = TempDir::new().unwrap();
+        // Parent has config but child does not — child gets defaults, not parent's config
         fs::write(
             dir.path().join("drft.toml"),
             "[rules]\norphan-node = \"error\"\n",
@@ -696,23 +715,6 @@ required = ["title", "date", "status"]
         fs::create_dir(&child).unwrap();
 
         let config = Config::load(&child).unwrap();
-        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Error);
-    }
-
-    #[test]
-    fn child_config_overrides_parent() {
-        let dir = TempDir::new().unwrap();
-        fs::write(
-            dir.path().join("drft.toml"),
-            "[rules]\norphan-node = \"error\"\n",
-        )
-        .unwrap();
-
-        let child = dir.path().join("child");
-        fs::create_dir(&child).unwrap();
-        fs::write(child.join("drft.toml"), "[rules]\norphan-node = \"off\"\n").unwrap();
-
-        let config = Config::load(&child).unwrap();
-        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Off);
+        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn); // default, not parent's "error"
     }
 }

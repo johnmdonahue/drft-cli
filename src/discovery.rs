@@ -1,7 +1,9 @@
 use anyhow::Result;
-use globset::{Glob, GlobSetBuilder};
+use globset::GlobSet;
 use ignore::WalkBuilder;
 use std::path::Path;
+
+use crate::config::compile_globs;
 
 /// Discover files under `root` matching `include` patterns (minus `exclude`),
 /// stopping at child graph boundaries (directories containing `drft.lock` or `drft.toml`).
@@ -11,23 +13,8 @@ pub fn discover(
     include_patterns: &[String],
     exclude_patterns: &[String],
 ) -> Result<Vec<String>> {
-    let include_set = {
-        let mut builder = GlobSetBuilder::new();
-        for pattern in include_patterns {
-            builder.add(Glob::new(pattern)?);
-        }
-        builder.build()?
-    };
-
-    let exclude_set = if exclude_patterns.is_empty() {
-        None
-    } else {
-        let mut builder = GlobSetBuilder::new();
-        for pattern in exclude_patterns {
-            builder.add(Glob::new(pattern)?);
-        }
-        Some(builder.build()?)
-    };
+    let include_set = compile_globs(include_patterns)?.unwrap_or_else(GlobSet::empty);
+    let exclude_set = compile_globs(exclude_patterns)?;
 
     let mut files = Vec::new();
     let root_owned = root.to_path_buf();
@@ -84,19 +71,11 @@ pub fn discover(
 }
 
 /// Find child graph directories (those containing `drft.lock` or `drft.toml`) under `root`.
-/// Returns relative paths with trailing slash (e.g., `"research/"`), sorted.
+/// Returns relative paths without trailing slash (e.g., `"research"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
 /// Respects `.gitignore` and `exclude_patterns` from config.
 pub fn find_child_graphs(root: &Path, exclude_patterns: &[String]) -> Result<Vec<String>> {
-    let ignore_set = if exclude_patterns.is_empty() {
-        None
-    } else {
-        let mut builder = GlobSetBuilder::new();
-        for pattern in exclude_patterns {
-            builder.add(Glob::new(pattern)?);
-        }
-        Some(builder.build()?)
-    };
+    let ignore_set = compile_globs(exclude_patterns)?;
 
     let mut child_graphs = Vec::new();
     let root_owned = root.to_path_buf();
@@ -138,7 +117,7 @@ pub fn find_child_graphs(root: &Path, exclude_patterns: &[String]) -> Result<Vec
         // Skip if inside an already-found child graph
         let inside_existing = found_prefixes
             .iter()
-            .any(|s| relative.starts_with(s.as_str()));
+            .any(|s| relative == s.as_str() || relative.starts_with(&format!("{s}/")));
         if inside_existing {
             continue;
         }
@@ -151,9 +130,8 @@ pub fn find_child_graphs(root: &Path, exclude_patterns: &[String]) -> Result<Vec
                 continue;
             }
 
-            let graph_path = format!("{relative}/");
-            found_prefixes.push(graph_path.clone());
-            child_graphs.push(graph_path);
+            found_prefixes.push(relative.clone());
+            child_graphs.push(relative);
         }
     }
 
@@ -254,7 +232,7 @@ mod tests {
         fs::write(gamma.join("readme.md"), "").unwrap();
 
         let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
-        assert_eq!(child_graphs, vec!["alpha/", "beta/"]);
+        assert_eq!(child_graphs, vec!["alpha", "beta"]);
     }
 
     #[test]
@@ -270,6 +248,6 @@ mod tests {
         fs::write(grandchild.join("drft.lock"), "").unwrap();
 
         let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
-        assert_eq!(child_graphs, vec!["child/"]);
+        assert_eq!(child_graphs, vec!["child"]);
     }
 }

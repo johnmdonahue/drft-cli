@@ -158,9 +158,9 @@ fn scenario_4_cycle_detection() {
 }
 
 /// Scenario 20: Directory links.
-/// A link to a directory should warn.
+/// A link to a directory without a lockfile should warn.
 #[test]
-fn scenario_20_directory_edge() {
+fn scenario_20_untrackable_target() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.md"), "[guides](guides/)").unwrap();
     let guides = dir.path().join("guides");
@@ -174,8 +174,8 @@ fn scenario_20_directory_edge() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[directory-edge]"),
-        "expected directory-edge warning, got: {stdout}"
+        stdout.contains("warn[untrackable-target]"),
+        "expected untrackable-target warning, got: {stdout}"
     );
     assert!(
         stdout.contains("guides"),

@@ -176,6 +176,7 @@ mod tests {
             node_type: NodeType::External,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));

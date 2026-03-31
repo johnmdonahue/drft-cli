@@ -16,13 +16,13 @@ The graph has a lockfile, so linking outside it is a violation:
 warn[boundary-violation]: index.md -> ../notes.md (links outside graph boundary)
 ```
 
-This rule is vacuous if no `drft.lock` exists -- there is no boundary to enforce.
+Without a `drft.lock`, this rule has nothing to enforce.
 
 ## Configuration
 
 ```toml
 [rules]
-boundary-violation = "warn"    # default
+boundary-violation = "warn" # default
 ```
 
 ```toml
@@ -33,7 +33,7 @@ ignore = ["README.md"]
 
 ## Analysis
 
-Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which identifies edges that cross graph boundaries.
+Uses the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which identifies edges that cross graph boundaries.
 
 ## Source
 

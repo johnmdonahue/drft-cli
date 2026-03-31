@@ -21,7 +21,7 @@ If the target file exists on disk but outside `include`, it appears as an Extern
 
 ```toml
 [rules]
-dangling-edge = "warn"    # default
+dangling-edge = "warn" # default
 ```
 
 ```toml
@@ -32,7 +32,7 @@ ignore = ["drafts/"]
 
 ## Analysis
 
-This rule inspects graph edges and their properties directly — it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists as a node in the graph. Edges to symlinks or directories are skipped (handled by `symlink-edge` and `directory-edge` respectively). Filesystem state is captured as edge properties during graph building.
+This rule inspects graph edges directly — it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists as a node in the graph. Edges to symlinks are skipped (handled by `symlink-edge`). Directories are represented as `Directory` nodes in the graph, so they are not flagged by this rule — `untrackable-target` handles directories without lockfiles.
 
 ## Source
 

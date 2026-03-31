@@ -60,7 +60,7 @@ impl Analysis for ChangePropagation {
         let mut directly_changed = Vec::new();
 
         for (path, locked_node) in &lockfile.nodes {
-            let current_hash = compute_current_hash(root, path);
+            let current_hash = compute_current_hash(root, path, locked_node.node_type);
             match (&locked_node.hash, &current_hash) {
                 (Some(locked), Some(current)) if locked != current => {
                     directly_stale.insert(path.clone());
@@ -88,7 +88,7 @@ impl Analysis for ChangePropagation {
             .collect();
 
         for (path, node) in &lockfile.nodes {
-            if node.node_type == NodeType::Graph && !current_graphs.contains(path.as_str()) {
+            if node.node_type == NodeType::Directory && !current_graphs.contains(path.as_str()) {
                 boundary_changes.push(BoundaryChange {
                     node: path.clone(),
                     reason: "child graph removed".into(),
@@ -99,7 +99,7 @@ impl Analysis for ChangePropagation {
         let lockfile_frontiers: HashSet<&str> = lockfile
             .nodes
             .iter()
-            .filter(|(_, n)| n.node_type == NodeType::Graph)
+            .filter(|(_, n)| n.node_type == NodeType::Directory)
             .map(|(p, _)| p.as_str())
             .collect();
         for child_graph in &current_graphs {
@@ -159,9 +159,9 @@ impl Analysis for ChangePropagation {
     }
 }
 
-fn compute_current_hash(root: &Path, relative_path: &str) -> Option<String> {
-    if relative_path.ends_with('/') {
-        let child_dir = root.join(relative_path.trim_end_matches('/'));
+fn compute_current_hash(root: &Path, relative_path: &str, node_type: NodeType) -> Option<String> {
+    if node_type == NodeType::Directory {
+        let child_dir = root.join(relative_path);
         let lockfile_path = child_dir.join("drft.lock");
         let content = std::fs::read(&lockfile_path).ok()?;
         Some(hash_bytes(&content))
@@ -206,6 +206,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
@@ -213,6 +214,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {

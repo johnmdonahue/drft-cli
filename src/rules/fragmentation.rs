@@ -38,15 +38,9 @@ impl Rule for FragmentationRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyses::EnrichedGraph;
-    use crate::config::Config;
     use crate::graph::Graph;
-    use crate::graph::test_helpers::{make_edge, make_node};
+    use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
     use crate::rules::RuleContext;
-
-    fn make_enriched(graph: Graph) -> EnrichedGraph {
-        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
-    }
 
     #[test]
     fn no_diagnostic_when_connected() {

@@ -4,10 +4,10 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Script-based parser. Runs an external command that receives a JSON
+/// Custom parser. Runs an external command that receives a JSON
 /// options envelope on line 1, then file paths (one per line) on stdin,
 /// and emits NDJSON links on stdout.
-pub struct ScriptParser {
+pub struct CustomParser {
     pub parser_name: String,
     /// File routing filter. None = receives all File nodes.
     pub file_filter: Option<globset::GlobSet>,
@@ -18,7 +18,7 @@ pub struct ScriptParser {
     pub options: Option<toml::Value>,
 }
 
-impl Parser for ScriptParser {
+impl Parser for CustomParser {
     fn name(&self) -> &str {
         &self.parser_name
     }
@@ -53,7 +53,7 @@ impl Parser for ScriptParser {
     }
 }
 
-impl ScriptParser {
+impl CustomParser {
     fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, ParseResult>> {
         if paths.is_empty() {
             return Ok(HashMap::new());

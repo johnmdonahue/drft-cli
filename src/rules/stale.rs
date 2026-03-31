@@ -94,6 +94,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
@@ -101,6 +102,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -186,7 +188,7 @@ mod tests {
             options: None,
         };
         let diagnostics = StaleRule.evaluate(&ctx);
-        assert!(diagnostics.len() >= 1);
+        assert!(!diagnostics.is_empty());
 
         let direct = diagnostics
             .iter()

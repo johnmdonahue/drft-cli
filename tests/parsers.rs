@@ -47,18 +47,18 @@ fn frontmatter_sources_create_edges() {
 
 #[test]
 #[cfg(unix)]
-fn wikilinks_script_parser_creates_edges() {
+fn wikilinks_custom_parser_creates_edges() {
     let dir = TempDir::new().unwrap();
 
-    // Copy the example wikilinks script into the temp dir
-    let script_src =
+    // Copy the example wikilinks parser into the temp dir
+    let parser_src =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/parsers/wikilinks.sh");
-    let script_dst = dir.path().join("wikilinks.sh");
-    fs::copy(&script_src, &script_dst).unwrap();
+    let parser_dst = dir.path().join("wikilinks.sh");
+    fs::copy(&parser_src, &parser_dst).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&script_dst, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&parser_dst, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     fs::write(
@@ -93,14 +93,14 @@ fn wikilinks_script_parser_creates_edges() {
 
 #[test]
 #[cfg(unix)]
-fn script_parser_batch_protocol() {
+fn custom_parser_batch_protocol() {
     let dir = TempDir::new().unwrap();
 
-    // Write a batch parser script that reads the options envelope on line 1,
+    // Write a batch parser command that reads the options envelope on line 1,
     // then file paths, and emits NDJSON
-    let script = dir.path().join("parse-txt.sh");
+    let parser_cmd = dir.path().join("parse-txt.sh");
     fs::write(
-        &script,
+        &parser_cmd,
         r#"#!/bin/sh
 # Line 1 is the JSON options envelope — read and skip it
 IFS= read -r _options
@@ -118,10 +118,10 @@ done
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&parser_cmd, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    // Config with a script parser for .txt files
+    // Config with a custom parser for .txt files
     fs::write(
         dir.path().join("drft.toml"),
         format!(
@@ -131,7 +131,7 @@ done
 files = ["*.txt"]
 command = "{}"
 "#,
-            script.to_string_lossy().replace('"', "\\\"")
+            parser_cmd.to_string_lossy().replace('"', "\\\"")
         ),
     )
     .unwrap();

@@ -48,15 +48,10 @@ impl Rule for SymlinkEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyses::EnrichedGraph;
-    use crate::config::Config;
+    use crate::graph::test_helpers::make_enriched;
     use crate::graph::{Edge, Graph, Node, NodeType, TargetProperties};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
-
-    fn make_enriched(graph: Graph) -> EnrichedGraph {
-        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
-    }
 
     #[test]
     fn detects_symlink_target() {
@@ -66,6 +61,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.target_properties.insert(
@@ -102,6 +98,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {

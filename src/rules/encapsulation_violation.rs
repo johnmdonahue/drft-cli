@@ -16,11 +16,11 @@ impl Rule for EncapsulationViolationRule {
             .iter()
             .map(|v| Diagnostic {
                 rule: "encapsulation-violation".into(),
-                message: format!("not in {}interface", v.graph),
+                message: format!("not in {} interface", v.graph),
                 source: Some(v.source.clone()),
                 target: Some(v.target.clone()),
                 fix: Some(format!(
-                    "{} is not exposed by the {}interface \u{2014} either add it to the interface or remove the link from {}",
+                    "{} is not exposed by the {} interface \u{2014} either add it to the interface or remove the link from {}",
                     v.target, v.graph, v.source
                 )),
                 ..Default::default()
@@ -32,17 +32,13 @@ impl Rule for EncapsulationViolationRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::graph::test_helpers::make_enriched_with_root;
     use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
     use crate::rules::RuleContext;
     use std::collections::{BTreeMap, HashMap};
     use std::fs;
     use tempfile::TempDir;
-
-    fn make_enriched(graph: Graph, root: &std::path::Path) -> crate::analyses::EnrichedGraph {
-        crate::analyses::enrich_graph(graph, root, &Config::defaults(), None)
-    }
 
     fn setup_sealed_child(dir: &std::path::Path) {
         let research = dir.join("research");
@@ -71,7 +67,7 @@ mod tests {
         let lockfile = Lockfile {
             lockfile_version: 2,
             interface: Some(LockfileInterface {
-                nodes: vec!["overview.md".into()],
+                files: vec!["overview.md".into()],
             }),
             nodes,
         };
@@ -88,21 +84,24 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
-            path: "research/".into(),
-            node_type: NodeType::Graph,
+            path: "research".into(),
+            node_type: NodeType::Directory,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: true,
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::File,
+            node_type: NodeType::External,
             hash: None,
-            graph: Some("research/".into()),
+            graph: Some("research".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -113,12 +112,12 @@ mod tests {
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
-            target: "research/".into(),
+            target: "research".into(),
             link: None,
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,
@@ -137,14 +136,24 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
-            path: "research/".into(),
-            node_type: NodeType::Graph,
+            path: "research".into(),
+            node_type: NodeType::Directory,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: true,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "research/internal.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("research".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -154,7 +163,7 @@ mod tests {
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,

@@ -12,16 +12,20 @@ hash = "b3:33b64e15f2ed5b9e297d6266c19ab8dbccbe09c731c4af7065d3aa76622c450e"
 type = "file"
 hash = "b3:f116d530190009c4909d4b7f15251389c65981f6dd15a3042ceaec2ff72dc965"
 
-[nodes."projects/alpha/"]
-type = "graph"
+[nodes."projects/alpha"]
+type = "directory"
+hash = "b3:5ecc8ca980eca650f2e0b5f8e4758d776d6a503f7f971efed676b4cba0d21909"
 
 [nodes."projects/alpha/index.md"]
 type = "external"
-graph = "projects/alpha/"
+hash = "b3:6269623b605353fe5aaf62cc92c3c817363ee1d73dd048a38ad0f85e2aa19d54"
+graph = "projects/alpha"
 
-[nodes."projects/beta/"]
-type = "graph"
+[nodes."projects/beta"]
+type = "directory"
+hash = "b3:c13547f40d97b2b5ba13567a730a1d652d3f352955fbf65678a2dc51dfce6d2e"
 
 [nodes."projects/beta/index.md"]
 type = "external"
-graph = "projects/beta/"
+hash = "b3:58ae2247fe46fac10e152e2465ac709f5cc5077c06f33815e1897c9dde301362"
+graph = "projects/beta"

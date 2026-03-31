@@ -16,14 +16,14 @@ project/
 `research/` is a child graph with `overview.md` as its interface. Linking directly to `internal.md` from outside violates encapsulation:
 
 ```
-warn[encapsulation-violation]: index.md -> research/internal.md (not in research/ interface)
+warn[encapsulation-violation]: index.md -> research/internal.md (not in research interface)
 ```
 
 ## Configuration
 
 ```toml
 [rules]
-encapsulation-violation = "warn"    # default
+encapsulation-violation = "warn" # default
 ```
 
 ```toml
@@ -34,7 +34,7 @@ ignore = []
 
 ## Analysis
 
-Powered by the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child graph configurations to determine interface boundaries.
+Uses the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child graph configurations to determine interface boundaries.
 
 ## Source
 

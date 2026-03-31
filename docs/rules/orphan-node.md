@@ -22,7 +22,7 @@ Note that root entry points (like `index.md`) will also be flagged since they na
 
 ```toml
 [rules]
-orphan-node = "warn"    # default
+orphan-node = "warn" # default
 ```
 
 ```toml
@@ -33,7 +33,7 @@ ignore = ["index.md", "README.md"]
 
 ## Analysis
 
-Powered by the [degree](../analyses/degree.md) analysis, which computes in-degree and out-degree for every node.
+Uses the [degree](../analyses/degree.md) analysis, which computes in-degree and out-degree for every node.
 
 ## Source
 

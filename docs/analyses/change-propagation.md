@@ -56,7 +56,7 @@ warn[stale]: index.md (stale via setup.md)
 
 1. Read the lockfile; if absent, report empty results.
 2. For each locked node, compute the current BLAKE3 hash and compare to the stored hash. Mismatches and deletions are direct changes.
-3. Check child graph boundaries: compare current `find_child_graphs()` against locked Graph nodes.
+3. Check child graph boundaries: compare current `find_child_graphs()` against locked Directory nodes.
 4. BFS propagation: from each directly changed node, follow reverse edges in the lockfile to mark dependents as transitively stale.
 
 ## Source

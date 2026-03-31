@@ -1,5 +1,4 @@
 use super::{Analysis, AnalysisContext};
-use crate::graph::NodeType;
 use crate::lockfile::read_lockfile;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -36,14 +35,16 @@ impl Analysis for GraphBoundaries {
         let root = ctx.root;
         let sealed = root.join("drft.lock").exists() || root.join("drft.toml").exists();
 
-        // Find graph escapes (edges with ../ targets)
+        // Find graph escapes: nodes with graph: ".."
         let escapes = if sealed {
             graph
                 .edges
                 .iter()
                 .filter(|edge| {
-                    !crate::graph::is_uri(&edge.target)
-                        && (edge.target.starts_with("../") || edge.target == "..")
+                    graph
+                        .nodes
+                        .get(&edge.target)
+                        .is_some_and(|n| n.graph.as_deref() == Some(".."))
                 })
                 .map(|edge| GraphEscape {
                     source: edge.source.clone(),
@@ -58,16 +59,16 @@ impl Analysis for GraphBoundaries {
         let mut encapsulation_violations = Vec::new();
 
         for (path, node) in &graph.nodes {
-            if node.node_type != NodeType::Graph {
+            if !node.is_graph {
                 continue;
             }
 
-            let child_dir = root.join(path.trim_end_matches('/'));
+            let child_dir = root.join(path);
 
             // Try reading interface from child lockfile
             let interface_nodes = if let Ok(Some(lf)) = read_lockfile(&child_dir) {
                 match &lf.interface {
-                    Some(iface) => iface.nodes.clone(),
+                    Some(iface) => iface.files.clone(),
                     None => continue, // No interface = open graph, no violations
                 }
             } else {
@@ -75,33 +76,37 @@ impl Analysis for GraphBoundaries {
                 let child_config = crate::config::Config::load(&child_dir);
                 match child_config {
                     Ok(config) => match config.interface {
-                        Some(iface) => iface.nodes,
+                        Some(iface) => iface.files,
                         None => continue, // No interface = open graph
                     },
                     Err(_) => continue,
                 }
             };
 
-            let graph_prefix = path.as_str();
-
             for edge in &graph.edges {
-                // Skip child-graph sources (implicit coupling edges)
+                // Skip sources that aren't local (child-graph coupling edges, etc.)
                 if let Some(source_node) = graph.nodes.get(&edge.source)
-                    && source_node.graph.is_some()
+                    && source_node.graph.as_deref() != Some(".")
                 {
                     continue;
                 }
 
-                if !edge.target.starts_with(graph_prefix) {
+                // Check if this edge target belongs to this child graph
+                let target_node = match graph.nodes.get(&edge.target) {
+                    Some(n) => n,
+                    None => continue,
+                };
+                if target_node.graph.as_deref() != Some(path.as_str()) {
                     continue;
                 }
 
-                let relative_target = &edge.target[graph_prefix.len()..];
+                // Strip the child graph prefix to get the relative path
+                let relative_target = &edge.target[path.len() + 1..]; // skip "research/"
                 if !interface_nodes.iter().any(|n| n == relative_target) {
                     encapsulation_violations.push(EncapsulationViolation {
                         source: edge.source.clone(),
                         target: edge.target.clone(),
-                        graph: graph_prefix.to_string(),
+                        graph: path.clone(),
                     });
                 }
             }
@@ -123,7 +128,8 @@ mod tests {
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
+    use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -144,6 +150,14 @@ mod tests {
 
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
+        graph.add_node(Node {
+            path: "../README.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("..".into()),
+            is_graph: false,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(make_edge("index.md", "../README.md"));
 
         let config = Config::defaults();
@@ -189,7 +203,7 @@ mod tests {
         let lockfile = Lockfile {
             lockfile_version: 2,
             interface: Some(LockfileInterface {
-                nodes: vec!["overview.md".into()],
+                files: vec!["overview.md".into()],
             }),
             nodes,
         };
@@ -198,10 +212,19 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(Node {
-            path: "research/".into(),
-            node_type: NodeType::Graph,
+            path: "research".into(),
+            node_type: NodeType::Directory,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: true,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "research/internal.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("research".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/internal.md"));
@@ -214,7 +237,7 @@ mod tests {
             result.encapsulation_violations[0].target,
             "research/internal.md"
         );
-        assert_eq!(result.encapsulation_violations[0].graph, "research/");
+        assert_eq!(result.encapsulation_violations[0].graph, "research");
     }
 
     #[test]
@@ -236,7 +259,7 @@ mod tests {
         let lockfile = Lockfile {
             lockfile_version: 2,
             interface: Some(LockfileInterface {
-                nodes: vec!["overview.md".into()],
+                files: vec!["overview.md".into()],
             }),
             nodes,
         };
@@ -245,10 +268,19 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(Node {
-            path: "research/".into(),
-            node_type: NodeType::Graph,
+            path: "research".into(),
+            node_type: NodeType::Directory,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: true,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "research/overview.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("research".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/overview.md"));
