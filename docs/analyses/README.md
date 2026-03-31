@@ -15,6 +15,7 @@ Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft r
 | [Degree distribution](degree.md) | `drft report degree` | In-degree and out-degree per node |
 | [Topological depth](depth.md) | `drft report depth` | Layer assignment from roots |
 | [Graph stats](graph-stats.md) | `drft report graph-stats` | Density, diameter, average path length |
+| [Impact radius](impact-radius.md) | `drft report impact-radius` | Blast zone size per node |
 | [PageRank](pagerank.md) | `drft report pagerank` | Structural importance ranking |
 | [Graph boundaries](graph-boundaries.md) | `drft report graph-boundaries` | Graph escapes and encapsulation violations |
 | [Strongly connected components](scc.md) | `drft report scc` | Finds groups of mutually reachable nodes |

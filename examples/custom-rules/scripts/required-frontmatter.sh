@@ -1,5 +1,5 @@
 #!/bin/sh
-# Require specific frontmatter fields in all document nodes.
+# Require specific frontmatter fields in all File nodes.
 # Receives JGF graph JSON on stdin, reads files from disk to check frontmatter.
 #
 # Customize REQUIRED_FIELDS and SKIP_NAMES below.
@@ -16,7 +16,7 @@ data = json.load(sys.stdin)
 graph = data['graph']
 
 for path, node in sorted(graph['nodes'].items()):
-    if node['metadata']['type'] != 'document':
+    if node['metadata']['type'] != 'file':
         continue
     if not os.path.isfile(path):
         continue

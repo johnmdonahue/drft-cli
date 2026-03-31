@@ -3,15 +3,27 @@ use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use std::path::Path;
 
-/// Discover all files under `root`, stopping at child graph boundaries
-/// (directories containing `drft.lock` or `drft.toml`). Respects `.gitignore` automatically.
-/// Returns paths relative to `root`, sorted.
-pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
-    let ignore_set = if ignore_patterns.is_empty() {
+/// Discover files under `root` matching `include` patterns (minus `exclude`),
+/// stopping at child graph boundaries (directories containing `drft.lock` or `drft.toml`).
+/// Respects `.gitignore` automatically. Returns paths relative to `root`, sorted.
+pub fn discover(
+    root: &Path,
+    include_patterns: &[String],
+    exclude_patterns: &[String],
+) -> Result<Vec<String>> {
+    let include_set = {
+        let mut builder = GlobSetBuilder::new();
+        for pattern in include_patterns {
+            builder.add(Glob::new(pattern)?);
+        }
+        builder.build()?
+    };
+
+    let exclude_set = if exclude_patterns.is_empty() {
         None
     } else {
         let mut builder = GlobSetBuilder::new();
-        for pattern in ignore_patterns {
+        for pattern in exclude_patterns {
             builder.add(Glob::new(pattern)?);
         }
         Some(builder.build()?)
@@ -52,7 +64,13 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
             .to_string_lossy()
             .replace('\\', "/");
 
-        if let Some(ref set) = ignore_set
+        // Must match at least one include pattern
+        if !include_set.is_match(&relative) {
+            continue;
+        }
+
+        // Must not match any exclude pattern
+        if let Some(ref set) = exclude_set
             && set.is_match(&relative)
         {
             continue;
@@ -68,13 +86,13 @@ pub fn discover(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> 
 /// Find child graph directories (those containing `drft.lock` or `drft.toml`) under `root`.
 /// Returns relative paths with trailing slash (e.g., `"research/"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
-/// Respects `.gitignore` and `ignore_patterns` from config.
-pub fn find_child_graphs(root: &Path, ignore_patterns: &[String]) -> Result<Vec<String>> {
-    let ignore_set = if ignore_patterns.is_empty() {
+/// Respects `.gitignore` and `exclude_patterns` from config.
+pub fn find_child_graphs(root: &Path, exclude_patterns: &[String]) -> Result<Vec<String>> {
+    let ignore_set = if exclude_patterns.is_empty() {
         None
     } else {
         let mut builder = GlobSetBuilder::new();
-        for pattern in ignore_patterns {
+        for pattern in exclude_patterns {
             builder.add(Glob::new(pattern)?);
         }
         Some(builder.build()?)
@@ -150,13 +168,18 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn discovers_all_files() {
+    fn discovers_files_matching_include() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Hello").unwrap();
         fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
         fs::write(dir.path().join("notes.txt"), "not markdown").unwrap();
 
-        let files = discover(dir.path(), &[]).unwrap();
+        // Only .md files
+        let files = discover(dir.path(), &["*.md".to_string()], &[]).unwrap();
+        assert_eq!(files, vec!["index.md", "setup.md"]);
+
+        // All files
+        let files = discover(dir.path(), &["*".to_string()], &[]).unwrap();
         assert_eq!(files, vec!["index.md", "notes.txt", "setup.md"]);
     }
 
@@ -170,19 +193,19 @@ mod tests {
         fs::write(child.join("drft.lock"), "").unwrap();
         fs::write(child.join("inner.md"), "# Inner").unwrap();
 
-        let files = discover(dir.path(), &[]).unwrap();
+        let files = discover(dir.path(), &["*.md".to_string()], &[]).unwrap();
         assert_eq!(files, vec!["index.md"]);
     }
 
     #[test]
-    fn respects_ignore_patterns() {
+    fn respects_exclude_patterns() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.md"), "# Hello").unwrap();
         let drafts = dir.path().join("drafts");
         fs::create_dir(&drafts).unwrap();
         fs::write(drafts.join("wip.md"), "# WIP").unwrap();
 
-        let files = discover(dir.path(), &["drafts/*".to_string()]).unwrap();
+        let files = discover(dir.path(), &["*.md".to_string()], &["drafts/*".to_string()]).unwrap();
         assert_eq!(files, vec!["index.md"]);
     }
 
@@ -197,8 +220,19 @@ mod tests {
         fs::create_dir(&vendor).unwrap();
         fs::write(vendor.join("lib.md"), "# Vendored").unwrap();
 
-        let files = discover(dir.path(), &[]).unwrap();
+        let files = discover(dir.path(), &["*.md".to_string()], &[]).unwrap();
         assert_eq!(files, vec!["index.md"]);
+    }
+
+    #[test]
+    fn multiple_include_patterns() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("index.md"), "# Hello").unwrap();
+        fs::write(dir.path().join("config.yaml"), "key: val").unwrap();
+        fs::write(dir.path().join("notes.txt"), "text").unwrap();
+
+        let files = discover(dir.path(), &["*.md".to_string(), "*.yaml".to_string()], &[]).unwrap();
+        assert_eq!(files, vec!["config.yaml", "index.md"]);
     }
 
     #[test]

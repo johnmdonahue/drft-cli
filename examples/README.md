@@ -11,3 +11,4 @@ Sample projects for manual testing and learning drft.
 | [with-assets](with-assets/README.md) | Non-markdown resource references |
 | [with-config](with-config/README.md) | Ignore patterns and rule configuration |
 | [custom-rules](custom-rules/README.md) | Script-based rules |
+| [parsers/wikilinks.sh](parsers/wikilinks.sh) | Script-based parser for `[[wikilinks]]` |

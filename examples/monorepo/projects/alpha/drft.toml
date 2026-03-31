@@ -2,4 +2,4 @@
 markdown = true
 
 [rules]
-broken-link = "error"
+dangling-edge = "error"

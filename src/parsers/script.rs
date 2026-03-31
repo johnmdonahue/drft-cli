@@ -1,18 +1,21 @@
-use super::{Parser, RawLink};
+use super::{ParseResult, Parser};
 use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Script-based parser. Runs an external command that receives file paths
-/// on stdin (one per line) and emits NDJSON links on stdout.
+/// Script-based parser. Runs an external command that receives a JSON
+/// options envelope on line 1, then file paths (one per line) on stdin,
+/// and emits NDJSON links on stdout.
 pub struct ScriptParser {
     pub parser_name: String,
-    pub glob: globset::GlobMatcher,
-    pub type_filter: Option<Vec<String>>,
+    /// File routing filter. None = receives all File nodes.
+    pub file_filter: Option<globset::GlobSet>,
     pub command: String,
     pub timeout_ms: u64,
     pub scope_dir: std::path::PathBuf,
+    /// Parser options from `[parsers.<name>.options]`. Sent as JSON on stdin line 1.
+    pub options: Option<toml::Value>,
 }
 
 impl Parser for ScriptParser {
@@ -21,22 +24,24 @@ impl Parser for ScriptParser {
     }
 
     fn matches(&self, path: &str) -> bool {
-        let filename = path.rsplit('/').next().unwrap_or(path);
-        self.glob.is_match(filename)
+        match &self.file_filter {
+            Some(set) => set.is_match(path),
+            None => true, // No filter = receives all File nodes
+        }
     }
 
-    fn parse(&self, path: &str, _content: &str) -> Vec<RawLink> {
+    fn parse(&self, path: &str, _content: &str) -> ParseResult {
         // Single-file fallback — used when parse_batch isn't called
         match self.run_batch(&[path]) {
             Ok(mut results) => results.remove(path).unwrap_or_default(),
             Err(e) => {
                 eprintln!("warn: parser {}: {path}: {e}", self.parser_name);
-                Vec::new()
+                ParseResult::default()
             }
         }
     }
 
-    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, ParseResult> {
         let paths: Vec<&str> = files.iter().map(|(path, _)| *path).collect();
         match self.run_batch(&paths) {
             Ok(results) => results,
@@ -49,7 +54,7 @@ impl Parser for ScriptParser {
 }
 
 impl ScriptParser {
-    fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, Vec<RawLink>>> {
+    fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, ParseResult>> {
         if paths.is_empty() {
             return Ok(HashMap::new());
         }
@@ -63,8 +68,13 @@ impl ScriptParser {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        // Send all file paths on stdin, one per line
+        // Send options envelope on line 1, then file paths
         if let Some(mut stdin) = child.stdin.take() {
+            let options_json = match &self.options {
+                Some(val) => serde_json::to_string(val).unwrap_or_else(|_| "{}".into()),
+                None => "{}".into(),
+            };
+            let _ = writeln!(stdin, "{options_json}");
             for path in paths {
                 let _ = writeln!(stdin, "{path}");
             }
@@ -85,49 +95,57 @@ impl ScriptParser {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut results: HashMap<String, Vec<RawLink>> = HashMap::new();
+        let mut results: HashMap<String, ParseResult> = HashMap::new();
 
         for line in stdout.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
             }
-            match serde_json::from_str::<ScriptLink>(line) {
-                Ok(sl) => {
-                    let link = RawLink {
-                        target: sl.target,
-                        link_type: sl.link_type,
-                        is_external: false,
-                    };
 
-                    // Apply type filter
-                    if let Some(ref types) = self.type_filter
-                        && !types.iter().any(|t| t == &link.link_type)
-                    {
-                        continue;
-                    }
-
-                    results.entry(sl.file).or_default().push(link);
-                }
+            // Try as edge first ({ file, target, type }), then as metadata ({ file, metadata })
+            let json: serde_json::Value = match serde_json::from_str(line) {
+                Ok(v) => v,
                 Err(e) => {
                     eprintln!(
                         "warn: parser {}: malformed JSON line: {e}",
                         self.parser_name
                     );
+                    continue;
                 }
+            };
+
+            let file = match json.get("file").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    eprintln!(
+                        "warn: parser {}: JSON line missing 'file' field",
+                        self.parser_name
+                    );
+                    continue;
+                }
+            };
+
+            if let Some(metadata) = json.get("metadata") {
+                // Metadata line: { file, metadata }
+                results.entry(file).or_default().metadata = Some(metadata.clone());
+            } else if let Some(target) = json.get("target").and_then(|v| v.as_str()) {
+                // Edge line: { file, target }
+                results
+                    .entry(file)
+                    .or_default()
+                    .links
+                    .push(target.to_string());
+            } else {
+                eprintln!(
+                    "warn: parser {}: JSON line has neither 'target' nor 'metadata'",
+                    self.parser_name
+                );
             }
         }
 
         Ok(results)
     }
-}
-
-#[derive(serde::Deserialize)]
-struct ScriptLink {
-    file: String,
-    target: String,
-    #[serde(rename = "type")]
-    link_type: String,
 }
 
 fn wait_with_timeout(

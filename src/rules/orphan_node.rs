@@ -1,31 +1,22 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::degree::Degree;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct OrphanRule;
+pub struct OrphanNodeRule;
 
-impl Rule for OrphanRule {
+impl Rule for OrphanNodeRule {
     fn name(&self) -> &str {
-        "orphan"
+        "orphan-node"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = Degree.run(&analysis_ctx);
+        let result = &ctx.graph.degree;
 
         result
             .nodes
             .iter()
             .filter(|nd| nd.in_degree == 0)
             .map(|nd| Diagnostic {
-                rule: "orphan".into(),
+                rule: "orphan-node".into(),
                 message: "no inbound links".into(),
                 node: Some(nd.node.clone()),
                 fix: Some(format!(
@@ -41,19 +32,14 @@ impl Rule for OrphanRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::rules::RuleContext;
-    use std::path::Path;
 
-    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root: Path::new("."),
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
@@ -63,8 +49,12 @@ mod tests {
         graph.add_node(make_node("orphan.md"));
         graph.add_edge(make_edge("index.md", "setup.md"));
 
-        let config = Config::defaults();
-        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = OrphanNodeRule.evaluate(&ctx);
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()
@@ -81,8 +71,12 @@ mod tests {
         graph.add_node(make_node("setup.md"));
         graph.add_edge(make_edge("index.md", "setup.md"));
 
-        let config = Config::defaults();
-        let diagnostics = OrphanRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = OrphanNodeRule.evaluate(&ctx);
 
         let orphan_nodes: Vec<&str> = diagnostics
             .iter()

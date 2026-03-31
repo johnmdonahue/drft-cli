@@ -42,8 +42,7 @@ impl Analysis for GraphBoundaries {
                 .edges
                 .iter()
                 .filter(|edge| {
-                    !edge.target.starts_with("http://")
-                        && !edge.target.starts_with("https://")
+                    !crate::graph::is_uri(&edge.target)
                         && (edge.target.starts_with("../") || edge.target == "..")
                 })
                 .map(|edge| GraphEscape {
@@ -124,7 +123,7 @@ mod tests {
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -182,7 +181,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },
@@ -203,6 +202,7 @@ mod tests {
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/internal.md"));
 
@@ -228,7 +228,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },
@@ -249,6 +249,7 @@ mod tests {
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/overview.md"));
 

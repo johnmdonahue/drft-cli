@@ -82,7 +82,7 @@ impl Analysis for ChangePropagation {
 
         // Boundary changes
         let mut boundary_changes = Vec::new();
-        let current_graphs: HashSet<String> = find_child_graphs(root, &ctx.config.ignore)
+        let current_graphs: HashSet<String> = find_child_graphs(root, &ctx.config.exclude)
             .unwrap_or_default()
             .into_iter()
             .collect();
@@ -177,8 +177,9 @@ mod tests {
     use super::*;
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, write_lockfile};
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -202,21 +203,23 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
         let lockfile = Lockfile::from_graph(&graph);

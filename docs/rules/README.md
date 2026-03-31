@@ -14,18 +14,19 @@ fragility = "off"     # suppress if tree-shaped graphs are expected
 
 | Rule | What it checks | Analysis |
 |------|---------------|----------|
-| [broken-link](broken-link.md) | Links to files that don't exist | graph (direct) |
-| [containment](containment.md) | Links that escape the graph boundary | [graph-boundaries](../analyses/graph-boundaries.md) |
-| [cycle](cycle.md) | Circular dependencies between files | [scc](../analyses/scc.md) |
-| [directory-link](directory-link.md) | Links that point to a directory instead of a file | graph (direct) |
-| [encapsulation](encapsulation.md) | Links into a child graph that bypass its interface | [graph-boundaries](../analyses/graph-boundaries.md) |
+| [boundary-violation](boundary-violation.md) | Edges that escape the graph boundary | [graph-boundaries](../analyses/graph-boundaries.md) |
+| [dangling-edge](dangling-edge.md) | Edges to nodes that don't exist | graph (direct) |
+| [directed-cycle](directed-cycle.md) | Circular dependencies between files | [scc](../analyses/scc.md) |
+| [directory-edge](directory-edge.md) | Edges that point to a directory instead of a file | graph (direct) |
+| [encapsulation-violation](encapsulation-violation.md) | Edges into a child graph that bypass its interface | [graph-boundaries](../analyses/graph-boundaries.md) |
 | [fragility](fragility.md) | Cut vertices and bridge edges (structural single points of failure) | [bridges](../analyses/bridges.md) |
 | [fragmentation](fragmentation.md) | Disconnected components in the graph | [connected-components](../analyses/connected-components.md) |
-| [indirect-link](indirect-link.md) | Links whose target is a symlink | graph (direct) |
 | [layer-violation](layer-violation.md) | Upward or skip-layer links in the depth hierarchy | [depth](../analyses/depth.md) |
-| [orphan](orphan.md) | Files with no inbound links | [degree](../analyses/degree.md) |
+| [orphan-node](orphan-node.md) | Nodes with no inbound edges | [degree](../analyses/degree.md) |
 | [redundant-edge](redundant-edge.md) | Direct links that are transitively redundant | [transitive-reduction](../analyses/transitive-reduction.md) |
+| [schema-violation](schema-violation.md) | Node metadata violates required fields or allowed values | graph (metadata) |
 | [stale](stale.md) | Files whose content has changed since the last lock | [change-propagation](../analyses/change-propagation.md) |
+| [symlink-edge](symlink-edge.md) | Edges whose target is a symlink | graph (direct) |
 
 ## Script rules
 
@@ -36,7 +37,7 @@ You can define custom rules that run an external script. See [script](script.md)
 Any rule can be configured with an ignore list to suppress diagnostics for specific files:
 
 ```toml
-[rules.orphan]
+[rules.orphan-node]
 severity = "warn"
 ignore = ["README.md", "CHANGELOG.md"]
 ```

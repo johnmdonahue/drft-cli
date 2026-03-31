@@ -3,7 +3,7 @@ use drft::analyses::{self, Analysis, AnalysisContext};
 use drft::config::Config;
 use drft::graph::build_graph;
 use drft::lockfile;
-use drft::rules::{self, Rule, RuleContext};
+use drft::rules::{self, RuleContext};
 use std::path::Path;
 
 /// Benchmark against the repo itself (98 nodes, 113 edges).
@@ -64,6 +64,9 @@ fn bench_analyses(c: &mut Criterion) {
     group.bench_function("graph_boundaries", |b| {
         b.iter(|| analyses::graph_boundaries::GraphBoundaries.run(&ctx));
     });
+    group.bench_function("impact_radius", |b| {
+        b.iter(|| analyses::impact_radius::ImpactRadius.run(&ctx));
+    });
     group.bench_function("change_propagation", |b| {
         b.iter(|| analyses::change_propagation::ChangePropagation.run(&ctx));
     });
@@ -74,19 +77,18 @@ fn bench_analyses(c: &mut Criterion) {
 fn bench_rules(c: &mut Criterion) {
     let root = repo_root();
     let config = Config::load(root).unwrap();
-    let graph = build_graph(root, &config).unwrap();
-    let ctx = RuleContext {
-        graph: &graph,
-        root,
-        config: &config,
-        lockfile: None,
-    };
+    let lockfile = lockfile::read_lockfile(root).unwrap();
+    let enriched = analyses::enrich(root, &config, lockfile.as_ref()).unwrap();
 
     c.bench_function("all_rules", |b| {
         b.iter(|| {
             let all = rules::all_rules();
             let mut diagnostics = Vec::new();
             for rule in &all {
+                let ctx = RuleContext {
+                    graph: &enriched,
+                    options: config.rule_options(rule.name()),
+                };
                 diagnostics.extend(rule.evaluate(&ctx));
             }
             diagnostics
@@ -100,16 +102,15 @@ fn bench_full_check(c: &mut Criterion) {
     c.bench_function("full_check", |b| {
         b.iter(|| {
             let config = Config::load(root).unwrap();
-            let graph = build_graph(root, &config).unwrap();
-            let ctx = RuleContext {
-                graph: &graph,
-                root,
-                config: &config,
-                lockfile: None,
-            };
+            let lockfile = lockfile::read_lockfile(root).unwrap();
+            let enriched = analyses::enrich(root, &config, lockfile.as_ref()).unwrap();
             let all = rules::all_rules();
             let mut diagnostics = Vec::new();
             for rule in &all {
+                let ctx = RuleContext {
+                    graph: &enriched,
+                    options: config.rule_options(rule.name()),
+                };
                 diagnostics.extend(rule.evaluate(&ctx));
             }
             diagnostics

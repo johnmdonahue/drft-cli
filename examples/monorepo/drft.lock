@@ -1,31 +1,27 @@
 lockfile_version = 2
 
 [nodes."README.md"]
-type = "source"
-hash = "b3:d3dc331fffce50dad63b5606e3f6bc4ff2f34aa8373cbd92939cbb74dd444ac1"
+type = "file"
+hash = "b3:1fe8430b118fde69d5bd4298ff41efdad15f5d2827f0468e39567913d8af95a5"
 
 [nodes."docs/architecture.md"]
-type = "source"
+type = "file"
 hash = "b3:33b64e15f2ed5b9e297d6266c19ab8dbccbe09c731c4af7065d3aa76622c450e"
 
 [nodes."docs/overview.md"]
-type = "source"
+type = "file"
 hash = "b3:f116d530190009c4909d4b7f15251389c65981f6dd15a3042ceaec2ff72dc965"
 
 [nodes."projects/alpha/"]
 type = "graph"
-hash = "b3:fbcf3aaabb95a0d21abaeb2b734ffee90baa69a931e830a2da846c909a888436"
 
 [nodes."projects/alpha/index.md"]
-type = "resource"
-hash = "b3:6269623b605353fe5aaf62cc92c3c817363ee1d73dd048a38ad0f85e2aa19d54"
+type = "external"
 graph = "projects/alpha/"
 
 [nodes."projects/beta/"]
 type = "graph"
-hash = "b3:4123901a02b65c6569e4265f9be71cea28289a84211357f5008a9f97f02e0798"
 
 [nodes."projects/beta/index.md"]
-type = "resource"
-hash = "b3:58ae2247fe46fac10e152e2465ac709f5cc5077c06f33815e1897c9dde301362"
+type = "external"
 graph = "projects/beta/"

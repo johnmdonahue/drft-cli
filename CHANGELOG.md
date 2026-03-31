@@ -31,7 +31,7 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 
 ## 0.2.1 (2026-03-29)
 
-- Fix #9: containment rule now catches `../` links escaping graph boundary
+- Fix #9: boundary-violation rule now catches `../` edges escaping graph boundary
 - Fix #11: custom rule commands resolve relative to config file, not CWD
 - Fix #8: required-frontmatter example adds file exemptions (SKIP_NAMES)
 - `lockfile-outdated` rule: `drft check` detects when lockfile doesn't match current graph
@@ -70,8 +70,8 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 - Fixed: email links no longer flagged as broken links
 - Fixed: frontmatter parser rejects YAML objects/arrays/quoted strings
 - Fixed: cycle detection panic on DFS root nodes
-- Fixed: directory-link rule skips Graph nodes
-- Fixed: ignored files detected as "excluded by ignore pattern" in broken-link
+- Fixed: directory-edge rule skips Graph nodes
+- Fixed: ignored files detected as "excluded by ignore pattern" in dangling-edge
 
 ## 0.1.1 (2026-03-28)
 
@@ -94,13 +94,13 @@ Initial release.
 - `--watch` flag for check
 
 ### Rules
-- `broken-link` -- missing link targets, including files excluded by ignore patterns
-- `containment` -- links escaping graph boundary
-- `cycle` -- circular dependencies
-- `directory-link` -- links to directories instead of files
-- `encapsulation` -- links into child graph's non-interface files
-- `indirect-link` -- symlink targets
-- `orphan` -- files with no inbound links
+- `dangling-edge` -- missing edge targets, including files excluded by ignore patterns
+- `boundary-violation` -- edges escaping graph boundary
+- `directed-cycle` -- circular dependencies
+- `directory-edge` -- edges to directories instead of files
+- `encapsulation-violation` -- edges into child graph's non-interface files
+- `symlink-edge` -- symlink targets
+- `orphan-node` -- nodes with no inbound edges
 - `stale` -- dependencies changed since last lock (direct + transitive)
 
 ### Features

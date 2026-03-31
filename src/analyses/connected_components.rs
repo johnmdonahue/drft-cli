@@ -108,6 +108,7 @@ mod tests {
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -175,6 +176,7 @@ mod tests {
             node_type: NodeType::External,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

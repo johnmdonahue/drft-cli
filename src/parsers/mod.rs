@@ -1,33 +1,33 @@
+pub mod frontmatter;
 pub mod markdown;
 pub mod script;
 
 use crate::config::ParserConfig;
 use std::collections::HashMap;
 
-/// A raw link emitted by a parser — just target path and bare link type.
-/// The full EdgeType (`parser:type`) is constructed by the graph builder.
+/// Combined output from parsing a single file: links + optional metadata.
+/// Links are raw strings as they appear in the source — the graph builder handles
+/// normalization (fragment stripping, anchor filtering, URI detection).
 ///
 /// See [`docs/parsers`](../../docs/parsers/README.md) for details.
-#[derive(Debug, Clone)]
-pub struct RawLink {
-    pub target: String,
-    /// Link type within this parser's vocabulary (e.g., "inline", "frontmatter").
-    pub link_type: String,
-    /// Whether this is an external URL (http/https).
-    pub is_external: bool,
+#[derive(Debug, Clone, Default)]
+pub struct ParseResult {
+    pub links: Vec<String>,
+    /// Structured metadata extracted from the file, namespaced by parser on the node.
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Trait implemented by all parsers (built-in and script-based).
 pub trait Parser {
-    /// Parser name (used as the namespace in EdgeType, e.g., "markdown").
+    /// Parser name — used as provenance on edges.
     fn name(&self) -> &str;
     /// Check if this parser should run on a given file path.
     fn matches(&self, path: &str) -> bool;
-    /// Parse a file's content and return discovered links.
-    fn parse(&self, path: &str, content: &str) -> Vec<RawLink>;
+    /// Parse a file's content and return discovered links + optional metadata.
+    fn parse(&self, path: &str, content: &str) -> ParseResult;
     /// Parse multiple files in one call. Default falls back to per-file parsing.
     /// Script parsers override this to spawn one process for all files.
-    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, ParseResult> {
         files
             .iter()
             .map(|(path, content)| (path.to_string(), self.parse(path, content)))
@@ -35,12 +35,111 @@ pub trait Parser {
     }
 }
 
-/// Default glob patterns for built-in parsers.
-fn default_glob(parser_name: &str) -> Option<&'static str> {
-    match parser_name {
-        "markdown" => Some("*.md"),
-        _ => None,
+/// Build a GlobSet from file patterns (for parser routing).
+/// Returns None if no patterns → parser receives all File nodes.
+fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globset::GlobSet> {
+    let patterns = patterns.as_ref()?;
+    let mut builder = globset::GlobSetBuilder::new();
+    for pattern in patterns {
+        match globset::Glob::new(pattern) {
+            Ok(g) => {
+                builder.add(g);
+            }
+            Err(e) => {
+                eprintln!("warn: invalid glob in parser {name}.files: {e}");
+            }
+        }
     }
+    match builder.build() {
+        Ok(set) => Some(set),
+        Err(e) => {
+            eprintln!("warn: failed to compile globs for parser {name}.files: {e}");
+            None
+        }
+    }
+}
+
+/// Check whether the last component of a path has a file extension.
+pub(crate) fn has_file_extension(path: &str) -> bool {
+    if let Some(basename) = path.rsplit('/').next() {
+        basename.contains('.')
+    } else {
+        path.contains('.')
+    }
+}
+
+/// Strip all code content (fenced blocks and inline backtick spans),
+/// replacing with spaces to preserve offsets.
+pub(crate) fn strip_code(content: &str) -> String {
+    // First strip fenced code blocks (``` and ~~~)
+    let mut result = String::with_capacity(content.len());
+    let mut in_code_block = false;
+    let mut fence_marker = "";
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_code_block {
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                in_code_block = true;
+                fence_marker = if trimmed.starts_with("```") {
+                    "```"
+                } else {
+                    "~~~"
+                };
+                result.push_str(&" ".repeat(line.len()));
+            } else {
+                result.push_str(line);
+            }
+        } else if trimmed.starts_with(fence_marker) && trimmed.trim() == fence_marker {
+            in_code_block = false;
+            result.push_str(&" ".repeat(line.len()));
+        } else {
+            result.push_str(&" ".repeat(line.len()));
+        }
+        result.push('\n');
+    }
+
+    // Then strip inline code spans (single and double backticks)
+    let mut cleaned = String::with_capacity(result.len());
+    let chars: Vec<char> = result.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '`' {
+            // Count opening backticks
+            let mut ticks = 0;
+            while i + ticks < chars.len() && chars[i + ticks] == '`' {
+                ticks += 1;
+            }
+            // Find matching closing backticks in the char array
+            let after = i + ticks;
+            let mut found = None;
+            let mut j = after;
+            while j + ticks <= chars.len() {
+                if chars[j..j + ticks].iter().all(|c| *c == '`') {
+                    found = Some(j);
+                    break;
+                }
+                j += 1;
+            }
+            if let Some(close_start) = found {
+                // Replace entire span (backticks + content + backticks) with spaces
+                let total = close_start + ticks - i;
+                for _ in 0..total {
+                    cleaned.push(' ');
+                }
+                i += total;
+            } else {
+                // No closing — keep the backtick as-is
+                cleaned.push(chars[i]);
+                i += 1;
+            }
+        } else {
+            cleaned.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    cleaned
 }
 
 /// Build the parser registry from config.
@@ -53,21 +152,7 @@ pub fn build_parsers(
     let mut parsers: Vec<Box<dyn Parser>> = Vec::new();
 
     for (name, config) in parsers_config {
-        let glob_pattern = config
-            .glob
-            .as_deref()
-            .or_else(|| default_glob(name))
-            .unwrap_or("*");
-
-        let glob = match globset::Glob::new(glob_pattern) {
-            Ok(g) => g.compile_matcher(),
-            Err(e) => {
-                eprintln!("warn: invalid glob for parser {name}: {e}");
-                continue;
-            }
-        };
-
-        let type_filter = config.types.clone();
+        let file_filter = build_file_filter(&config.files, name);
 
         if let Some(ref command) = config.command {
             // Script-based parser
@@ -84,17 +169,20 @@ pub fn build_parsers(
 
             parsers.push(Box::new(script::ScriptParser {
                 parser_name: name.clone(),
-                glob,
-                type_filter,
+                file_filter,
                 command: resolved_command,
                 timeout_ms: config.timeout.unwrap_or(5000),
                 scope_dir: root.to_path_buf(),
+                options: config.options.clone(),
             }));
         } else {
             // Built-in parser
             match name.as_str() {
                 "markdown" => {
-                    parsers.push(Box::new(markdown::MarkdownParser { glob, type_filter }));
+                    parsers.push(Box::new(markdown::MarkdownParser { file_filter }));
+                }
+                "frontmatter" => {
+                    parsers.push(Box::new(frontmatter::FrontmatterParser { file_filter }));
                 }
                 _ => {
                     eprintln!(

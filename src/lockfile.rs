@@ -111,21 +111,24 @@ pub fn write_lockfile(root: &Path, lockfile: &Lockfile) -> Result<()> {
 mod tests {
     use super::*;
     use crate::graph::{Node, NodeType};
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     fn make_graph() -> Graph {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g
     }

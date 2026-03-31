@@ -2,7 +2,7 @@
 markdown = true
 
 [rules]
-orphan = "off"
+orphan-node = "off"
 
 [rules.max-fan-out]
 command = "./scripts/max-fan-out.sh"

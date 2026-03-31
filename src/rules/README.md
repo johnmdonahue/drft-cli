@@ -2,17 +2,18 @@
 
 Rules evaluate the graph and emit diagnostics. Each implements the `Rule` trait.
 
-- [broken_link.rs](broken_link.rs) — detects links to missing files
-- [containment.rs](containment.rs) — detects links escaping the scope root
-- [cycle.rs](cycle.rs) — detects dependency cycles
-- [directory_link.rs](directory_link.rs) — detects links to directories instead of files
-- [encapsulation.rs](encapsulation.rs) — enforces graph boundary interfaces
+- [boundary_violation.rs](boundary_violation.rs) — detects edges escaping the scope root
+- [dangling_edge.rs](dangling_edge.rs) — detects edges to missing nodes
+- [directed_cycle.rs](directed_cycle.rs) — detects dependency cycles
+- [directory_edge.rs](directory_edge.rs) — detects edges to directories instead of files
+- [encapsulation_violation.rs](encapsulation_violation.rs) — enforces graph boundary interfaces
 - [fragility.rs](fragility.rs) — detects structural single points of failure
 - [fragmentation.rs](fragmentation.rs) — detects disconnected components
-- [indirect_link.rs](indirect_link.rs) — detects links through symlinks
 - [layer_violation.rs](layer_violation.rs) — enforces layer ordering
 - [mod.rs](mod.rs) — `Rule` trait, `RuleContext`, `all_rules()` registry
-- [orphan.rs](orphan.rs) — detects files with no inbound links
+- [orphan_node.rs](orphan_node.rs) — detects nodes with no inbound edges
 - [redundant_edge.rs](redundant_edge.rs) — detects transitively redundant edges
+- [schema_violation.rs](schema_violation.rs) — validates node metadata against schema options
 - [script.rs](script.rs) — script-based rule runner
 - [stale.rs](stale.rs) — detects content changes since last lock
+- [symlink_edge.rs](symlink_edge.rs) — detects edges through symlinks

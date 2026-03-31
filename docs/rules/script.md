@@ -1,6 +1,6 @@
 # Script rules
 
-Script rules let you define custom checks as external scripts. The script receives the graph as JSON on stdin and emits diagnostics as newline-delimited JSON on stdout.
+Script rules let you define custom checks as external scripts. The script receives the enriched graph and rule options as JSON on stdin and emits diagnostics as newline-delimited JSON on stdout.
 
 ## Defining a script rule
 
@@ -8,25 +8,38 @@ Script rules let you define custom checks as external scripts. The script receiv
 [rules.my-custom-rule]
 severity = "warn"
 command = "./scripts/my-rule.sh"
+
+[rules.my-custom-rule.options]
+threshold = 5
 ```
 
-The command path is resolved relative to the directory containing `drft.toml`. Arguments can be included in the command string (split on whitespace).
+The command path is resolved relative to the directory containing `drft.toml`. Arguments can be included in the command string (split on whitespace). Options under `[rules.<name>.options]` are passed through to the script.
 
 ## Input format
 
-The script receives a JGF (JSON Graph Format) object on stdin:
+The script receives a JSON object on stdin with two top-level keys: `graph` (the enriched graph including all analyses) and `options` (from `[rules.<name>.options]`, or `{}` if none):
 
 ```json
 {
   "graph": {
     "directed": true,
     "nodes": {
-      "index.md": { "metadata": { "type": "source", "hash": "b3:abc..." } },
-      "setup.md": { "metadata": { "type": "source", "hash": "b3:def..." } }
+      "index.md": { "metadata": { "type": "file", "hash": "b3:abc..." } },
+      "setup.md": { "metadata": { "type": "file", "hash": "b3:def..." } }
     },
     "edges": [
-      { "source": "index.md", "target": "setup.md", "relation": "markdown:inline" }
-    ]
+      { "source": "index.md", "target": "setup.md", "parser": "markdown" }
+    ],
+    "analyses": {
+      "degree": { "nodes": [...] },
+      "scc": { "sccs": [...], ... },
+      "bridges": { "cut_vertices": [...], "bridge_edges": [...] },
+      "impact_radius": { "nodes": [...] },
+      ...
+    }
+  },
+  "options": {
+    "threshold": 5
   }
 }
 ```
@@ -58,6 +71,7 @@ If the script exits with a non-zero status, `drft` emits a warning to stderr and
 ```bash
 #!/bin/sh
 # Flag any node whose path contains "draft"
+# Reads { graph, options } from stdin
 cat | jq -c '.graph.nodes | to_entries[] | select(.key | test("draft")) | {message: "file looks like a draft", node: .key}'
 ```
 

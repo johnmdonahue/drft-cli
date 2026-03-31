@@ -1,5 +1,5 @@
 #!/bin/sh
-# Enforce kebab-case file naming for all document nodes.
+# Enforce kebab-case file naming for all File nodes.
 # Receives JGF graph JSON on stdin, emits NDJSON diagnostics on stdout.
 
 python3 -c "
@@ -8,7 +8,7 @@ data = json.load(sys.stdin)
 graph = data['graph']
 kebab = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*\.md$')
 for path, node in sorted(graph['nodes'].items()):
-    if node['metadata']['type'] != 'document':
+    if node['metadata']['type'] != 'file':
         continue
     # Check the filename only (not directory parts)
     filename = path.rsplit('/', 1)[-1]

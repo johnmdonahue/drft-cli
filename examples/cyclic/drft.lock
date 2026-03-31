@@ -1,0 +1,17 @@
+lockfile_version = 2
+
+[nodes."README.md"]
+type = "file"
+hash = "b3:b5631eff4489dc892977ddcd3afe913160e22bb5b7021b99c116dd00e67e2556"
+
+[nodes."a.md"]
+type = "file"
+hash = "b3:fe641d3f77fc2d3842f61b5229eee2d2e8bade97fdc744df9590ecdbf27a9925"
+
+[nodes."b.md"]
+type = "file"
+hash = "b3:71db5ccd49caf5711d17646a9d9deaba8d3420e4be1f711e09d1f39a23911bc9"
+
+[nodes."c.md"]
+type = "file"
+hash = "b3:d4a5180e0ccc7c4c06e95fbbe3f50804a9afbb78565be414bd60d34e12ae4d8e"

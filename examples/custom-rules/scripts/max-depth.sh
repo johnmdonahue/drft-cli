@@ -20,10 +20,10 @@ for e in graph['edges']:
     children.setdefault(e['source'], []).append(e['target'])
     has_inbound.add(e['target'])
 
-# Find roots (no inbound links, document type only)
+# Find roots (no inbound links, File nodes only)
 roots = [
     p for p, n in graph['nodes'].items()
-    if p not in has_inbound and n['metadata']['type'] == 'document'
+    if p not in has_inbound and n['metadata']['type'] == 'file'
 ]
 
 # BFS from all roots to compute min depth for each node
@@ -44,7 +44,7 @@ while queue:
 max_depth = $MAX_DEPTH
 for path in sorted(graph['nodes']):
     node = graph['nodes'][path]
-    if node['metadata']['type'] != 'document':
+    if node['metadata']['type'] != 'file':
         continue
     d = depth.get(path)
     if d is not None and d > max_depth:

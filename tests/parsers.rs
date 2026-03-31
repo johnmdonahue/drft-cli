@@ -6,6 +6,12 @@ use tempfile::TempDir;
 #[test]
 fn frontmatter_sources_create_edges() {
     let dir = TempDir::new().unwrap();
+    // Enable the frontmatter parser (frontmatter links moved out of markdown parser)
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n",
+    )
+    .unwrap();
     fs::write(
         dir.path().join("analysis.md"),
         "---\nsources:\n  - ./data/notes.md\n---\n\n# Analysis\n",
@@ -40,8 +46,26 @@ fn frontmatter_sources_create_edges() {
 }
 
 #[test]
-fn wikilinks_create_edges() {
+#[cfg(unix)]
+fn wikilinks_script_parser_creates_edges() {
     let dir = TempDir::new().unwrap();
+
+    // Copy the example wikilinks script into the temp dir
+    let script_src =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/parsers/wikilinks.sh");
+    let script_dst = dir.path().join("wikilinks.sh");
+    fs::copy(&script_src, &script_dst).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script_dst, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n\n[parsers.wikilinks]\nfiles = [\"*.md\"]\ncommand = \"./wikilinks.sh\"\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "See [[setup]] for details.").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -53,7 +77,6 @@ fn wikilinks_create_edges() {
 
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains("setup.md"));
-    // v2 lockfile has no edges — edge types verified at check time
 
     // Broken wikilink should be caught
     fs::write(dir.path().join("index.md"), "See [[missing]] here.").unwrap();
@@ -63,8 +86,8 @@ fn wikilinks_create_edges() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("broken-link"),
-        "broken wikilink should fire broken-link, got: {stdout}"
+        stdout.contains("dangling-edge"),
+        "broken wikilink should fire dangling-edge, got: {stdout}"
     );
 }
 
@@ -73,11 +96,14 @@ fn wikilinks_create_edges() {
 fn script_parser_batch_protocol() {
     let dir = TempDir::new().unwrap();
 
-    // Write a batch parser script that reads paths from stdin and emits NDJSON
+    // Write a batch parser script that reads the options envelope on line 1,
+    // then file paths, and emits NDJSON
     let script = dir.path().join("parse-txt.sh");
     fs::write(
         &script,
         r#"#!/bin/sh
+# Line 1 is the JSON options envelope — read and skip it
+IFS= read -r _options
 while IFS= read -r filepath; do
     [ -z "$filepath" ] && continue
     grep -oE '\[[^]]+\]\([^)]+\)' "$filepath" 2>/dev/null | while IFS= read -r match; do
@@ -99,8 +125,10 @@ done
     fs::write(
         dir.path().join("drft.toml"),
         format!(
-            r#"[parsers.custom]
-glob = "*.txt"
+            r#"include = ["*.txt", "*.md"]
+
+[parsers.custom]
+files = ["*.txt"]
 command = "{}"
 "#,
             script.to_string_lossy().replace('"', "\\\"")

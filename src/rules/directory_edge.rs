@@ -1,23 +1,22 @@
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct DirectoryLinkRule;
+pub struct DirectoryEdgeRule;
 
-impl Rule for DirectoryLinkRule {
+impl Rule for DirectoryEdgeRule {
     fn name(&self) -> &str {
-        "directory-link"
+        "directory-edge"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let graph = ctx.graph;
-        let root = ctx.root;
+        let graph = &ctx.graph.graph;
 
         graph
             .edges
             .iter()
             .filter_map(|edge| {
-                // Skip external URLs
-                if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+                // Skip URIs
+                if crate::graph::is_uri(&edge.target) {
                     return None;
                 }
 
@@ -26,11 +25,10 @@ impl Rule for DirectoryLinkRule {
                     return None;
                 }
 
-                // Check if target is a directory on the filesystem
-                let target_path = root.join(&edge.target);
-                if target_path.is_dir() {
+                // Check target properties set during graph building
+                if graph.target_properties.get(&edge.target).is_some_and(|p| p.is_directory) {
                     Some(Diagnostic {
-                        rule: "directory-link".into(),
+                        rule: "directory-edge".into(),
                         message: "links to directory, not file".into(),
                         source: Some(edge.source.clone()),
                         target: Some(edge.target.clone()),
@@ -52,81 +50,82 @@ impl Rule for DirectoryLinkRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType, TargetProperties};
     use crate::rules::RuleContext;
-    use std::fs;
-    use std::path::Path;
-    use tempfile::TempDir;
+    use std::collections::HashMap;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
     fn detects_directory_link() {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
-        let guides = dir.path().join("guides");
-        fs::create_dir(&guides).unwrap();
-        fs::write(guides.join("README.md"), "").unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
+        graph.target_properties.insert(
+            "guides".into(),
+            TargetProperties {
+                is_symlink: false,
+                is_directory: true,
+                symlink_target: None,
+            },
+        );
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "guides".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = DirectoryLinkRule.evaluate(&ctx);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = DirectoryEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "directory-link");
+        assert_eq!(diagnostics[0].rule, "directory-edge");
         assert_eq!(diagnostics[0].target.as_deref(), Some("guides"));
     }
 
     #[test]
     fn no_diagnostic_for_file_link() {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("index.md"), "").unwrap();
-        fs::write(dir.path().join("setup.md"), "").unwrap();
-
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = DirectoryLinkRule.evaluate(&ctx);
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = DirectoryEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 }

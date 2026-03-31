@@ -1,24 +1,15 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::scc::StronglyConnectedComponents;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct CycleRule;
+pub struct DirectedCycleRule;
 
-impl Rule for CycleRule {
+impl Rule for DirectedCycleRule {
     fn name(&self) -> &str {
-        "cycle"
+        "directed-cycle"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = StronglyConnectedComponents.run(&analysis_ctx);
+        let result = &ctx.graph.scc;
 
         result
             .sccs
@@ -35,7 +26,7 @@ impl Rule for CycleRule {
                 );
 
                 Diagnostic {
-                    rule: "cycle".into(),
+                    rule: "directed-cycle".into(),
                     message: "cycle detected".into(),
                     path: Some(path),
                     fix: Some(fix),
@@ -49,19 +40,14 @@ impl Rule for CycleRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyses::EnrichedGraph;
     use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::rules::RuleContext;
-    use std::path::Path;
 
-    fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root: Path::new("."),
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph) -> EnrichedGraph {
+        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
     }
 
     #[test]
@@ -74,10 +60,14 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
         graph.add_edge(make_edge("c.md", "a.md"));
 
-        let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "cycle");
+        assert_eq!(diagnostics[0].rule, "directed-cycle");
 
         let path = diagnostics[0].path.as_ref().unwrap();
         assert_eq!(path.first(), path.last());
@@ -95,8 +85,12 @@ mod tests {
         graph.add_edge(make_edge("a.md", "b.md"));
         graph.add_edge(make_edge("b.md", "c.md"));
 
-        let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -106,8 +100,12 @@ mod tests {
         graph.add_node(make_node("a.md"));
         graph.add_edge(make_edge("a.md", "missing.md"));
 
-        let config = Config::defaults();
-        let diagnostics = CycleRule.evaluate(&make_ctx(&graph, &config));
+        let enriched = make_enriched(graph);
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = DirectedCycleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 }

@@ -21,10 +21,7 @@ fn graph_json_follows_jgf() {
     assert!(v["graph"]["directed"].as_bool().unwrap());
     assert!(v["graph"]["nodes"]["index.md"].is_object());
     assert!(v["graph"]["nodes"]["setup.md"].is_object());
-    assert_eq!(
-        v["graph"]["nodes"]["index.md"]["metadata"]["type"],
-        "source"
-    );
+    assert_eq!(v["graph"]["nodes"]["index.md"]["metadata"]["type"], "file");
     assert!(!v["graph"]["edges"].as_array().unwrap().is_empty());
 }
 

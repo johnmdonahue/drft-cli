@@ -12,7 +12,7 @@ fn check_json_envelope_clean() {
     // Suppress warnings for this test — we're testing the JSON envelope shape
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\norphan = \"off\"\nfragility = \"off\"\n",
+        "[rules]\norphan-node = \"off\"\nfragility = \"off\"\n",
     )
     .unwrap();
 

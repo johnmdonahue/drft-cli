@@ -1,32 +1,29 @@
-pub mod broken_link;
-pub mod containment;
-pub mod cycle;
-pub mod directory_link;
-pub mod encapsulation;
+pub mod boundary_violation;
+pub mod dangling_edge;
+pub mod directed_cycle;
+pub mod directory_edge;
+pub mod encapsulation_violation;
 pub mod fragility;
 pub mod fragmentation;
-pub mod indirect_link;
 pub mod layer_violation;
-pub mod orphan;
+pub mod orphan_node;
 pub mod redundant_edge;
+pub mod schema_violation;
 pub mod script;
 pub mod stale;
+pub mod symlink_edge;
 
-use crate::config::Config;
+use crate::analyses::EnrichedGraph;
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
-use crate::lockfile::Lockfile;
-use std::path::Path;
 
-/// Context passed to every rule, providing access to the graph,
-/// filesystem root, config, and optional lockfile.
+/// Context passed to every rule. Rules are pure functions over the
+/// enriched graph — no filesystem access, no config, no lockfile.
 ///
 /// See [`docs/rules`](../../docs/rules/README.md) for details.
 pub struct RuleContext<'a> {
-    pub graph: &'a Graph,
-    pub root: &'a Path,
-    pub config: &'a Config,
-    pub lockfile: Option<&'a Lockfile>,
+    pub graph: &'a EnrichedGraph,
+    /// Per-rule options from `[rules.<name>.options]`. drft passes through, rules interpret.
+    pub options: Option<&'a toml::Value>,
 }
 
 pub trait Rule {
@@ -36,17 +33,18 @@ pub trait Rule {
 
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
     vec![
-        Box::new(broken_link::BrokenLinkRule),
-        Box::new(containment::ContainmentRule),
-        Box::new(cycle::CycleRule),
-        Box::new(directory_link::DirectoryLinkRule),
-        Box::new(encapsulation::EncapsulationRule),
+        Box::new(boundary_violation::BoundaryViolationRule),
+        Box::new(dangling_edge::DanglingEdgeRule),
+        Box::new(directed_cycle::DirectedCycleRule),
+        Box::new(directory_edge::DirectoryEdgeRule),
+        Box::new(encapsulation_violation::EncapsulationViolationRule),
         Box::new(fragility::FragilityRule),
         Box::new(fragmentation::FragmentationRule),
-        Box::new(indirect_link::IndirectLinkRule),
         Box::new(layer_violation::LayerViolationRule),
-        Box::new(orphan::OrphanRule),
+        Box::new(orphan_node::OrphanNodeRule),
         Box::new(redundant_edge::RedundantEdgeRule),
+        Box::new(schema_violation::SchemaViolationRule),
         Box::new(stale::StaleRule),
+        Box::new(symlink_edge::SymlinkEdgeRule),
     ]
 }

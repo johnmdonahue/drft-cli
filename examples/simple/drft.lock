@@ -1,17 +1,21 @@
 lockfile_version = 2
 
+[nodes."README.md"]
+type = "file"
+hash = "b3:d9864e12a5d8cd41b302770a1505e14a61e06a54151df64f167e1c8c80e17f84"
+
 [nodes."config.md"]
-type = "source"
+type = "file"
 hash = "b3:0da3fb374e7d55ca78333dfede8696599d9583ec08f3aa0f17c08a043834e1b3"
 
 [nodes."faq.md"]
-type = "source"
+type = "file"
 hash = "b3:44aa84d4b37362b710d71145bcac5affb4cfba67d8b5c7f3b2a345c3da025c16"
 
 [nodes."index.md"]
-type = "source"
+type = "file"
 hash = "b3:90eb25eb61adf2cee1ea8f45a00ae4812cf93c7143b80c347e35eb8f012e957b"
 
 [nodes."setup.md"]
-type = "source"
+type = "file"
 hash = "b3:716613e289c9e6ac5747f13aeb19cec4f9471231831737d74a31dde39247613e"

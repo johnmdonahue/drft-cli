@@ -1,30 +1,21 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::graph_boundaries::GraphBoundaries;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct EncapsulationRule;
+pub struct EncapsulationViolationRule;
 
-impl Rule for EncapsulationRule {
+impl Rule for EncapsulationViolationRule {
     fn name(&self) -> &str {
-        "encapsulation"
+        "encapsulation-violation"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = GraphBoundaries.run(&analysis_ctx);
+        let result = &ctx.graph.graph_boundaries;
 
         result
             .encapsulation_violations
             .iter()
             .map(|v| Diagnostic {
-                rule: "encapsulation".into(),
+                rule: "encapsulation-violation".into(),
                 message: format!("not in {}interface", v.graph),
                 source: Some(v.source.clone()),
                 target: Some(v.target.clone()),
@@ -42,24 +33,18 @@ impl Rule for EncapsulationRule {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
     use crate::rules::RuleContext;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
 
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
+    fn make_enriched(graph: Graph, root: &std::path::Path) -> crate::analyses::EnrichedGraph {
+        crate::analyses::enrich_graph(graph, root, &Config::defaults(), None)
     }
 
-    fn setup_sealed_child(dir: &Path) {
+    fn setup_sealed_child(dir: &std::path::Path) {
         let research = dir.join("research");
         fs::create_dir_all(&research).unwrap();
         fs::write(research.join("overview.md"), "# Overview").unwrap();
@@ -69,7 +54,7 @@ mod tests {
         nodes.insert(
             "overview.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:aaa".into()),
                 graph: None,
             },
@@ -77,7 +62,7 @@ mod tests {
         nodes.insert(
             "internal.md".into(),
             LockfileNode {
-                node_type: NodeType::Source,
+                node_type: NodeType::File,
                 hash: Some("b3:bbb".into()),
                 graph: None,
             },
@@ -101,38 +86,44 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/".into(),
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research/".into()),
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/overview.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research/".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = EncapsulationRule.evaluate(&ctx);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -144,28 +135,33 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/".into(),
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/internal.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
-        let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
-        let diagnostics = EncapsulationRule.evaluate(&ctx);
+        let enriched = make_enriched(graph, dir.path());
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
+        let diagnostics = EncapsulationViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "encapsulation");
+        assert_eq!(diagnostics[0].rule, "encapsulation-violation");
         assert_eq!(
             diagnostics[0].target.as_deref(),
             Some("research/internal.md")

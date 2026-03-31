@@ -119,15 +119,17 @@ mod tests {
     use super::*;
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Node, NodeType};
+    use crate::graph::{Edge, Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         }
     }
 
@@ -135,8 +137,8 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         }
     }
 

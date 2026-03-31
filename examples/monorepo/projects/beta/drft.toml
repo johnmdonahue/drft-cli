@@ -2,4 +2,4 @@
 markdown = true
 
 [rules]
-orphan = "warn"
+orphan-node = "warn"

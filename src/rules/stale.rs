@@ -1,6 +1,3 @@
-use crate::analyses::Analysis;
-use crate::analyses::AnalysisContext;
-use crate::analyses::change_propagation::ChangePropagation;
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
@@ -12,13 +9,7 @@ impl Rule for StaleRule {
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
-        let analysis_ctx = AnalysisContext {
-            graph: ctx.graph,
-            root: ctx.root,
-            config: ctx.config,
-            lockfile: ctx.lockfile,
-        };
-        let result = ChangePropagation.run(&analysis_ctx);
+        let result = &ctx.graph.change_propagation;
 
         if !result.has_lockfile {
             return vec![];
@@ -82,21 +73,12 @@ impl Rule for StaleRule {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType, hash_bytes};
+    use crate::graph::{Edge, Graph, Node, NodeType, hash_bytes};
     use crate::lockfile::{Lockfile, write_lockfile};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
-
-    fn make_ctx<'a>(graph: &'a Graph, root: &'a Path, config: &'a Config) -> RuleContext<'a> {
-        RuleContext {
-            graph,
-            root,
-            config,
-            lockfile: None,
-        }
-    }
 
     fn setup_locked_dir() -> TempDir {
         let dir = TempDir::new().unwrap();
@@ -109,21 +91,23 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
 
         let lockfile = Lockfile::from_graph(&graph);
@@ -134,9 +118,13 @@ mod tests {
     #[test]
     fn no_staleness_when_unchanged() {
         let dir = setup_locked_dir();
-        let graph = Graph::new();
         let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -147,8 +135,12 @@ mod tests {
         fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
 
         let config = Config::defaults();
-        let graph = crate::graph::build_graph(dir.path(), &config).unwrap();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 2);
 
@@ -170,9 +162,13 @@ mod tests {
     #[test]
     fn skips_when_no_lockfile() {
         let dir = TempDir::new().unwrap();
-        let graph = Graph::new();
+        fs::write(dir.path().join("dummy.md"), "").unwrap();
         let config = Config::defaults();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let enriched = crate::analyses::enrich(dir.path(), &config, None).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -183,8 +179,12 @@ mod tests {
         fs::remove_file(dir.path().join("setup.md")).unwrap();
 
         let config = Config::defaults();
-        let graph = crate::graph::build_graph(dir.path(), &config).unwrap();
-        let ctx = make_ctx(&graph, dir.path(), &config);
+        let lockfile = crate::lockfile::read_lockfile(dir.path()).ok().flatten();
+        let enriched = crate::analyses::enrich(dir.path(), &config, lockfile.as_ref()).unwrap();
+        let ctx = RuleContext {
+            graph: &enriched,
+            options: None,
+        };
         let diagnostics = StaleRule.evaluate(&ctx);
         assert!(diagnostics.len() >= 1);
 

@@ -1,7 +1,9 @@
 # drft.toml — drft dogfooding itself
 
-[parsers]
-markdown = true
+include = ["*.md", "*.rs"]
+
+[parsers.markdown]
+files = ["*.md"]
 
 [rules]
 # All rules default to warn. Override only what you need.
@@ -9,3 +11,11 @@ stale = "error"       # recommended for LLM workflows and CI
 fragility = "off"     # tree-shaped docs are expected to have bridges
 layer-violation = "off"  # ARCHITECTURE.md intentionally links deep
 redundant-edge = "off"   # docs/rules/README.md cross-references are intentional
+
+[rules.fragmentation]
+severity = "warn"
+ignore = ["CHANGELOG.md", "npm/README.md"]
+
+[rules.orphan-node]
+severity = "warn"
+ignore = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "npm/README.md"]

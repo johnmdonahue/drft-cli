@@ -1,26 +1,27 @@
 use std::path::Path;
 use std::process::Command;
 
+use crate::analyses::EnrichedGraph;
 use crate::config::{Config, RuleConfig};
 use crate::diagnostic::Diagnostic;
-use crate::graph::Graph;
 
-/// Run all script rules defined in the config against the graph.
+/// Run all script rules defined in the config against the enriched graph.
 /// Script rules are rules with a `command` field in `[rules]`.
-/// Each script rule receives the graph as JGF JSON on stdin and
-/// emits diagnostics as newline-delimited JSON on stdout.
+/// Each script rule receives `{ graph, options }` as JSON on stdin —
+/// the enriched graph (nodes, edges, analyses) plus the rule's options —
+/// and emits diagnostics as newline-delimited JSON on stdout.
 ///
 /// Expected output format per line:
 /// {"message": "...", "source": "...", "target": "...", "node": "...", "fix": "..."}
 ///
 /// All fields except `message` are optional. The `rule` and `severity` fields
 /// are set by drft from the config — the script doesn't need to provide them.
-pub fn run_script_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diagnostic> {
+pub fn run_script_rules(enriched: &EnrichedGraph, root: &Path, config: &Config) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let config_dir = config.config_dir.as_deref().unwrap_or(root);
 
     for (rule_name, rule_config) in config.script_rules() {
-        match run_one(rule_name, rule_config, graph, root, config_dir) {
+        match run_one(rule_name, rule_config, enriched, root, config_dir) {
             Ok(mut results) => diagnostics.append(&mut results),
             Err(e) => {
                 eprintln!("warn: script rule \"{rule_name}\" failed: {e}");
@@ -44,7 +45,7 @@ pub fn run_script_rules(graph: &Graph, root: &Path, config: &Config) -> Vec<Diag
 fn run_one(
     rule_name: &str,
     rule_config: &RuleConfig,
-    graph: &Graph,
+    enriched: &EnrichedGraph,
     root: &Path,
     config_dir: &Path,
 ) -> anyhow::Result<Vec<Diagnostic>> {
@@ -53,8 +54,8 @@ fn run_one(
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("rule \"{rule_name}\" has no command"))?;
 
-    // Build the graph JSON to pass on stdin
-    let graph_json = build_graph_json(graph);
+    // Build the enriched graph + options JSON to pass on stdin
+    let graph_json = build_enriched_json(enriched, rule_config.options.as_ref());
 
     // Parse command string (split on whitespace for simple commands)
     let parts: Vec<&str> = command.split_whitespace().collect();
@@ -133,7 +134,13 @@ struct CustomDiagnostic {
     fix: Option<String>,
 }
 
-pub(crate) fn build_graph_json(graph: &Graph) -> String {
+/// Build the JSON envelope sent to script rules: `{ graph, options }`.
+///
+/// The `graph` object contains the full enriched graph — nodes, edges,
+/// and all analysis results. `options` carries the rule's `[rules.<name>.options]`.
+fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) -> String {
+    let graph = &enriched.graph;
+
     let mut nodes = serde_json::Map::new();
     for (path, node) in &graph.nodes {
         let mut meta = serde_json::Map::new();
@@ -149,20 +156,41 @@ pub(crate) fn build_graph_json(graph: &Graph) -> String {
         .iter()
         .filter(|e| graph.nodes.contains_key(&e.target))
         .map(|e| {
-            serde_json::json!({
+            let mut edge = serde_json::json!({
                 "source": e.source,
                 "target": e.target,
-                "relation": e.edge_type,
-            })
+                "parser": e.parser,
+            });
+            if let Some(ref r) = e.link {
+                edge["link"] = serde_json::json!(r);
+            }
+            edge
         })
         .collect();
+
+    let analyses = serde_json::json!({
+        "betweenness": enriched.betweenness,
+        "bridges": enriched.bridges,
+        "change_propagation": enriched.change_propagation,
+        "connected_components": enriched.connected_components,
+        "degree": enriched.degree,
+        "depth": enriched.depth,
+        "graph_boundaries": enriched.graph_boundaries,
+        "graph_stats": enriched.graph_stats,
+        "impact_radius": enriched.impact_radius,
+        "pagerank": enriched.pagerank,
+        "scc": enriched.scc,
+        "transitive_reduction": enriched.transitive_reduction,
+    });
 
     let output = serde_json::json!({
         "graph": {
             "directed": true,
             "nodes": nodes,
             "edges": edges,
-        }
+            "analyses": analyses,
+        },
+        "options": options.unwrap_or(&toml::Value::Table(Default::default())),
     });
 
     serde_json::to_string(&output).unwrap()
@@ -171,31 +199,43 @@ pub(crate) fn build_graph_json(graph: &Graph) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::analyses::enrich_graph;
+    use crate::graph::{Edge, Graph, Node, NodeType};
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
-    fn make_graph() -> Graph {
+    fn make_enriched(dir: &Path) -> EnrichedGraph {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::Source,
+            node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
+            link: None,
+            parser: "markdown".into(),
         });
-        g
+        let config = crate::config::Config {
+            include: vec!["*.md".into()],
+            exclude: vec![],
+            interface: None,
+            parsers: std::collections::HashMap::new(),
+            rules: std::collections::HashMap::new(),
+            config_dir: None,
+        };
+        enrich_graph(g, dir, &config, None)
     }
 
     #[test]
@@ -220,12 +260,12 @@ mod tests {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 
-        let graph = make_graph();
-        let diagnostics = run_one("my-rule", &config, &graph, dir.path(), dir.path()).unwrap();
+        let enriched = make_enriched(dir.path());
+        let diagnostics = run_one("my-rule", &config, &enriched, dir.path(), dir.path()).unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "my-rule");
@@ -250,12 +290,12 @@ mod tests {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 
-        let graph = make_graph();
-        let result = run_one("bad-rule", &config, &graph, dir.path(), dir.path());
+        let enriched = make_enriched(dir.path());
+        let result = run_one("bad-rule", &config, &enriched, dir.path(), dir.path());
         assert!(result.is_err());
     }
 
@@ -288,15 +328,101 @@ mod tests {
             command: Some("./scripts/check.sh".to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 
-        let graph = make_graph();
+        let enriched = make_enriched(dir.path());
         // config_dir != root — script should resolve relative to config_dir
-        let diagnostics = run_one("my-rule", &config, &graph, &root, config_dir).unwrap();
+        let diagnostics = run_one("my-rule", &config, &enriched, &root, config_dir).unwrap();
 
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].message, "found issue");
+    }
+
+    #[test]
+    fn passes_options_to_script() {
+        let dir = TempDir::new().unwrap();
+
+        // Script reads stdin, parses the JSON, and echoes back whether options were received
+        let script = dir.path().join("options-rule.sh");
+        fs::write(
+            &script,
+            r#"#!/bin/sh
+INPUT=$(cat)
+# Check if options.threshold exists in the JSON
+HAS_OPTIONS=$(echo "$INPUT" | grep -c '"threshold"')
+if [ "$HAS_OPTIONS" -gt 0 ]; then
+  echo '{"message": "got options"}'
+else
+  echo '{"message": "no options"}'
+fi
+"#,
+        )
+        .unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let options: toml::Value = toml::from_str("threshold = 5").unwrap();
+        let config = RuleConfig {
+            command: Some(script.to_string_lossy().to_string()),
+            severity: crate::config::RuleSeverity::Warn,
+            ignore: Vec::new(),
+            options: Some(options),
+            ignore_compiled: None,
+        };
+
+        let enriched = make_enriched(dir.path());
+        let diagnostics =
+            run_one("options-rule", &config, &enriched, dir.path(), dir.path()).unwrap();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].message, "got options");
+    }
+
+    #[test]
+    fn includes_analyses_in_graph_json() {
+        let dir = TempDir::new().unwrap();
+
+        // Script checks that analyses are present in the graph JSON
+        let script = dir.path().join("analyses-rule.sh");
+        fs::write(
+            &script,
+            r#"#!/bin/sh
+INPUT=$(cat)
+HAS_ANALYSES=$(echo "$INPUT" | grep -c '"analyses"')
+if [ "$HAS_ANALYSES" -gt 0 ]; then
+  echo '{"message": "has analyses"}'
+else
+  echo '{"message": "no analyses"}'
+fi
+"#,
+        )
+        .unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let config = RuleConfig {
+            command: Some(script.to_string_lossy().to_string()),
+            severity: crate::config::RuleSeverity::Warn,
+            ignore: Vec::new(),
+            options: None,
+            ignore_compiled: None,
+        };
+
+        let enriched = make_enriched(dir.path());
+        let diagnostics =
+            run_one("analyses-rule", &config, &enriched, dir.path(), dir.path()).unwrap();
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].message, "has analyses");
     }
 }

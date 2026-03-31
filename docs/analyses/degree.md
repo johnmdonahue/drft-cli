@@ -54,21 +54,21 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Only Source and Resource nodes are included — External and Graph nodes are excluded. Degree counts only edges between Source/Resource nodes.
+Nodes are sorted alphabetically by path. Only File nodes are included — External and Graph nodes are excluded. Degree counts only edges between File nodes.
 
 ### As a rule (`drft check`)
 
-The `orphan` rule consumes the degree analysis and flags nodes with in-degree = 0:
+The `orphan-node` rule consumes the degree analysis and flags nodes with in-degree = 0:
 
 ```
-warn[orphan]: a.md (no inbound links)
+warn[orphan-node]: a.md (no inbound links)
 ```
 
 Enable it in `drft.toml`:
 
 ```toml
 [rules]
-orphan = "warn"
+orphan-node = "warn"
 ```
 
 ## Algorithm
