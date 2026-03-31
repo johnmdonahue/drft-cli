@@ -102,7 +102,7 @@ fn extract_frontmatter_metadata(content: &str) -> Option<serde_json::Value> {
         return None;
     }
 
-    match serde_yaml::from_str::<serde_yaml::Value>(yaml_str) {
+    match serde_yml::from_str::<serde_yml::Value>(yaml_str) {
         Ok(yaml_val) => Some(yaml_to_json(yaml_val)),
         Err(e) => {
             eprintln!("warn: frontmatter parser: invalid YAML: {e}");
@@ -111,12 +111,12 @@ fn extract_frontmatter_metadata(content: &str) -> Option<serde_json::Value> {
     }
 }
 
-/// Convert serde_yaml::Value to serde_json::Value.
-fn yaml_to_json(yaml: serde_yaml::Value) -> serde_json::Value {
+/// Convert serde_yml::Value to serde_json::Value.
+fn yaml_to_json(yaml: serde_yml::Value) -> serde_json::Value {
     match yaml {
-        serde_yaml::Value::Null => serde_json::Value::Null,
-        serde_yaml::Value::Bool(b) => serde_json::Value::Bool(b),
-        serde_yaml::Value::Number(n) => {
+        serde_yml::Value::Null => serde_json::Value::Null,
+        serde_yml::Value::Bool(b) => serde_json::Value::Bool(b),
+        serde_yml::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 serde_json::Value::Number(i.into())
             } else if let Some(f) = n.as_f64() {
@@ -127,16 +127,16 @@ fn yaml_to_json(yaml: serde_yaml::Value) -> serde_json::Value {
                 serde_json::Value::Null
             }
         }
-        serde_yaml::Value::String(s) => serde_json::Value::String(s),
-        serde_yaml::Value::Sequence(seq) => {
+        serde_yml::Value::String(s) => serde_json::Value::String(s),
+        serde_yml::Value::Sequence(seq) => {
             serde_json::Value::Array(seq.into_iter().map(yaml_to_json).collect())
         }
-        serde_yaml::Value::Mapping(map) => {
+        serde_yml::Value::Mapping(map) => {
             let obj: serde_json::Map<String, serde_json::Value> = map
                 .into_iter()
                 .filter_map(|(k, v)| {
                     let key = match k {
-                        serde_yaml::Value::String(s) => s,
+                        serde_yml::Value::String(s) => s,
                         other => serde_json::to_string(&yaml_to_json(other)).ok()?,
                     };
                     Some((key, yaml_to_json(v)))
@@ -144,7 +144,7 @@ fn yaml_to_json(yaml: serde_yaml::Value) -> serde_json::Value {
                 .collect();
             serde_json::Value::Object(obj)
         }
-        serde_yaml::Value::Tagged(tagged) => yaml_to_json(tagged.value),
+        serde_yml::Value::Tagged(tagged) => yaml_to_json(tagged.value),
     }
 }
 
