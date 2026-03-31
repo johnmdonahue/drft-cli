@@ -710,6 +710,7 @@ fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32
         let a_priority = (a_radius as f64) / (a.2 as f64) + a_betweenness;
         let b_priority = (b_radius as f64) / (b.2 as f64) + b_betweenness;
         b_priority.partial_cmp(&a_priority).unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.0.cmp(&b.0))
     });
 
     match format {

@@ -190,6 +190,28 @@ mod tests {
     }
 
     #[test]
+    fn cycle() {
+        // a -> b -> c -> a (cycle)
+        // Each node has radius 2 (can reach the other two via reverse edges)
+        let mut graph = Graph::new();
+        graph.add_node(make_node("a.md"));
+        graph.add_node(make_node("b.md"));
+        graph.add_node(make_node("c.md"));
+        graph.add_edge(make_edge("a.md", "b.md"));
+        graph.add_edge(make_edge("b.md", "c.md"));
+        graph.add_edge(make_edge("c.md", "a.md"));
+
+        let config = Config::defaults();
+        let result = ImpactRadius.run(&make_ctx(&graph, &config));
+
+        let get = |name: &str| result.nodes.iter().find(|n| n.node == name).unwrap();
+
+        assert_eq!(get("a.md").radius, 2);
+        assert_eq!(get("b.md").radius, 2);
+        assert_eq!(get("c.md").radius, 2);
+    }
+
+    #[test]
     fn excludes_external_nodes() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));

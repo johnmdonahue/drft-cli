@@ -2,7 +2,7 @@
 
 ## The concept
 
-Impact radius measures the blast zone when a file changes. For each File node, it counts how many other nodes are transitively affected — walking reverse edges (dependents) outward from the node. A file with high impact radius is load-bearing: when it changes, many downstream files may need review.
+Impact radius measures the blast zone when a file changes. For each File node, it counts how many other File nodes are transitively affected — walking reverse edges (dependents) outward from the node. A file with high impact radius is load-bearing: when it changes, many downstream files may need review.
 
 This is the reverse complement of depth. Depth asks "how far is this node from a root?" Impact radius asks "how far does damage travel when this node changes?"
 
