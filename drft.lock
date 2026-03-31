@@ -2,7 +2,7 @@ lockfile_version = 2
 
 [nodes."ARCHITECTURE.md"]
 type = "file"
-hash = "b3:97083037d0140966e8bd2df08be5d4f18d552eaf7903bfb53c07451de683da6c"
+hash = "b3:81da390fda9919153761c48d107ecefd90ea5d68f402b68e3f638e13abc694eb"
 
 [nodes."CHANGELOG.md"]
 type = "file"
@@ -10,7 +10,7 @@ hash = "b3:589ee07f003b7ec4ca5dac762b233cad6e2ce7a84944d49cca158153bb91700e"
 
 [nodes."CLAUDE.md"]
 type = "file"
-hash = "b3:e89b592278410df99a3e52fc394488c5807d00e78898a0f1b7e3cc47ab3dbe70"
+hash = "b3:08572d8ca6e4a03b9ad5eac7eab614e87d36646f27e582c10c3a4f449c8525ea"
 
 [nodes."CONTRIBUTING.md"]
 type = "file"
@@ -86,19 +86,19 @@ hash = "b3:b7fc8c27664c3aba80e095ac955a52d67fcb57c506539b49b584c36beb237184"
 
 [nodes."docs/parsers/README.md"]
 type = "file"
-hash = "b3:dbceea65c926ffdc47c4036d9187c56d227c69b160668586a1af12aa06aad0ca"
+hash = "b3:97c9e48424f2771a074753c4cb37437ca6def39b7e10d336e3e402a7894028c7"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
-hash = "b3:a47a30282b7939f1ee843d401fde2302b8c68ecd5cbca34f61c6c8ce00ee3b72"
+hash = "b3:822d23ebace3a66f177bd735c6b9ee832f212af15f48a9914aeeb268d1ff9fb5"
 
 [nodes."docs/parsers/script.md"]
 type = "file"
-hash = "b3:b3355b0f69c2cb4688c442acabfdca6a2b9b3ccbc8ac5d45dcf52e3bb53a882e"
+hash = "b3:7be658d065d328a641a239b545f660668525e448c2f663097e56d735eff8881e"
 
 [nodes."docs/rules/README.md"]
 type = "file"
-hash = "b3:62850d3e0e48da009a8bf0a4fd8bd360a2d9593b5f38fe6f2528d54813fb2a6e"
+hash = "b3:c2bed5757545fd2a419ff7de96598f4443d021b7217f81bde2d0440cfa735a85"
 
 [nodes."docs/rules/boundary-violation.md"]
 type = "file"
@@ -139,6 +139,10 @@ hash = "b3:f162f780e03821cc31fea67526fd8c914bfdbea15f9ecfe725604e204e03e3ec"
 [nodes."docs/rules/redundant-edge.md"]
 type = "file"
 hash = "b3:eadfd113c3a395796aaf15c292b34d312d91ae9aa5ce401e9f6b87fc60bea038"
+
+[nodes."docs/rules/schema-violation.md"]
+type = "file"
+hash = "b3:145870b96a59bf55004c3fd9511883e281aa9e9474972e3147408206f31e7a7b"
 
 [nodes."docs/rules/script.md"]
 type = "file"
@@ -236,7 +240,7 @@ hash = "b3:f9b05887e9a822bc7070280ba542359b56d89e6f2a17ccb52355808a02f99a16"
 
 [nodes."src/README.md"]
 type = "file"
-hash = "b3:77afe11c1efd7b98478db052d569a2ef1ec6b2c2cbd764d0b7e0a3004945df80"
+hash = "b3:41b852352af73c45ed0a81f96417cd2b7ff1c9be56bb7a933bdd013424e22aa2"
 
 [nodes."src/analyses/README.md"]
 type = "file"
@@ -252,15 +256,15 @@ hash = "b3:3e6aa5c9c9b0e06102211bcfea85768849a31daa57bf4e2930eeace1b1bcd6b9"
 
 [nodes."src/analyses/change_propagation.rs"]
 type = "file"
-hash = "b3:14ad6bbcbb2286d330967455bc6400bd25301c6b12aec8302a69a79e2812c456"
+hash = "b3:1f18c3f6d7739fb2730555f842f07be6779b7c4848907a583c87ca65b4420cae"
 
 [nodes."src/analyses/connected_components.rs"]
 type = "file"
-hash = "b3:cb42cadd133281385163adfae088af644dd56003a625247160856df6f02c9d26"
+hash = "b3:e53d50a5a219d69516a8324a68ae7d32b2c4a1b47e7e814de56861525637ace7"
 
 [nodes."src/analyses/degree.rs"]
 type = "file"
-hash = "b3:56480a148d5d40c2ce46e5c4aea0412379030b301d921041d1cbdedaf619da5d"
+hash = "b3:8c915b041894b9884da3fb51b91036079df48281b0a2cb18638ace63cdba485c"
 
 [nodes."src/analyses/depth.rs"]
 type = "file"
@@ -268,7 +272,7 @@ hash = "b3:9d06abdaa68f8e6128804b73673001e3be0e7d95a418c0b203877e79ccde518d"
 
 [nodes."src/analyses/graph_boundaries.rs"]
 type = "file"
-hash = "b3:146e4a2e0343edc10ce9d8da1e4c1fbe00f8bb7b6e5d9e73edafec8757e61f3b"
+hash = "b3:54486d001da914db762125fd896820a15786b4cb98ec74b5d66e26f2603ca489"
 
 [nodes."src/analyses/graph_stats.rs"]
 type = "file"
@@ -288,7 +292,7 @@ hash = "b3:ad5f092a11391c02ad0069fba96aeb620c03727b2af2be6a3750cef33223c85f"
 
 [nodes."src/analyses/transitive_reduction.rs"]
 type = "file"
-hash = "b3:823aafdda85e4ee9f6590ed6c3c94bea8381034a24106bd2d01d1e2b8a75e2dd"
+hash = "b3:b78cf1a79b4ff688c8038488aaeff387369be8728ac078bf6daf9fd97b3585a4"
 
 [nodes."src/cli.rs"]
 type = "file"
@@ -308,7 +312,7 @@ hash = "b3:bd9b67493c4f71cd2d83ff1eb773460e59f275c0449c6d1900a78ec9b45e15a7"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:be0cba7a02040130cffed4fa246bb0a2c854d367c488c34a07e2cdf30e3eb440"
+hash = "b3:e319290ba7b8488d79682408c3c11f11b509029571f8f4e092af48e9b6471bb6"
 
 [nodes."src/lib.rs"]
 type = "file"
@@ -316,11 +320,11 @@ hash = "b3:4f687059fe439b13e542d5cd3265f647e49eb71067a65cf9119250acbcf43834"
 
 [nodes."src/lockfile.rs"]
 type = "file"
-hash = "b3:4070e5ff5a54453ed17d53f6f6ad250ac007d998e543a5e9bc04bee8e7323395"
+hash = "b3:5f7ab15434c1a0e9d70d866745974789591d8371a276accb079a1e3fe625177f"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:0f99526985967f59c78abbe75092c141ddf590c42371d1045ee348a1e09eae05"
+hash = "b3:27d8dea78164c44e9074299a3e099eee084fa4dfd2ebdea928acdfe872e80366"
 
 [nodes."src/metrics.rs"]
 type = "file"
@@ -328,31 +332,31 @@ hash = "b3:d61de500e18236ed6e56b1a0ac1a9171627b7ead4fd7b7b9ee55726fc04fda7e"
 
 [nodes."src/parsers/README.md"]
 type = "file"
-hash = "b3:b1c39e7135461f5fb0a39d3c322bcbe50695715ee9070e354299d8e19e90d2be"
+hash = "b3:191a8341716140b27e1a60a7d8679d0c217c184b2ab53f1ca9891b64dd7cbe8f"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"
-hash = "b3:f98aec1260e2fc3f4b2a9c3dc2e419b01bd814057dce01696f31529e9a13c3f4"
+hash = "b3:7cebec85b2ef2999f0123d3029093be4650a77834d038bbd905a7c2fe379bc4e"
 
 [nodes."src/parsers/mod.rs"]
 type = "file"
-hash = "b3:b018d94405e96be9b096533f9031d8f08cb7ebaa9a7e857732ce156784ee8f5a"
+hash = "b3:5cf0cc585c0238626f270d90e474a41cb02eb71aa2144cbf78bba3cde4a192ea"
 
 [nodes."src/parsers/script.rs"]
 type = "file"
-hash = "b3:1bb28c5c4760e052992589077af7e465289b4c120904b26312c026926e0e7a88"
+hash = "b3:e63ca60459398902250c818182a4b73397d2a96804e0635f5448dce3dbf00a75"
 
 [nodes."src/rules/README.md"]
 type = "file"
-hash = "b3:fdf8830caf848453cc5331501b5a04c7fc90c368af4bb0522151daa372464fc4"
+hash = "b3:e49d0b0de94f33a26a50b3f29c427c0e4d76b7b8d52ec81a321c9ccd844a9bb6"
 
 [nodes."src/rules/boundary_violation.rs"]
 type = "file"
-hash = "b3:778bfe63cc05ad9b5f44a87765426f34c5c2bf572d45160819f971abd82f9b5a"
+hash = "b3:e6ccec5ad49705418d56d0bede75000c8409e2ad180f6b4de11cc19e21d17151"
 
 [nodes."src/rules/dangling_edge.rs"]
 type = "file"
-hash = "b3:4168b83dfbb1383d5accb093f3a3ea8a6243c46e0a059466333e48682bd794b3"
+hash = "b3:08333ac70c84b57cab53e64c0e236b7bc1f468382105cef3298c803e9971901d"
 
 [nodes."src/rules/directed_cycle.rs"]
 type = "file"
@@ -360,11 +364,11 @@ hash = "b3:06db7a1a0bcbc8e67ef40398ccbf9dbbc022dd9797507cff7820e4b36aa0d398"
 
 [nodes."src/rules/directory_edge.rs"]
 type = "file"
-hash = "b3:e42de28112f46cd7fdd365efe98c70470a0f22de91cf553d85dbea6afeb0482b"
+hash = "b3:5166c48c0c47e859c3410baa6573b9e2c1767895f472164e78a49af324ca966c"
 
 [nodes."src/rules/encapsulation_violation.rs"]
 type = "file"
-hash = "b3:e8fdc8b06f8ff9edb1dbf309c396a08085d41d7157ae7f41aaca8d4243b277aa"
+hash = "b3:46b4133e6cd6f9a6fa8ca46bdc8b807d5bfd97232ff3f8f86b76165435d7d5b2"
 
 [nodes."src/rules/fragility.rs"]
 type = "file"
@@ -380,7 +384,7 @@ hash = "b3:c04f5626304d238068bf69a96223c943f44383f3ee0bfa61707692f8f946652f"
 
 [nodes."src/rules/mod.rs"]
 type = "file"
-hash = "b3:d7239a16b7a6b0ed881d714c07a813cdba1900e37956253e216a76a37d44758d"
+hash = "b3:1768287bcdd8d47a5360bb6738b5638b61f69a6a5b0e0ca637e6885398026d7c"
 
 [nodes."src/rules/orphan_node.rs"]
 type = "file"
@@ -388,19 +392,23 @@ hash = "b3:dfc6bbdbc62d0fd38251903116ecd2e7b91a2f2eaef05a4649bfe31d57bee261"
 
 [nodes."src/rules/redundant_edge.rs"]
 type = "file"
-hash = "b3:09d85f5f592599b387c27a97fbbfa385cef5f946a63dd7fdbe6b73d445aa042a"
+hash = "b3:4cfecf4600084f4b2383f0efb2314228384e79f2c15e53e17bf4fc9eb5d653b6"
+
+[nodes."src/rules/schema_violation.rs"]
+type = "file"
+hash = "b3:6e797d273182ff8ac011acde0175a99de1bcb3f14be4cc2456eb222a95a2c16e"
 
 [nodes."src/rules/script.rs"]
 type = "file"
-hash = "b3:17c0aee4df6ab2f3d3a2565096173c717fd4da91d9dd99307a045588b61ebc06"
+hash = "b3:56ab1cec9892f56d3c28869eeb9c6f879b3c518d82e4433e24a3f874ce2424e5"
 
 [nodes."src/rules/stale.rs"]
 type = "file"
-hash = "b3:8fbafe40c9ed626692170802537abcc764ac1477e74b5dfa521c72974d2a2c65"
+hash = "b3:7b796e74a4c77dbdf7cf90fb8d25618e44585532584cdaaa9b7234175a378f7e"
 
 [nodes."src/rules/symlink_edge.rs"]
 type = "file"
-hash = "b3:9da8b06bc9af34cd411e3a494fec55b5cf227fc218843302dc621f1a697716f1"
+hash = "b3:f256d6f1fcd4fd3c54c7800559ddea3f11285b8b351a0ca317ff140ae672ca53"
 
 [nodes."tests/README.md"]
 type = "file"
