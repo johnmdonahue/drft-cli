@@ -22,17 +22,28 @@ impl Rule for SchemaViolationRule {
             .cloned()
             .unwrap_or_default();
 
-        // Pre-compile glob matchers for schemas
-        let compiled_schemas: Vec<(globset::GlobMatcher, SchemaSpec)> = schemas
-            .iter()
-            .filter_map(|(pattern, value)| {
-                let glob = globset::Glob::new(pattern).ok()?;
-                let spec = SchemaSpec::from_toml(value);
-                Some((glob.compile_matcher(), spec))
-            })
-            .collect();
-
         let mut diagnostics = Vec::new();
+
+        // Pre-compile glob matchers for schemas
+        let mut compiled_schemas: Vec<(globset::GlobMatcher, SchemaSpec)> = Vec::new();
+        for (pattern, value) in &schemas {
+            match globset::Glob::new(pattern) {
+                Ok(glob) => {
+                    let spec = SchemaSpec::from_toml(value);
+                    compiled_schemas.push((glob.compile_matcher(), spec));
+                }
+                Err(e) => {
+                    diagnostics.push(Diagnostic {
+                        rule: "schema-violation".into(),
+                        message: format!("invalid schema glob \"{pattern}\": {e}"),
+                        fix: Some(format!(
+                            "fix the glob pattern \"{pattern}\" in [rules.schema-violation.options.schemas]"
+                        )),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
 
         for (path, node) in &ctx.graph.graph.nodes {
             if node.node_type != NodeType::File {
@@ -148,13 +159,16 @@ fn extract_string_array_direct(value: &toml::Value) -> Vec<String> {
 }
 
 /// Merge metadata from all parser namespaces into a single flat JSON object.
-/// Later parser namespaces override earlier ones for conflicting keys.
+/// Namespaces are merged in alphabetical order — later namespaces override earlier
+/// ones for conflicting keys (e.g., "markdown" overrides "frontmatter").
 fn merge_metadata(
     metadata: &std::collections::HashMap<String, serde_json::Value>,
 ) -> serde_json::Value {
     let mut merged = serde_json::Map::new();
-    for value in metadata.values() {
-        if let serde_json::Value::Object(map) = value {
+    let mut keys: Vec<&String> = metadata.keys().collect();
+    keys.sort();
+    for key in keys {
+        if let serde_json::Value::Object(map) = &metadata[key] {
             for (k, v) in map {
                 merged.insert(k.clone(), v.clone());
             }
@@ -226,8 +240,7 @@ mod tests {
         ));
 
         let enriched = make_enriched(graph);
-        let options: toml::Value =
-            toml::from_str("required = [\"title\"]").unwrap();
+        let options: toml::Value = toml::from_str("required = [\"title\"]").unwrap();
         let ctx = RuleContext {
             graph: &enriched,
             options: Some(&options),
@@ -254,8 +267,7 @@ mod tests {
         ));
 
         let enriched = make_enriched(graph);
-        let options: toml::Value =
-            toml::from_str("required = [\"title\"]").unwrap();
+        let options: toml::Value = toml::from_str("required = [\"title\"]").unwrap();
         let ctx = RuleContext {
             graph: &enriched,
             options: Some(&options),
@@ -382,8 +394,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let options: toml::Value =
-            toml::from_str("required = [\"title\"]").unwrap();
+        let options: toml::Value = toml::from_str("required = [\"title\"]").unwrap();
         let ctx = RuleContext {
             graph: &enriched,
             options: Some(&options),
