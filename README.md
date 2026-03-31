@@ -50,6 +50,7 @@ drft discovers files, runs configurable parsers to extract links between them, a
 | `fragmentation` | Disconnected graph component |
 | `layer-violation` | Edge violates depth hierarchy |
 | `redundant-edge` | Edge is transitively redundant |
+| `schema-violation` | Node metadata violates schema (requires options) |
 
 All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -96,7 +97,7 @@ Export the dependency graph.
 
 ```bash
 drft graph                    # JSON Graph Format output
-drft graph --format dot       # Graphviz DOT output
+drft graph --dot              # GraphViz DOT output
 drft graph --recursive        # include child graphs
 ```
 
@@ -115,9 +116,7 @@ drft impact config.md faq.md      # multiple files
 Create a default `drft.toml` config file.
 
 ```bash
-drft init                              # write default drft.toml
-drft init --interface-from README.md   # derive interface from file's outbound links
-drft init --no-interface               # config without interface (open graph)
+drft init                     # write default drft.toml
 ```
 
 ## Configuration
@@ -203,7 +202,7 @@ JSON format (`--format json`):
 
 Every JSON diagnostic includes a `fix` field with actionable instructions.
 
-DOT format (`--format dot`) for graph export:
+DOT format (`drft graph --dot`) for graph export:
 
 ```dot
 digraph {

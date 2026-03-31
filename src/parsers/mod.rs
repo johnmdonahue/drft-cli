@@ -1,33 +1,25 @@
+pub mod frontmatter;
 pub mod markdown;
 pub mod script;
 
 use crate::config::ParserConfig;
 use std::collections::HashMap;
 
-/// A raw link emitted by a parser — just target path and bare link type.
-/// The full EdgeType (`parser:type`) is constructed by the graph builder.
+/// Combined output from parsing a single file: links + optional metadata.
+/// Links are raw strings as they appear in the source — the graph builder handles
+/// normalization (fragment stripping, anchor filtering, URI detection).
 ///
 /// See [`docs/parsers`](../../docs/parsers/README.md) for details.
-#[derive(Debug, Clone)]
-pub struct RawLink {
-    pub target: String,
-    /// Link type within this parser's vocabulary (e.g., "inline", "frontmatter").
-    pub link_type: String,
-    /// Whether this is an external URL (http/https).
-    pub is_external: bool,
-}
-
-/// Combined output from parsing a single file: edges + optional metadata.
 #[derive(Debug, Clone, Default)]
 pub struct ParseResult {
-    pub links: Vec<RawLink>,
+    pub links: Vec<String>,
     /// Structured metadata extracted from the file, namespaced by parser on the node.
     pub metadata: Option<serde_json::Value>,
 }
 
 /// Trait implemented by all parsers (built-in and script-based).
 pub trait Parser {
-    /// Parser name (used as the namespace in EdgeType, e.g., "markdown").
+    /// Parser name — used as provenance on edges.
     fn name(&self) -> &str;
     /// Check if this parser should run on a given file path.
     fn matches(&self, path: &str) -> bool;
@@ -43,18 +35,6 @@ pub trait Parser {
     }
 }
 
-/// Extract the `types` array from parser options, if present.
-fn extract_type_filter(options: &Option<toml::Value>) -> Option<Vec<String>> {
-    options
-        .as_ref()
-        .and_then(|v| v.get("types"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-}
 
 /// Build a GlobSet from file patterns (for parser routing).
 /// Returns None if no patterns → parser receives all File nodes.
@@ -80,6 +60,89 @@ fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globs
     }
 }
 
+/// Check whether the last component of a path has a file extension.
+pub(crate) fn has_file_extension(path: &str) -> bool {
+    if let Some(basename) = path.rsplit('/').next() {
+        basename.contains('.')
+    } else {
+        path.contains('.')
+    }
+}
+
+/// Strip all code content (fenced blocks and inline backtick spans),
+/// replacing with spaces to preserve offsets.
+pub(crate) fn strip_code(content: &str) -> String {
+    // First strip fenced code blocks (``` and ~~~)
+    let mut result = String::with_capacity(content.len());
+    let mut in_code_block = false;
+    let mut fence_marker = "";
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_code_block {
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                in_code_block = true;
+                fence_marker = if trimmed.starts_with("```") {
+                    "```"
+                } else {
+                    "~~~"
+                };
+                result.push_str(&" ".repeat(line.len()));
+            } else {
+                result.push_str(line);
+            }
+        } else if trimmed.starts_with(fence_marker) && trimmed.trim() == fence_marker {
+            in_code_block = false;
+            result.push_str(&" ".repeat(line.len()));
+        } else {
+            result.push_str(&" ".repeat(line.len()));
+        }
+        result.push('\n');
+    }
+
+    // Then strip inline code spans (single and double backticks)
+    let mut cleaned = String::with_capacity(result.len());
+    let chars: Vec<char> = result.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '`' {
+            // Count opening backticks
+            let mut ticks = 0;
+            while i + ticks < chars.len() && chars[i + ticks] == '`' {
+                ticks += 1;
+            }
+            // Find matching closing backticks in the char array
+            let after = i + ticks;
+            let mut found = None;
+            let mut j = after;
+            while j + ticks <= chars.len() {
+                if chars[j..j + ticks].iter().all(|c| *c == '`') {
+                    found = Some(j);
+                    break;
+                }
+                j += 1;
+            }
+            if let Some(close_start) = found {
+                // Replace entire span (backticks + content + backticks) with spaces
+                let total = close_start + ticks - i;
+                for _ in 0..total {
+                    cleaned.push(' ');
+                }
+                i += total;
+            } else {
+                // No closing — keep the backtick as-is
+                cleaned.push(chars[i]);
+                i += 1;
+            }
+        } else {
+            cleaned.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    cleaned
+}
+
 /// Build the parser registry from config.
 /// Returns a list of boxed parsers ready to run.
 pub fn build_parsers(
@@ -91,7 +154,6 @@ pub fn build_parsers(
 
     for (name, config) in parsers_config {
         let file_filter = build_file_filter(&config.files, name);
-        let type_filter = extract_type_filter(&config.options);
 
         if let Some(ref command) = config.command {
             // Script-based parser
@@ -109,7 +171,6 @@ pub fn build_parsers(
             parsers.push(Box::new(script::ScriptParser {
                 parser_name: name.clone(),
                 file_filter,
-                type_filter,
                 command: resolved_command,
                 timeout_ms: config.timeout.unwrap_or(5000),
                 scope_dir: root.to_path_buf(),
@@ -119,16 +180,13 @@ pub fn build_parsers(
             // Built-in parser
             match name.as_str() {
                 "markdown" => {
-                    let extract_metadata = config
-                        .options
-                        .as_ref()
-                        .and_then(|v| v.get("extract_metadata"))
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
                     parsers.push(Box::new(markdown::MarkdownParser {
                         file_filter,
-                        type_filter,
-                        extract_metadata,
+                    }));
+                }
+                "frontmatter" => {
+                    parsers.push(Box::new(frontmatter::FrontmatterParser {
+                        file_filter,
                     }));
                 }
                 _ => {

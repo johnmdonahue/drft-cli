@@ -11,7 +11,7 @@ Core modules for the drft CLI.
 ## Graph construction
 
 - [discovery.rs](discovery.rs) — .gitignore-aware file discovery and child graph detection
-- [graph.rs](graph.rs) — `Graph`, `Node`, `Edge`, `EdgeType` types; `build_graph` construction
+- [graph.rs](graph.rs) — `Graph`, `Node`, `Edge` types; `build_graph` construction
 - [config.rs](config.rs) — config loading, defaults, parser/rule configuration
 - [lockfile.rs](lockfile.rs) — lockfile read/write, hash comparison
 
@@ -22,6 +22,6 @@ Core modules for the drft CLI.
 
 ## Subdirectories
 
-- [parsers/](parsers/README.md) — parser trait, built-in markdown parser, script-based parser runner
+- [parsers/](parsers/README.md) — parser trait, built-in markdown + frontmatter parsers, script-based parser runner
 - [analyses/](analyses/README.md) — analysis trait, 11 graph analyses
 - [rules/](rules/README.md) — rule trait, 13 built-in rules, script-based rule runner

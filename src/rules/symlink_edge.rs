@@ -15,16 +15,16 @@ impl Rule for SymlinkEdgeRule {
             .edges
             .iter()
             .filter_map(|edge| {
-                // Skip external URLs
-                if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+                // Skip URIs
+                if crate::graph::is_uri(&edge.target) {
                     return None;
                 }
 
-                // Check edge property set during graph building
-                if edge.target_is_symlink {
-                    let resolved = edge
-                        .symlink_target
-                        .as_deref()
+                // Check target properties set during graph building
+                let props = graph.target_properties.get(&edge.target);
+                if props.is_some_and(|p| p.is_symlink) {
+                    let resolved = props
+                        .and_then(|p| p.symlink_target.as_deref())
                         .unwrap_or("unknown");
                     Some(Diagnostic {
                         rule: "symlink-edge".into(),
@@ -50,7 +50,7 @@ mod tests {
     use super::*;
     use crate::analyses::EnrichedGraph;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType, TargetProperties};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
 
@@ -68,14 +68,18 @@ mod tests {
             graph: None,
             metadata: HashMap::new(),
         });
+        graph.target_properties.insert(
+            "setup.md".into(),
+            TargetProperties {
+                is_symlink: true,
+                is_directory: false,
+                symlink_target: Some("/shared/setup.md".into()),
+            },
+        );
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: true,
-            target_is_directory: false,
-            symlink_target: Some("/shared/setup.md".into()),
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);
@@ -99,11 +103,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);

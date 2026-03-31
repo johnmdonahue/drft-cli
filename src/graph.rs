@@ -6,6 +6,24 @@ use crate::config::Config;
 use crate::discovery::{discover, find_child_graphs};
 use crate::parsers;
 
+/// Check if a target string is a URI (has a scheme per RFC 3986).
+/// A scheme is `[a-zA-Z][a-zA-Z0-9+.-]*:` — e.g., `http:`, `mailto:`, `ftp:`, `tel:`.
+pub fn is_uri(target: &str) -> bool {
+    let bytes = target.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+        return false;
+    }
+    for &b in &bytes[1..] {
+        if b == b':' {
+            return true;
+        }
+        if !b.is_ascii_alphanumeric() && b != b'+' && b != b'-' && b != b'.' {
+            return false;
+        }
+    }
+    false
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
@@ -16,66 +34,6 @@ pub enum NodeType {
     Graph,
 }
 
-/// Namespaced edge type in the format `parser:type`.
-/// Validated on construction — accessors are infallible.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct EdgeType {
-    parser: String,
-    link_type: String,
-}
-
-impl EdgeType {
-    pub fn new(parser: impl Into<String>, link_type: impl Into<String>) -> Self {
-        Self {
-            parser: parser.into(),
-            link_type: link_type.into(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn parser(&self) -> &str {
-        &self.parser
-    }
-
-    #[allow(dead_code)]
-    pub fn link_type(&self) -> &str {
-        &self.link_type
-    }
-}
-
-impl std::fmt::Display for EdgeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}:{}", self.parser, self.link_type)
-    }
-}
-
-impl std::str::FromStr for EdgeType {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self> {
-        let (parser, link_type) = s
-            .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("edge type must be 'parser:type', got '{s}'"))?;
-        Ok(Self::new(parser, link_type))
-    }
-}
-
-impl serde::Serialize for EdgeType {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for EdgeType {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Node {
@@ -93,16 +51,22 @@ pub struct Node {
 #[derive(Debug, Clone)]
 pub struct Edge {
     pub source: String,
+    /// Node identity — always matches a key in `graph.nodes` (or is a dangling target).
+    /// Fragment-stripped: `bar.md`, not `bar.md#heading`.
     pub target: String,
-    pub edge_type: EdgeType,
-    /// True if created by graph builder (e.g., child-graph coupling edges), not parsed from content.
-    #[allow(dead_code)]
-    pub synthetic: bool,
-    /// Target is a symlink on disk. Set during graph building.
-    pub target_is_symlink: bool,
-    /// Target is a directory on disk. Set during graph building.
-    pub target_is_directory: bool,
-    /// Resolved symlink destination, if target is a symlink.
+    /// Original link when it differs from target (e.g., `bar.md#heading`).
+    /// Absent when the link resolved to exactly the node ID.
+    pub link: Option<String>,
+    /// Which parser discovered this edge (provenance).
+    pub parser: String,
+}
+
+/// Filesystem properties of an edge target, probed during graph building.
+/// Stored per-target on the Graph, not per-edge.
+#[derive(Debug, Clone, Default)]
+pub struct TargetProperties {
+    pub is_symlink: bool,
+    pub is_directory: bool,
     pub symlink_target: Option<String>,
 }
 
@@ -115,6 +79,8 @@ pub struct Graph {
     pub child_graphs: Vec<String>,
     /// Resolved interface nodes from config (empty = open graph).
     pub interface: Vec<String>,
+    /// Filesystem properties of edge targets, keyed by node identity (fragment-stripped).
+    pub target_properties: HashMap<String, TargetProperties>,
 }
 
 impl Graph {
@@ -160,7 +126,13 @@ impl Graph {
             .push(idx);
         self.edges.push(edge);
     }
+
+    /// Get filesystem properties for an edge target.
+    pub fn target_props(&self, target: &str) -> Option<&TargetProperties> {
+        self.target_properties.get(target)
+    }
 }
+
 
 /// Hash file contents with BLAKE3, returning `b3:<hex>`.
 pub fn hash_bytes(content: &[u8]) -> String {
@@ -242,29 +214,24 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             }
 
             for link in result.links {
-                let edge_type = EdgeType::new(parser.name(), &link.link_type);
-                if link.is_external {
-                    pending_edges.push(Edge {
-                        source: file.clone(),
-                        target: link.target,
-                        edge_type,
-                        synthetic: false,
-                        target_is_symlink: false,
-                        target_is_directory: false,
-                        symlink_target: None,
-                    });
+                let normalized = match normalize_link_target(&link) {
+                    Some(n) => n,
+                    None => continue, // filtered (empty, anchor-only)
+                };
+
+                let target = if is_uri(&normalized.target) {
+                    normalized.target
                 } else {
-                    let resolved = resolve_link(&file, &link.target);
-                    pending_edges.push(Edge {
-                        source: file.clone(),
-                        target: resolved,
-                        edge_type,
-                        synthetic: false,
-                        target_is_symlink: false,
-                        target_is_directory: false,
-                        symlink_target: None,
-                    });
-                }
+                    resolve_link(&file, &normalized.target)
+                };
+                // link carries the full original when it has a fragment
+                let link = normalized.fragment.map(|frag| format!("{target}{frag}"));
+                pending_edges.push(Edge {
+                    source: file.clone(),
+                    target,
+                    link,
+                    parser: parser.name().to_string(),
+                });
             }
         }
     }
@@ -281,7 +248,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         });
     }
 
-    // 5. Classify edge targets not already in the graph
+    // 5. Classify edge targets not already in the graph.
+    //    edge.target is already the node identity (fragment-stripped).
     //    - URIs → External
     //    - Child graph files (exist on disk) → External with graph field
     //    - Files on disk outside include → External
@@ -293,7 +261,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
 
         // URIs → External
-        if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+        if is_uri(&edge.target) {
             graph.add_node(Node {
                 path: edge.target.clone(),
                 node_type: NodeType::External,
@@ -322,11 +290,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 implicit_edges.push(Edge {
                     source: edge.target.clone(),
                     target: graph_prefix.clone(),
-                    edge_type: edge.edge_type.clone(),
-                    synthetic: true,
-                    target_is_symlink: false,
-                    target_is_directory: false,
-                    symlink_target: None,
+                    link: None,
+                    parser: edge.parser.clone(),
                 });
             }
             continue;
@@ -347,20 +312,30 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         // dangling-edge and directory-edge rules handle these cases.
     }
 
-    // Probe filesystem properties for non-URI edge targets
+    // Probe filesystem properties for non-URI edge targets (stored per-target, not per-edge)
     pending_edges.extend(implicit_edges);
-    for edge in &mut pending_edges {
-        if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+    for edge in &pending_edges {
+        if is_uri(&edge.target) || graph.target_properties.contains_key(&edge.target) {
             continue;
         }
         let target_path = root.join(&edge.target);
-        edge.target_is_symlink = target_path.is_symlink();
-        edge.target_is_directory = target_path.is_dir();
-        if edge.target_is_symlink {
-            edge.symlink_target = std::fs::read_link(&target_path)
+        let is_symlink = target_path.is_symlink();
+        let is_directory = target_path.is_dir();
+        let symlink_target = if is_symlink {
+            std::fs::read_link(&target_path)
                 .ok()
-                .map(|p| p.to_string_lossy().to_string());
-        }
+                .map(|p| p.to_string_lossy().to_string())
+        } else {
+            None
+        };
+        graph.target_properties.insert(
+            edge.target.clone(),
+            TargetProperties {
+                is_symlink,
+                is_directory,
+                symlink_target,
+            },
+        );
     }
 
     // Add all edges (explicit + implicit) to the graph
@@ -417,6 +392,45 @@ pub fn normalize_relative_path(path: &str) -> String {
     parts.join("/")
 }
 
+/// Normalized link target: the node identity and optional fragment metadata.
+struct NormalizedTarget {
+    /// The target path or URI with fragment stripped (used for node identity).
+    target: String,
+    /// The fragment portion (e.g., `#heading`), if any. Preserved as edge metadata.
+    fragment: Option<String>,
+}
+
+/// Normalize a raw link target from a parser.
+/// Returns None for targets that should be filtered (empty, anchor-only with no file target).
+/// Strips fragments for node identity but preserves them as metadata.
+fn normalize_link_target(raw: &str) -> Option<NormalizedTarget> {
+    let target = raw.trim();
+    if target.is_empty() {
+        return None;
+    }
+
+    // Anchor-only links (#heading) have no file target — drop them
+    if target.starts_with('#') {
+        return None;
+    }
+
+    // Split target and fragment at the first #
+    let (base, fragment) = match target.find('#') {
+        Some(idx) => (&target[..idx], Some(target[idx..].to_string())),
+        None => (target, None),
+    };
+
+    // After stripping fragment, if nothing remains, drop
+    if base.is_empty() {
+        return None;
+    }
+
+    Some(NormalizedTarget {
+        target: base.to_string(),
+        fragment,
+    })
+}
+
 /// Resolve a link target relative to a source file, producing a path relative to the graph root.
 /// Uses Path::join for correct platform-aware path handling.
 pub fn resolve_link(source_file: &str, raw_target: &str) -> String {
@@ -444,11 +458,8 @@ pub mod test_helpers {
         Edge {
             source: source.into(),
             target: target.into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None,
+            parser: "markdown".into(),
         }
     }
 }
@@ -529,14 +540,83 @@ mod tests {
         g.add_edge(Edge {
             source: "a.md".into(),
             target: "b.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None,
+            parser: "markdown".into(),
         });
         assert_eq!(g.forward["a.md"], vec![0]);
         assert_eq!(g.reverse["b.md"], vec![0]);
         assert!(!g.forward.contains_key("b.md"));
+    }
+
+    #[test]
+    fn fragment_edge_resolves_to_node() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "b.md".into(),
+            link: Some("b.md#heading".into()),
+            parser: "markdown".into(),
+        });
+        // target is the node ID
+        assert_eq!(g.edges[0].target, "b.md");
+        // reference carries the full original
+        assert_eq!(g.edges[0].link.as_deref(), Some("b.md#heading"));
+        // reverse map works directly on target
+        assert_eq!(g.reverse["b.md"], vec![0]);
+    }
+
+    #[test]
+    fn is_uri_detects_schemes() {
+        assert!(is_uri("http://example.com"));
+        assert!(is_uri("https://example.com"));
+        assert!(is_uri("mailto:user@example.com"));
+        assert!(is_uri("ftp://files.example.com"));
+        assert!(is_uri("tel:+1234567890"));
+        assert!(is_uri("ssh://git@github.com"));
+        assert!(is_uri("custom+scheme://foo"));
+    }
+
+    #[test]
+    fn is_uri_rejects_paths() {
+        assert!(!is_uri("setup.md"));
+        assert!(!is_uri("./relative/path.md"));
+        assert!(!is_uri("../parent.md"));
+        assert!(!is_uri("#heading"));
+        assert!(!is_uri(""));
+        assert!(!is_uri("path/with:colon.md")); // colon after slash = not a scheme
+    }
+
+    #[test]
+    fn normalize_strips_fragment() {
+        let n = normalize_link_target("file.md#heading").unwrap();
+        assert_eq!(n.target, "file.md");
+        assert_eq!(n.fragment.as_deref(), Some("#heading"));
+    }
+
+    #[test]
+    fn normalize_strips_uri_fragment() {
+        let n = normalize_link_target("https://example.com/page#section").unwrap();
+        assert_eq!(n.target, "https://example.com/page");
+        assert_eq!(n.fragment.as_deref(), Some("#section"));
+    }
+
+    #[test]
+    fn normalize_drops_anchor_only() {
+        assert!(normalize_link_target("#heading").is_none());
+    }
+
+    #[test]
+    fn normalize_drops_empty() {
+        assert!(normalize_link_target("").is_none());
+        assert!(normalize_link_target("  ").is_none());
+    }
+
+    #[test]
+    fn normalize_preserves_mailto() {
+        let n = normalize_link_target("mailto:user@example.com").unwrap();
+        assert_eq!(n.target, "mailto:user@example.com");
+        assert!(n.fragment.is_none());
     }
 }

@@ -31,7 +31,7 @@ ignore = []
 
 ## Analysis
 
-This rule inspects graph edges and their properties directly — it does not consume a separate analysis. For each edge with a local target, it checks the `target_is_symlink` edge property set during graph building.
+This rule inspects graph edges and target properties directly — it does not consume a separate analysis. For each edge with a local target, it checks `graph.target_properties` for the `is_symlink` flag set during graph building.
 
 ## Source
 

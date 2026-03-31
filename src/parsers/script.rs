@@ -1,4 +1,4 @@
-use super::{ParseResult, Parser, RawLink};
+use super::{ParseResult, Parser};
 use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -11,7 +11,6 @@ pub struct ScriptParser {
     pub parser_name: String,
     /// File routing filter. None = receives all File nodes.
     pub file_filter: Option<globset::GlobSet>,
-    pub type_filter: Option<Vec<String>>,
     pub command: String,
     pub timeout_ms: u64,
     pub scope_dir: std::path::PathBuf,
@@ -131,26 +130,8 @@ impl ScriptParser {
                 // Metadata line: { file, metadata }
                 results.entry(file).or_default().metadata = Some(metadata.clone());
             } else if let Some(target) = json.get("target").and_then(|v| v.as_str()) {
-                // Edge line: { file, target, type }
-                let link_type = json
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("link")
-                    .to_string();
-                let link = RawLink {
-                    target: target.to_string(),
-                    link_type,
-                    is_external: false,
-                };
-
-                // Apply type filter
-                if let Some(ref types) = self.type_filter
-                    && !types.iter().any(|t| t == &link.link_type)
-                {
-                    continue;
-                }
-
-                results.entry(file).or_default().links.push(link);
+                // Edge line: { file, target }
+                results.entry(file).or_default().links.push(target.to_string());
             } else {
                 eprintln!(
                     "warn: parser {}: JSON line has neither 'target' nor 'metadata'",

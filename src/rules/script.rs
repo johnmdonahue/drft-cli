@@ -156,11 +156,15 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
         .iter()
         .filter(|e| graph.nodes.contains_key(&e.target))
         .map(|e| {
-            serde_json::json!({
+            let mut edge = serde_json::json!({
                 "source": e.source,
                 "target": e.target,
-                "relation": e.edge_type,
-            })
+                "parser": e.parser,
+            });
+            if let Some(ref r) = e.link {
+                edge["link"] = serde_json::json!(r);
+            }
+            edge
         })
         .collect();
 
@@ -195,7 +199,7 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
 mod tests {
     use super::*;
     use crate::analyses::enrich_graph;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
@@ -219,11 +223,7 @@ mod tests {
         g.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
         let config = crate::config::Config {
             include: vec!["*.md".into()],
@@ -258,7 +258,6 @@ mod tests {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
             options: None,
             ignore_compiled: None,
         };
@@ -289,7 +288,6 @@ mod tests {
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
             options: None,
             ignore_compiled: None,
         };
@@ -328,7 +326,6 @@ mod tests {
             command: Some("./scripts/check.sh".to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
             options: None,
             ignore_compiled: None,
         };
@@ -373,7 +370,6 @@ fi
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
             options: Some(options),
             ignore_compiled: None,
         };
@@ -416,7 +412,6 @@ fi
             command: Some(script.to_string_lossy().to_string()),
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
-            timeout: None,
             options: None,
             ignore_compiled: None,
         };

@@ -26,15 +26,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Create a drft.toml config file
-    Init {
-        /// Derive interface nodes from a file's outbound links
-        #[arg(long, value_name = "FILE")]
-        interface_from: Option<String>,
-
-        /// Create config without interface (open graph)
-        #[arg(long)]
-        no_interface: bool,
-    },
+    Init,
 
     /// Snapshot the current state to drft.lock
     Lock {
@@ -67,6 +59,10 @@ pub enum Commands {
         /// Max graph nesting depth for --recursive
         #[arg(long, requires = "recursive")]
         max_depth: Option<usize>,
+
+        /// Output as GraphViz DOT
+        #[arg(long)]
+        dot: bool,
     },
 
     /// Show what depends on the given files (transitively)
@@ -106,7 +102,6 @@ pub enum Commands {
 pub enum OutputFormat {
     Text,
     Json,
-    Dot,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

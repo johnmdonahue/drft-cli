@@ -42,8 +42,7 @@ impl Analysis for GraphBoundaries {
                 .edges
                 .iter()
                 .filter(|edge| {
-                    !edge.target.starts_with("http://")
-                        && !edge.target.starts_with("https://")
+                    !crate::graph::is_uri(&edge.target)
                         && (edge.target.starts_with("../") || edge.target == "..")
                 })
                 .map(|edge| GraphEscape {

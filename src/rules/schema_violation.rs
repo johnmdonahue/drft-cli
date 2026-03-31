@@ -41,6 +41,7 @@ impl Rule for SchemaViolationRule {
 
             // Collect all metadata across parser namespaces into one merged view
             let metadata = merge_metadata(&node.metadata);
+            let source = metadata_source(&node.metadata);
 
             // Check global required fields
             for field in &global_required {
@@ -49,7 +50,7 @@ impl Rule for SchemaViolationRule {
                         rule: "schema-violation".into(),
                         message: format!("missing required field \"{field}\""),
                         node: Some(path.clone()),
-                        fix: Some(format!("add \"{field}\" to frontmatter in {path}")),
+                        fix: Some(format!("add \"{field}\" to {source} in {path}")),
                         ..Default::default()
                     });
                 }
@@ -67,7 +68,7 @@ impl Rule for SchemaViolationRule {
                             rule: "schema-violation".into(),
                             message: format!("missing required field \"{field}\""),
                             node: Some(path.clone()),
-                            fix: Some(format!("add \"{field}\" to frontmatter in {path}")),
+                            fix: Some(format!("add \"{field}\" to {source} in {path}")),
                             ..Default::default()
                         });
                     }
@@ -162,6 +163,18 @@ fn merge_metadata(
     serde_json::Value::Object(merged)
 }
 
+/// Return a human-readable label for the metadata source.
+/// When a single parser contributed metadata, name it (e.g. "frontmatter").
+/// Otherwise fall back to the generic "metadata".
+fn metadata_source(metadata: &std::collections::HashMap<String, serde_json::Value>) -> String {
+    let keys: Vec<&String> = metadata.keys().collect();
+    if keys.len() == 1 {
+        keys[0].clone()
+    } else {
+        "metadata".to_string()
+    }
+}
+
 fn has_field(metadata: &serde_json::Value, field: &str) -> bool {
     metadata.get(field).is_some_and(|v| !v.is_null())
 }
@@ -194,7 +207,7 @@ mod tests {
 
     fn node_with_metadata(path: &str, metadata: serde_json::Value) -> Node {
         let mut meta_map = HashMap::new();
-        meta_map.insert("markdown".to_string(), metadata);
+        meta_map.insert("frontmatter".to_string(), metadata);
         Node {
             path: path.into(),
             node_type: NodeType::File,
@@ -224,6 +237,12 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("title"));
         assert_eq!(diagnostics[0].node.as_deref(), Some("doc.md"));
+        // Fix message names the parser when there's a single contributor
+        let fix = diagnostics[0].fix.as_ref().unwrap();
+        assert!(
+            fix.contains("frontmatter"),
+            "fix should name the parser: {fix}"
+        );
     }
 
     #[test]

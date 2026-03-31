@@ -1,6 +1,6 @@
 # Architecture
 
-drft treats a directory of files as a directed graph — files are nodes, links are edges — and provides structural analysis, health metrics, and configurable rule enforcement.
+drft treats a directory of files as a directed graph — files are nodes, links are edges — and validates the graph against configurable rules.
 
 ## Core model
 
@@ -11,9 +11,7 @@ Files                                 Graph
   setup.md ──[link]──> config.md        setup.md ──→ config.md
 ```
 
-The graph is built in a single pass: discover files, match parsers, parse links, resolve paths, classify nodes. The result is an adjacency-list `Graph` with forward and reverse indices for efficient traversal.
-
-Parsers define what a "link" is. Markdown is the default parser, but any file type can be parsed via configurable built-in or script-based parsers. The same graph algorithms apply regardless of what parsers built the graph.
+The graph is built in a single pass: discover files, run parsers, normalize links, resolve paths, classify nodes. The result is an adjacency-list `Graph` with forward and reverse indices for efficient traversal.
 
 ### Node types
 
@@ -25,60 +23,45 @@ Parsers define what a "link" is. Markdown is the default parser, but any file ty
 
 Node classification is driven by `include`/`exclude`, not by parsers. The `include` patterns declare the graph's known universe of files. Everything outside is an exit.
 
-### Edge types
+### Edges
 
-Edge types are namespaced identifiers in the format `parser:type`. Each parser defines its own vocabulary of link types.
-
-The built-in markdown parser produces: `markdown:inline`, `markdown:reference`, `markdown:autolink`, `markdown:image`, `markdown:frontmatter`, `markdown:wikilink`.
-
-Custom parsers define their own types -- e.g., `tsx:import` for `import X from './path'`.
-
-The type is represented as a validated `EdgeType` newtype, not a bare string:
+Edges are minimal — the relationship and provenance:
 
 ```rust
-pub struct EdgeType {
-    parser: String,
-    link_type: String,
+pub struct Edge {
+    pub source: String,        // source file path
+    pub target: String,        // node ID (fragment-stripped)
+    pub link: Option<String>,  // original link when it differs (e.g., bar.md#heading)
+    pub parser: String,        // which parser found this
 }
 ```
+
+`target` is always a node ID — you can join on it directly. `link` is present only when the original reference included a fragment. `parser` records provenance.
+
+### Parser contract
+
+Parsers extract link strings from source files — relative paths, URIs, whatever the format contains. The parser decides what constitutes a link; the [graph builder](docs/graph.md) handles everything after: URI detection (RFC 3986), fragment stripping, path resolution, and node classification.
 
 ## Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Parsing                             src/parsers/           │
-│  Discovers files via include/exclude, parses links.         │
-│  Pluggable: built-in (markdown) + custom scripts.           │
-│                                                             │
-│  Produces the Graph.                                        │
-├═════════════════════════════════════════════════════════════╡
-│  Analysis                            src/analyses/          │
-│  Computes structural properties and contract checks.        │
-│  fn(&AnalysisContext) → Output.                             │
-├─────────────────────────────────────────────────────────────┤
-│  Metrics                             src/metrics.rs         │
-│  Extracts named scalar values from analysis results.        │
-└─────────────────────────────────────────────────────────────┘
-
-Evaluated State = Graph + all analysis results + all metrics
-    │
-    ├── Rules (built-in and script-based, via Rule trait)
-    └── drft check output
+  Parsers          → raw link strings + metadata
+  Graph builder    → normalized edges, classified nodes, filesystem properties
+  Enrichment       → structural analyses (degree, SCC, bridges, pagerank, etc.)
+  Rules            → diagnostics
 ```
 
-The pipeline: **Parsing → Graph → Analyses → Metrics → Rules**. Each layer's output feeds the next. Custom scripts (parsers, rules) receive the same data as built-in implementations.
+Each layer's output feeds the next. Custom scripts (parsers, rules) receive the same data as built-in implementations.
 
-Each layer has its own directory and concerns:
-
-- **[`src/parsers/`](src/parsers/README.md)** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and returns a `ParseResult` (links + optional metadata). Built-in (markdown) and script-based parsers share the same interface.
-- **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
-- **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
-- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph and optional per-rule options, and emits `Diagnostic` structs with severity and fix suggestions. Rules are pure functions — no filesystem access, no config.
+- **[`src/parsers/`](src/parsers/README.md)** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes, and returns link strings + optional metadata. Built-in (markdown, frontmatter) and script-based parsers share the same interface.
+- **[`src/graph.rs`](src/graph.rs)** — normalization, path resolution, node classification, filesystem probing. See [docs/graph.md](docs/graph.md) for the full contract.
+- **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait and returns a typed result. No judgments, no formatting.
+- **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction from analysis results. Named `Metric` values.
+- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph, and emits `Diagnostic` structs. Rules are pure functions — no filesystem access, no config.
 
 This separation means:
 - Analyses are reusable. Multiple rules and metrics can consume the same analysis.
 - Rules carry no computation. They filter and format analysis output into diagnostics.
-- Metrics are independent. Adding a new metric doesn't touch analysis code.
 - New rules can compose existing analyses (e.g., "high PageRank + cut vertex = critical fragility").
 
 ## Analyses
@@ -152,9 +135,9 @@ Rules are pure functions over data. The enriched graph carries the graph plus al
 | Rule | Reads from | Default severity |
 |------|-----------|-----------------|
 | `boundary-violation` | `graph_boundaries` | warn |
-| `dangling-edge` | edge properties | warn |
+| `dangling-edge` | target properties | warn |
 | `directed-cycle` | `scc` | warn |
-| `directory-edge` | edge properties | warn |
+| `directory-edge` | target properties | warn |
 | `encapsulation-violation` | `graph_boundaries` | warn |
 | `fragility` | `bridges` | warn |
 | `fragmentation` | `connected_components` | warn |
@@ -163,7 +146,7 @@ Rules are pure functions over data. The enriched graph carries the graph plus al
 | `redundant-edge` | `transitive_reduction` | warn |
 | `schema-violation` | node metadata + options | warn |
 | `stale` | `change_propagation` | warn |
-| `symlink-edge` | edge properties | warn |
+| `symlink-edge` | target properties | warn |
 
 All rules default to `warn` for immediate discoverability. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -202,6 +185,9 @@ exclude = ["drafts/*"]          # remove from the graph (also respects .gitignor
 nodes = ["overview.md"]         # public interface nodes (enables encapsulation)
 
 [parsers.markdown]              # built-in parser, all defaults
+
+[parsers.frontmatter]           # built-in parser for YAML frontmatter
+files = ["*.md"]
 
 [parsers.tsx]                   # custom parser (has command)
 files = ["*.tsx"]
@@ -249,6 +235,7 @@ Add the metric extraction to [`src/metrics.rs`](src/metrics.rs) inside `compute_
 
 - **Analyses describe shape, rules judge correctness.** An analysis says "this edge is transitively redundant." A rule says "that's a warning."
 - **Three directories, three concerns.** `parsers/` extracts links, `analyses/` computes properties, `rules/` emits diagnostics. No layer reaches into another's concern.
+- **Parsers emit, the graph normalizes.** Parsers return raw strings. The graph builder handles URI detection, fragment stripping, path resolution, node classification. Parser authors don't bake in assumptions.
 - **No new dependencies for algorithms.** All graph algorithms (Tarjan's SCC, Brandes' betweenness, PageRank, BFS) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
 - **Deterministic output.** All results are sorted. No timestamps in lockfiles. Same input always produces same output.
 - **Explicit node filtering.** Each analysis declares which node types it operates on. No shared default, no hidden filter. File nodes for most structural analyses; Graph nodes added for boundary analyses.

@@ -15,8 +15,8 @@ impl Rule for DirectoryEdgeRule {
             .edges
             .iter()
             .filter_map(|edge| {
-                // Skip external URLs
-                if edge.target.starts_with("http://") || edge.target.starts_with("https://") {
+                // Skip URIs
+                if crate::graph::is_uri(&edge.target) {
                     return None;
                 }
 
@@ -25,8 +25,8 @@ impl Rule for DirectoryEdgeRule {
                     return None;
                 }
 
-                // Check edge property set during graph building
-                if edge.target_is_directory {
+                // Check target properties set during graph building
+                if graph.target_properties.get(&edge.target).is_some_and(|p| p.is_directory) {
                     Some(Diagnostic {
                         rule: "directory-edge".into(),
                         message: "links to directory, not file".into(),
@@ -52,7 +52,7 @@ mod tests {
     use super::*;
     use crate::analyses::EnrichedGraph;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType, TargetProperties};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
 
@@ -70,14 +70,18 @@ mod tests {
             graph: None,
             metadata: HashMap::new(),
         });
+        graph.target_properties.insert(
+            "guides".into(),
+            TargetProperties {
+                is_symlink: false,
+                is_directory: true,
+                symlink_target: None,
+            },
+        );
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "guides".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: true,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);
@@ -108,11 +112,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph);

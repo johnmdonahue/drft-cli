@@ -35,7 +35,7 @@ drft runs the command once via `sh -c`. Stdin carries a JSON options envelope on
 Line 1 is the JSON options envelope from `[parsers.<name>.options]` (always `{}` if no options). Remaining lines are file paths:
 
 ```
-{"types":["inline"],"extract_metadata":true}
+{"ref_style":"jsonpath"}
 src/analyses/mod.rs
 src/rules/mod.rs
 src/parsers/mod.rs

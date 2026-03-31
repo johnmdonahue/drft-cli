@@ -55,9 +55,9 @@ cargo run -- check    # runs as `drft check`
 - Lockfile (`drft.lock`): TOML v2 format, nodes + hashes only (no edges), fully deterministic, no timestamps
 - Config (`drft.toml`): TOML, unified `[parsers]` and `[rules]` sections, `[interface]` for graph boundary
 - Hashes use BLAKE3 with `b3:` prefix
-- Edge types are namespaced by parser: `markdown:inline`, `markdown:frontmatter`, `tsx:import`, etc.
+- Edges carry the parser name as provenance (e.g., `"parser": "markdown"`)
 - Node types: `File` (matched by `include`, hashed, tracked, parsed), `External` (discovered via edge, not tracked), `Graph` (child graph)
-- Parsers are configurable via `[parsers]` — built-in (markdown) or script-based (`command` field)
+- Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or script-based (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
 - Pipeline: [`src/parsers/`](src/parsers/README.md) (parse links) → [`src/graph.rs`](src/graph.rs) (build graph) → [`src/analyses/`](src/analyses/README.md) (compute properties) → [`src/metrics.rs`](src/metrics.rs) (extract scalars) → [`src/rules/`](src/rules/README.md) (emit diagnostics)

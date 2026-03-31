@@ -33,7 +33,7 @@ ignore = []
 
 ## Analysis
 
-This rule inspects graph edges and their properties directly — it does not consume a separate analysis. For each edge whose target is not in the graph, it checks the `target_is_directory` edge property set during graph building.
+This rule inspects graph edges and target properties directly — it does not consume a separate analysis. For each edge whose target is not in the graph, it checks `graph.target_properties` for the `is_directory` flag set during graph building.
 
 ## Source
 

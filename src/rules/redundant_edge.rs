@@ -35,7 +35,7 @@ mod tests {
     use super::*;
     use crate::analyses::EnrichedGraph;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
 
@@ -53,11 +53,7 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         }
     }
 

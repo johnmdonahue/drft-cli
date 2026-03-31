@@ -10,7 +10,7 @@ Validates that File nodes have the required metadata fields and that field value
 
 ## How it works
 
-The rule reads node metadata (populated by parsers with `extract_metadata = true`) and checks it against the schema defined in rule options. Two levels of schema:
+The rule reads node metadata (populated by parsers like the [frontmatter parser](../parsers/frontmatter.md)) and checks it against the schema defined in rule options. Two levels of schema:
 
 1. **Global** — `required` fields checked on every File node
 2. **Per-glob** — `schemas.<glob>` with `required` and `allowed` checked on matching paths
@@ -18,8 +18,8 @@ The rule reads node metadata (populated by parsers with `extract_metadata = true
 ## Configuration
 
 ```toml
-[parsers.markdown.options]
-extract_metadata = true       # enable frontmatter metadata extraction
+[parsers.frontmatter]
+files = ["*.md"]              # enable frontmatter metadata extraction
 
 [rules.schema-violation]
 severity = "warn"
@@ -49,4 +49,4 @@ allowed.status = ["draft", "review", "final"]
 
 ## Requires
 
-- Parser metadata: at least one parser must set `extract_metadata = true` in its options for nodes to have metadata to validate.
+- Parser metadata: at least one parser must emit metadata for nodes to have fields to validate. The built-in [frontmatter parser](../parsers/frontmatter.md) extracts YAML frontmatter as metadata. Script parsers can also emit metadata.

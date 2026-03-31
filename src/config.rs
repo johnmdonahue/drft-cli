@@ -136,11 +136,8 @@ pub struct InterfaceConfig {
 #[derive(Debug, Clone)]
 pub struct RuleConfig {
     pub severity: RuleSeverity,
-    #[allow(dead_code)]
     pub ignore: Vec<String>,
     pub command: Option<String>,
-    #[allow(dead_code)]
-    pub timeout: Option<u64>,
     /// Arbitrary structured data passed through to the rule. drft doesn't interpret it.
     pub options: Option<toml::Value>,
     pub(crate) ignore_compiled: Option<GlobSet>,
@@ -169,7 +166,6 @@ enum RawRuleValue {
         #[serde(default)]
         ignore: Vec<String>,
         command: Option<String>,
-        timeout: Option<u64>,
         options: Option<toml::Value>,
     },
 }
@@ -265,7 +261,6 @@ impl Config {
                     severity: v,
                     ignore: Vec::new(),
                     command: None,
-                    timeout: None,
                     options: None,
                     ignore_compiled: None,
                 },
@@ -362,7 +357,6 @@ impl Config {
                         severity,
                         ignore: Vec::new(),
                         command: None,
-                        timeout: None,
                         options: None,
                         ignore_compiled: None,
                     },
@@ -370,7 +364,6 @@ impl Config {
                         severity,
                         ignore,
                         command,
-                        timeout,
                         options,
                     } => {
                         let compiled = if ignore.is_empty() {
@@ -390,7 +383,6 @@ impl Config {
                             severity,
                             ignore,
                             command,
-                            timeout,
                             options,
                             ignore_compiled: compiled,
                         }

@@ -37,7 +37,7 @@ impl Rule for BoundaryViolationRule {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
     use std::fs;
@@ -63,11 +63,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../README.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
@@ -94,11 +90,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../../other.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
@@ -123,11 +115,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
@@ -144,11 +132,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../escape.md".into(),
-            edge_type: EdgeType::new("markdown", "inline"),
-            synthetic: false,
-            target_is_symlink: false,
-            target_is_directory: false,
-            symlink_target: None,
+            link: None, parser: "markdown".into(),
         });
 
         let enriched = make_enriched(graph, dir.path());
