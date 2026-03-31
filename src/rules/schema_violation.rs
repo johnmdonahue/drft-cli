@@ -209,15 +209,10 @@ fn value_as_string(value: &serde_json::Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyses::EnrichedGraph;
-    use crate::config::Config;
+    use crate::graph::test_helpers::make_enriched;
     use crate::graph::{Graph, Node, NodeType};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
-
-    fn make_enriched(graph: Graph) -> EnrichedGraph {
-        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
-    }
 
     fn node_with_metadata(path: &str, metadata: serde_json::Value) -> Node {
         let mut meta_map = HashMap::new();
@@ -227,6 +222,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: meta_map,
         }
     }
@@ -390,6 +386,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
 

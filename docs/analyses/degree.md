@@ -5,11 +5,11 @@
 The **degree** of a node in a directed graph is the number of edges connected to it. In-degree counts inbound edges (how many files link to this one); out-degree counts outbound edges (how many files this one links to). Together they describe a node's role in the graph.
 
 ```
-         a.md           in:0  out:2
-        ↙    ↘
-    b.md      c.md      in:1  out:1  /  in:1  out:0
-        ↘
-         d.md           in:1  out:0
+     a.md           in:0  out:2
+    ↙    ↘
+b.md      c.md      in:1  out:1  /  in:1  out:0
+    ↘
+     d.md           in:1  out:0
 ```
 
 Nodes with high out-degree are hubs (index pages, tables of contents). Nodes with high in-degree are foundational (frequently referenced concepts). Nodes with zero in-degree are orphans — nothing links to them.
@@ -54,7 +54,7 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Only File nodes are included — External and Graph nodes are excluded. Degree counts only edges between File nodes.
+Nodes are sorted alphabetically by path. Only File nodes are included — External and Directory nodes are excluded. Degree counts only edges between File nodes.
 
 ### As a rule (`drft check`)
 

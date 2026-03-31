@@ -2,7 +2,7 @@
 
 ## The concept
 
-A **connected component** is a maximal set of nodes where every node can reach every other node when edge direction is ignored. If your graph has more than one component, it means some files are completely disconnected from the rest — there is no path of links (in either direction) between them.
+A **connected component** is a maximal set of nodes where every node can reach every other node when edge direction is ignored. If your graph has more than one component, some files are completely disconnected from the rest — no path of links (in either direction) connects them.
 
 ```
 Component 1             Component 2
@@ -53,7 +53,7 @@ JSON output:
 }
 ```
 
-Components are sorted by size (largest first). Members within each component are sorted alphabetically. Only File nodes are included — External and Graph nodes are excluded.
+Components are sorted by size (largest first). Members within each component are sorted alphabetically. Only File nodes are included — External and Directory nodes are excluded.
 
 ### As a rule (`drft check`)
 

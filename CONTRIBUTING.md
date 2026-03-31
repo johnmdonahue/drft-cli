@@ -32,11 +32,11 @@ cargo test scenario_5         # specific test
 
 ## Code style
 
-- `cargo fmt` before committing
-- `cargo clippy -- -D warnings` should pass
-- One module per concern
-- Diagnostics to stdout, errors to stderr
-- Exit codes: 0 clean, 1 violations, 2 usage error
+- Run `cargo fmt` before committing
+- Run `cargo clippy -- -D warnings` (must pass cleanly)
+- Keep one module per concern
+- Write diagnostics to stdout, errors to stderr
+- Use exit codes: 0 clean, 1 violations, 2 usage error
 
 ## Examples
 

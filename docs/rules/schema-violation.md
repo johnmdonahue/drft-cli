@@ -19,13 +19,13 @@ The rule reads node metadata (populated by parsers like the [frontmatter parser]
 
 ```toml
 [parsers.frontmatter]
-files = ["*.md"]              # enable frontmatter metadata extraction
+files = ["*.md"] # enable frontmatter metadata extraction
 
 [rules.schema-violation]
 severity = "warn"
 
 [rules.schema-violation.options]
-required = ["title"]          # every File node must have "title"
+required = ["title"] # every File node must have "title"
 
 [rules.schema-violation.options.schemas."observations/*.md"]
 required = ["title", "date", "status"]
@@ -34,17 +34,17 @@ allowed.status = ["draft", "review", "final"]
 
 ### Options
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `required` | string[] | Fields required on all File nodes |
-| `schemas.<glob>.required` | string[] | Fields required on nodes matching the glob |
+| Key                              | Type     | Description                                  |
+| -------------------------------- | -------- | -------------------------------------------- |
+| `required`                       | string[] | Fields required on all File nodes            |
+| `schemas.<glob>.required`        | string[] | Fields required on nodes matching the glob   |
 | `schemas.<glob>.allowed.<field>` | string[] | Allowed values for a field on matching nodes |
 
 ## Diagnostics
 
-| Message | Meaning |
-|---------|---------|
-| `missing required field "title"` | Node metadata lacks a required field |
+| Message                                                               | Meaning                               |
+| --------------------------------------------------------------------- | ------------------------------------- |
+| `missing required field "title"`                                      | Node metadata lacks a required field  |
 | `field "status" has value "invalid", allowed: [draft, review, final]` | Field value is not in the allowed set |
 
 ## Requires

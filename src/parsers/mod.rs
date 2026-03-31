@@ -1,6 +1,6 @@
+pub mod custom;
 pub mod frontmatter;
 pub mod markdown;
-pub mod script;
 
 use crate::config::ParserConfig;
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ pub struct ParseResult {
     pub metadata: Option<serde_json::Value>,
 }
 
-/// Trait implemented by all parsers (built-in and script-based).
+/// Trait implemented by all parsers (built-in and custom).
 pub trait Parser {
     /// Parser name — used as provenance on edges.
     fn name(&self) -> &str;
@@ -26,7 +26,7 @@ pub trait Parser {
     /// Parse a file's content and return discovered links + optional metadata.
     fn parse(&self, path: &str, content: &str) -> ParseResult;
     /// Parse multiple files in one call. Default falls back to per-file parsing.
-    /// Script parsers override this to spawn one process for all files.
+    /// Custom parsers override this to spawn one process for all files.
     fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, ParseResult> {
         files
             .iter()
@@ -39,21 +39,10 @@ pub trait Parser {
 /// Returns None if no patterns → parser receives all File nodes.
 fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globset::GlobSet> {
     let patterns = patterns.as_ref()?;
-    let mut builder = globset::GlobSetBuilder::new();
-    for pattern in patterns {
-        match globset::Glob::new(pattern) {
-            Ok(g) => {
-                builder.add(g);
-            }
-            Err(e) => {
-                eprintln!("warn: invalid glob in parser {name}.files: {e}");
-            }
-        }
-    }
-    match builder.build() {
-        Ok(set) => Some(set),
+    match crate::config::compile_globs(patterns) {
+        Ok(set) => set,
         Err(e) => {
-            eprintln!("warn: failed to compile globs for parser {name}.files: {e}");
+            eprintln!("warn: invalid glob in parser {name}.files: {e}");
             None
         }
     }
@@ -155,7 +144,7 @@ pub fn build_parsers(
         let file_filter = build_file_filter(&config.files, name);
 
         if let Some(ref command) = config.command {
-            // Script-based parser
+            // Custom parser
             let resolved_command = if let Some(dir) = config_dir {
                 let cmd_path = dir.join(command);
                 if cmd_path.exists() {
@@ -167,7 +156,7 @@ pub fn build_parsers(
                 command.clone()
             };
 
-            parsers.push(Box::new(script::ScriptParser {
+            parsers.push(Box::new(custom::CustomParser {
                 parser_name: name.clone(),
                 file_filter,
                 command: resolved_command,

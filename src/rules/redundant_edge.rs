@@ -33,34 +33,9 @@ impl Rule for RedundantEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyses::EnrichedGraph;
-    use crate::config::Config;
-    use crate::graph::{Edge, Graph, Node, NodeType};
+    use crate::graph::Graph;
+    use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
     use crate::rules::RuleContext;
-    use std::collections::HashMap;
-
-    fn make_node(path: &str) -> Node {
-        Node {
-            path: path.into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            metadata: HashMap::new(),
-        }
-    }
-
-    fn make_edge(source: &str, target: &str) -> Edge {
-        Edge {
-            source: source.into(),
-            target: target.into(),
-            link: None,
-            parser: "markdown".into(),
-        }
-    }
-
-    fn make_enriched(graph: Graph) -> EnrichedGraph {
-        crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
-    }
 
     #[test]
     fn produces_diagnostics_for_redundant_edges() {

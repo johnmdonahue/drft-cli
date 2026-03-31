@@ -6,9 +6,11 @@ hash = "b3:c86dbeb3e58a6be13824ef257017fdf695d5047881e16b93af1aad416119c889"
 
 [nodes."assets/architecture.png"]
 type = "external"
+hash = "b3:880031aabab70d51f1ff08762ad3c457bdaa2bf2687f4e864a33f63889a5ed1b"
 
 [nodes."assets/data.csv"]
 type = "external"
+hash = "b3:46a84d8206ad99a32257f30978b2cbb00023e98683a274ee0a197151cc441818"
 
 [nodes."https://example.com/docs"]
 type = "external"

@@ -4,17 +4,23 @@ A structural integrity checker for linked file systems. Treats a directory of fi
 
 ## Dogfooding
 
-This repo runs drft on itself (`drft.toml` at root). A PostToolUse hook runs `drft impact <file> --format json` after every `.md` and `.rs` file edit.
+This repo runs drft on itself (`drft.toml` at root). A PreToolUse hook runs `drft impact <file> --format json` before every `.md` and `.rs` file edit.
 
-**When planning changes, run `drft impact <files> --format json` on the files you intend to modify.** This shows the transitive dependency chain *before* you start editing. Document impacted files in the plan so the implementation accounts for downstream effects.
+### Before you start: map the blast radius
 
-**When the hook reports impacted files, STOP.** The output lists every file that transitively depends on the file you just edited. These are files whose content may now be out of date because of your change. Read each one and check whether it still accurately reflects the source it depends on.
+**Run `drft impact <files> --format json` on the files you plan to change before writing any code.** This is navigation, not verification. The output shows every file that transitively depends on the files you're about to touch — docs, examples, READMEs that reference the module, configs that name a rule. Use this to build the task list: impacted files are tasks, not afterthoughts. On wide changes (core types, rule renames, config schema), this step prevents a cleanup pass at the end.
+
+### During editing: respond to the hook
+
+**When the hook reports impacted files, STOP.** The output lists every file that transitively depends on the file you just edited. These are files whose content may be out of date because of your change. Read each one and check whether it still accurately reflects the source it depends on.
 
 **Reviewing impacted files means reading them.** Check all content that could be affected by your change — not just prose, but code examples, JSON snippets, data structures, command invocations, and any content that mirrors or describes the file you changed. A doc that links to a source file is making a promise that its content reflects that source. When the source changes, verify the promise still holds.
 
-Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause (create missing files, fix broken references, restructure links). Do not run `drft lock` to clear staleness without first reviewing the impacted files.
+Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause (create missing files, fix broken references, restructure links).
 
-The workflow: edit → drft impact fires → read impacted dependents → fix impacts → drft lock (only after review) → commit.
+**Never run `drft lock` unless the user explicitly asks.** Locking acknowledges that the current state has been reviewed — it is the user's decision, not the agent's. Running lock unprompted clears staleness signals the user may want to inspect. If you believe a lock is warranted, say so and let the user decide.
+
+The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → user runs `drft lock` when satisfied → commit.
 
 ## Architecture
 
@@ -56,12 +62,16 @@ cargo run -- check    # runs as `drft check`
 - Config (`drft.toml`): TOML, unified `[parsers]` and `[rules]` sections, `[interface]` for graph boundary
 - Hashes use BLAKE3 with `b3:` prefix
 - Edges carry the parser name as provenance (e.g., `"parser": "markdown"`)
-- Node types: `File` (matched by `include`, hashed, tracked, parsed), `External` (discovered via edge, not tracked), `Graph` (child graph)
-- Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or script-based (`command` field)
+- Node types: `File` (matched by `include`, hashed, tracked, parsed), `Directory` (directory on disk, `is_graph` when `drft.toml` exists, hashed via `drft.lock`), `External` (discovered via edge, hashed when on disk)
+- Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
 - Pipeline: [`src/parsers/`](src/parsers/README.md) (parse links) → [`src/graph.rs`](src/graph.rs) (build graph) → [`src/analyses/`](src/analyses/README.md) (compute properties) → [`src/metrics.rs`](src/metrics.rs) (extract scalars) → [`src/rules/`](src/rules/README.md) (emit diagnostics)
 
+## Git workflow
+
+Main is protected. All changes go through branches and pull requests — never push directly to main.
+
 ## Releasing
 
-See [RELEASING.md](RELEASING.md). Main is protected — releases go through a PR, then tag on main after merge.
+See [RELEASING.md](RELEASING.md). Releases go through a PR, then tag on main after merge.

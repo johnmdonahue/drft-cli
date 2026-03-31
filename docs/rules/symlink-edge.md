@@ -20,7 +20,7 @@ The fix suggests linking to the actual file directly instead of going through th
 
 ```toml
 [rules]
-symlink-edge = "warn"    # default
+symlink-edge = "warn" # default
 ```
 
 ```toml

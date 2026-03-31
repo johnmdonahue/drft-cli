@@ -27,7 +27,7 @@ Nodes involved in cycles are excluded from this rule, since their depth is ambig
 
 ```toml
 [rules]
-layer-violation = "warn"    # default
+layer-violation = "warn" # default
 ```
 
 ```toml
@@ -38,7 +38,7 @@ ignore = ["index.md"]
 
 ## Analysis
 
-Powered by the [depth](../analyses/depth.md) analysis, which computes the longest-path depth of each node from the graph roots.
+Uses the [depth](../analyses/depth.md) analysis, which computes the longest-path depth of each node from the graph roots.
 
 ## Source
 

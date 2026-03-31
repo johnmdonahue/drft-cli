@@ -34,23 +34,23 @@ drft lock --check
 
 ## What it does
 
-drft discovers files, runs configurable parsers to extract links between them, and builds a dependency graph. It then validates that graph against a set of rules:
+drft discovers files, runs configurable parsers to extract links between them, and builds a dependency graph. It then validates the graph against rules:
 
-| Rule | Description |
-|------|-------------|
-| `dangling-edge` | Edge target does not exist |
-| `directed-cycle` | Circular dependency detected |
-| `directory-edge` | Edge points to a directory, not a file |
-| `stale` | Dependency changed since last lock |
-| `boundary-violation` | Edge escapes the graph boundary |
+| Rule                      | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `dangling-edge`           | Edge target does not exist                            |
+| `directed-cycle`          | Circular dependency detected                          |
+| `untrackable-target`      | Directory target with no lockfile                     |
+| `stale`                   | Dependency changed since last lock                    |
+| `boundary-violation`      | Edge escapes the graph boundary                       |
 | `encapsulation-violation` | Edge reaches into a child graph's non-interface files |
-| `orphan-node` | Node has no inbound edges |
-| `symlink-edge` | Edge target is a symlink |
-| `fragility` | Structural single point of failure |
-| `fragmentation` | Disconnected graph component |
-| `layer-violation` | Edge violates depth hierarchy |
-| `redundant-edge` | Edge is transitively redundant |
-| `schema-violation` | Node metadata violates schema (requires options) |
+| `orphan-node`             | Node has no inbound edges                             |
+| `symlink-edge`            | Edge target is a symlink                              |
+| `fragility`               | Structural single point of failure                    |
+| `fragmentation`           | Disconnected graph component                          |
+| `layer-violation`         | Edge violates depth hierarchy                         |
+| `redundant-edge`          | Edge is transitively redundant                        |
+| `schema-violation`        | Node metadata violates schema (requires options)      |
 
 All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -73,7 +73,7 @@ drft check --format json      # machine-readable output
 
 ### `drft lock`
 
-Snapshot file hashes to `drft.lock`. This enables staleness detection -- when a file changes, its dependents are flagged.
+Snapshot file hashes to `drft.lock`. This enables staleness detection -- when a file changes, drft flags its dependents.
 
 ```bash
 drft lock                     # create/update drft.lock
@@ -143,16 +143,16 @@ include = ["*.md", "*.yaml"]
 # Remove from the graph (also respects .gitignore)
 exclude = ["drafts/*", "archive/*"]
 
-# Public interface — nodes accessible from parent graphs.
+# Public interface — files accessible from parent graphs.
 # Presence of this section enables encapsulation.
 [interface]
-nodes = ["overview.md", "api/*.md"]
+files = ["overview.md", "api/*.md"]
 
 # Parsers — edge extraction from File nodes
 [parsers.markdown]
-files = ["*.md"]                   # restrict to .md files (default: all)
+files = ["*.md"] # restrict to .md files (default: all)
 
-[parsers.tsx]                      # custom (has command)
+[parsers.tsx] # custom (has command)
 files = ["*.tsx"]
 command = "./scripts/parse-tsx-links.sh"
 
@@ -171,7 +171,7 @@ ignore = ["README.md", "CLAUDE.md"]
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
 
-[rules.max-fan-out.options]            # rule-specific options (passed through)
+[rules.max-fan-out.options] # rule-specific options (passed through)
 threshold = 5
 ```
 
@@ -179,7 +179,7 @@ drft automatically respects `.gitignore`.
 
 ## Graph nesting
 
-A directory with a `drft.toml` or `drft.lock` becomes a **graph**. Child directories with their own config are **child graphs** -- they appear as `Graph` nodes in the parent graph and are checked independently.
+A directory with a `drft.toml` or `drft.lock` becomes a **graph**. Child directories with their own config are **child graphs** -- they appear as `Directory` nodes in the parent graph and are checked independently.
 
 ```
 project/
@@ -189,7 +189,7 @@ project/
   docs/
     overview.md
   research/
-    drft.toml            # child graph (Graph node in parent)
+    drft.toml            # child graph (Directory node in parent)
     drft.lock
     overview.md
     internal.md
@@ -229,15 +229,15 @@ Graph JSON follows the [JSON Graph Format](https://github.com/jsongraph/json-gra
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Clean (warnings may be present) |
-| 1 | Rule violations at `error` severity, or `lock --check` found lockfile out of date |
-| 2 | Usage or configuration error |
+| Code | Meaning                                                                           |
+| ---- | --------------------------------------------------------------------------------- |
+| 0    | Clean (warnings may be present)                                                   |
+| 1    | Rule violations at `error` severity, or `lock --check` found lockfile out of date |
+| 2    | Usage or configuration error                                                      |
 
 ## Custom rules
 
-Custom rules are scripts that receive the dependency graph as JSON on stdin and emit diagnostics as newline-delimited JSON on stdout:
+Custom rules are commands that receive the dependency graph as JSON on stdin and emit diagnostics as newline-delimited JSON on stdout:
 
 ```toml
 [rules.max-fan-out]
@@ -262,7 +262,7 @@ See [examples/custom-rules](examples/custom-rules/drft.toml) for complete exampl
 
 ## LLM integration
 
-drft is designed to work with LLMs as both a validation tool during editing sessions and a CI gate.
+drft works with LLMs as both a validation tool during editing sessions and a CI gate.
 
 ### JSON output
 
@@ -324,33 +324,15 @@ drft impact src/main.rs --format json
 
 Results are sorted by review priority — high-radius nodes at shallow depth first. `impact_radius` tells you how many files cascade if you miss this one. `depth` tells you how far from the original change. `betweenness` signals structural centrality. The `fix` field provides actionable instructions.
 
-This is the primary signal for LLM-assisted editing: after every file change, `drft impact` tells the agent exactly which files to review, in priority order.
-
 ### Claude Code hooks
 
-Add to your project's `.claude/settings.json` to run `drft impact` automatically after file edits:
+A PreToolUse hook can run `drft impact` before each file edit, so the agent sees the blast radius before it acts. See [`.claude/settings.json`](.claude/settings.json) for this repo's hook configuration. Adapt the glob patterns (`*.md`, `*.rs`) to match the file types in your project.
 
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "FILE=\"${TOOL_INPUT_FILE_PATH:-$TOOL_INPUT_file_path}\"; if [[ \"$FILE\" == *.md ]] || [[ \"$FILE\" == *.rs ]]; then npx drft impact \"$FILE\" --format json 2>/dev/null; fi"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+### Agent instructions
 
-When the hook reports impacted files, the agent should read each one and verify its content still reflects the source. Extend the glob patterns (`*.md`, `*.rs`) to match the file types in your project.
+The hook gives the agent data. What the agent _does_ with it depends on how you instruct it. Tell the agent how to use drft in your `CLAUDE.md` (or equivalent) — when to run impact, how to review dependents, when locking is appropriate. This repo dogfoods the pattern: see [`CLAUDE.md`](CLAUDE.md) for agent instructions and [`.claude/settings.json`](.claude/settings.json) for the hook configuration.
 
-If drft is installed globally (`cargo install drft-cli`), use `drft` instead of `npx drft`. For npm projects with `drft-cli` as a devDependency, `npx drft` ensures it resolves from `node_modules`.
+**A note on expectations:** LLM agents don't follow hooks and instructions deterministically. The agent may blow past impact output when it's deep in a multi-file change, or skip the upfront impact scan when it's eager to start editing. This is normal. The hooks and instructions improve the baseline — the agent catches more drift than it would without them — but they don't eliminate it. Treat this as a collaboration pattern to experiment with, not a guarantee. Adjust the wording in your agent instructions, try different hook triggers, and see what sticks for your workflow.
 
 ### CI
 
@@ -361,7 +343,7 @@ npx drft lock --check --recursive   # verify lockfiles are committed
 
 Run `check` first — it catches broken links, cycles, and stale files. Then `lock --check` verifies the lockfile is committed (structural consistency). Both exit with code 1 on failure.
 
-The workflow: edit → `drft impact` (see what's affected) → review impacted files → fix impacts → `drft lock` (acknowledge the changes) → commit.
+The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → `drft lock` (only after review) → commit.
 
 ## License
 

@@ -1,14 +1,14 @@
 [package]
 name = "drft-cli"
 version = "0.4.0"
-edition = "2024"
-description = "A structural integrity checker for linked file systems"
-license = "MIT"
-repository = "https://github.com/johnmdonahue/drft-cli"
-homepage = "https://github.com/johnmdonahue/drft-cli"
-readme = "README.md"
-keywords = ["graph", "linter", "dependency-graph", "structural-integrity"]
 categories = ["command-line-utilities", "development-tools"]
+edition = "2024"
+homepage = "https://github.com/johnmdonahue/drft-cli"
+keywords = ["graph", "linter", "dependency-graph", "structural-integrity"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/johnmdonahue/drft-cli"
+description = "A structural integrity checker for linked file systems"
 
 [lib]
 name = "drft"
@@ -19,23 +19,23 @@ name = "drft"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
-toml = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+anyhow = "1"
 blake3 = "1"
+clap = { version = "4", features = ["derive"] }
 globset = "0.4"
 ignore = "0.4"
-pulldown-cmark = "0.12"
-serde_yml = "0.0.12"
-anyhow = "1"
-thiserror = "2"
 notify = "7"
 notify-debouncer-mini = "0.5"
+pulldown-cmark = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yml = "0.0.12"
+thiserror = "2"
+toml = "0.8"
 
 [dev-dependencies]
-tempfile = "3"
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
 
 [[bench]]
 name = "pipeline"

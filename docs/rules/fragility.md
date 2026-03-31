@@ -22,7 +22,7 @@ warn[fragility]: b.md -> c.md (bridge edge)
 
 ```toml
 [rules]
-fragility = "warn"    # default
+fragility = "warn" # default
 ```
 
 ```toml
@@ -33,7 +33,7 @@ ignore = ["index.md"]
 
 ## Analysis
 
-Powered by the [bridges](../analyses/bridges.md) analysis, which uses Tarjan's bridge-finding algorithm to identify cut vertices and bridge edges in O(V + E).
+Uses the [bridges](../analyses/bridges.md) analysis, which uses Tarjan's bridge-finding algorithm to identify cut vertices and bridge edges in O(V + E).
 
 ## Source
 

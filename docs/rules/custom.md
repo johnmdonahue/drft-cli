@@ -1,8 +1,8 @@
-# Script rules
+# Custom rules
 
-Script rules let you define custom checks as external scripts. The script receives the enriched graph and rule options as JSON on stdin and emits diagnostics as newline-delimited JSON on stdout.
+Custom rules let you define custom checks as external commands. The command receives the enriched graph and rule options as JSON on stdin and emits diagnostics as newline-delimited JSON on stdout.
 
-## Defining a script rule
+## Defining a custom rule
 
 ```toml
 [rules.my-custom-rule]
@@ -13,11 +13,11 @@ command = "./scripts/my-rule.sh"
 threshold = 5
 ```
 
-The command path is resolved relative to the directory containing `drft.toml`. Arguments can be included in the command string (split on whitespace). Options under `[rules.<name>.options]` are passed through to the script.
+The command path is resolved relative to the directory containing `drft.toml`. Arguments can be included in the command string (split on whitespace). Options under `[rules.<name>.options]` are passed through to the command.
 
 ## Input format
 
-The script receives a JSON object on stdin with two top-level keys: `graph` (the enriched graph including all analyses) and `options` (from `[rules.<name>.options]`, or `{}` if none):
+The command receives a JSON object on stdin with two top-level keys: `graph` (the enriched graph including all analyses) and `options` (from `[rules.<name>.options]`, or `{}` if none):
 
 ```json
 {
@@ -54,19 +54,20 @@ Emit one JSON object per line on stdout. Each object must have a `message` field
 ```
 
 Fields:
+
 - `message` (required) -- the diagnostic message
 - `source` -- the source file of a problematic edge
 - `target` -- the target file of a problematic edge
 - `node` -- a single file the diagnostic applies to
 - `fix` -- a suggested fix
 
-The `rule` name and `severity` are set automatically from the config -- the script does not need to provide them.
+The `rule` name and `severity` are set automatically from the config -- the command does not need to provide them.
 
 ## Error handling
 
-If the script exits with a non-zero status, `drft` emits a warning to stderr and surfaces a diagnostic so JSON consumers see the failure. Unparseable output lines are also warned about on stderr.
+If the command exits with a non-zero status, `drft` emits a warning to stderr and surfaces a diagnostic so JSON consumers see the failure. Unparseable output lines are also warned about on stderr.
 
-## Example script
+## Example
 
 ```bash
 #!/bin/sh
@@ -77,4 +78,4 @@ cat | jq -c '.graph.nodes | to_entries[] | select(.key | test("draft")) | {messa
 
 ## Source
 
-[`src/rules/script.rs`](../../src/rules/script.rs)
+[`src/rules/custom.rs`](../../src/rules/custom.rs)

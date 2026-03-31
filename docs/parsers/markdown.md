@@ -2,11 +2,11 @@
 
 ## The concept
 
-The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md). For wikilinks (`[[page]]`), see the [example script parser](../../examples/parsers/wikilinks.sh).
+The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md). For wikilinks (`[[page]]`), see the [example script parser](../../examples/custom-parsers/wikilinks.sh).
 
 ## Link types
 
-The parser extracts four types of links. Each becomes an edge with parser provenance `markdown` in the graph.
+Each link type becomes an edge with parser provenance `markdown` in the graph.
 
 ### inline
 
@@ -49,7 +49,7 @@ Image references.
 ![architecture diagram](assets/arch.png)
 ```
 
-Images follow the same resolution rules as inline links -- fragments are stripped, anchor-only references are skipped.
+Images follow the same resolution rules as inline links -- the graph builder strips fragments and skips anchor-only references.
 
 ## Configuration
 

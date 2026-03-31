@@ -7,15 +7,17 @@ All notable changes to drft are documented here.
 Graph model redesign — explicit graph declaration, pure rules, parser metadata, and enriched impact analysis.
 
 ### Breaking changes
+
 - **Graph declaration**: `include`/`exclude` replaces implicit parser-glob union. `ignore` renamed to `exclude`.
-- **Node types**: `Source` → `File`, `Resource` removed. Three types: File, External, Graph.
-- **Rule renames**: `broken-link` → `dangling-edge`, `cycle` → `directed-cycle`, `containment` → `boundary-violation`, `encapsulation` → `encapsulation-violation`, `orphan` → `orphan-node`, `indirect-link` → `symlink-edge`, `directory-link` → `directory-edge`.
+- **Node types**: `Source` → `File`, `Resource` removed. `Graph` → `Directory` with `is_graph` property. Three types: File, Directory, External.
+- **Rule renames**: `broken-link` → `dangling-edge`, `cycle` → `directed-cycle`, `containment` → `boundary-violation`, `encapsulation` → `encapsulation-violation`, `orphan` → `orphan-node`, `indirect-link` → `symlink-edge`, `directory-link` → `directory-edge` → `untrackable-target`.
 - **Parser contract**: `glob` replaced by `files` (array of globs), `types` replaced by `options` (arbitrary structured data). Parsers return raw link strings — graph builder owns normalization.
 - **Edge model simplified**: `RawLink`/`EdgeType` removed. Edge = `{ source, target, link?, parser }`.
 - **RuleContext**: reduced to `{ graph: &EnrichedGraph, options }`. No filesystem access, no config.
 - **Lockfile**: regenerated with new node types.
 
 ### New features
+
 - **`drft parse`** command: raw parser output for debugging script parsers and the options envelope protocol.
 - **Frontmatter parser**: standalone built-in parser for YAML frontmatter (links + structured metadata).
 - **Schema-violation rule**: validates node metadata against glob-scoped schemas with required/allowed fields. First consumer of parser metadata and rule options.
@@ -26,6 +28,7 @@ Graph model redesign — explicit graph declaration, pure rules, parser metadata
 - **Script rule enrichment**: script rules receive `{ graph, options }` with all 12 analyses.
 
 ### Fixes
+
 - Replace deprecated `serde_yaml` with maintained `serde_yml` fork.
 - Deterministic metadata merge across parser namespaces (sorted by key).
 - Warning on invalid glob patterns in schema-violation options.
@@ -36,11 +39,13 @@ Graph model redesign — explicit graph declaration, pure rules, parser metadata
 Major architecture overhaul: drft is now a structural integrity checker for any linked file system, not just markdown.
 
 ### Breaking changes
+
 - Config format: unified `[parsers]` and `[rules]` sections replace prior layout
 - Lockfile v2: nodes + hashes only, no edges
 - `scope` terminology renamed to `graph` throughout
 
 ### New features
+
 - **Configurable parsers**: built-in markdown parser + script-based parsers via `command` field
 - **Batch script parsers**: one process per parser instead of one per file (PR #19)
 - **Rust doc comment parser**: links source files to docs via `parse-rust.sh`
@@ -49,11 +54,13 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 - **Criterion benchmarks** for the full pipeline
 
 ### Rules
+
 - New: `fragmentation`, `layer-violation`, `redundant-edge`
 - `stale` rule now defaults to error severity
 - Rules refactored to consume analysis results
 
 ### Fixes
+
 - Wikilink/frontmatter parsers skip inline code spans and code blocks
 - Ignore patterns now apply to child graph detection
 - Dropped lockfile version migration check
@@ -99,7 +106,7 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 - Fixed: email links no longer flagged as broken links
 - Fixed: frontmatter parser rejects YAML objects/arrays/quoted strings
 - Fixed: cycle detection panic on DFS root nodes
-- Fixed: directory-edge rule skips Graph nodes
+- Fixed: untrackable-target rule (was directory-edge) skips Graph nodes
 - Fixed: ignored files detected as "excluded by ignore pattern" in dangling-edge
 
 ## 0.1.1 (2026-03-28)
@@ -112,6 +119,7 @@ Major architecture overhaul: drft is now a structural integrity checker for any 
 Initial release.
 
 ### Commands
+
 - `drft init` -- create default config
 - `drft lock` -- snapshot file hashes and dependency graph
 - `drft lock --check` -- verify lockfile is current (CI)
@@ -123,16 +131,18 @@ Initial release.
 - `--watch` flag for check
 
 ### Rules
+
 - `dangling-edge` -- missing edge targets, including files excluded by ignore patterns
 - `boundary-violation` -- edges escaping graph boundary
 - `directed-cycle` -- circular dependencies
-- `directory-edge` -- edges to directories instead of files
+- `untrackable-target` -- directory targets with no lockfile
 - `encapsulation-violation` -- edges into child graph's non-interface files
 - `symlink-edge` -- symlink targets
 - `orphan-node` -- nodes with no inbound edges
 - `stale` -- dependencies changed since last lock (direct + transitive)
 
 ### Features
+
 - 6 link source types: inline, reference, autolink, image, frontmatter, wikilink
 - 4 node types: Source, Resource, External, Graph
 - BLAKE3 content hashing (`b3:` prefix)
@@ -147,6 +157,7 @@ Initial release.
 - Lockfile version checking (forward-compatible)
 
 ### Distribution
+
 - Cargo: `cargo install drft-cli`
 - npm: `npm install drft-cli`
 - GitHub Releases: prebuilt binaries for macOS, Linux, and Windows

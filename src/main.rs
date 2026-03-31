@@ -631,15 +631,11 @@ fn collect_jgf_graphs(
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
         for child_graph in &g.child_graphs {
-            let child_dir = root.join(child_graph.trim_end_matches('/'));
+            let child_dir = root.join(child_graph);
             let child_id = if id == "." {
-                child_graph.trim_end_matches('/').to_string()
+                child_graph.clone()
             } else {
-                format!(
-                    "{}/{}",
-                    id.trim_end_matches('/'),
-                    child_graph.trim_end_matches('/')
-                )
+                format!("{id}/{child_graph}")
             };
             let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
             graphs.extend(sub_graphs);
@@ -773,16 +769,16 @@ fn run_check(
     recursive: bool,
     max_depth: Option<usize>,
 ) -> Result<i32> {
-    // Validate rule names (built-in + script rules from config)
+    // Validate rule names (built-in + custom rules from config)
     let graph_root = find_graph_root(root);
     let root_config = Config::load(&graph_root)?;
     let available_rules = all_rules();
     let mut known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
-    let script_names: Vec<String> = root_config
-        .script_rules()
+    let custom_names: Vec<String> = root_config
+        .custom_rules()
         .map(|(name, _)| name.to_string())
         .collect();
-    known_names.extend(script_names.iter().map(|s| s.as_str()));
+    known_names.extend(custom_names.iter().map(|s| s.as_str()));
     for name in rule_filter {
         if !known_names.contains(&name.as_str()) {
             anyhow::bail!("unknown rule: \"{name}\"");
@@ -1013,12 +1009,18 @@ fn check_graph(
         };
         let mut findings = rule.evaluate(&rule_ctx);
         findings.retain(|d| {
-            // Check all path fields against ignore-rules
             let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
                 .into_iter()
                 .flatten()
                 .collect();
-            !paths.iter().any(|p| config.is_rule_ignored(rule.name(), p))
+            // files: scope which nodes the rule evaluates (all paths must be in scope)
+            let in_scope = paths.is_empty()
+                || paths
+                    .iter()
+                    .any(|p| config.is_rule_in_scope(rule.name(), p));
+            // ignore: exclude specific nodes from diagnostics
+            let ignored = paths.iter().any(|p| config.is_rule_ignored(rule.name(), p));
+            in_scope && !ignored
         });
         for d in &mut findings {
             d.severity = severity;
@@ -1029,45 +1031,48 @@ fn check_graph(
         diagnostics.extend(findings);
     }
 
-    // Run script rules (respecting --rule filter)
-    let has_script_rules = config.script_rules().next().is_some();
-    let run_script = if rule_filter.is_empty() {
-        has_script_rules
+    // Run custom rules (respecting --rule filter)
+    let has_custom_rules = config.custom_rules().next().is_some();
+    let run_custom = if rule_filter.is_empty() {
+        has_custom_rules
     } else {
         config
-            .script_rules()
+            .custom_rules()
             .any(|(name, _)| rule_filter.iter().any(|f| f == name))
     };
-    if run_script {
-        let mut script_findings = rules::script::run_script_rules(&enriched, root, &config);
+    if run_custom {
+        let mut custom_findings = rules::custom::run_custom_rules(&enriched, root, &config);
         // Filter to only requested rules if --rule is set
         if !rule_filter.is_empty() {
-            script_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
+            custom_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
         }
-        // Apply per-rule ignore filtering to script rule diagnostics
-        script_findings.retain(|d| {
+        // Apply per-rule files/ignore filtering to custom rule diagnostics
+        custom_findings.retain(|d| {
             let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
                 .into_iter()
                 .flatten()
                 .collect();
-            !paths.iter().any(|p| config.is_rule_ignored(&d.rule, p))
+            let in_scope =
+                paths.is_empty() || paths.iter().any(|p| config.is_rule_in_scope(&d.rule, p));
+            let ignored = paths.iter().any(|p| config.is_rule_ignored(&d.rule, p));
+            in_scope && !ignored
         });
-        for d in &mut script_findings {
+        for d in &mut custom_findings {
             if graph_prefix.is_some() {
                 d.graph = graph_prefix.map(|s| s.to_string());
             }
         }
-        diagnostics.extend(script_findings);
+        diagnostics.extend(custom_findings);
     }
 
     // Recursively check child graphs if --recursive
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
         for child_graph in &enriched.graph.child_graphs {
-            let child_dir = root.join(child_graph.trim_end_matches('/'));
+            let child_dir = root.join(child_graph);
             let child_prefix = match graph_prefix {
-                Some(parent) => format!("{parent}/{}", child_graph.trim_end_matches('/')),
-                None => child_graph.trim_end_matches('/').to_string(),
+                Some(parent) => format!("{parent}/{child_graph}"),
+                None => child_graph.clone(),
             };
             let child_diagnostics = check_graph(
                 &child_dir,

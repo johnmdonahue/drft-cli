@@ -28,7 +28,7 @@ synthesis.md → evidence/EVD-01.md   ← redundant
 Synthesis already reaches EVD-01 through observations. The direct link:
 
 - **Obscures the actual dependency structure.** The layered chain tells you _how_ synthesis depends on EVD-01 (through observations). The shortcut hides that.
-- **Creates unnecessary staleness propagation.** When EVD-01 changes, both observations _and_ synthesis get flagged as stale. But only observations should be the direct dependent — synthesis should hear about it through observations.
+- **Creates unnecessary staleness propagation.** When EVD-01 changes, drft flags both observations _and_ synthesis as stale. But only observations should be the direct dependent — synthesis should hear about it through observations.
 - **Makes impact analysis noisier.** `drft impact evidence/EVD-01.md` reports more dependents than necessary because the shortcut creates an extra propagation path.
 
 Not every redundant edge is a mistake. In some structures, direct links are intentional convenience — a table of contents linking to every page, for example. That's why the `redundant-edge` rule defaults to `warn` rather than `error`. But in systems with intentional layering, redundant edges almost always indicate structural drift.
@@ -76,7 +76,7 @@ Enable it in `drft.toml`:
 
 ```toml
 [rules]
-redundant-edge = "warn"   # or "error"
+redundant-edge = "warn" # or "error"
 ```
 
 Or check on demand without changing config:

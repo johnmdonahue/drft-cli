@@ -21,7 +21,7 @@ Each strongly connected component with more than one member produces one diagnos
 
 ```toml
 [rules]
-directed-cycle = "warn"    # default
+directed-cycle = "warn" # default
 ```
 
 ```toml
@@ -32,7 +32,7 @@ ignore = ["glossary.md"]
 
 ## Analysis
 
-Powered by the [scc](../analyses/scc.md) (strongly connected components) analysis, which uses Tarjan's algorithm to find all cycles.
+Uses the [scc](../analyses/scc.md) (strongly connected components) analysis, which uses Tarjan's algorithm to find all cycles.
 
 ## Source
 

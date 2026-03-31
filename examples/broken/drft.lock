@@ -4,6 +4,9 @@ lockfile_version = 2
 type = "file"
 hash = "b3:1686a4acda5bf198cea1dd641ae75ea14279de784d9842f8c0f1c9918ff8f56e"
 
+[nodes.guides]
+type = "directory"
+
 [nodes."guides/README.md"]
 type = "file"
 hash = "b3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"

@@ -129,6 +129,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         }
     }

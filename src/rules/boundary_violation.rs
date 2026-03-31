@@ -36,16 +36,12 @@ impl Rule for BoundaryViolationRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::graph::test_helpers::make_enriched_with_root;
     use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
-
-    fn make_enriched(graph: Graph, root: &std::path::Path) -> crate::analyses::EnrichedGraph {
-        crate::analyses::enrich_graph(graph, root, &Config::defaults(), None)
-    }
 
     #[test]
     fn detects_escape() {
@@ -57,7 +53,16 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "../README.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("..".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -67,7 +72,7 @@ mod tests {
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,
@@ -88,7 +93,16 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
+            graph: Some(".".into()),
+            is_graph: false,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "../../other.md".into(),
+            node_type: NodeType::External,
+            hash: None,
+            graph: Some("..".into()),
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -98,7 +112,7 @@ mod tests {
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,
@@ -118,6 +132,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
@@ -127,7 +142,7 @@ mod tests {
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,
@@ -148,7 +163,7 @@ mod tests {
             parser: "markdown".into(),
         });
 
-        let enriched = make_enriched(graph, dir.path());
+        let enriched = make_enriched_with_root(graph, dir.path());
         let ctx = RuleContext {
             graph: &enriched,
             options: None,

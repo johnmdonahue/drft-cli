@@ -7,7 +7,7 @@ use crate::graph::{Graph, NodeType};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LockfileInterface {
-    pub nodes: Vec<String>,
+    pub files: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -19,13 +19,18 @@ pub struct Lockfile {
     pub nodes: BTreeMap<String, LockfileNode>,
 }
 
+/// Skip serializing graph when it's "." (the common local case).
+fn is_local_graph(g: &Option<String>) -> bool {
+    matches!(g.as_deref(), None | Some("."))
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct LockfileNode {
     #[serde(rename = "type")]
     pub node_type: NodeType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "is_local_graph")]
     pub graph: Option<String>,
 }
 
@@ -50,7 +55,7 @@ impl Lockfile {
             None
         } else {
             Some(LockfileInterface {
-                nodes: graph.interface.clone(),
+                files: graph.interface.clone(),
             })
         };
 
@@ -121,6 +126,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g.add_node(Node {
@@ -128,6 +134,7 @@ mod tests {
             node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
+            is_graph: false,
             metadata: HashMap::new(),
         });
         g
@@ -187,7 +194,7 @@ mod tests {
         g.interface = vec!["index.md".to_string()];
         let lf = Lockfile::from_graph(&g);
         assert!(lf.interface.is_some());
-        assert_eq!(lf.interface.unwrap().nodes, vec!["index.md"]);
+        assert_eq!(lf.interface.unwrap().files, vec!["index.md"]);
     }
 
     #[test]

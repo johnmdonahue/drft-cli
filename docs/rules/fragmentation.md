@@ -23,7 +23,7 @@ Only non-largest components are flagged. A fully connected graph produces no dia
 
 ```toml
 [rules]
-fragmentation = "warn"    # default
+fragmentation = "warn" # default
 ```
 
 ```toml
@@ -34,7 +34,7 @@ ignore = ["CHANGELOG.md"]
 
 ## Analysis
 
-Powered by the [connected-components](../analyses/connected-components.md) analysis, which finds weakly connected components in the undirected projection of the graph.
+Uses the [connected-components](../analyses/connected-components.md) analysis, which finds weakly connected components in the undirected projection of the graph.
 
 ## Source
 
