@@ -105,6 +105,7 @@ pub fn build_parsers(
                 command: resolved_command,
                 timeout_ms: config.timeout.unwrap_or(5000),
                 scope_dir: root.to_path_buf(),
+                options: config.options.clone(),
             }));
         } else {
             // Built-in parser

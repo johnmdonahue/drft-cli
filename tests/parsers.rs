@@ -73,11 +73,14 @@ fn wikilinks_create_edges() {
 fn script_parser_batch_protocol() {
     let dir = TempDir::new().unwrap();
 
-    // Write a batch parser script that reads paths from stdin and emits NDJSON
+    // Write a batch parser script that reads the options envelope on line 1,
+    // then file paths, and emits NDJSON
     let script = dir.path().join("parse-txt.sh");
     fs::write(
         &script,
         r#"#!/bin/sh
+# Line 1 is the JSON options envelope — read and skip it
+IFS= read -r _options
 while IFS= read -r filepath; do
     [ -z "$filepath" ] && continue
     grep -oE '\[[^]]+\]\([^)]+\)' "$filepath" 2>/dev/null | while IFS= read -r match; do

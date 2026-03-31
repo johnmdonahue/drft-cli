@@ -94,7 +94,7 @@ hash = "b3:a47a30282b7939f1ee843d401fde2302b8c68ecd5cbca34f61c6c8ce00ee3b72"
 
 [nodes."docs/parsers/script.md"]
 type = "file"
-hash = "b3:53c472cbb88f99c78adcb149b99c5e4624dbf545fafd1efa4ae6c030a9715a23"
+hash = "b3:b3355b0f69c2cb4688c442acabfdca6a2b9b3ccbc8ac5d45dcf52e3bb53a882e"
 
 [nodes."docs/rules/README.md"]
 type = "file"
@@ -142,7 +142,7 @@ hash = "b3:eadfd113c3a395796aaf15c292b34d312d91ae9aa5ce401e9f6b87fc60bea038"
 
 [nodes."docs/rules/script.md"]
 type = "file"
-hash = "b3:fd3aec493ced907db78f7fa8c618818540689a0260619136e92a99e21de15022"
+hash = "b3:9523de45c1f02ff1113b4cbb346f0ea53e74f190044bc2f32bc02b75155ed4ee"
 
 [nodes."docs/rules/stale.md"]
 type = "file"
@@ -336,11 +336,11 @@ hash = "b3:f98aec1260e2fc3f4b2a9c3dc2e419b01bd814057dce01696f31529e9a13c3f4"
 
 [nodes."src/parsers/mod.rs"]
 type = "file"
-hash = "b3:83ecd95cddb3e6cc243a7f7b0d2afeb6b7ea4b0432f65f9ee7f2cdf5c48c6693"
+hash = "b3:b018d94405e96be9b096533f9031d8f08cb7ebaa9a7e857732ce156784ee8f5a"
 
 [nodes."src/parsers/script.rs"]
 type = "file"
-hash = "b3:60f5c94acdfdefe20c1937dcfdeb22dc80d5a5ad4d44a4e48ee25e8e453ff124"
+hash = "b3:1bb28c5c4760e052992589077af7e465289b4c120904b26312c026926e0e7a88"
 
 [nodes."src/rules/README.md"]
 type = "file"
@@ -392,7 +392,7 @@ hash = "b3:09d85f5f592599b387c27a97fbbfa385cef5f946a63dd7fdbe6b73d445aa042a"
 
 [nodes."src/rules/script.rs"]
 type = "file"
-hash = "b3:bb0a71176612700838b5ba2fcfada8654f8472f2f20854f119da10a4944f19ef"
+hash = "b3:17c0aee4df6ab2f3d3a2565096173c717fd4da91d9dd99307a045588b61ebc06"
 
 [nodes."src/rules/stale.rs"]
 type = "file"
@@ -444,7 +444,7 @@ hash = "b3:893cbd8cdba8d88bdb32fc6c29ab0a76585d1373dc585be3b2677c76cb70c20a"
 
 [nodes."tests/parsers.rs"]
 type = "file"
-hash = "b3:22377c96ba98b77a8dd22428f30337b294425ab1b7ccb96a2ca0cc2db1862420"
+hash = "b3:e18212cebd48880453625f5ee7a804a42f0553d1c535d36e422595ce702f54ac"
 
 [nodes."tests/report.rs"]
 type = "file"

@@ -2,7 +2,7 @@
 
 ## The concept
 
-A script parser lets you extend drft with custom link extraction logic. You provide an external command that receives a file path on stdin and emits discovered links as NDJSON on stdout. drft handles glob matching, type filtering, and timeout enforcement -- the script just needs to find links and print them.
+A script parser lets you extend drft with custom link extraction logic. You provide an external command that receives file paths on stdin and emits discovered links as NDJSON on stdout. drft handles file routing, type filtering, and timeout enforcement -- the script just needs to find links and print them.
 
 ## Configuration
 
@@ -10,7 +10,7 @@ Script parsers are defined under `[parsers]` in `drft.toml`. The parser name is 
 
 ```toml
 [parsers.yaml-refs]
-glob = "*.yaml"
+files = ["*.yaml"]
 command = "./scripts/parse-yaml-refs.sh"
 ```
 
@@ -18,22 +18,24 @@ command = "./scripts/parse-yaml-refs.sh"
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `glob` | yes | -- | File pattern to match (matched against filename only) |
+| `files` | no | all File nodes | Glob patterns for which File nodes to send |
 | `command` | yes | -- | Shell command to run |
-| `types` | no | all | List of link types to keep |
 | `timeout` | no | 5000 | Timeout in milliseconds |
+
+Parser-specific options go under `[parsers.<name>.options]` and are passed through to the script (see Protocol below).
 
 If the command path is relative, drft resolves it against the directory containing `drft.toml`.
 
 ## Protocol
 
-drft runs the command once via `sh -c` and sends all matched file paths on stdin (one per line). The script processes each file and prints NDJSON links on stdout, each tagged with the source file.
+drft runs the command once via `sh -c`. Stdin carries a JSON options envelope on line 1, followed by file paths (one per line). The script processes each file and prints NDJSON links on stdout, each tagged with the source file.
 
 ### Input (stdin)
 
-File paths, one per line:
+Line 1 is the JSON options envelope from `[parsers.<name>.options]` (always `{}` if no options). Remaining lines are file paths:
 
 ```
+{"types":["inline"],"extract_metadata":true}
 src/analyses/mod.rs
 src/rules/mod.rs
 src/parsers/mod.rs
@@ -74,24 +76,26 @@ Errors are non-fatal. A failing script parser does not cause `drft check` to exi
 
 ## Type filtering
 
-You can restrict which link types are kept, just like the markdown parser:
+You can restrict which link types are kept via parser options:
 
 ```toml
 [parsers.yaml-refs]
-glob = "*.yaml"
+files = ["*.yaml"]
 command = "./scripts/parse-yaml-refs.sh"
+
+[parsers.yaml-refs.options]
 types = ["import"]
 ```
 
-This runs the script and keeps only links where `type` matches one of the listed values.
+This runs the script and keeps only links where `type` matches one of the listed values. The `types` option is the one parser option that drft interprets itself (for filtering); all other options are passed through to the script.
 
 ## Timeout
 
-The default timeout is 5000ms (5 seconds) per file. Override it if your script needs more time:
+The default timeout is 5000ms (5 seconds). Override it if your script needs more time:
 
 ```toml
 [parsers.yaml-refs]
-glob = "*.yaml"
+files = ["*.yaml"]
 command = "./scripts/parse-yaml-refs.sh"
 timeout = 10000
 ```
@@ -105,16 +109,19 @@ A shell script that extracts `$ref` values from YAML files:
 ```bash
 #!/usr/bin/env bash
 # scripts/parse-yaml-refs.sh
-# Reads a file path on stdin, extracts $ref values, emits NDJSON.
+# Line 1 is the JSON options envelope — read and skip it.
+# Remaining lines are file paths.
 
-read -r filepath
-
-grep -oP '\$ref:\s*\K\S+' "$filepath" | while read -r ref; do
-  # Skip URLs
-  case "$ref" in
-    http://*|https://*) continue ;;
-  esac
-  printf '{"target": "%s", "type": "ref"}\n' "$ref"
+read -r _options
+while IFS= read -r filepath; do
+  [ -z "$filepath" ] && continue
+  grep -oP '\$ref:\s*\K\S+' "$filepath" | while read -r ref; do
+    # Skip URLs
+    case "$ref" in
+      http://*|https://*) continue ;;
+    esac
+    printf '{"file": "%s", "target": "%s", "type": "ref"}\n' "$filepath" "$ref"
+  done
 done
 ```
 
@@ -122,7 +129,7 @@ Configure it:
 
 ```toml
 [parsers.yaml-refs]
-glob = "*.{yaml,yml}"
+files = ["*.yaml", "*.yml"]
 command = "./scripts/parse-yaml-refs.sh"
 ```
 

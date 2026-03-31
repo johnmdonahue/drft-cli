@@ -4,8 +4,9 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Script-based parser. Runs an external command that receives file paths
-/// on stdin (one per line) and emits NDJSON links on stdout.
+/// Script-based parser. Runs an external command that receives a JSON
+/// options envelope on line 1, then file paths (one per line) on stdin,
+/// and emits NDJSON links on stdout.
 pub struct ScriptParser {
     pub parser_name: String,
     /// File routing filter. None = receives all File nodes.
@@ -14,6 +15,8 @@ pub struct ScriptParser {
     pub command: String,
     pub timeout_ms: u64,
     pub scope_dir: std::path::PathBuf,
+    /// Parser options from `[parsers.<name>.options]`. Sent as JSON on stdin line 1.
+    pub options: Option<toml::Value>,
 }
 
 impl Parser for ScriptParser {
@@ -66,8 +69,13 @@ impl ScriptParser {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        // Send all file paths on stdin, one per line
+        // Send options envelope on line 1, then file paths
         if let Some(mut stdin) = child.stdin.take() {
+            let options_json = match &self.options {
+                Some(val) => serde_json::to_string(val).unwrap_or_else(|_| "{}".into()),
+                None => "{}".into(),
+            };
+            let _ = writeln!(stdin, "{options_json}");
             for path in paths {
                 let _ = writeln!(stdin, "{path}");
             }
