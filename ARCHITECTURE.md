@@ -73,7 +73,7 @@ Each layer has its own directory and concerns:
 - **[`src/parsers/`](src/parsers/README.md)** — link extraction. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
 - **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
 - **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
-- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives a `RuleContext` with full evaluated state, and emits `Diagnostic` structs with severity and fix suggestions.
+- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph and optional per-rule options, and emits `Diagnostic` structs with severity and fix suggestions. Rules are pure functions — no filesystem access, no config.
 
 This separation means:
 - Analyses are reusable. Multiple rules and metrics can consume the same analysis.
@@ -138,33 +138,31 @@ Each rule implements:
 ```rust
 pub trait Rule {
     fn name(&self) -> &str;
-    fn default_severity(&self) -> Severity;
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic>;
 }
 
 pub struct RuleContext<'a> {
-    pub graph: &'a Graph,
-    pub analyses: &'a AnalysisResults,
-    pub metrics: &'a [Metric],
-    pub config: &'a Config,
-    pub lockfile: Option<&'a Lockfile>,
+    pub graph: &'a EnrichedGraph,
+    pub options: Option<&'a toml::Value>,
 }
 ```
 
-| Rule | Source | Default severity |
-|------|-------|-----------------|
-| `boundary-violation` | analysis: `graph-boundaries` | warn |
-| `dangling-edge` | graph | warn |
-| `directed-cycle` | analysis: `scc` | warn |
-| `directory-edge` | graph | warn |
-| `encapsulation-violation` | analysis: `graph-boundaries` | warn |
-| `fragility` | analysis: `bridges` | warn |
-| `fragmentation` | analysis: `connected-components` | warn |
-| `layer-violation` | analysis: `depth` | warn |
-| `orphan-node` | analysis: `degree` | warn |
-| `redundant-edge` | analysis: `transitive-reduction` | warn |
-| `stale` | analysis: `change-propagation` | warn |
-| `symlink-edge` | graph | warn |
+Rules are pure functions over data. The enriched graph carries the graph plus all pre-computed analysis results (degree, SCC, bridges, etc.). Rules read what they need — no re-computation, no filesystem access, no config. Per-rule options from `[rules.<name>.options]` are passed through for rules that accept structured configuration.
+
+| Rule | Reads from | Default severity |
+|------|-----------|-----------------|
+| `boundary-violation` | `graph_boundaries` | warn |
+| `dangling-edge` | edge properties | warn |
+| `directed-cycle` | `scc` | warn |
+| `directory-edge` | edge properties | warn |
+| `encapsulation-violation` | `graph_boundaries` | warn |
+| `fragility` | `bridges` | warn |
+| `fragmentation` | `connected_components` | warn |
+| `layer-violation` | `depth` | warn |
+| `orphan-node` | `degree` | warn |
+| `redundant-edge` | `transitive_reduction` | warn |
+| `stale` | `change_propagation` | warn |
+| `symlink-edge` | edge properties | warn |
 
 All rules default to `warn` for immediate discoverability. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -227,9 +225,12 @@ ignore = ["README.md"]
 [rules.my-check]                # custom rule (has command)
 command = "./scripts/check.sh"
 severity = "warn"
+
+[rules.my-check.options]        # rule-specific options (passed through)
+threshold = 5
 ```
 
-Parsers and rules use the same config pattern. Shorthand (`markdown = true`, `directed-cycle = "warn"`) for the common case. Table form (`[parsers.tsx]`, `[rules.orphan-node]`) for options or custom scripts. The `command` field is the discriminant -- present means custom, absent means built-in.
+Parsers and rules use the same config pattern. Shorthand (`markdown = true`, `directed-cycle = "warn"`) for the common case. Table form (`[parsers.tsx]`, `[rules.orphan-node]`) for options or custom scripts. Both support an `options` sub-table for arbitrary structured data passed through to the parser or rule. The `command` field is the discriminant — present means custom, absent means built-in.
 
 Rules are evaluated at the configured severity. `--rule <name>` on the command line overrides `off` to `warn` for on-demand checks without config changes.
 

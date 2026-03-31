@@ -66,7 +66,7 @@ mod tests {
         graph.add_edge(make_edge("c.md", "a.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = FragilityRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -81,7 +81,7 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = FragilityRule.evaluate(&ctx);
         let cut_vertices: Vec<_> = diagnostics
             .iter()

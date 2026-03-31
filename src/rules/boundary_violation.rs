@@ -69,7 +69,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "boundary-violation");
@@ -99,7 +99,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
@@ -127,7 +127,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -148,7 +148,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph, dir.path());
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = BoundaryViolationRule.evaluate(&ctx);
         assert!(
             diagnostics.is_empty(),

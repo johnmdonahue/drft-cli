@@ -141,6 +141,8 @@ pub struct RuleConfig {
     pub command: Option<String>,
     #[allow(dead_code)]
     pub timeout: Option<u64>,
+    /// Arbitrary structured data passed through to the rule. drft doesn't interpret it.
+    pub options: Option<toml::Value>,
     pub(crate) ignore_compiled: Option<GlobSet>,
 }
 
@@ -168,6 +170,7 @@ enum RawRuleValue {
         ignore: Vec<String>,
         command: Option<String>,
         timeout: Option<u64>,
+        options: Option<toml::Value>,
     },
 }
 
@@ -263,6 +266,7 @@ impl Config {
                     ignore: Vec::new(),
                     command: None,
                     timeout: None,
+                    options: None,
                     ignore_compiled: None,
                 },
             )
@@ -359,6 +363,7 @@ impl Config {
                         ignore: Vec::new(),
                         command: None,
                         timeout: None,
+                        options: None,
                         ignore_compiled: None,
                     },
                     RawRuleValue::Table {
@@ -366,6 +371,7 @@ impl Config {
                         ignore,
                         command,
                         timeout,
+                        options,
                     } => {
                         let compiled = if ignore.is_empty() {
                             None
@@ -385,6 +391,7 @@ impl Config {
                             ignore,
                             command,
                             timeout,
+                            options,
                             ignore_compiled: compiled,
                         }
                     }
@@ -428,6 +435,11 @@ impl Config {
         self.rules
             .get(rule)
             .is_some_and(|r| r.is_path_ignored(path))
+    }
+
+    /// Get a rule's options (the `[rules.<name>.options]` section).
+    pub fn rule_options(&self, name: &str) -> Option<&toml::Value> {
+        self.rules.get(name).and_then(|r| r.options.as_ref())
     }
 
     /// Get script rules (rules with a command field).
@@ -484,6 +496,44 @@ mod tests {
         assert!(config.is_rule_ignored("orphan-node", "index.md"));
         assert!(!config.is_rule_ignored("orphan-node", "other.md"));
         assert!(!config.is_rule_ignored("dangling-edge", "README.md"));
+    }
+
+    #[test]
+    fn loads_rule_with_options() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            r#"
+[rules.schema-violation]
+severity = "warn"
+
+[rules.schema-violation.options]
+required = ["title"]
+
+[rules.schema-violation.options.schemas."observations/*.md"]
+required = ["title", "date", "status"]
+"#,
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        let opts = config.rule_options("schema-violation").unwrap();
+        let required = opts.get("required").unwrap().as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0].as_str().unwrap(), "title");
+        let schemas = opts.get("schemas").unwrap().as_table().unwrap();
+        assert!(schemas.contains_key("observations/*.md"));
+    }
+
+    #[test]
+    fn shorthand_rule_has_no_options() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\ndangling-edge = \"error\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert!(config.rule_options("dangling-edge").is_none());
     }
 
     #[test]

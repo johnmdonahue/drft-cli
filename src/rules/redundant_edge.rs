@@ -74,7 +74,7 @@ mod tests {
         graph.add_edge(make_edge("a.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = RedundantEdgeRule.evaluate(&ctx);
 
         assert_eq!(diagnostics.len(), 1);
@@ -95,7 +95,7 @@ mod tests {
         graph.add_edge(make_edge("b.md", "c.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = RedundantEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

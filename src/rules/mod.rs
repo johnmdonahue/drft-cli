@@ -21,6 +21,8 @@ use crate::diagnostic::Diagnostic;
 /// See [`docs/rules`](../../docs/rules/README.md) for details.
 pub struct RuleContext<'a> {
     pub graph: &'a EnrichedGraph,
+    /// Per-rule options from `[rules.<name>.options]`. drft passes through, rules interpret.
+    pub options: Option<&'a toml::Value>,
 }
 
 pub trait Rule {

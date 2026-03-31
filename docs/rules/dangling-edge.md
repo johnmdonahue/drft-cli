@@ -15,7 +15,7 @@ docs/
 warn[dangling-edge]: index.md -> setup.md (file not found)
 ```
 
-If the target file exists but is excluded by an ignore pattern, the diagnostic says "file excluded by ignore pattern" instead.
+If the target file exists on disk but outside `include`, it appears as an External node in the graph and is not flagged by this rule.
 
 ## Configuration
 
@@ -32,7 +32,7 @@ ignore = ["drafts/"]
 
 ## Analysis
 
-This rule inspects the graph edges directly -- it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists in the graph or on the filesystem.
+This rule inspects graph edges and their properties directly — it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists as a node in the graph. Edges to symlinks or directories are skipped (handled by `symlink-edge` and `directory-edge` respectively). Filesystem state is captured as edge properties during graph building.
 
 ## Source
 

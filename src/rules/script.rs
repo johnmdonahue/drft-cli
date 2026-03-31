@@ -225,6 +225,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
             timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 
@@ -255,6 +256,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
             timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 
@@ -293,6 +295,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             ignore: Vec::new(),
             timeout: None,
+            options: None,
             ignore_compiled: None,
         };
 

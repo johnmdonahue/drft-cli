@@ -854,6 +854,7 @@ fn check_graph(
 
         let rule_ctx = rules::RuleContext {
             graph: &enriched,
+            options: config.rule_options(rule.name()),
         };
         let mut findings = rule.evaluate(&rule_ctx);
         findings.retain(|d| {

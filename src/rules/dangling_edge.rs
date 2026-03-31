@@ -91,7 +91,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "dangling-edge");
@@ -125,7 +125,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -150,7 +150,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
@@ -175,7 +175,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = DanglingEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

@@ -142,6 +142,9 @@ ignore = ["README.md", "CLAUDE.md"]
 [rules.max-fan-out]
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
+
+[rules.max-fan-out.options]            # rule-specific options (passed through)
+threshold = 5
 ```
 
 drft automatically respects `.gitignore`.

@@ -77,7 +77,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule, "symlink-edge");
@@ -104,7 +104,7 @@ mod tests {
         });
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = SymlinkEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }

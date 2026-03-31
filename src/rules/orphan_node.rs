@@ -50,7 +50,7 @@ mod tests {
         graph.add_edge(make_edge("index.md", "setup.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = OrphanNodeRule.evaluate(&ctx);
 
         let orphan_nodes: Vec<&str> = diagnostics
@@ -69,7 +69,7 @@ mod tests {
         graph.add_edge(make_edge("index.md", "setup.md"));
 
         let enriched = make_enriched(graph);
-        let ctx = RuleContext { graph: &enriched };
+        let ctx = RuleContext { graph: &enriched, options: None };
         let diagnostics = OrphanNodeRule.evaluate(&ctx);
 
         let orphan_nodes: Vec<&str> = diagnostics
