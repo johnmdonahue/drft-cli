@@ -2,7 +2,7 @@
 
 ## The concept
 
-The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: detecting file path references as edges, and extracting structured metadata for rules like [schema-violation](../rules/schema-violation.md).
+The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: detecting file path references as edges, and extracting structured metadata for rules like schema-violation.
 
 ## Link types
 
@@ -27,7 +27,7 @@ This means `sources: ../shared/glossary.md` is detected, but `title: My Document
 
 ## Metadata
 
-The parser always extracts the full YAML frontmatter as structured metadata, attached to the node as `node.metadata["frontmatter"]`. This makes frontmatter fields available to rules like [schema-violation](../rules/schema-violation.md).
+The parser always extracts the full YAML frontmatter as structured metadata, attached to the node as `node.metadata["frontmatter"]`. This makes frontmatter fields available to rules like schema-violation.
 
 ## Configuration
 
