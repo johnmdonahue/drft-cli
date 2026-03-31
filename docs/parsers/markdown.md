@@ -2,7 +2,7 @@
 
 ## The concept
 
-The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md). For wikilinks (`[[page]]`), see the [example script parser](../../examples/parsers/wikilinks.sh).
+The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md). For wikilinks (`[[page]]`), see the [example script parser](../../examples/custom-parsers/wikilinks.sh).
 
 ## Link types
 

@@ -51,8 +51,8 @@ fn wikilinks_custom_parser_creates_edges() {
     let dir = TempDir::new().unwrap();
 
     // Copy the example wikilinks parser into the temp dir
-    let parser_src =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/parsers/wikilinks.sh");
+    let parser_src = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples/custom-parsers/wikilinks.sh");
     let parser_dst = dir.path().join("wikilinks.sh");
     fs::copy(&parser_src, &parser_dst).unwrap();
     #[cfg(unix)]

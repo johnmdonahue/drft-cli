@@ -5,7 +5,7 @@
 #
 #   [parsers.wikilinks]
 #   files = ["*.md"]
-#   command = "./examples/parsers/wikilinks.sh"
+#   command = "./examples/custom-parsers/wikilinks.sh"
 #
 # Protocol:
 #   stdin line 1 = JSON options envelope (ignored here)

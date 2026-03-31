@@ -101,7 +101,11 @@ impl Analysis for GraphBoundaries {
                 }
 
                 // Strip the child graph prefix to get the relative path
-                let relative_target = &edge.target[path.len() + 1..]; // skip "research/"
+                let prefix = format!("{path}/");
+                let relative_target = match edge.target.strip_prefix(&prefix) {
+                    Some(rel) => rel,
+                    None => continue,
+                };
                 if !interface_nodes.iter().any(|n| n == relative_target) {
                     encapsulation_violations.push(EncapsulationViolation {
                         source: edge.source.clone(),

@@ -28,7 +28,7 @@ fragility = "off" # suppress if tree-shaped graphs are expected
 | [stale](stale.md)                                     | Files whose content has changed since the last lock                 | [change-propagation](../analyses/change-propagation.md)     |
 | [symlink-edge](symlink-edge.md)                       | Edges whose target is a symlink                                     | graph (direct)                                              |
 
-## Script rules
+## Custom rules
 
 You can define custom rules that run an external command. See [custom](custom.md).
 

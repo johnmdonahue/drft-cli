@@ -110,11 +110,11 @@ hash = "b3:ffba54d37eab2915b0c35f9e124e5b8f07321f41fb590f205a76b047196f1949"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
-hash = "b3:c2314f0dec8ffbc0cfb4f6fae375851023c9025d82716ef73ef07ee60306c7a8"
+hash = "b3:83957de367f47e30c438b444773ff435f718b83f8e4896527337cb9de25fe536"
 
 [nodes."docs/rules/README.md"]
 type = "file"
-hash = "b3:4bbf5292b9932ca5bf87451359070f103d402a45d06254776e7962475480d639"
+hash = "b3:dfeeb0408c9cef95ac249ecd2172261d8addd2c2f3fe10d49993a85927cf90ab"
 
 [nodes."docs/rules/boundary-violation.md"]
 type = "file"
@@ -174,7 +174,7 @@ hash = "b3:df5d6db2164b2f3738279badcc6df3d04dd9307f7adddc5555c201e62867b50a"
 
 [nodes."examples/README.md"]
 type = "file"
-hash = "b3:208be82e54824af8d4a29d2159dd96dab84a7c2986649a8edd567761c175d470"
+hash = "b3:c593f9fc2bdf3e931582dfd0b22e58ff3d9b36dd1ce35b838885dae7e906a49d"
 
 [nodes."examples/broken"]
 type = "directory"
@@ -184,6 +184,10 @@ hash = "b3:1cfdf629702283f2b915dbe5b8c2274ce1e5d7d2c5525d8d0bf6972be11f9862"
 type = "external"
 hash = "b3:1686a4acda5bf198cea1dd641ae75ea14279de784d9842f8c0f1c9918ff8f56e"
 graph = "examples/broken"
+
+[nodes."examples/custom-parsers/wikilinks.sh"]
+type = "external"
+hash = "b3:2256840232debaa57aabbfaee544c2c2890fb2088beb7d2c2bec097b99cd6395"
 
 [nodes."examples/custom-rules"]
 type = "directory"
@@ -216,10 +220,6 @@ hash = "b3:de0577fc718fae986ee8c97b0d2be5fb14ad4c8457f798614757f4a059468e33"
 type = "external"
 hash = "b3:1fe8430b118fde69d5bd4298ff41efdad15f5d2827f0468e39567913d8af95a5"
 graph = "examples/monorepo"
-
-[nodes."examples/parsers/wikilinks.sh"]
-type = "external"
-hash = "b3:f0eccbd38e075afc4b74bf52e3bab7be998bfdca97e608831f5cafd052dae9b8"
 
 [nodes."examples/simple"]
 type = "directory"
@@ -310,7 +310,7 @@ hash = "b3:9d06abdaa68f8e6128804b73673001e3be0e7d95a418c0b203877e79ccde518d"
 
 [nodes."src/analyses/graph_boundaries.rs"]
 type = "file"
-hash = "b3:9201343282adf52ceb1886ae0583aa01ecaf706ed0a48d102d453e3c977e078e"
+hash = "b3:35870a7a8f17660de48c1a1cfd075ec377bfc6e9232b8be2faa92b08d0693e86"
 
 [nodes."src/analyses/graph_stats.rs"]
 type = "file"
@@ -498,7 +498,7 @@ hash = "b3:893cbd8cdba8d88bdb32fc6c29ab0a76585d1373dc585be3b2677c76cb70c20a"
 
 [nodes."tests/parsers.rs"]
 type = "file"
-hash = "b3:53bc28cf46bf4a6fa6598c59c64c95fe601433d2e587101b51ffd7d40905adcd"
+hash = "b3:328db8e30082b44da89de8881b0d79a3f326409aa9afbae32c24d17070ea55c1"
 
 [nodes."tests/report.rs"]
 type = "file"
