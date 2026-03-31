@@ -5,6 +5,7 @@ Integration tests for drft CLI commands. Each file exercises one command or feat
 ## Commands
 
 - [check.rs](check.rs) — `drft check`: broken links, cycles, directory edges, orphans, rule filtering
+- [config.rs](config.rs) — `drft config show`: defaults, custom config, JSON, recursive
 - [graph.rs](graph.rs) — `drft graph`: JGF output, recursive multi-graph
 - [impact.rs](impact.rs) — `drft impact`: transitive dependents
 - [init.rs](init.rs) — `drft init`: config scaffolding

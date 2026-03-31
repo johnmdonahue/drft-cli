@@ -22,7 +22,7 @@ hash = "b3:f457f74fbd0a183398a3e8d88c9e3fa6dc8205ba092ede3d2fcaacbde6959f92"
 
 [nodes."README.md"]
 type = "file"
-hash = "b3:687e0fcaeb957c6e5ba59cde9fd9ca6cbc769c891ffd93538e02a352deb14738"
+hash = "b3:2f41105db160c8704df94b5d22b8d00c4bb3f5641893be34fc345bfa15055cd3"
 
 [nodes."RELEASING.md"]
 type = "file"
@@ -278,7 +278,7 @@ hash = "b3:f9b05887e9a822bc7070280ba542359b56d89e6f2a17ccb52355808a02f99a16"
 
 [nodes."src/README.md"]
 type = "file"
-hash = "b3:fc1b28b2fce2a3dd0251c3c5cfec719e74f093e95969ff6d6ab881aa68fc121e"
+hash = "b3:56360a3a099763b7211ebec19f775bb578d56c1b8736aed36dfffcaea29cdf77"
 
 [nodes."src/analyses/README.md"]
 type = "file"
@@ -338,11 +338,11 @@ hash = "b3:3d4d575126d8a2c3044ea98213af2f284ec32169c5ede5d6a36dc7689eac2296"
 
 [nodes."src/cli.rs"]
 type = "file"
-hash = "b3:b9be430d7db557a72ce65e845af0ce4b334a9cd48d1a07bf8fb49ea218c7e841"
+hash = "b3:878f2048460978e93ef4602de13b02659d86972c34e3f69e66ba95bf48325bad"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:fb3511f523a022a5b57714ef59f328426b1e41d468e59d30e8710c1719fed99a"
+hash = "b3:3f4ed84deaf282bb49859af57b969b80add9c5d59ff3065b91de842ad011a262"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
@@ -366,7 +366,7 @@ hash = "b3:63c60b10aa1f9c726e960fe4f0e00e000518b730fc8079b397286e6f6e44356e"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:5b95d6be378afab172dab3b3f35ccd709d095a836a7d75b539b038de5d5452be"
+hash = "b3:eb9f676b6d921ddb3f88e3d2d9ce17445198105d4c288ab81398ffbd7a2d46ca"
 
 [nodes."src/metrics.rs"]
 type = "file"
@@ -458,7 +458,7 @@ hash = "b3:cccfc752cf240f1b805e6b92700439b7616474377287ffda9d3256613cb91ca5"
 
 [nodes."tests/README.md"]
 type = "file"
-hash = "b3:052df3b0788ba7e2059318d0b6c4b0a96abc13f378aec3c7bbf9f66e10f6c6f0"
+hash = "b3:a381f87142eac25629c35467438d70f10c1ddcaee4ca089562a67ac0a2aefab3"
 
 [nodes."tests/check.rs"]
 type = "file"
@@ -467,6 +467,10 @@ hash = "b3:dbba3ed581064f584508b143446e32dc2e2fbb502e14fcfdd3ac274a84e27711"
 [nodes."tests/common/mod.rs"]
 type = "file"
 hash = "b3:2d229609bd5598d5ca83de9d55a84fbcd29e54cb545ef562295ff9c483e5cd2e"
+
+[nodes."tests/config.rs"]
+type = "file"
+hash = "b3:d1ddb31a2536df4e4d475ca60f57213003b444d70d869f6bd8f958869c010d78"
 
 [nodes."tests/custom_rules.rs"]
 type = "file"

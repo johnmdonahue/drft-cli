@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -30,13 +30,17 @@ pub enum RuleSeverity {
 /// Supports shorthand (`markdown = true`) and expanded table form
 /// (`[parsers.markdown]` with fields). Parser-specific options go
 /// under `[parsers.<name>.options]` and are passed through to the parser.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ParserConfig {
     /// Which File nodes to send to this parser. None = all File nodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u64>,
     /// Arbitrary options passed through to the parser (not interpreted by drft).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<toml::Value>,
 }
 
@@ -136,7 +140,7 @@ impl From<RawParserValue> for Option<ParserConfig> {
 
 // ── Interface config ───────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterfaceConfig {
     pub files: Vec<String>,
     #[serde(default)]
@@ -159,6 +163,44 @@ pub struct RuleConfig {
     pub options: Option<toml::Value>,
     pub(crate) files_compiled: Option<GlobSet>,
     pub(crate) ignore_compiled: Option<GlobSet>,
+}
+
+impl Serialize for RuleConfig {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        // Count how many fields to serialize (skip empty/default fields for cleaner output)
+        let mut len = 1; // severity always present
+        if !self.files.is_empty() {
+            len += 1;
+        }
+        if !self.ignore.is_empty() {
+            len += 1;
+        }
+        if self.command.is_some() {
+            len += 1;
+        }
+        if self.options.is_some() {
+            len += 1;
+        }
+        let mut map = serializer.serialize_map(Some(len))?;
+        map.serialize_entry("severity", &self.severity)?;
+        if !self.files.is_empty() {
+            map.serialize_entry("files", &self.files)?;
+        }
+        if !self.ignore.is_empty() {
+            map.serialize_entry("ignore", &self.ignore)?;
+        }
+        if let Some(ref command) = self.command {
+            map.serialize_entry("command", command)?;
+        }
+        if let Some(ref options) = self.options {
+            map.serialize_entry("options", options)?;
+        }
+        map.end()
+    }
 }
 
 impl RuleConfig {
@@ -223,18 +265,21 @@ fn default_warn() -> RuleSeverity {
 
 // ── Config ─────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Config {
     /// Glob patterns declaring which filesystem paths become File nodes.
     /// Default: `["*.md"]`.
     pub include: Vec<String>,
     /// Glob patterns removed from the graph (applied after `include`).
     /// Also respects `.gitignore`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub interface: Option<InterfaceConfig>,
     pub parsers: HashMap<String, ParserConfig>,
     pub rules: HashMap<String, RuleConfig>,
     /// Directory containing the drft.toml this config was loaded from.
+    #[serde(skip)]
     pub config_dir: Option<std::path::PathBuf>,
 }
 
