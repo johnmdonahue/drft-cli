@@ -391,7 +391,11 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
         let files: Vec<(&str, &str)> = included_files
             .iter()
             .filter(|f| parser.matches(f))
-            .filter_map(|f| file_text.get(f).map(|content| (f.as_str(), content.as_str())))
+            .filter_map(|f| {
+                file_text
+                    .get(f)
+                    .map(|content| (f.as_str(), content.as_str()))
+            })
             .collect();
 
         if files.is_empty() {
@@ -424,7 +428,7 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
             .as_str()
             .cmp(&b["parser"].as_str())
             .then_with(|| a["file"].as_str().cmp(&b["file"].as_str()))
-            .then_with(|| a["link"].as_str().cmp(&b["ref"].as_str()))
+            .then_with(|| a["link"].as_str().cmp(&b["link"].as_str()))
     });
     metadata_results.sort_by(|a, b| {
         a["parser"]
@@ -481,103 +485,103 @@ fn run_graph(
     let graph_root = find_graph_root(root);
 
     if dot {
-            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
-            println!("digraph {{");
-            let mut all_nodes = Vec::new();
-            let mut all_edges = Vec::new();
-            for g in &graphs {
-                let prefix = if g.id == "." { "" } else { g.id.as_str() };
-                for (path, _, _) in &g.nodes {
-                    let full = if prefix.is_empty() {
-                        path.clone()
-                    } else {
-                        format!("{prefix}{path}")
-                    };
-                    all_nodes.push(full);
-                }
-                for (source, target, _, _) in &g.edges {
-                    let fs = if prefix.is_empty() {
-                        source.clone()
-                    } else {
-                        format!("{prefix}{source}")
-                    };
-                    let ft = if prefix.is_empty() {
-                        target.clone()
-                    } else {
-                        format!("{prefix}{target}")
-                    };
-                    all_edges.push((fs, ft));
-                }
+        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
+        println!("digraph {{");
+        let mut all_nodes = Vec::new();
+        let mut all_edges = Vec::new();
+        for g in &graphs {
+            let prefix = if g.id == "." { "" } else { g.id.as_str() };
+            for (path, _, _) in &g.nodes {
+                let full = if prefix.is_empty() {
+                    path.clone()
+                } else {
+                    format!("{prefix}{path}")
+                };
+                all_nodes.push(full);
             }
-            all_nodes.sort();
-            all_nodes.dedup();
-            for path in &all_nodes {
-                println!("  \"{path}\"");
+            for (source, target, _, _) in &g.edges {
+                let fs = if prefix.is_empty() {
+                    source.clone()
+                } else {
+                    format!("{prefix}{source}")
+                };
+                let ft = if prefix.is_empty() {
+                    target.clone()
+                } else {
+                    format!("{prefix}{target}")
+                };
+                all_edges.push((fs, ft));
             }
-            all_edges.sort();
-            all_edges.dedup();
-            for (source, target) in &all_edges {
-                println!("  \"{source}\" -> \"{target}\"");
-            }
-            println!("}}");
-        } else {
-            // JSON Graph Format (JGF)
-            let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
-
-            let jgf_graphs: Vec<serde_json::Value> = graphs
-                .iter()
-                .map(|g| {
-                    let mut nodes = serde_json::Map::new();
-                    let mut sorted: Vec<&(String, graph::NodeType, Option<String>)> =
-                        g.nodes.iter().collect();
-                    sorted.sort_by(|a, b| a.0.cmp(&b.0));
-                    for (path, node_type, hash) in sorted {
-                        let mut meta = serde_json::Map::new();
-                        meta.insert("type".into(), serde_json::json!(node_type));
-                        if let Some(h) = hash {
-                            meta.insert("hash".into(), serde_json::json!(h));
-                        }
-                        nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
-                    }
-
-                    let mut edges: Vec<serde_json::Value> = g
-                        .edges
-                        .iter()
-                        .map(|(source, target, reference, parser)| {
-                            let mut edge = serde_json::json!({
-                                "source": source,
-                                "target": target,
-                                "parser": parser,
-                            });
-                            if let Some(r) = reference {
-                                edge["link"] = serde_json::json!(r);
-                            }
-                            edge
-                        })
-                        .collect();
-                    edges.sort_by(|a, b| {
-                        a["source"]
-                            .as_str()
-                            .cmp(&b["source"].as_str())
-                            .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
-                    });
-
-                    serde_json::json!({
-                        "id": g.id,
-                        "directed": true,
-                        "nodes": nodes,
-                        "edges": edges,
-                    })
-                })
-                .collect();
-
-            let output = if jgf_graphs.len() == 1 {
-                serde_json::json!({ "graph": jgf_graphs[0] })
-            } else {
-                serde_json::json!({ "graphs": jgf_graphs })
-            };
-            println!("{}", serde_json::to_string_pretty(&output)?);
         }
+        all_nodes.sort();
+        all_nodes.dedup();
+        for path in &all_nodes {
+            println!("  \"{path}\"");
+        }
+        all_edges.sort();
+        all_edges.dedup();
+        for (source, target) in &all_edges {
+            println!("  \"{source}\" -> \"{target}\"");
+        }
+        println!("}}");
+    } else {
+        // JSON Graph Format (JGF)
+        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
+
+        let jgf_graphs: Vec<serde_json::Value> = graphs
+            .iter()
+            .map(|g| {
+                let mut nodes = serde_json::Map::new();
+                let mut sorted: Vec<&(String, graph::NodeType, Option<String>)> =
+                    g.nodes.iter().collect();
+                sorted.sort_by(|a, b| a.0.cmp(&b.0));
+                for (path, node_type, hash) in sorted {
+                    let mut meta = serde_json::Map::new();
+                    meta.insert("type".into(), serde_json::json!(node_type));
+                    if let Some(h) = hash {
+                        meta.insert("hash".into(), serde_json::json!(h));
+                    }
+                    nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
+                }
+
+                let mut edges: Vec<serde_json::Value> = g
+                    .edges
+                    .iter()
+                    .map(|(source, target, reference, parser)| {
+                        let mut edge = serde_json::json!({
+                            "source": source,
+                            "target": target,
+                            "parser": parser,
+                        });
+                        if let Some(r) = reference {
+                            edge["link"] = serde_json::json!(r);
+                        }
+                        edge
+                    })
+                    .collect();
+                edges.sort_by(|a, b| {
+                    a["source"]
+                        .as_str()
+                        .cmp(&b["source"].as_str())
+                        .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
+                });
+
+                serde_json::json!({
+                    "id": g.id,
+                    "directed": true,
+                    "nodes": nodes,
+                    "edges": edges,
+                })
+            })
+            .collect();
+
+        let output = if jgf_graphs.len() == 1 {
+            serde_json::json!({ "graph": jgf_graphs[0] })
+        } else {
+            serde_json::json!({ "graphs": jgf_graphs })
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    }
 
     Ok(0)
 }
@@ -694,10 +698,21 @@ fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32
     }
 
     // Build lookup maps for enrichment data
-    let radius_map: std::collections::HashMap<&str, &drft::analyses::impact_radius::ImpactRadiusNode> =
-        enriched.impact_radius.nodes.iter().map(|n| (n.node.as_str(), n)).collect();
-    let betweenness_map: std::collections::HashMap<&str, f64> =
-        enriched.betweenness.nodes.iter().map(|n| (n.node.as_str(), n.score)).collect();
+    let radius_map: std::collections::HashMap<
+        &str,
+        &drft::analyses::impact_radius::ImpactRadiusNode,
+    > = enriched
+        .impact_radius
+        .nodes
+        .iter()
+        .map(|n| (n.node.as_str(), n))
+        .collect();
+    let betweenness_map: std::collections::HashMap<&str, f64> = enriched
+        .betweenness
+        .nodes
+        .iter()
+        .map(|n| (n.node.as_str(), n.score))
+        .collect();
 
     // Sort by review priority: high-radius nodes at shallow depth first
     impacted.sort_by(|a, b| {
@@ -709,7 +724,9 @@ fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32
         // Priority: impact_radius / depth + betweenness (higher = more important = sorts first)
         let a_priority = (a_radius as f64) / (a.2 as f64) + a_betweenness;
         let b_priority = (b_radius as f64) / (b.2 as f64) + b_betweenness;
-        b_priority.partial_cmp(&a_priority).unwrap_or(std::cmp::Ordering::Equal)
+        b_priority
+            .partial_cmp(&a_priority)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.0.cmp(&b.0))
     });
 

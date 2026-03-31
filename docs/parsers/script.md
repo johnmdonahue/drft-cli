@@ -2,7 +2,7 @@
 
 ## The concept
 
-A script parser lets you extend drft with custom link extraction logic. You provide an external command that receives file paths on stdin and emits discovered links as NDJSON on stdout. drft handles file routing, type filtering, and timeout enforcement -- the script just needs to find links and print them.
+A script parser lets you extend drft with custom link extraction logic. You provide an external command that receives file paths on stdin and emits discovered links as NDJSON on stdout. drft handles file routing and timeout enforcement -- the script just needs to find links and print them.
 
 ## Configuration
 

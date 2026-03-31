@@ -177,6 +177,7 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
         "depth": enriched.depth,
         "graph_boundaries": enriched.graph_boundaries,
         "graph_stats": enriched.graph_stats,
+        "impact_radius": enriched.impact_radius,
         "pagerank": enriched.pagerank,
         "scc": enriched.scc,
         "transitive_reduction": enriched.transitive_reduction,
@@ -223,7 +224,8 @@ mod tests {
         g.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            link: None, parser: "markdown".into(),
+            link: None,
+            parser: "markdown".into(),
         });
         let config = crate::config::Config {
             include: vec!["*.md".into()],

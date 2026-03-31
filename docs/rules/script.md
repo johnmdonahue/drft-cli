@@ -28,12 +28,13 @@ The script receives a JSON object on stdin with two top-level keys: `graph` (the
       "setup.md": { "metadata": { "type": "file", "hash": "b3:def..." } }
     },
     "edges": [
-      { "source": "index.md", "target": "setup.md", "relation": "markdown:inline" }
+      { "source": "index.md", "target": "setup.md", "parser": "markdown" }
     ],
     "analyses": {
       "degree": { "nodes": [...] },
-      "scc": { "components": [...] },
-      "bridges": { "bridges": [...] },
+      "scc": { "sccs": [...], ... },
+      "bridges": { "cut_vertices": [...], "bridge_edges": [...] },
+      "impact_radius": { "nodes": [...] },
       ...
     }
   },
