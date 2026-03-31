@@ -1,4 +1,4 @@
-use super::{Parser, RawLink};
+use super::{ParseResult, Parser, RawLink};
 use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks, images,
@@ -7,6 +7,8 @@ pub struct MarkdownParser {
     /// File routing filter. None = receives all File nodes.
     pub file_filter: Option<globset::GlobSet>,
     pub type_filter: Option<Vec<String>>,
+    /// When true, parse YAML frontmatter and return as node metadata.
+    pub extract_metadata: bool,
 }
 
 impl Parser for MarkdownParser {
@@ -21,7 +23,7 @@ impl Parser for MarkdownParser {
         }
     }
 
-    fn parse(&self, _path: &str, content: &str) -> Vec<RawLink> {
+    fn parse(&self, _path: &str, content: &str) -> ParseResult {
         let mut links = Vec::new();
 
         links.extend(extract_frontmatter(content));
@@ -33,7 +35,13 @@ impl Parser for MarkdownParser {
             links.retain(|l| types.iter().any(|t| t == &l.link_type));
         }
 
-        links
+        let metadata = if self.extract_metadata {
+            extract_frontmatter_metadata(content)
+        } else {
+            None
+        };
+
+        ParseResult { links, metadata }
     }
 }
 
@@ -188,6 +196,69 @@ fn extract_frontmatter(content: &str) -> Vec<RawLink> {
     links
 }
 
+/// Parse YAML frontmatter into a JSON value for node metadata.
+/// Returns None if no valid frontmatter is found.
+fn extract_frontmatter_metadata(content: &str) -> Option<serde_json::Value> {
+    let content = &strip_code(content);
+
+    if !content.starts_with("---") {
+        return None;
+    }
+
+    let rest = &content[3..];
+    let end = rest.find("\n---")?;
+    let yaml_str = &rest[..end];
+
+    if yaml_str.trim().is_empty() {
+        return None;
+    }
+
+    match serde_yaml::from_str::<serde_yaml::Value>(yaml_str) {
+        Ok(yaml_val) => Some(yaml_to_json(yaml_val)),
+        Err(e) => {
+            eprintln!("warn: markdown parser: invalid frontmatter YAML: {e}");
+            None
+        }
+    }
+}
+
+/// Convert serde_yaml::Value to serde_json::Value.
+fn yaml_to_json(yaml: serde_yaml::Value) -> serde_json::Value {
+    match yaml {
+        serde_yaml::Value::Null => serde_json::Value::Null,
+        serde_yaml::Value::Bool(b) => serde_json::Value::Bool(b),
+        serde_yaml::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                serde_json::Value::Number(i.into())
+            } else if let Some(f) = n.as_f64() {
+                serde_json::Number::from_f64(f)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        serde_yaml::Value::String(s) => serde_json::Value::String(s),
+        serde_yaml::Value::Sequence(seq) => {
+            serde_json::Value::Array(seq.into_iter().map(yaml_to_json).collect())
+        }
+        serde_yaml::Value::Mapping(map) => {
+            let obj: serde_json::Map<String, serde_json::Value> = map
+                .into_iter()
+                .filter_map(|(k, v)| {
+                    let key = match k {
+                        serde_yaml::Value::String(s) => s,
+                        other => serde_json::to_string(&yaml_to_json(other)).ok()?,
+                    };
+                    Some((key, yaml_to_json(v)))
+                })
+                .collect();
+            serde_json::Value::Object(obj)
+        }
+        serde_yaml::Value::Tagged(tagged) => yaml_to_json(tagged.value),
+    }
+}
+
 fn has_file_extension(path: &str) -> bool {
     if let Some(basename) = path.rsplit('/').next() {
         basename.contains('.')
@@ -321,8 +392,9 @@ mod tests {
         let parser = MarkdownParser {
             file_filter: None,
             type_filter: None,
+            extract_metadata: false,
         };
-        parser.parse("test.md", content)
+        parser.parse("test.md", content).links
     }
 
     #[test]
@@ -461,9 +533,10 @@ mod tests {
         let parser = MarkdownParser {
             file_filter: None,
             type_filter: Some(vec!["frontmatter".to_string()]),
+            extract_metadata: false,
         };
         let content = "---\nsources:\n  - ./ref.md\n---\n\n[inline](other.md) and [[wikilink]]\n";
-        let links = parser.parse("test.md", content);
+        let links = parser.parse("test.md", content).links;
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].link_type, "frontmatter");
     }
@@ -473,6 +546,7 @@ mod tests {
         let parser = MarkdownParser {
             file_filter: None,
             type_filter: None,
+            extract_metadata: false,
         };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("main.rs"));
@@ -487,9 +561,63 @@ mod tests {
         let parser = MarkdownParser {
             file_filter: Some(builder.build().unwrap()),
             type_filter: None,
+            extract_metadata: false,
         };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("page.mdx"));
         assert!(!parser.matches("main.rs"));
+    }
+
+    fn parse_with_metadata(content: &str) -> super::ParseResult {
+        let parser = MarkdownParser {
+            file_filter: None,
+            type_filter: None,
+            extract_metadata: true,
+        };
+        parser.parse("test.md", content)
+    }
+
+    #[test]
+    fn extracts_frontmatter_metadata() {
+        let content = "---\ntitle: My Doc\nstatus: draft\ntags:\n  - rust\n  - cli\n---\n\n# Hello\n";
+        let result = parse_with_metadata(content);
+        let meta = result.metadata.unwrap();
+        assert_eq!(meta["title"], "My Doc");
+        assert_eq!(meta["status"], "draft");
+        assert_eq!(meta["tags"], serde_json::json!(["rust", "cli"]));
+    }
+
+    #[test]
+    fn no_metadata_without_frontmatter() {
+        let result = parse_with_metadata("# Just a heading\n");
+        assert!(result.metadata.is_none());
+    }
+
+    #[test]
+    fn no_metadata_when_disabled() {
+        let parser = MarkdownParser {
+            file_filter: None,
+            type_filter: None,
+            extract_metadata: false,
+        };
+        let content = "---\ntitle: My Doc\n---\n\n# Hello\n";
+        let result = parser.parse("test.md", content);
+        assert!(result.metadata.is_none());
+    }
+
+    #[test]
+    fn metadata_ignores_code_block_frontmatter() {
+        let content = "# Doc\n\n```markdown\n---\ntitle: Fake\n---\n```\n";
+        let result = parse_with_metadata(content);
+        assert!(result.metadata.is_none());
+    }
+
+    #[test]
+    fn metadata_handles_nested_yaml() {
+        let content = "---\ntitle: Test\nauthor:\n  name: Alice\n  role: dev\n---\n";
+        let result = parse_with_metadata(content);
+        let meta = result.metadata.unwrap();
+        assert_eq!(meta["author"]["name"], "Alice");
+        assert_eq!(meta["author"]["role"], "dev");
     }
 }

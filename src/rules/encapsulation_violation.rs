@@ -36,7 +36,7 @@ mod tests {
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
     use crate::rules::RuleContext;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::fs;
     use tempfile::TempDir;
 
@@ -89,18 +89,21 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/".into(),
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
             node_type: NodeType::File,
             hash: None,
             graph: Some("research/".into()),
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -138,12 +141,14 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "research/".into(),
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

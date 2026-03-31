@@ -196,6 +196,7 @@ mod tests {
     use super::*;
     use crate::analyses::enrich_graph;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -206,12 +207,14 @@ mod tests {
             node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_edge(Edge {
             source: "index.md".into(),

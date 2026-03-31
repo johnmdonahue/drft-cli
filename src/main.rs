@@ -407,7 +407,8 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
         parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), &graph_root);
 
     // 4. Route files to parsers and run
-    let mut results: Vec<serde_json::Value> = Vec::new();
+    let mut edge_results: Vec<serde_json::Value> = Vec::new();
+    let mut metadata_results: Vec<serde_json::Value> = Vec::new();
 
     for parser in &parser_list {
         if let Some(name) = parser_filter
@@ -428,9 +429,9 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
 
         let batch_results = parser.parse_batch(&files);
 
-        for (file, links) in batch_results {
-            for link in links {
-                results.push(serde_json::json!({
+        for (file, result) in batch_results {
+            for link in result.links {
+                edge_results.push(serde_json::json!({
                     "parser": parser.name(),
                     "file": file,
                     "target": link.target,
@@ -438,31 +439,47 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
                     "external": link.is_external,
                 }));
             }
+            if let Some(metadata) = result.metadata {
+                metadata_results.push(serde_json::json!({
+                    "parser": parser.name(),
+                    "file": file,
+                    "metadata": metadata,
+                }));
+            }
         }
     }
 
     // Sort for deterministic output
-    results.sort_by(|a, b| {
+    edge_results.sort_by(|a, b| {
         a["parser"]
             .as_str()
             .cmp(&b["parser"].as_str())
             .then_with(|| a["file"].as_str().cmp(&b["file"].as_str()))
             .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
     });
+    metadata_results.sort_by(|a, b| {
+        a["parser"]
+            .as_str()
+            .cmp(&b["parser"].as_str())
+            .then_with(|| a["file"].as_str().cmp(&b["file"].as_str()))
+    });
 
     match format {
         OutputFormat::Json => {
-            let output = serde_json::json!({
-                "edges": results,
-                "total": results.len(),
+            let mut output = serde_json::json!({
+                "edges": edge_results,
+                "total": edge_results.len(),
             });
+            if !metadata_results.is_empty() {
+                output["metadata"] = serde_json::json!(metadata_results);
+            }
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
         _ => {
-            if results.is_empty() {
+            if edge_results.is_empty() && metadata_results.is_empty() {
                 println!("no edges found");
             } else {
-                for edge in &results {
+                for edge in &edge_results {
                     let parser = edge["parser"].as_str().unwrap_or("");
                     let file = edge["file"].as_str().unwrap_or("");
                     let target = edge["target"].as_str().unwrap_or("");
@@ -474,7 +491,16 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
                     };
                     println!("{file} → {target} ({parser}:{link_type}){ext}");
                 }
-                eprintln!("\n{} edges", results.len());
+                for meta in &metadata_results {
+                    let parser = meta["parser"].as_str().unwrap_or("");
+                    let file = meta["file"].as_str().unwrap_or("");
+                    println!("{file} [metadata:{parser}]");
+                }
+                eprintln!(
+                    "\n{} edges, {} metadata",
+                    edge_results.len(),
+                    metadata_results.len()
+                );
             }
         }
     }

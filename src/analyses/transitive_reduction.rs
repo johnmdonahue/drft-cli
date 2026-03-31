@@ -120,6 +120,7 @@ mod tests {
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_node(path: &str) -> Node {
@@ -128,6 +129,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         }
     }
 

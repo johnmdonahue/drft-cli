@@ -13,6 +13,7 @@ Rules evaluate the graph and emit diagnostics. Each implements the `Rule` trait.
 - [mod.rs](mod.rs) — `Rule` trait, `RuleContext`, `all_rules()` registry
 - [orphan_node.rs](orphan_node.rs) — detects nodes with no inbound edges
 - [redundant_edge.rs](redundant_edge.rs) — detects transitively redundant edges
+- [schema_violation.rs](schema_violation.rs) — validates node metadata against schema options
 - [script.rs](script.rs) — script-based rule runner
 - [stale.rs](stale.rs) — detects content changes since last lock
 - [symlink_edge.rs](symlink_edge.rs) — detects edges through symlinks

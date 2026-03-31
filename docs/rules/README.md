@@ -24,6 +24,7 @@ fragility = "off"     # suppress if tree-shaped graphs are expected
 | [layer-violation](layer-violation.md) | Upward or skip-layer links in the depth hierarchy | [depth](../analyses/depth.md) |
 | [orphan-node](orphan-node.md) | Nodes with no inbound edges | [degree](../analyses/degree.md) |
 | [redundant-edge](redundant-edge.md) | Direct links that are transitively redundant | [transitive-reduction](../analyses/transitive-reduction.md) |
+| [schema-violation](schema-violation.md) | Node metadata violates required fields or allowed values | graph (metadata) |
 | [stale](stale.md) | Files whose content has changed since the last lock | [change-propagation](../analyses/change-propagation.md) |
 | [symlink-edge](symlink-edge.md) | Edges whose target is a symlink | graph (direct) |
 

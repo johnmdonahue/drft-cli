@@ -70,7 +70,7 @@ The pipeline: **Parsing → Graph → Analyses → Metrics → Rules**. Each lay
 
 Each layer has its own directory and concerns:
 
-- **[`src/parsers/`](src/parsers/README.md)** — link extraction. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and emits `RawLink` results. Built-in (markdown) and script-based parsers share the same interface.
+- **[`src/parsers/`](src/parsers/README.md)** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes routed by `files` patterns, and returns a `ParseResult` (links + optional metadata). Built-in (markdown) and script-based parsers share the same interface.
 - **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait, takes an `AnalysisContext`, returns a typed result. No judgments, no formatting.
 - **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction. Reads from analysis results and produces named `Metric` values. No graph traversal, no I/O.
 - **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph and optional per-rule options, and emits `Diagnostic` structs with severity and fix suggestions. Rules are pure functions — no filesystem access, no config.
@@ -161,6 +161,7 @@ Rules are pure functions over data. The enriched graph carries the graph plus al
 | `layer-violation` | `depth` | warn |
 | `orphan-node` | `degree` | warn |
 | `redundant-edge` | `transitive_reduction` | warn |
+| `schema-violation` | node metadata + options | warn |
 | `stale` | `change_propagation` | warn |
 | `symlink-edge` | edge properties | warn |
 
@@ -200,8 +201,7 @@ exclude = ["drafts/*"]          # remove from the graph (also respects .gitignor
 [interface]
 nodes = ["overview.md"]         # public interface nodes (enables encapsulation)
 
-[parsers]
-markdown = true                 # built-in parser, all defaults
+[parsers.markdown]              # built-in parser, all defaults
 
 [parsers.tsx]                   # custom parser (has command)
 files = ["*.tsx"]

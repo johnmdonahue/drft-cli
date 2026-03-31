@@ -1,4 +1,4 @@
-use super::{Parser, RawLink};
+use super::{ParseResult, Parser, RawLink};
 use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -31,18 +31,18 @@ impl Parser for ScriptParser {
         }
     }
 
-    fn parse(&self, path: &str, _content: &str) -> Vec<RawLink> {
+    fn parse(&self, path: &str, _content: &str) -> ParseResult {
         // Single-file fallback — used when parse_batch isn't called
         match self.run_batch(&[path]) {
             Ok(mut results) => results.remove(path).unwrap_or_default(),
             Err(e) => {
                 eprintln!("warn: parser {}: {path}: {e}", self.parser_name);
-                Vec::new()
+                ParseResult::default()
             }
         }
     }
 
-    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, ParseResult> {
         let paths: Vec<&str> = files.iter().map(|(path, _)| *path).collect();
         match self.run_batch(&paths) {
             Ok(results) => results,
@@ -55,7 +55,7 @@ impl Parser for ScriptParser {
 }
 
 impl ScriptParser {
-    fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, Vec<RawLink>>> {
+    fn run_batch(&self, paths: &[&str]) -> anyhow::Result<HashMap<String, ParseResult>> {
         if paths.is_empty() {
             return Ok(HashMap::new());
         }
@@ -96,49 +96,71 @@ impl ScriptParser {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut results: HashMap<String, Vec<RawLink>> = HashMap::new();
+        let mut results: HashMap<String, ParseResult> = HashMap::new();
 
         for line in stdout.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
             }
-            match serde_json::from_str::<ScriptLink>(line) {
-                Ok(sl) => {
-                    let link = RawLink {
-                        target: sl.target,
-                        link_type: sl.link_type,
-                        is_external: false,
-                    };
 
-                    // Apply type filter
-                    if let Some(ref types) = self.type_filter
-                        && !types.iter().any(|t| t == &link.link_type)
-                    {
-                        continue;
-                    }
-
-                    results.entry(sl.file).or_default().push(link);
-                }
+            // Try as edge first ({ file, target, type }), then as metadata ({ file, metadata })
+            let json: serde_json::Value = match serde_json::from_str(line) {
+                Ok(v) => v,
                 Err(e) => {
                     eprintln!(
                         "warn: parser {}: malformed JSON line: {e}",
                         self.parser_name
                     );
+                    continue;
                 }
+            };
+
+            let file = match json.get("file").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    eprintln!(
+                        "warn: parser {}: JSON line missing 'file' field",
+                        self.parser_name
+                    );
+                    continue;
+                }
+            };
+
+            if let Some(metadata) = json.get("metadata") {
+                // Metadata line: { file, metadata }
+                results.entry(file).or_default().metadata = Some(metadata.clone());
+            } else if let Some(target) = json.get("target").and_then(|v| v.as_str()) {
+                // Edge line: { file, target, type }
+                let link_type = json
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("link")
+                    .to_string();
+                let link = RawLink {
+                    target: target.to_string(),
+                    link_type,
+                    is_external: false,
+                };
+
+                // Apply type filter
+                if let Some(ref types) = self.type_filter
+                    && !types.iter().any(|t| t == &link.link_type)
+                {
+                    continue;
+                }
+
+                results.entry(file).or_default().links.push(link);
+            } else {
+                eprintln!(
+                    "warn: parser {}: JSON line has neither 'target' nor 'metadata'",
+                    self.parser_name
+                );
             }
         }
 
         Ok(results)
     }
-}
-
-#[derive(serde::Deserialize)]
-struct ScriptLink {
-    file: String,
-    target: String,
-    #[serde(rename = "type")]
-    link_type: String,
 }
 
 fn wait_with_timeout(

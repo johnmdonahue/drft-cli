@@ -17,17 +17,25 @@ pub struct RawLink {
     pub is_external: bool,
 }
 
+/// Combined output from parsing a single file: edges + optional metadata.
+#[derive(Debug, Clone, Default)]
+pub struct ParseResult {
+    pub links: Vec<RawLink>,
+    /// Structured metadata extracted from the file, namespaced by parser on the node.
+    pub metadata: Option<serde_json::Value>,
+}
+
 /// Trait implemented by all parsers (built-in and script-based).
 pub trait Parser {
     /// Parser name (used as the namespace in EdgeType, e.g., "markdown").
     fn name(&self) -> &str;
     /// Check if this parser should run on a given file path.
     fn matches(&self, path: &str) -> bool;
-    /// Parse a file's content and return discovered links.
-    fn parse(&self, path: &str, content: &str) -> Vec<RawLink>;
+    /// Parse a file's content and return discovered links + optional metadata.
+    fn parse(&self, path: &str, content: &str) -> ParseResult;
     /// Parse multiple files in one call. Default falls back to per-file parsing.
     /// Script parsers override this to spawn one process for all files.
-    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, Vec<RawLink>> {
+    fn parse_batch(&self, files: &[(&str, &str)]) -> HashMap<String, ParseResult> {
         files
             .iter()
             .map(|(path, content)| (path.to_string(), self.parse(path, content)))
@@ -111,9 +119,16 @@ pub fn build_parsers(
             // Built-in parser
             match name.as_str() {
                 "markdown" => {
+                    let extract_metadata = config
+                        .options
+                        .as_ref()
+                        .and_then(|v| v.get("extract_metadata"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     parsers.push(Box::new(markdown::MarkdownParser {
                         file_filter,
                         type_filter,
+                        extract_metadata,
                     }));
                 }
                 _ => {

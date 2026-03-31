@@ -39,6 +39,7 @@ mod tests {
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -57,6 +58,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -87,6 +89,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -115,6 +118,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

@@ -124,7 +124,7 @@ mod tests {
     use crate::graph::test_helpers::{make_edge, make_node};
     use crate::graph::{Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, LockfileInterface, LockfileNode, write_lockfile};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -203,6 +203,7 @@ mod tests {
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/internal.md"));
 
@@ -249,6 +250,7 @@ mod tests {
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(make_edge("index.md", "research/overview.md"));
 

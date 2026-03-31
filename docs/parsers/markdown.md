@@ -84,46 +84,49 @@ Wikilinks inside code (fenced blocks and inline backtick spans) are ignored. The
 
 ## Configuration
 
-### Enable (default)
+### Minimal
 
 ```toml
-[parsers]
-markdown = true
+[parsers.markdown]
 ```
 
-When `markdown = true`, the parser uses the default glob `*.md` and extracts all six link types.
+With no `files` field, the parser receives all File nodes in the graph. Extracts all six link types.
+
+### File routing
+
+Restrict which File nodes the parser receives:
+
+```toml
+[parsers.markdown]
+files = ["*.md", "*.mdx"]
+```
+
+This is routing only — it does not affect which paths become nodes (that's `include`/`exclude`).
 
 ### Type filtering
 
-Restrict which link types the parser extracts:
-
-```toml
-[parsers]
-markdown = ["frontmatter", "wikilink"]
-```
-
-This runs the full parser but only keeps links whose type matches the list. Useful if you only want to track certain kinds of dependencies.
-
-### Custom glob
-
-Override the default file matching pattern:
+Restrict which link types the parser keeps:
 
 ```toml
 [parsers.markdown]
-glob = "*.{md,mdx}"
-```
+files = ["*.md"]
 
-The glob matches against filenames only (not full paths), so `*.md` matches `docs/guide.md`.
-
-### Expanded form
-
-Combine glob and type filter in the table form:
-
-```toml
-[parsers.markdown]
-glob = "*.{md,mdx}"
+[parsers.markdown.options]
 types = ["inline", "image"]
 ```
+
+This runs the full parser but only keeps links whose type matches the list.
+
+### Metadata extraction
+
+Extract YAML frontmatter as structured metadata on nodes:
+
+```toml
+[parsers.markdown.options]
+extract_metadata = true
+```
+
+When enabled, the full YAML frontmatter is parsed and attached to the node as `node.metadata["markdown"]`. This makes frontmatter fields available to rules like [schema-violation](../rules/schema-violation.md).
 
 ### Disable
 

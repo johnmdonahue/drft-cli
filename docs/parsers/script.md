@@ -43,7 +43,9 @@ src/parsers/mod.rs
 
 ### Output (stdout)
 
-One JSON object per line (NDJSON). Each object must have three fields:
+One JSON object per line (NDJSON). Two kinds of lines:
+
+**Edge lines** — discovered links:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -51,15 +53,25 @@ One JSON object per line (NDJSON). Each object must have three fields:
 | `target` | string | The link target (relative file path) |
 | `type` | string | Link type label (your choice, e.g. `"import"`, `"ref"`) |
 
+**Metadata lines** — structured data on a node:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file` | string | The file path this metadata belongs to |
+| `metadata` | object | Arbitrary JSON object attached to the node |
+
+drft distinguishes the two by checking for a `target` or `metadata` field.
+
 Example output:
 
 ```json
 {"file": "src/api.yaml", "target": "shared/types.yaml", "type": "import"}
 {"file": "src/api.yaml", "target": "../schemas/base.yaml", "type": "ref"}
+{"file": "src/api.yaml", "metadata": {"version": "3.0", "title": "API Spec"}}
 {"file": "src/models.yaml", "target": "shared/types.yaml", "type": "import"}
 ```
 
-Empty lines are silently skipped. The `type` value becomes part of the edge type in the graph as `<parser-name>:<type>` -- so the above would produce edges of type `yaml-refs:import` and `yaml-refs:ref`.
+Empty lines are silently skipped. The `type` value becomes part of the edge type in the graph as `<parser-name>:<type>` -- so the above would produce edges of type `yaml-refs:import` and `yaml-refs:ref`. Metadata is namespaced by parser name on the node as `node.metadata["yaml-refs"]`.
 
 The batch approach (one process for all files) is much faster than per-file spawning.
 

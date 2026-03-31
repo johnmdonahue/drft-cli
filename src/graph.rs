@@ -85,6 +85,9 @@ pub struct Node {
     /// If set, this node lives in a child graph (value is the child graph's path).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph: Option<String>,
+    /// Structured metadata from parsers, keyed by parser name.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -191,6 +194,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             node_type: NodeType::File,
             hash: Some(hash),
             graph: None,
+            metadata: HashMap::new(),
         });
 
         // Try to read as text for parser input — binary files just won't have text
@@ -228,8 +232,16 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
         let batch_results = parser.parse_batch(&files);
 
-        for (file, links) in batch_results {
-            for link in links {
+        for (file, result) in batch_results {
+            // Attach metadata to node if parser returned it
+            if let Some(metadata) = result.metadata
+                && let Some(node) = graph.nodes.get_mut(&file)
+            {
+                node.metadata
+                    .insert(parser.name().to_string(), metadata);
+            }
+
+            for link in result.links {
                 let edge_type = EdgeType::new(parser.name(), &link.link_type);
                 if link.is_external {
                     pending_edges.push(Edge {
@@ -265,6 +277,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             node_type: NodeType::Graph,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
     }
 
@@ -286,6 +299,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 node_type: NodeType::External,
                 hash: None,
                 graph: None,
+                metadata: HashMap::new(),
             });
             continue;
         }
@@ -302,6 +316,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     node_type: NodeType::External,
                     hash: None,
                     graph: Some(graph_prefix.clone()),
+                    metadata: HashMap::new(),
                 });
                 // Synthetic coupling edge: child-graph file → Graph node
                 implicit_edges.push(Edge {
@@ -325,6 +340,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 node_type: NodeType::External,
                 hash: None,
                 graph: None,
+                metadata: HashMap::new(),
             });
         }
         // If doesn't exist or is a directory: no node created.
@@ -420,6 +436,7 @@ pub mod test_helpers {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         }
     }
 
@@ -500,12 +517,14 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "b.md".into(),
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         g.add_edge(Edge {
             source: "a.md".into(),

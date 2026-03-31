@@ -8,6 +8,7 @@ pub mod fragmentation;
 pub mod layer_violation;
 pub mod orphan_node;
 pub mod redundant_edge;
+pub mod schema_violation;
 pub mod script;
 pub mod stale;
 pub mod symlink_edge;
@@ -42,6 +43,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(layer_violation::LayerViolationRule),
         Box::new(orphan_node::OrphanNodeRule),
         Box::new(redundant_edge::RedundantEdgeRule),
+        Box::new(schema_violation::SchemaViolationRule),
         Box::new(stale::StaleRule),
         Box::new(symlink_edge::SymlinkEdgeRule),
     ]

@@ -32,6 +32,7 @@ Naming rule: "drift" spelled out refers only to the concept of structural drift.
 - `serde_json` for JSON output
 - `blake3` for content hashing (prefix: `b3:`)
 - `pulldown-cmark` for markdown parsing (built-in parser)
+- `serde_yaml` for YAML frontmatter metadata extraction
 - `ignore` for directory traversal (.gitignore-aware)
 - `globset` for ignore/glob patterns
 - `notify` for watch mode
@@ -55,7 +56,7 @@ cargo run -- check    # runs as `drft check`
 - Config (`drft.toml`): TOML, unified `[parsers]` and `[rules]` sections, `[interface]` for graph boundary
 - Hashes use BLAKE3 with `b3:` prefix
 - Edge types are namespaced by parser: `markdown:inline`, `markdown:frontmatter`, `tsx:import`, etc.
-- Node types: `Source` (parser ran on it), `Resource` (linked to, not parsed), `External` (URI), `Graph` (child graph)
+- Node types: `File` (matched by `include`, hashed, tracked, parsed), `External` (discovered via edge, not tracked), `Graph` (child graph)
 - Parsers are configurable via `[parsers]` — built-in (markdown) or script-based (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)

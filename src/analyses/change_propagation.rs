@@ -179,6 +179,7 @@ mod tests {
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::lockfile::{Lockfile, write_lockfile};
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -205,12 +206,14 @@ mod tests {
             node_type: NodeType::File,
             hash: Some(index_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: Some(setup_hash),
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

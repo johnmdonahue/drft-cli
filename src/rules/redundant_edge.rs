@@ -37,6 +37,7 @@ mod tests {
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
 
     fn make_node(path: &str) -> Node {
         Node {
@@ -44,6 +45,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         }
     }
 

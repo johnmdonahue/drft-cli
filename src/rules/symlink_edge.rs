@@ -52,6 +52,7 @@ mod tests {
     use crate::config::Config;
     use crate::graph::{Edge, EdgeType, Graph, Node, NodeType};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
 
     fn make_enriched(graph: Graph) -> EnrichedGraph {
         crate::analyses::enrich_graph(graph, std::path::Path::new("."), &Config::defaults(), None)
@@ -65,6 +66,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -92,6 +94,7 @@ mod tests {
             node_type: NodeType::File,
             hash: None,
             graph: None,
+            metadata: HashMap::new(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
