@@ -102,7 +102,7 @@ hash = "b3:ffba54d37eab2915b0c35f9e124e5b8f07321f41fb590f205a76b047196f1949"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
-hash = "b3:739319d2266df1683d00e11bd6497b8a269a08a2b153eea6f9a724161976bada"
+hash = "b3:6beb71234bced7fafb86df2da30c0b64e14ab4c059d3bfc69891bbf246d6c447"
 
 [nodes."docs/parsers/script.md"]
 type = "file"

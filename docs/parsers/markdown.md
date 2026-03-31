@@ -81,7 +81,7 @@ markdown = false
 
 ## External URLs
 
-External links (`http://` and `https://`) are emitted as raw targets by the parser. The graph builder classifies them as External nodes. Anchor-only links (`#heading`) and `mailto:` links are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
+External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw targets by the parser. The graph builder classifies them as External nodes. Anchor-only links (`#heading`) are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
 
 ## Source
 
