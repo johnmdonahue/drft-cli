@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
-use cli::{Cli, ColorChoice, Commands, OutputFormat};
+use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
 use config::{Config, RuleSeverity};
 use diagnostic::Diagnostic;
 use graph::build_graph;
@@ -67,6 +67,12 @@ fn try_main() -> Result<i32> {
 
     match &cli.command {
         Commands::Init => run_init(&root),
+        Commands::Config { action } => match action {
+            ConfigAction::Show {
+                recursive,
+                max_depth,
+            } => run_config_show(&root, cli.format, *recursive, *max_depth),
+        },
         Commands::Lock {
             check,
             recursive,
@@ -141,6 +147,110 @@ include = ["*.md"]
         .with_context(|| format!("failed to write {}", config_path.display()))?;
 
     Ok(0)
+}
+
+fn run_config_show(
+    root: &Path,
+    format: OutputFormat,
+    recursive: bool,
+    max_depth: Option<usize>,
+) -> Result<i32> {
+    if recursive {
+        match format {
+            OutputFormat::Json => {
+                let mut entries = Vec::new();
+                collect_configs_recursive(root, ".", max_depth, &mut entries)?;
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+            }
+            OutputFormat::Text => {
+                print_configs_recursive(root, ".", max_depth, true)?;
+            }
+        }
+    } else {
+        let config = Config::load(root)?;
+        match format {
+            OutputFormat::Json => {
+                println!("{}", serde_json::to_string_pretty(&config)?);
+            }
+            OutputFormat::Text => {
+                let toml_str = toml::to_string_pretty(&config)
+                    .context("failed to serialize config as TOML")?;
+                print!("{}", toml_str);
+            }
+        }
+    }
+    Ok(0)
+}
+
+fn normalize_label(root: &Path, child_dir: &Path) -> String {
+    child_dir
+        .strip_prefix(root)
+        .unwrap_or(child_dir)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn collect_configs_recursive(
+    root: &Path,
+    label: &str,
+    max_depth: Option<usize>,
+    entries: &mut Vec<serde_json::Value>,
+) -> Result<()> {
+    let config = Config::load(root)?;
+    let mut value = serde_json::to_value(&config)?;
+    if let serde_json::Value::Object(ref mut map) = value {
+        map.insert("path".to_string(), serde_json::json!(label));
+    }
+    entries.push(value);
+
+    if max_depth == Some(0) {
+        return Ok(());
+    }
+
+    let next_depth = max_depth.map(|d| d.saturating_sub(1));
+    let child_graphs = find_lockable_graphs(root)?;
+    for child_dir in &child_graphs {
+        let relative = normalize_label(root, child_dir);
+        let child_label = if label == "." {
+            relative
+        } else {
+            format!("{label}/{relative}")
+        };
+        collect_configs_recursive(child_dir, &child_label, next_depth, entries)?;
+    }
+    Ok(())
+}
+
+fn print_configs_recursive(
+    root: &Path,
+    label: &str,
+    max_depth: Option<usize>,
+    first: bool,
+) -> Result<()> {
+    let config = Config::load(root)?;
+    if !first {
+        println!();
+    }
+    println!("# {}", label);
+    let toml_str = toml::to_string_pretty(&config).context("failed to serialize config as TOML")?;
+    print!("{}", toml_str);
+
+    if max_depth == Some(0) {
+        return Ok(());
+    }
+
+    let next_depth = max_depth.map(|d| d.saturating_sub(1));
+    let child_graphs = find_lockable_graphs(root)?;
+    for child_dir in &child_graphs {
+        let relative = normalize_label(root, child_dir);
+        let child_label = if label == "." {
+            relative
+        } else {
+            format!("{label}/{relative}")
+        };
+        print_configs_recursive(child_dir, &child_label, next_depth, false)?;
+    }
+    Ok(())
 }
 
 fn run_lock(

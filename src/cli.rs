@@ -78,6 +78,12 @@ pub enum Commands {
         names: Vec<String>,
     },
 
+    /// Show resolved configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+
     /// Check structure for rule violations
     Check {
         /// Run only specific rules (can be repeated)
@@ -95,6 +101,20 @@ pub enum Commands {
         /// Watch for changes and re-check
         #[arg(long, short = 'w')]
         watch: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigAction {
+    /// Print the resolved configuration (defaults filled in)
+    Show {
+        /// Show config for each graph in the tree
+        #[arg(long, short = 'r')]
+        recursive: bool,
+
+        /// Max graph nesting depth for --recursive
+        #[arg(long, requires = "recursive")]
+        max_depth: Option<usize>,
     },
 }
 

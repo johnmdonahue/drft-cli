@@ -124,6 +124,16 @@ drft report --format json degree  # machine-readable output
 
 See [analyses documentation](docs/analyses/README.md) for the full list.
 
+### `drft config`
+
+Show the resolved configuration (defaults filled in).
+
+```bash
+drft config show              # resolved config as TOML
+drft config show --format json # machine-readable
+drft config show --recursive  # config for each graph in the tree
+```
+
 ### `drft init`
 
 Create a default `drft.toml` config file.
