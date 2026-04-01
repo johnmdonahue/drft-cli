@@ -2,6 +2,26 @@
 
 All notable changes to drft are documented here.
 
+## 0.5.0 (2026-03-31)
+
+drft.toml as the sole graph marker — simpler mental model, no ordering constraints.
+
+### Breaking changes
+
+- **Require `drft.toml` to run** — `drft check`, `drft lock`, etc. exit 2 without a config file instead of silently applying defaults.
+- **Child graph discovery by `drft.toml` only** — bare `drft.lock` no longer marks a graph boundary.
+- **Directory nodes hashed from `drft.toml`** — parent tracks child config for staleness; no dependency on child lockfiles.
+
+### New features
+
+- **`drft config show`** — display the resolved configuration (defaults filled in). Supports `--format json` and `--recursive`.
+
+### Fixes
+
+- **Directory staleness detection** — `compute_current_hash` was hashing `drft.lock` while `build_graph` hashed `drft.toml`, causing child graphs to always appear stale.
+- **Interface file promotion** — now honors child's `exclude` and interface `ignore` patterns.
+- **`untrackable-target` rule** — restored with updated message ("add a drft.toml" instead of "create a lockfile").
+
 ## 0.4.0 (2026-03-31)
 
 Graph model redesign — explicit graph declaration, pure rules, parser metadata, and enriched impact analysis.
