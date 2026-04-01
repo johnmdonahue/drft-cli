@@ -6,45 +6,22 @@ include = ["*.md", "*.rs", ".claude/settings.json"]
 files = ["*.md"]
 
 [rules]
-# All rules default to warn. Override only what you need.
-stale = "error" # recommended for LLM workflows and CI
-# fragility = "off" # tree-shaped docs are expected to have bridges
-# layer-violation = "off" # CONTRIBUTING.md intentionally links deep
-# redundant-edge = "off" # docs/rules/README.md cross-references are intentional
+stale = "error"
 
+# Hub files (READMEs, root docs) are structural connectors — they link
+# broadly by design, so structural rules like fragility, layer-violation,
+# orphan-node, and redundant-edge produce expected warnings on them.
 [rules.fragility]
-ignore = [
-  "**/README.md",
-  "CONTRIBUTING.md",
-  "CHANGELOG.md",
-  "CLAUDE.md",
-  "RELEASING.md",
-  "npm/README.md",
-]
+ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "docs/config.md"]
 
 [rules.fragmentation]
 ignore = ["CHANGELOG.md", "npm/README.md"]
 
 [rules.layer-violation]
-ignore = [
-  "**/README.md",
-  "CONTRIBUTING.md",
-  "CHANGELOG.md",
-  "CLAUDE.md",
-  "RELEASING.md",
-  "npm/README.md",
-  "docs/config.md",
-]
+ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "docs/config.md"]
 
 [rules.orphan-node]
-ignore = [
-  "**/README.md",
-  "CONTRIBUTING.md",
-  "CHANGELOG.md",
-  "CLAUDE.md",
-  "RELEASING.md",
-  "npm/README.md",
-]
+ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md"]
 
 [rules.redundant-edge]
 ignore = ["**/README.md", "CONTRIBUTING.md", "docs/config.md"]
