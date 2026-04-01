@@ -350,12 +350,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         metadata: HashMap::new(),
                     });
                     // Promote interface files into parent graph
-                    promote_interface_files(
-                        root,
-                        child_name,
-                        &mut graph,
-                        &mut implicit_edges,
-                    );
+                    promote_interface_files(root, child_name, &mut graph, &mut implicit_edges);
                 }
                 // Synthetic coupling edge: child-graph file → Directory node
                 implicit_edges.push(Edge {
@@ -389,12 +384,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 metadata: HashMap::new(),
             });
             if has_config {
-                promote_interface_files(
-                    root,
-                    &edge.target,
-                    &mut graph,
-                    &mut implicit_edges,
-                );
+                promote_interface_files(root, &edge.target, &mut graph, &mut implicit_edges);
             }
             continue;
         }
