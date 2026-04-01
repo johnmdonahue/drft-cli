@@ -102,7 +102,7 @@ hash = "b3:4d0ccf67be0e28e32dea6efc893c355d72a11297cb196ba945cebf9c39ceb6fe"
 
 [nodes."docs/rules/README.md"]
 type = "file"
-hash = "b3:0e87503cbd4ed4cdbca6bc9dde48a546089dc14144b8a551c0f066bc6e3603a3"
+hash = "b3:a1fc57deffac78d1f9a6b8cbd08542df1948ae0e20fe2f9dcd6bdac8a18d5194"
 
 [nodes."docs/rules/boundary-violation.md"]
 type = "file"
@@ -124,25 +124,13 @@ hash = "b3:4586616cef03f44d7a3974ac4883c23a0aa005d4e1cbb8b719c510a9270fbfbc"
 type = "file"
 hash = "b3:1a3e4533a106d3b084d149c306ddf0be286d2f88378adc8770044c29cb2ac38a"
 
-[nodes."docs/rules/fragility.md"]
-type = "file"
-hash = "b3:211a4e09732da59d717bf23bcdcb867984bbe2fd59aaaf4029502db90a558246"
-
 [nodes."docs/rules/fragmentation.md"]
 type = "file"
 hash = "b3:7abf1334024b6131fa282e5c3c81da6c37eea269aeb9d2557d8e3d4da8d9c646"
 
-[nodes."docs/rules/layer-violation.md"]
-type = "file"
-hash = "b3:b9d6c4fe0651ec43dc0915ec0e6eb8131f1087e190206acd0d0afa8d1cf8aced"
-
 [nodes."docs/rules/orphan-node.md"]
 type = "file"
 hash = "b3:5aab564d7bd70c20baa4615c5e9370d5d92069b27df89d8870a83cca03612bab"
-
-[nodes."docs/rules/redundant-edge.md"]
-type = "file"
-hash = "b3:4eb9147094cbb3fb65239414519a78c4a85112107a35633686c84b0bd6d00840"
 
 [nodes."docs/rules/schema-violation.md"]
 type = "file"
@@ -307,7 +295,7 @@ hash = "b3:878f2048460978e93ef4602de13b02659d86972c34e3f69e66ba95bf48325bad"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:7dbf58511d74166c6942efbdd3f3d42014f8f4e4fee328b9e0fb57b3b02250d3"
+hash = "b3:ec8bbc6b4b10ef521c2da081ba079421e2e521ebddb600074192b2a7903a8ba6"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
@@ -369,29 +357,17 @@ hash = "b3:388b65f29f3acf9e5f53ae206eaba81215cffe3360472e296b88c907aa16e212"
 type = "file"
 hash = "b3:b8519b5bfbdf4d5421feaf5d03ff888f1838825a8d45b49d40b51f8ba723b793"
 
-[nodes."src/rules/fragility.rs"]
-type = "file"
-hash = "b3:96dcff7427e57854d968988d477c1949d393fc0f1301d13e927b5dc0fa03b7a2"
-
 [nodes."src/rules/fragmentation.rs"]
 type = "file"
 hash = "b3:6b96f22b78cbac5bcff9ee2267af29cf22866ae5ccc5329d534ca3b5e3946211"
 
-[nodes."src/rules/layer_violation.rs"]
-type = "file"
-hash = "b3:8abd5c0f62db977a0ae06e8416e8871f0fa079cd07371c754010a701eb4e7f02"
-
 [nodes."src/rules/mod.rs"]
 type = "file"
-hash = "b3:d4bb5f83273e32fc7dba23e81057627652fac04341fb02c3e6a3913294ddb15c"
+hash = "b3:5847bc7bb95b4a9558d021f517d82242ae0fe1fa99e865dadde7d81e404267c2"
 
 [nodes."src/rules/orphan_node.rs"]
 type = "file"
 hash = "b3:fb24e3e0340d9f15156f70e6c8e5064979568abc7665ba874061f7a279b10ebd"
-
-[nodes."src/rules/redundant_edge.rs"]
-type = "file"
-hash = "b3:d8cc028cb495fe076d29d36bc8706ba39a77c692ab03d0ae64e8ad6879f48edc"
 
 [nodes."src/rules/schema_violation.rs"]
 type = "file"

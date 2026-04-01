@@ -11,9 +11,6 @@ files = ["*.md"]
 
 [rules]
 stale = "error"
-fragility = "off"
-layer-violation = "off"
-redundant-edge = "off"
 
 [rules.schema-violation]
 files = ["docs/**"]
