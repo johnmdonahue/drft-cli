@@ -142,13 +142,16 @@ fn promote_interface_files(
         Err(_) => return,
     };
 
-    let interface_files = match &config.interface {
-        Some(iface) => &iface.files,
+    let (interface_files, interface_ignore) = match &config.interface {
+        Some(iface) => (&iface.files, &iface.ignore),
         None => return,
     };
 
-    // Resolve interface globs to actual files
-    let included = match discover(&child_dir, interface_files, &[]) {
+    // Resolve interface globs to actual files, honoring child excludes and interface ignores
+    let mut exclude_patterns = config.exclude.clone();
+    exclude_patterns.extend(interface_ignore.iter().cloned());
+
+    let included = match discover(&child_dir, interface_files, &exclude_patterns) {
         Ok(files) => files,
         Err(_) => return,
     };
