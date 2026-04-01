@@ -15,11 +15,11 @@ drft builds the graph in a single pass: discover files, run parsers, normalize l
 
 ### Node types
 
-| Type        | Meaning                                                                                                                          |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `File`      | A path matched by `include` (minus `exclude`). Hashed, tracked, sent to parsers.                                                 |
+| Type        | Meaning                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `File`      | A path matched by `include` (minus `exclude`). Hashed, tracked, sent to parsers.                                                           |
 | `Directory` | A directory on disk. When it contains a `drft.toml`, it's a child graph (`is_graph`). Hashed on the fly from the child's discovered files. |
-| `External`  | Discovered via an edge — target not in `include`. Validated for existence, not tracked. Covers both file paths on disk and URIs. |
+| `External`  | Discovered via an edge — target not in `include`. Validated for existence, not tracked. Covers both file paths on disk and URIs.           |
 
 `include`/`exclude` drive node classification, not parsers. The `include` patterns declare the graph's known universe of files. Everything outside is an exit.
 
