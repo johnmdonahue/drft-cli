@@ -162,8 +162,8 @@ impl Analysis for ChangePropagation {
 fn compute_current_hash(root: &Path, relative_path: &str, node_type: NodeType) -> Option<String> {
     if node_type == NodeType::Directory {
         let child_dir = root.join(relative_path);
-        let lockfile_path = child_dir.join("drft.lock");
-        let content = std::fs::read(&lockfile_path).ok()?;
+        let config_path = child_dir.join("drft.toml");
+        let content = std::fs::read(&config_path).ok()?;
         Some(hash_bytes(&content))
     } else {
         let full_path = root.join(relative_path);

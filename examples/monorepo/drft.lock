@@ -14,7 +14,7 @@ hash = "b3:f116d530190009c4909d4b7f15251389c65981f6dd15a3042ceaec2ff72dc965"
 
 [nodes."projects/alpha"]
 type = "directory"
-hash = "b3:5ecc8ca980eca650f2e0b5f8e4758d776d6a503f7f971efed676b4cba0d21909"
+hash = "b3:a96abcf02ad7d670e2252fe4d602174a9d93c8c51ea1c6780d04f2decb8cac54"
 
 [nodes."projects/alpha/index.md"]
 type = "external"
@@ -23,7 +23,7 @@ graph = "projects/alpha"
 
 [nodes."projects/beta"]
 type = "directory"
-hash = "b3:c13547f40d97b2b5ba13567a730a1d652d3f352955fbf65678a2dc51dfce6d2e"
+hash = "b3:2719bab486f0b185105e9a0460dfc4eed9e5a43769fbf3be2339570aaf248b90"
 
 [nodes."projects/beta/index.md"]
 type = "external"

@@ -6,7 +6,7 @@ hash = "b3:b68c4b2bde8249c9a82895d2034375359e1240c4a4f1200d46f33ea269d68e61"
 
 [nodes."ARCHITECTURE.md"]
 type = "file"
-hash = "b3:8ba90176bfd93c7978f56a0337e53bddecfbb5ecbbde20387b716b0814ddd847"
+hash = "b3:29ec04319d0a7e73697289a05affcbd623604203e0d8738d2a81b316b88e74e8"
 
 [nodes."CHANGELOG.md"]
 type = "file"
@@ -94,7 +94,7 @@ hash = "b3:e1395c33ea81adf01d5b3a17ae72c95d4130f73e41e6724c642c2ad543cb252e"
 
 [nodes."docs/graph.md"]
 type = "file"
-hash = "b3:9f2ce1a6ffd3a743079a0868b40db366231bd658b54a79574a7307ea19f1fe84"
+hash = "b3:248a5d5205884564f4a8481d27f2f619b828d69b4298d78cf83c50ca8df0899c"
 
 [nodes."docs/parsers/README.md"]
 type = "file"
@@ -294,7 +294,7 @@ hash = "b3:3e6aa5c9c9b0e06102211bcfea85768849a31daa57bf4e2930eeace1b1bcd6b9"
 
 [nodes."src/analyses/change_propagation.rs"]
 type = "file"
-hash = "b3:67b8a2377632388bff24b435ecd177aa32e9afd092489b0792f02fdd42c71fe7"
+hash = "b3:35f133d2f962758dde39a662b3bb96b5f243f509021176275fe7322103c4f83d"
 
 [nodes."src/analyses/connected_components.rs"]
 type = "file"
@@ -342,7 +342,7 @@ hash = "b3:878f2048460978e93ef4602de13b02659d86972c34e3f69e66ba95bf48325bad"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:15fb71f8fbb90077a62ed12f077826410026845f17c3bb990e55838d6c2d43af"
+hash = "b3:a0b34390ae719352389684f9f6876a235dd9830f9ac8fa40bb670008d2af2f8b"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
@@ -354,7 +354,7 @@ hash = "b3:8a0a213d2c8f0667c6f3a3002ab95744e988526d2324cbed8511722d51a5f9cd"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:196cd9fcfdc4ce4732e39a6d63170db7e5bd9f4902f19b2fca81a4b957e7d590"
+hash = "b3:2a560df98c9821701e878e901f698b43af7b446db27d7d9031e5e7da56960f6a"
 
 [nodes."src/lib.rs"]
 type = "file"
