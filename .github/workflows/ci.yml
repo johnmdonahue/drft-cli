@@ -21,3 +21,4 @@ jobs:
       - run: cargo test
       - run: cargo run -- check
       - run: cargo run -- lock --check
+      - run: cargo bench --no-run
