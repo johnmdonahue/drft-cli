@@ -11,10 +11,17 @@ drft.toml as the sole graph marker — simpler mental model, no ordering constra
 - **Require `drft.toml` to run** — `drft check`, `drft lock`, etc. exit 2 without a config file instead of silently applying defaults.
 - **Child graph discovery by `drft.toml` only** — bare `drft.lock` no longer marks a graph boundary.
 - **Directory nodes hashed from `drft.toml`** — parent tracks child config for staleness; no dependency on child lockfiles.
+- **`Graph` node type replaced by `Directory`** — `NodeType::Graph` is now `NodeType::Directory` with an `is_graph` boolean. JSON output, lockfiles, and custom rule input use `"directory"` instead of `"graph"`.
+- **Node `graph` field semantics expanded** — indicates graph membership: `"."` (local), `".."` (escape), child graph name, or `null` (not on filesystem). Replaces the previous "set only for child graph nodes" convention.
+- **`[interface] nodes` renamed to `[interface] files`** — config and lockfile both changed. New `ignore` field for excluding interface paths.
+- **`directory-edge` rule replaced by `untrackable-target`** — the config key changed; `directory-edge` is no longer recognized.
+- **Child graph paths normalized** — no trailing slash (`"research"` not `"research/"`).
+- **"Script" terminology renamed to "custom"** — "script parsers" and "script rules" are now "custom parsers" and "custom rules" in docs and source.
 
 ### New features
 
 - **`drft config show`** — display the resolved configuration (defaults filled in). Supports `--format json` and `--recursive`.
+- **Per-rule `files` scoping** — `[rules.<name>] files = ["docs/**"]` restricts which nodes a rule evaluates, complementing the existing `ignore` field.
 
 ### Fixes
 
@@ -29,8 +36,8 @@ Graph model redesign — explicit graph declaration, pure rules, parser metadata
 ### Breaking changes
 
 - **Graph declaration**: `include`/`exclude` replaces implicit parser-glob union. `ignore` renamed to `exclude`.
-- **Node types**: `Source` → `File`, `Resource` removed. `Graph` → `Directory` with `is_graph` property. Three types: File, Directory, External.
-- **Rule renames**: `broken-link` → `dangling-edge`, `cycle` → `directed-cycle`, `containment` → `boundary-violation`, `encapsulation` → `encapsulation-violation`, `orphan` → `orphan-node`, `indirect-link` → `symlink-edge`, `directory-link` → `directory-edge` → `untrackable-target`.
+- **Node types**: `Source` → `File`, `Resource` removed. Three types: File, External, Graph.
+- **Rule renames**: `broken-link` → `dangling-edge`, `cycle` → `directed-cycle`, `containment` → `boundary-violation`, `encapsulation` → `encapsulation-violation`, `orphan` → `orphan-node`, `indirect-link` → `symlink-edge`, `directory-link` → `directory-edge`.
 - **Parser contract**: `glob` replaced by `files` (array of globs), `types` replaced by `options` (arbitrary structured data). Parsers return raw link strings — graph builder owns normalization.
 - **Edge model simplified**: `RawLink`/`EdgeType` removed. Edge = `{ source, target, link?, parser }`.
 - **RuleContext**: reduced to `{ graph: &EnrichedGraph, options }`. No filesystem access, no config.

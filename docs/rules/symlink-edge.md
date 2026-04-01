@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/symlink_edge.rs
+---
+
 # symlink-edge
 
 Flags edges whose target is a symlink rather than a regular file.
@@ -32,7 +37,3 @@ ignore = []
 ## Analysis
 
 This rule inspects graph edges and target properties directly — it does not consume a separate analysis. For each edge with a local target, it checks `graph.target_properties` for the `is_symlink` flag set during graph building.
-
-## Source
-
-[`src/rules/symlink_edge.rs`](../../src/rules/symlink_edge.rs)

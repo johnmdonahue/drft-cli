@@ -1,6 +1,13 @@
+---
+sources:
+  - ../../src/rules/orphan_node.rs
+---
+
 # orphan-node
 
-Flags nodes with no inbound edges (in-degree = 0).
+Flags nodes with no connections — no inbound edges and no outbound edges. These are files that exist in the graph but don't participate in any link relationships.
+
+Files with outbound links but no inbound links (like `index.md` or `README.md`) are roots, not orphans. They are entry points into the graph and are not flagged.
 
 ## Example
 
@@ -8,15 +15,14 @@ Flags nodes with no inbound edges (in-degree = 0).
 docs/
   index.md       # links to setup.md
   setup.md
-  stray.md       # nothing links here
+  stray.md       # nothing links here, links to nothing
 ```
 
 ```
-warn[orphan-node]: stray.md (no inbound links)
-warn[orphan-node]: index.md (no inbound links)
+warn[orphan-node]: stray.md (no connections)
 ```
 
-Note that root entry points (like `index.md`) will also be flagged since they naturally have zero in-degree. Use the ignore list to suppress expected roots.
+`index.md` is not flagged — it has outbound links, making it a root node.
 
 ## Configuration
 
@@ -28,13 +34,9 @@ orphan-node = "warn" # default
 ```toml
 [rules.orphan-node]
 severity = "warn"
-ignore = ["index.md", "README.md"]
+ignore = ["CHANGELOG.md"]
 ```
 
 ## Analysis
 
 Uses the [degree](../analyses/degree.md) analysis, which computes in-degree and out-degree for every node.
-
-## Source
-
-[`src/rules/orphan_node.rs`](../../src/rules/orphan_node.rs)

@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/impact_radius.rs
+---
+
 # Impact radius
 
 ## The concept
@@ -39,7 +44,3 @@ The `drft impact` command annotates each impacted node with its impact radius an
 ## Algorithm
 
 BFS on reverse edges per File node. For each node, walk all transitive dependents, counting total reach (radius), immediate neighbors (direct_dependents), and maximum path length (max_depth). O(V*(V+E)) worst case, negligible at drft scale.
-
-## Source
-
-[`src/analyses/impact_radius.rs`](../../src/analyses/impact_radius.rs)

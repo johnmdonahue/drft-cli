@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/custom.rs
+---
+
 # Custom rules
 
 Custom rules let you define custom checks as external commands. The command receives the enriched graph and rule options as JSON on stdin and emits diagnostics as newline-delimited JSON on stdout.
@@ -75,7 +80,3 @@ If the command exits with a non-zero status, `drft` emits a warning to stderr an
 # Reads { graph, options } from stdin
 cat | jq -c '.graph.nodes | to_entries[] | select(.key | test("draft")) | {message: "file looks like a draft", node: .key}'
 ```
-
-## Source
-
-[`src/rules/custom.rs`](../../src/rules/custom.rs)

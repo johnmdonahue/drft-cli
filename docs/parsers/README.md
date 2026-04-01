@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/parsers/mod.rs
+---
+
 # Parsers
 
 Parsers extract edges and metadata from files. Each parser receives File nodes (optionally filtered by `files` globs), parses their content, and emits links that become edges in the graph. Parsers can also emit structured metadata that is attached to nodes.

@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/stale.rs
+---
+
 # stale
 
 Flags files whose content has changed since the last `drft lock`, and files that are transitively stale because a dependency changed.
@@ -34,7 +39,3 @@ ignore = ["CHANGELOG.md"]
 ## Analysis
 
 Uses the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges.
-
-## Source
-
-[`src/rules/stale.rs`](../../src/rules/stale.rs)

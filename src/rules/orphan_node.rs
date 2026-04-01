@@ -14,13 +14,13 @@ impl Rule for OrphanNodeRule {
         result
             .nodes
             .iter()
-            .filter(|nd| nd.in_degree == 0)
+            .filter(|nd| nd.in_degree == 0 && nd.out_degree == 0)
             .map(|nd| Diagnostic {
                 rule: "orphan-node".into(),
-                message: "no inbound links".into(),
+                message: "no connections".into(),
                 node: Some(nd.node.clone()),
                 fix: Some(format!(
-                    "{} has no inbound links — either link to it from another file or remove it",
+                    "{} has no inbound or outbound links — either link to it from another file or remove it",
                     nd.node
                 )),
                 ..Default::default()
@@ -37,7 +37,7 @@ mod tests {
     use crate::rules::RuleContext;
 
     #[test]
-    fn detects_orphan() {
+    fn detects_isolated_node() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(make_node("orphan.md"));
@@ -55,11 +55,10 @@ mod tests {
             .map(|d| d.node.as_deref().unwrap())
             .collect();
         assert!(orphan_nodes.contains(&"orphan.md"));
-        assert!(orphan_nodes.contains(&"index.md"));
     }
 
     #[test]
-    fn linked_file_is_not_orphan() {
+    fn root_node_is_not_orphan() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(make_node("setup.md"));
@@ -77,6 +76,6 @@ mod tests {
             .map(|d| d.node.as_deref().unwrap())
             .collect();
         assert!(!orphan_nodes.contains(&"setup.md"));
-        assert!(orphan_nodes.contains(&"index.md"));
+        assert!(!orphan_nodes.contains(&"index.md"));
     }
 }

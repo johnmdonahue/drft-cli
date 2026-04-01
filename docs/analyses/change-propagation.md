@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/change_propagation.rs
+---
+
 # Change propagation
 
 ## The concept
@@ -58,7 +63,3 @@ warn[stale]: index.md (stale via setup.md)
 2. For each locked node, compute the current BLAKE3 hash and compare to the stored hash. Mismatches and deletions are direct changes.
 3. Check child graph boundaries: compare current `find_child_graphs()` against locked Directory nodes.
 4. BFS propagation: from each directly changed node, follow reverse edges in the lockfile to mark dependents as transitively stale.
-
-## Source
-
-[`src/analyses/change_propagation.rs`](../../src/analyses/change_propagation.rs)

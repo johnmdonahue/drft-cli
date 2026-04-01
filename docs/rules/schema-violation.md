@@ -1,12 +1,13 @@
+---
+sources:
+  - ../../src/rules/schema_violation.rs
+---
+
 # schema-violation
 
 Validates that File nodes have the required metadata fields and that field values are within allowed sets. This rule only produces diagnostics when configured with options — without options, it does nothing.
 
 **Default severity:** `warn`
-
-## Source
-
-[`src/rules/schema_violation.rs`](../../src/rules/schema_violation.rs)
 
 ## How it works
 
@@ -49,4 +50,4 @@ allowed.status = ["draft", "review", "final"]
 
 ## Requires
 
-- Parser metadata: at least one parser must emit metadata for nodes to have fields to validate. The built-in [frontmatter parser](../parsers/frontmatter.md) extracts YAML frontmatter as metadata. Script parsers can also emit metadata.
+- Parser metadata: at least one parser must emit metadata for nodes to have fields to validate. The built-in [frontmatter parser](../parsers/frontmatter.md) extracts YAML frontmatter as metadata. Custom parsers can also emit metadata.

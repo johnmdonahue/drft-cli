@@ -1,21 +1,20 @@
 # drft.toml — drft dogfooding itself
 
-include = ["*.md", "*.rs", ".claude/settings.json"]
+include = ["*.md", "src/**/*.rs", ".claude/settings.json"]
+exclude = ["src/lib.rs", "CHANGELOG.md", "npm/*"]
 
 [parsers.markdown]
 files = ["*.md"]
 
+[parsers.frontmatter]
+files = ["*.md"]
+
 [rules]
-# All rules default to warn. Override only what you need.
-stale = "error" # recommended for LLM workflows and CI
-fragility = "off" # tree-shaped docs are expected to have bridges
-layer-violation = "off" # ARCHITECTURE.md intentionally links deep
-redundant-edge = "off" # docs/rules/README.md cross-references are intentional
+stale = "error"
 
-[rules.fragmentation]
-severity = "warn"
-ignore = ["CHANGELOG.md", "npm/README.md"]
+[rules.schema-violation]
+files = ["docs/**"]
+ignore = ["docs/README.md"]
 
-[rules.orphan-node]
-severity = "warn"
-ignore = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "npm/README.md"]
+[rules.schema-violation.options.schemas."docs/**"]
+required = ["sources"]
