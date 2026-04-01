@@ -36,7 +36,6 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(boundary_violation::BoundaryViolationRule),
         Box::new(dangling_edge::DanglingEdgeRule),
         Box::new(directed_cycle::DirectedCycleRule),
-        Box::new(untrackable_target::UntrackableTargetRule),
         Box::new(encapsulation_violation::EncapsulationViolationRule),
         Box::new(fragility::FragilityRule),
         Box::new(fragmentation::FragmentationRule),
@@ -46,5 +45,6 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(schema_violation::SchemaViolationRule),
         Box::new(stale::StaleRule),
         Box::new(symlink_edge::SymlinkEdgeRule),
+        Box::new(untrackable_target::UntrackableTargetRule),
     ]
 }

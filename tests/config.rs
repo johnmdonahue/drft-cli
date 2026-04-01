@@ -6,7 +6,8 @@ use tempfile::TempDir;
 #[test]
 fn config_show_defaults() {
     let dir = TempDir::new().unwrap();
-    // No drft.toml — should show defaults
+    // Empty drft.toml — should show defaults
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "config", "show"])
         .output()

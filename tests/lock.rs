@@ -7,6 +7,7 @@ use tempfile::TempDir;
 #[test]
 fn scenario_5_first_lock() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -42,6 +43,7 @@ fn scenario_5_first_lock() {
 #[test]
 fn scenario_6_staleness_after_edit() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -76,6 +78,7 @@ fn scenario_6_staleness_after_edit() {
 #[test]
 fn scenario_7a_file_removed() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -111,6 +114,7 @@ fn scenario_7a_file_removed() {
 #[test]
 fn scenario_24_lock_check_current() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -136,6 +140,7 @@ fn scenario_24_lock_check_current() {
 #[test]
 fn scenario_25_lock_check_stale() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -164,6 +169,7 @@ fn scenario_25_lock_check_stale() {
 #[test]
 fn scenario_26_lock_check_no_lockfile() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 

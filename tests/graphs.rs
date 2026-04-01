@@ -7,6 +7,7 @@ use tempfile::TempDir;
 #[test]
 fn scenario_10_child_graph_open() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[overview](research/overview.md)",
@@ -15,6 +16,7 @@ fn scenario_10_child_graph_open() {
 
     let research = dir.path().join("research");
     fs::create_dir(&research).unwrap();
+    fs::write(research.join("drft.toml"), "").unwrap();
     fs::write(research.join("overview.md"), "# Overview").unwrap();
     fs::write(research.join("notes.md"), "# Notes").unwrap();
 
@@ -100,6 +102,7 @@ fn scenario_12_encapsulation_violation() {
 #[test]
 fn recursive_lock() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
 
     let child = dir.path().join("child");
@@ -178,19 +181,21 @@ fn recursive_check_with_child_config() {
 #[test]
 fn graph_boundary_staleness() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[docs](docs/readme.md)").unwrap();
 
     let docs = dir.path().join("docs");
     fs::create_dir(&docs).unwrap();
     fs::write(docs.join("readme.md"), "# Docs").unwrap();
 
-    // Lock parent (docs/ has no drft.lock yet)
+    // Lock parent (docs/ has no drft.toml yet — not a child graph)
     drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock"])
         .output()
         .unwrap();
 
-    // Now create a child graph in docs/
+    // Now create a child graph in docs/ by adding drft.toml + locking
+    fs::write(docs.join("drft.toml"), "").unwrap();
     drft_bin()
         .args(["-C", docs.to_str().unwrap(), "lock"])
         .output()

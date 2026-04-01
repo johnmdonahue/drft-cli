@@ -306,7 +306,6 @@ const BUILTIN_RULES: &[&str] = &[
     "boundary-violation",
     "dangling-edge",
     "directed-cycle",
-    "untrackable-target",
     "encapsulation-violation",
     "fragility",
     "fragmentation",
@@ -315,6 +314,7 @@ const BUILTIN_RULES: &[&str] = &[
     "redundant-edge",
     "stale",
     "symlink-edge",
+    "untrackable-target",
 ];
 
 impl Config {
@@ -335,7 +335,6 @@ impl Config {
             ("boundary-violation", RuleSeverity::Warn),
             ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
-            ("untrackable-target", RuleSeverity::Warn),
             ("encapsulation-violation", RuleSeverity::Warn),
             ("fragility", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
@@ -344,6 +343,7 @@ impl Config {
             ("redundant-edge", RuleSeverity::Warn),
             ("stale", RuleSeverity::Warn),
             ("symlink-edge", RuleSeverity::Warn),
+            ("untrackable-target", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -369,7 +369,7 @@ impl Config {
         let config_path = Self::find_config(root);
         let config_path = match config_path {
             Some(p) => p,
-            None => return Ok(Self::defaults()),
+            None => anyhow::bail!("no drft.toml found (run `drft init` to create one)"),
         };
 
         let content = std::fs::read_to_string(&config_path)
@@ -513,14 +513,16 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn defaults_when_no_config() {
+    fn errors_when_no_config() {
         let dir = TempDir::new().unwrap();
-        let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Warn);
-        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
-        assert_eq!(config.include, vec!["*.md"]);
-        assert!(config.exclude.is_empty());
-        assert!(config.parsers.contains_key("markdown"));
+        let result = Config::load(dir.path());
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("no drft.toml found"),
+        );
     }
 
     #[test]
@@ -747,9 +749,8 @@ required = ["title", "date", "status"]
     }
 
     #[test]
-    fn no_config_uses_defaults() {
+    fn child_without_config_errors() {
         let dir = TempDir::new().unwrap();
-        // Parent has config but child does not — child gets defaults, not parent's config
         fs::write(
             dir.path().join("drft.toml"),
             "[rules]\norphan-node = \"error\"\n",
@@ -759,7 +760,7 @@ required = ["title", "date", "status"]
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
 
-        let config = Config::load(&child).unwrap();
-        assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn); // default, not parent's "error"
+        let result = Config::load(&child);
+        assert!(result.is_err());
     }
 }

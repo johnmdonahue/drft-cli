@@ -16,11 +16,11 @@ The binary is called `drft`.
 ## Quick start
 
 ```bash
-# Check a directory for issues (no setup required)
-drft check
-
 # Initialize a config file
 drft init
+
+# Check a directory for issues
+drft check
 
 # Snapshot the current state
 drft lock
@@ -40,7 +40,6 @@ drft discovers files, runs configurable parsers to extract links between them, a
 | ------------------------- | ----------------------------------------------------- |
 | `dangling-edge`           | Edge target does not exist                            |
 | `directed-cycle`          | Circular dependency detected                          |
-| `untrackable-target`      | Directory target with no lockfile                     |
 | `stale`                   | Dependency changed since last lock                    |
 | `boundary-violation`      | Edge escapes the graph boundary                       |
 | `encapsulation-violation` | Edge reaches into a child graph's non-interface files |
@@ -51,6 +50,7 @@ drft discovers files, runs configurable parsers to extract links between them, a
 | `layer-violation`         | Edge violates depth hierarchy                         |
 | `redundant-edge`          | Edge is transitively redundant                        |
 | `schema-violation`        | Node metadata violates schema (requires options)      |
+| `untrackable-target`      | Directory target has no `drft.toml`                   |
 
 All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -189,7 +189,7 @@ drft automatically respects `.gitignore`.
 
 ## Graph nesting
 
-A directory with a `drft.toml` or `drft.lock` becomes a **graph**. Child directories with their own config are **child graphs** -- they appear as `Directory` nodes in the parent graph and are checked independently.
+A directory with a `drft.toml` is a **graph**. Child directories with their own config are **child graphs** -- they appear as `Directory` nodes in the parent graph and are checked independently.
 
 ```
 project/

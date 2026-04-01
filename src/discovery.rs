@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::config::compile_globs;
 
 /// Discover files under `root` matching `include` patterns (minus `exclude`),
-/// stopping at child graph boundaries (directories containing `drft.lock` or `drft.toml`).
+/// stopping at child graph boundaries (directories containing `drft.toml`).
 /// Respects `.gitignore` automatically. Returns paths relative to `root`, sorted.
 pub fn discover(
     root: &Path,
@@ -28,9 +28,7 @@ pub fn discover(
                     return true;
                 }
                 // Stop at child graph boundaries
-                if entry.path().join("drft.lock").exists()
-                    || entry.path().join("drft.toml").exists()
-                {
+                if entry.path().join("drft.toml").exists() {
                     return false;
                 }
             }
@@ -70,7 +68,7 @@ pub fn discover(
     Ok(files)
 }
 
-/// Find child graph directories (those containing `drft.lock` or `drft.toml`) under `root`.
+/// Find child graph directories (those containing `drft.toml`) under `root`.
 /// Returns relative paths without trailing slash (e.g., `"research"`), sorted.
 /// Only returns the shallowest boundary — does not recurse past them.
 /// Respects `.gitignore` and `exclude_patterns` from config.
@@ -122,7 +120,7 @@ pub fn find_child_graphs(root: &Path, exclude_patterns: &[String]) -> Result<Vec
             continue;
         }
 
-        if entry.path().join("drft.lock").exists() || entry.path().join("drft.toml").exists() {
+        if entry.path().join("drft.toml").exists() {
             // Skip if matched by ignore patterns
             if let Some(ref set) = ignore_set
                 && set.is_match(&relative)
@@ -168,7 +166,7 @@ mod tests {
 
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
-        fs::write(child.join("drft.lock"), "").unwrap();
+        fs::write(child.join("drft.toml"), "").unwrap();
         fs::write(child.join("inner.md"), "# Inner").unwrap();
 
         let files = discover(dir.path(), &["*.md".to_string()], &[]).unwrap();
@@ -220,13 +218,13 @@ mod tests {
 
         let alpha = dir.path().join("alpha");
         fs::create_dir(&alpha).unwrap();
-        fs::write(alpha.join("drft.lock"), "").unwrap();
+        fs::write(alpha.join("drft.toml"), "").unwrap();
 
         let beta = dir.path().join("beta");
         fs::create_dir(&beta).unwrap();
-        fs::write(beta.join("drft.lock"), "").unwrap();
+        fs::write(beta.join("drft.toml"), "").unwrap();
 
-        // No lockfile in gamma — not a child graph
+        // No config in gamma — not a child graph
         let gamma = dir.path().join("gamma");
         fs::create_dir(&gamma).unwrap();
         fs::write(gamma.join("readme.md"), "").unwrap();
@@ -240,12 +238,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let child = dir.path().join("child");
         fs::create_dir(&child).unwrap();
-        fs::write(child.join("drft.lock"), "").unwrap();
+        fs::write(child.join("drft.toml"), "").unwrap();
 
         // Grandchild graph — should NOT appear from parent's perspective
         let grandchild = child.join("nested");
         fs::create_dir(&grandchild).unwrap();
-        fs::write(grandchild.join("drft.lock"), "").unwrap();
+        fs::write(grandchild.join("drft.toml"), "").unwrap();
 
         let child_graphs = find_child_graphs(dir.path(), &[]).unwrap();
         assert_eq!(child_graphs, vec!["child"]);

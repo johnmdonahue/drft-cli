@@ -1026,7 +1026,7 @@ fn run_check_watch(
     Ok(0)
 }
 
-/// Find subdirectories that are lockable graphs (have drft.lock or drft.toml).
+/// Find subdirectories that are lockable graphs (have drft.toml).
 /// Returns absolute paths, sorted, shallowest first. Does not recurse past graph boundaries.
 /// Respects .gitignore.
 fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
@@ -1054,9 +1054,7 @@ fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
             continue;
         }
 
-        let has_lock = entry.path().join("drft.lock").exists();
-        let has_config = entry.path().join("drft.toml").exists();
-        if has_lock || has_config {
+        if entry.path().join("drft.toml").exists() {
             found.push(entry.path().to_path_buf());
             graphs.push(entry.path().to_path_buf());
         }
@@ -1071,7 +1069,7 @@ fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
 fn find_graph_root(start: &Path) -> std::path::PathBuf {
     let mut current = start.to_path_buf();
     loop {
-        if current.join("drft.lock").exists() {
+        if current.join("drft.toml").exists() {
             return current;
         }
         if !current.pop() {
