@@ -11,3 +11,10 @@ files = ["*.md"]
 
 [rules]
 stale = "error"
+
+[rules.schema-violation]
+files = ["docs/**"]
+ignore = ["docs/README.md"]
+
+[rules.schema-violation.options.schemas."docs/**"]
+required = ["sources"]

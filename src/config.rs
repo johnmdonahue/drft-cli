@@ -312,6 +312,7 @@ const BUILTIN_RULES: &[&str] = &[
     "layer-violation",
     "orphan-node",
     "redundant-edge",
+    "schema-violation",
     "stale",
     "symlink-edge",
     "untrackable-target",

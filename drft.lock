@@ -307,7 +307,7 @@ hash = "b3:878f2048460978e93ef4602de13b02659d86972c34e3f69e66ba95bf48325bad"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:a0b34390ae719352389684f9f6876a235dd9830f9ac8fa40bb670008d2af2f8b"
+hash = "b3:7dbf58511d74166c6942efbdd3f3d42014f8f4e4fee328b9e0fb57b3b02250d3"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
