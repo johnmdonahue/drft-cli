@@ -69,14 +69,14 @@ Uses standard path joining with `..` / `.` normalization.
 
 Edge targets that aren't already in the graph get classified:
 
-| Condition                                   | Node type                                        | Tracked?                                    |
-| ------------------------------------------- | ------------------------------------------------ | ------------------------------------------- |
-| Target matches `include` patterns           | **File**                                         | Yes — hashed, parsed                        |
-| Target is a URI                             | **External**                                     | No                                          |
-| Target exists on disk but outside `include` | **External**                                     | Yes — hashed                                |
-| Target is inside a child graph              | **External** (with `graph` field)                | Yes — hashed                                |
-| Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | When `drft.toml` exists — hashed on the fly |
-| Target doesn't exist on disk                | No node created                                  | dangling-edge candidate                     |
+| Condition                                   | Node type                                        | Tracked?                                          |
+| ------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| Target matches `include` patterns           | **File**                                         | Yes — hashed, parsed                              |
+| Target is a URI                             | **External**                                     | No                                                |
+| Target exists on disk but outside `include` | **External**                                     | Yes — hashed                                      |
+| Target is inside a child graph              | **External** (with `graph` field)                | Yes — hashed                                      |
+| Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | When `drft.toml` exists — hashed from `drft.toml` |
+| Target doesn't exist on disk                | No node created                                  | dangling-edge candidate                           |
 
 ### 5. Probe filesystem properties
 
@@ -124,6 +124,22 @@ Edges are minimal — just the relationship and provenance:
 | `graph.target_props(target)` | Get filesystem properties for a target               |
 | `graph.is_file_node(path)`   | Check if a path is a File node                       |
 
+## Lockfile
+
+`drft.lock` is a deterministic TOML snapshot of the graph's node set and content hashes. All File nodes are hashed via BLAKE3 (raw bytes). It enables:
+
+- **Staleness detection** — compare current hashes to locked hashes.
+- **Change propagation** — BFS from changed nodes through reverse edges to find transitively stale dependents.
+- **Structural drift detection** — node additions and removals since last lock.
+
+The lockfile omits edges. If a file's links change, its content hash changes. Directory nodes with `drft.toml` are hashed from the child's `drft.toml` content — a config change in a child graph triggers staleness in the parent. The parent does not depend on the child's lockfile.
+
+### Staleness propagation
+
+Staleness is conservative. When A → B → C and C changes, drft flags both B and A as stale ("stale via C" and "stale via B" respectively). A might not actually need updating — it depends on B, and B's content could still be accurate. drft can't know this; it flags the whole reverse-reachable set.
+
+"Stale via X" means "X changed and you depend on it — review whether your content still holds." It's a review prompt, not an error report.
+
 ## Source
 
-[`src/graph.rs`](../src/graph.rs)
+[`src/graph.rs`](../src/graph.rs) · [`src/lockfile.rs`](../src/lockfile.rs)

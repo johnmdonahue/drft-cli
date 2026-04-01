@@ -1,6 +1,6 @@
 # Analyses
 
-drft treats a directory of markdown files as a dependency graph — files are nodes, links are edges. **Analyses** compute structural properties of this graph. They describe shape, not correctness.
+drft treats a directory of files as a dependency graph — files are nodes, links are edges. **Analyses** compute structural properties of this graph. They describe shape, not correctness.
 
 Rules consume analyses to produce diagnostics (pass/fail judgments). The `drft report` command exposes analyses directly, without judgment, so you can understand your graph's structure before deciding what to enforce.
 

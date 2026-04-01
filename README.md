@@ -1,6 +1,12 @@
 # drft
 
-A structural integrity checker for linked file systems. drft treats a directory of files as a dependency graph -- files are nodes, links are edges -- and validates the graph against configurable rules.
+A structural integrity checker for linked file systems.
+
+Files link to other files. When a target changes, the files that depend on it may no longer be accurate. drft tracks these dependencies and flags what needs review.
+
+It treats your directory as a graph — files are nodes, links are edges — and validates the structure. `drft check` catches broken links, cycles, and staleness. `drft lock` snapshots hashes so it can detect when a dependency changes and flag everything downstream. `drft impact <file>` tells you what to review when you touch a file.
+
+A subdirectory with its own `drft.toml` becomes a child graph with its own boundary. Links into it from outside are violations unless you declare public interface files. That's the model — everything else is configuration.
 
 ## Install
 
@@ -16,344 +22,89 @@ The binary is called `drft`.
 ## Quick start
 
 ```bash
-# Initialize a config file
-drft init
-
-# Check a directory for issues
-drft check
-
-# Snapshot the current state
-drft lock
-
-# Check for staleness (files changed since last lock)
-drft check
-
-# Verify lockfile is current (for CI)
-drft lock --check
+drft init                 # create a drft.toml
+drft check                # validate the graph
+drft lock                 # snapshot file hashes
+drft check                # now detects staleness too
 ```
 
-## What it does
+## How it works
 
-drft discovers files, runs configurable parsers to extract links between them, and builds a dependency graph. It then validates the graph against rules:
+drft discovers files matching your `include` patterns, runs parsers to extract links, and builds a dependency graph. It then validates the graph against rules:
 
-| Rule                      | Description                                           |
-| ------------------------- | ----------------------------------------------------- |
-| `dangling-edge`           | Edge target does not exist                            |
-| `directed-cycle`          | Circular dependency detected                          |
-| `stale`                   | Dependency changed since last lock                    |
-| `boundary-violation`      | Edge escapes the graph boundary                       |
-| `encapsulation-violation` | Edge reaches into a child graph's non-interface files |
-| `orphan-node`             | Node has no inbound edges                             |
-| `symlink-edge`            | Edge target is a symlink                              |
-| `fragility`               | Structural single point of failure                    |
-| `fragmentation`           | Disconnected graph component                          |
-| `layer-violation`         | Edge violates depth hierarchy                         |
-| `redundant-edge`          | Edge is transitively redundant                        |
-| `schema-violation`        | Node metadata violates schema (requires options)      |
-| `untrackable-target`      | Directory target has no `drft.toml`                   |
+- **Broken links** — edges to files that don't exist (`dangling-edge`)
+- **Cycles** — circular dependencies (`directed-cycle`)
+- **Staleness** — files changed since last lock, including transitive dependents (`stale`)
+- **Boundary escapes** — links that reach outside the graph (`boundary-violation`)
+- **Encapsulation** — links into a child graph that bypass its interface (`encapsulation-violation`)
 
-All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
+drft ships with [built-in rules](docs/rules/README.md) covering structural integrity, plus support for [custom rules](docs/rules/custom.md) via external commands. All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
-See the [full documentation](docs/README.md) for details on parsers, analyses, and rules.
+Underneath the rules, drft computes [structural analyses](docs/analyses/README.md) — degree, centrality, connected components, depth, and more. Rules consume these analyses; you can also query them directly with `drft report`.
 
 ## Commands
 
-### `drft check`
+| Command            | What it does                                                |
+| ------------------ | ----------------------------------------------------------- |
+| `drft check`       | Validate the graph against enabled rules                    |
+| `drft lock`        | Snapshot file hashes to `drft.lock` for staleness tracking  |
+| `drft impact`      | Show what depends on given files, sorted by review priority |
+| `drft graph`       | Export the dependency graph (JSON Graph Format or DOT)      |
+| `drft report`      | Query structural analyses directly                          |
+| `drft parse`       | Show raw parser output before graph construction            |
+| `drft config show` | Display resolved configuration                              |
+| `drft init`        | Create a default `drft.toml`                                |
 
-Validate the graph against all enabled rules.
-
-```bash
-drft check                    # check current directory
-drft check -C path/to/docs   # check a different directory
-drft check --recursive        # include child graphs
-drft check --rule orphan-node  # run only specific rules
-drft check --watch            # re-check on file changes
-drft check --format json      # machine-readable output
-```
-
-### `drft lock`
-
-Snapshot file hashes to `drft.lock`. This enables staleness detection -- when a file changes, drft flags its dependents.
-
-```bash
-drft lock                     # create/update drft.lock
-drft lock --check             # verify lockfile is current (CI)
-drft lock --recursive         # lock all graphs bottom-up
-```
-
-### `drft parse`
-
-Show raw parser output — what edges each parser found, before graph construction.
-
-```bash
-drft parse                    # all parsers, text output
-drft parse --parser markdown  # only the markdown parser
-drft parse --format json      # machine-readable output
-```
-
-### `drft graph`
-
-Export the dependency graph.
-
-```bash
-drft graph                    # JSON Graph Format output
-drft graph --dot              # GraphViz DOT output
-drft graph --recursive        # include child graphs
-```
-
-### `drft impact`
-
-Show what depends on the given files (transitively), sorted by review priority. Each dependent is annotated with its depth from the changed file, impact radius (its own transitive dependents), and betweenness centrality.
-
-```bash
-drft impact setup.md              # text output
-drft impact --format json setup.md  # JSON with structural context
-drft impact config.md faq.md      # multiple files
-```
-
-### `drft report`
-
-Query structural analyses of the graph — degree, betweenness, SCC, depth, and more.
-
-```bash
-drft report                       # all analyses, text output
-drft report degree                # single analysis
-drft report betweenness pagerank  # multiple analyses
-drft report --format json degree  # machine-readable output
-```
-
-See [analyses documentation](docs/analyses/README.md) for the full list.
-
-### `drft config`
-
-Show the resolved configuration (defaults filled in).
-
-```bash
-drft config show              # resolved config as TOML
-drft config show --format json # machine-readable
-drft config show --recursive  # config for each graph in the tree
-```
-
-### `drft init`
-
-Create a default `drft.toml` config file.
-
-```bash
-drft init                     # write default drft.toml
-```
+Most commands support `--format json`, `--recursive`, and `--watch`. Run `drft --help` for the full flag reference.
 
 ## Configuration
 
-`drft.toml` in the graph root:
+`drft.toml` in the directory root:
 
 ```toml
-# Which paths become File nodes (default: ["*.md"])
-include = ["*.md", "*.yaml"]
+include = ["*.md"] # which files become nodes (default)
+exclude = ["drafts/*"] # also respects .gitignore
 
-# Remove from the graph (also respects .gitignore)
-exclude = ["drafts/*", "archive/*"]
+[parsers.markdown] # built-in parser, no config needed
 
-# Public interface — files accessible from parent graphs.
-# Presence of this section enables encapsulation.
-[interface]
-files = ["overview.md", "api/*.md"]
-
-# Parsers — edge extraction from File nodes
-[parsers.markdown]
-files = ["*.md"] # restrict to .md files (default: all)
-
-[parsers.tsx] # custom (has command)
-files = ["*.tsx"]
-command = "./scripts/parse-tsx-links.sh"
-
-# Rule severities: "error", "warn", or "off"
-# Table form for per-rule options or custom rules
 [rules]
-dangling-edge = "error"
-directed-cycle = "error"
-stale = "error"
+stale = "error" # escalate for CI
+orphan-node = "off" # suppress if expected
 
-[rules.orphan-node]
+[rules.orphan-node] # or use table form for options
 severity = "warn"
-ignore = ["README.md", "CLAUDE.md"]
-
-[rules.max-fan-out]
-command = "./scripts/max-fan-out.sh"
-severity = "warn"
-
-[rules.max-fan-out.options] # rule-specific options (passed through)
-threshold = 5
+ignore = ["README.md"]
 ```
 
-drft automatically respects `.gitignore`.
+Parsers extract links from files. drft includes markdown and YAML frontmatter parsers; you can add [custom parsers](docs/parsers/custom.md) for any format. See the [configuration reference](docs/config.md) for all options.
 
 ## Graph nesting
 
-A directory with a `drft.toml` is a **graph**. Child directories with their own config are **child graphs** -- they appear as `Directory` nodes in the parent graph and are checked independently.
+A directory with a `drft.toml` is a graph. A child directory with its own config is a child graph — it appears as a single node in the parent and is checked independently.
 
 ```
 project/
-  drft.lock              # root graph
   drft.toml
   index.md
   docs/
     overview.md
   research/
-    drft.toml            # child graph (Directory node in parent)
-    drft.lock
+    drft.toml          # child graph
     overview.md
     internal.md
 ```
 
-Use `--recursive` to check or lock all graphs in one command. Use `[interface]` in `drft.toml` to declare a graph's public interface and control which files are visible to the parent.
-
-## Output
-
-Text format (default):
-
-```
-error[dangling-edge]: index.md -> gone.md (file not found)
-error[stale]: index.md (stale via setup.md)
-warn[directed-cycle]: cycle detected: a.md -> b.md -> c.md -> a.md
-```
-
-JSON format (`--format json`):
-
-```json
-{"rule":"dangling-edge","severity":"error","source":"index.md","target":"gone.md","message":"file not found","fix":"gone.md does not exist -- either create it or update the link in index.md"}
-```
-
-Every JSON diagnostic includes a `fix` field with actionable instructions.
-
-DOT format (`drft graph --dot`) for graph export:
-
-```dot
-digraph {
-  "index.md"
-  "setup.md"
-  "index.md" -> "setup.md"
-}
-```
-
-Graph JSON follows the [JSON Graph Format](https://github.com/jsongraph/json-graph-specification) specification.
-
-## Exit codes
-
-| Code | Meaning                                                                           |
-| ---- | --------------------------------------------------------------------------------- |
-| 0    | Clean (warnings may be present)                                                   |
-| 1    | Rule violations at `error` severity, or `lock --check` found lockfile out of date |
-| 2    | Usage or configuration error                                                      |
-
-## Custom rules
-
-Custom rules are commands that receive the dependency graph as JSON on stdin and emit diagnostics as newline-delimited JSON on stdout:
-
-```toml
-[rules.max-fan-out]
-command = "./scripts/max-fan-out.sh"
-severity = "warn"
-```
-
-```sh
-#!/bin/sh
-# Flag nodes with more than 5 outbound links
-python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for node, count in ...:
-    print(json.dumps({'message': '...', 'node': node, 'fix': '...'}))
-"
-```
-
-See [examples/custom-rules](examples/custom-rules/drft.toml) for complete examples.
-
-**Security note:** Custom rules and custom parsers execute arbitrary shell commands defined in `drft.toml`. Review the `[rules]` and `[parsers]` sections before running `drft` in untrusted repositories, the same as you would review npm scripts or Makefiles.
+Use `--recursive` to check or lock all graphs in one command. Declare `[interface]` in a child's `drft.toml` to specify which files are accessible from parent graphs.
 
 ## LLM integration
 
-drft works with LLMs as both a validation tool during editing sessions and a CI gate.
+All commands support `--format json` with actionable `fix` fields in every diagnostic. `drft impact` is designed for agent workflows — it shows which files to review after an edit, sorted by priority.
 
-### JSON output
+This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and [`.claude/settings.json`](.claude/settings.json) for the hook configuration.
 
-All commands support `--format json`. The `check` command returns a summary envelope:
+## Docs
 
-```json
-{
-  "status": "warn",
-  "total": 2,
-  "errors": 0,
-  "warnings": 2,
-  "diagnostics": [
-    {
-      "rule": "stale",
-      "severity": "warn",
-      "message": "stale via",
-      "node": "design.md",
-      "via": "observations.md",
-      "fix": "observations.md has changed — review design.md to ensure it still accurately reflects observations.md, then run drft lock"
-    }
-  ]
-}
-```
-
-Every diagnostic includes a `fix` field with actionable instructions an LLM can follow directly.
-
-### Impact analysis
-
-After editing a file, check what depends on it:
-
-```bash
-drft impact src/main.rs --format json
-```
-
-```json
-{
-  "files": ["src/main.rs"],
-  "total": 2,
-  "impacted": [
-    {
-      "node": "docs/analyses/degree.md",
-      "via": "src/main.rs",
-      "depth": 1,
-      "impact_radius": 4,
-      "betweenness": 0.01,
-      "fix": "..."
-    },
-    {
-      "node": "README.md",
-      "via": "docs/analyses/degree.md",
-      "depth": 2,
-      "impact_radius": 0,
-      "betweenness": 0.005,
-      "fix": "..."
-    }
-  ]
-}
-```
-
-Results are sorted by review priority — high-radius nodes at shallow depth first. `impact_radius` tells you how many files cascade if you miss this one. `depth` tells you how far from the original change. `betweenness` signals structural centrality. The `fix` field provides actionable instructions.
-
-### Claude Code hooks
-
-A PreToolUse hook can run `drft impact` before each file edit, so the agent sees the blast radius before it acts. See [`.claude/settings.json`](.claude/settings.json) for this repo's hook configuration. Adapt the glob patterns (`*.md`, `*.rs`) to match the file types in your project.
-
-### Agent instructions
-
-The hook gives the agent data. What the agent _does_ with it depends on how you instruct it. Tell the agent how to use drft in your `CLAUDE.md` (or equivalent) — when to run impact, how to review dependents, when locking is appropriate. This repo dogfoods the pattern: see [`CLAUDE.md`](CLAUDE.md) for agent instructions and [`.claude/settings.json`](.claude/settings.json) for the hook configuration.
-
-**A note on expectations:** LLM agents don't follow hooks and instructions deterministically. The agent may blow past impact output when it's deep in a multi-file change, or skip the upfront impact scan when it's eager to start editing. This is normal. The hooks and instructions improve the baseline — the agent catches more drift than it would without them — but they don't eliminate it. Treat this as a collaboration pattern to experiment with, not a guarantee. Adjust the wording in your agent instructions, try different hook triggers, and see what sticks for your workflow.
-
-### CI
-
-```bash
-npx drft check --recursive          # catch violations and staleness
-npx drft lock --check --recursive   # verify lockfiles are committed
-```
-
-Run `check` first — it catches broken links, cycles, and stale files. Then `lock --check` verifies the lockfile is committed (structural consistency). Both exit with code 1 on failure.
-
-The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → `drft lock` (only after review) → commit.
+The [full documentation](docs/README.md) covers parsers, graph construction, structural analyses, rules, and configuration.
 
 ## License
 

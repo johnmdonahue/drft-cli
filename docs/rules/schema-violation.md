@@ -49,4 +49,4 @@ allowed.status = ["draft", "review", "final"]
 
 ## Requires
 
-- Parser metadata: at least one parser must emit metadata for nodes to have fields to validate. The built-in [frontmatter parser](../parsers/frontmatter.md) extracts YAML frontmatter as metadata. Script parsers can also emit metadata.
+- Parser metadata: at least one parser must emit metadata for nodes to have fields to validate. The built-in [frontmatter parser](../parsers/frontmatter.md) extracts YAML frontmatter as metadata. Custom parsers can also emit metadata.

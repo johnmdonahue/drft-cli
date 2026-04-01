@@ -2,27 +2,23 @@ lockfile_version = 2
 
 [nodes.".claude/settings.json"]
 type = "external"
-hash = "b3:b68c4b2bde8249c9a82895d2034375359e1240c4a4f1200d46f33ea269d68e61"
-
-[nodes."ARCHITECTURE.md"]
-type = "file"
-hash = "b3:29ec04319d0a7e73697289a05affcbd623604203e0d8738d2a81b316b88e74e8"
+hash = "b3:62755c203fe2de271300144fb06ce4bb31984c9d022632e77023ba5d3828f94c"
 
 [nodes."CHANGELOG.md"]
 type = "file"
-hash = "b3:d03b680bffcc51aca2de6a9fef8afee5efec3646ec65907715f496da523cd618"
+hash = "b3:c4113aab5566006fc23edd5fa7075c8e40096458aa408ef2585b786b334e189b"
 
 [nodes."CLAUDE.md"]
 type = "file"
-hash = "b3:308a4a3fd2d1af590c4ec698621ee998aac3dc5bf8bde42ac87788b0d37293a7"
+hash = "b3:0dec4c261460f692d7a656eb3b5c092cbb66a387b420473679b57004c7f8cbea"
 
 [nodes."CONTRIBUTING.md"]
 type = "file"
-hash = "b3:f457f74fbd0a183398a3e8d88c9e3fa6dc8205ba092ede3d2fcaacbde6959f92"
+hash = "b3:fb85a86d5bbb997e97a79abaf26af3495e6cc649b4a7ffe0e806fb0a6346777c"
 
 [nodes."README.md"]
 type = "file"
-hash = "b3:f76ae09504fb1f27f0c3b119b36800d269bc13890c62140961614b53a39c8635"
+hash = "b3:f2b91db825b3ee21485a9f99977b3d3f2f2b86af7da64b24d403785b5cfcc610"
 
 [nodes."RELEASING.md"]
 type = "file"
@@ -38,11 +34,11 @@ hash = "b3:83a3d4d7ca1db2b0503835c5f44e4e972d7564f8772dfe0198e541ed0173a67e"
 
 [nodes."docs/README.md"]
 type = "file"
-hash = "b3:0020e9088a00ec703ef0ece651e4c8dfa045fc38edb144abfd96f4104bcc6b1e"
+hash = "b3:ce9e9dd215ed0ca30a09f62257b30784537466400b9c8d6986baf9f56d3c6236"
 
 [nodes."docs/analyses/README.md"]
 type = "file"
-hash = "b3:773029fc1067170babdd8b9ac5fbd206af3bea1cd76fddf73956017b7b301af1"
+hash = "b3:4ab45bd848d74dd6ed46e7607b6453273cdd36e1d803be0870fd27fda8fb3f9c"
 
 [nodes."docs/analyses/betweenness.md"]
 type = "file"
@@ -92,9 +88,13 @@ hash = "b3:bb6a3d0595e6a116a43636b4cf92b03d9c59fe089116b0b7dd6a91ca9696a1b1"
 type = "file"
 hash = "b3:e1395c33ea81adf01d5b3a17ae72c95d4130f73e41e6724c642c2ad543cb252e"
 
+[nodes."docs/config.md"]
+type = "file"
+hash = "b3:4edde88cbeb5503cf6702d48537ca6f08a60bbaf97d287be352306051df42612"
+
 [nodes."docs/graph.md"]
 type = "file"
-hash = "b3:248a5d5205884564f4a8481d27f2f619b828d69b4298d78cf83c50ca8df0899c"
+hash = "b3:d32b9787d78913d3d65b92e1145e1b91fad8535caa9f54ed09c019adc19d2747"
 
 [nodes."docs/parsers/README.md"]
 type = "file"
@@ -110,7 +110,7 @@ hash = "b3:ffba54d37eab2915b0c35f9e124e5b8f07321f41fb590f205a76b047196f1949"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
-hash = "b3:83957de367f47e30c438b444773ff435f718b83f8e4896527337cb9de25fe536"
+hash = "b3:beb0a0372241505cbf73161a0c9aba93e5c7acb8dea5fa5fd31c2b94fd4c87a8"
 
 [nodes."docs/rules/README.md"]
 type = "file"
@@ -158,7 +158,7 @@ hash = "b3:610434540adb38ad545f76384bbbab137f517736664b60d1a0d4be8dae1eb02a"
 
 [nodes."docs/rules/schema-violation.md"]
 type = "file"
-hash = "b3:b105662d4bfdb31b63182afd48aa85e9951583fdd9f887557bbfb3757339b108"
+hash = "b3:f8e53c6797d2d1f2a58b671fa13d545dd439bf36222bc70f3070da73fddae6fc"
 
 [nodes."docs/rules/stale.md"]
 type = "file"
@@ -195,12 +195,7 @@ hash = "b3:48af7cb6cb3ee862a44b700862e8596835517d47323a30840f66380092f72598"
 
 [nodes."examples/custom-rules/README.md"]
 type = "external"
-hash = "b3:291b8a1b4ec977540a578bc88952f9de9c1eeec37d44772fe7d6068684f71e86"
-graph = "examples/custom-rules"
-
-[nodes."examples/custom-rules/drft.toml"]
-type = "external"
-hash = "b3:48af7cb6cb3ee862a44b700862e8596835517d47323a30840f66380092f72598"
+hash = "b3:e29eaaa616d655ff0e93e4df8cb4ca8296d74b8302cdd385d1f054f1bc40c01c"
 graph = "examples/custom-rules"
 
 [nodes."examples/cyclic"]
@@ -266,9 +261,6 @@ type = "external"
 [nodes."https://github.com/johnmdonahue/drft-cli/releases"]
 type = "external"
 
-[nodes."https://github.com/jsongraph/json-graph-specification"]
-type = "external"
-
 [nodes."https://www.rfc-editor.org/rfc/rfc3986"]
 type = "external"
 
@@ -278,7 +270,7 @@ hash = "b3:f9b05887e9a822bc7070280ba542359b56d89e6f2a17ccb52355808a02f99a16"
 
 [nodes."src/README.md"]
 type = "file"
-hash = "b3:56360a3a099763b7211ebec19f775bb578d56c1b8736aed36dfffcaea29cdf77"
+hash = "b3:10782bc2a06159d79c27f91da0105731861de3ac81d5bf5e87876e01355f1615"
 
 [nodes."src/analyses/README.md"]
 type = "file"
@@ -458,7 +450,7 @@ hash = "b3:4452cece288732bd3d6636655dff19469384e6c8f80c8b8c508901095e3887f3"
 
 [nodes."tests/README.md"]
 type = "file"
-hash = "b3:a381f87142eac25629c35467438d70f10c1ddcaee4ca089562a67ac0a2aefab3"
+hash = "b3:75575695fcd52b190b3d8392bcf091fe678b8f761090138715051e38eca28069"
 
 [nodes."tests/check.rs"]
 type = "file"

@@ -50,7 +50,8 @@ cargo build
 cargo test
 cargo clippy -- -D warnings
 cargo fmt
-cargo run -- check    # runs as `drft check`
+dprint fmt             # formats markdown + TOML (CI runs dprint check)
+cargo run -- check     # runs as `drft check`
 ```
 
 ## Conventions
