@@ -10,7 +10,7 @@ Rules evaluate the graph and emit diagnostics. Each implements the `Rule` trait.
 - [fragmentation.rs](fragmentation.rs) — detects disconnected components
 - [layer_violation.rs](layer_violation.rs) — enforces layer ordering
 - [mod.rs](mod.rs) — `Rule` trait, `RuleContext`, `all_rules()` registry
-- [orphan_node.rs](orphan_node.rs) — detects nodes with no inbound edges
+- [orphan_node.rs](orphan_node.rs) — detects isolated nodes (no inbound or outbound edges)
 - [redundant_edge.rs](redundant_edge.rs) — detects transitively redundant edges
 - [schema_violation.rs](schema_violation.rs) — validates node metadata against schema options
 - [custom.rs](custom.rs) — custom rule runner

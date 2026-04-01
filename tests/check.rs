@@ -222,7 +222,7 @@ fn scenario_7b_orphan_enabled() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[orphan-node]: orphan.md (no inbound links)"),
+        stdout.contains("warn[orphan-node]: orphan.md (no connections)"),
         "expected orphan-node warning for orphan.md, got: {stdout}"
     );
     assert!(output.status.success());

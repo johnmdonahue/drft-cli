@@ -9,8 +9,8 @@ files = ["*.md"]
 stale = "error"
 
 # Hub files (READMEs, root docs) are structural connectors — they link
-# broadly by design, so structural rules like fragility, layer-violation,
-# orphan-node, and redundant-edge produce expected warnings on them.
+# broadly by design, so fragility, layer-violation, and redundant-edge
+# produce expected warnings on them.
 [rules.fragility]
 ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "docs/config.md"]
 
@@ -21,7 +21,7 @@ ignore = ["CHANGELOG.md", "npm/README.md"]
 ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md", "docs/config.md"]
 
 [rules.orphan-node]
-ignore = ["**/README.md", "CONTRIBUTING.md", "CHANGELOG.md", "CLAUDE.md", "RELEASING.md"]
+ignore = ["CHANGELOG.md", "npm/README.md"]
 
 [rules.redundant-edge]
 ignore = ["**/README.md", "CONTRIBUTING.md", "docs/config.md"]

@@ -114,7 +114,7 @@ hash = "b3:beb0a0372241505cbf73161a0c9aba93e5c7acb8dea5fa5fd31c2b94fd4c87a8"
 
 [nodes."docs/rules/README.md"]
 type = "file"
-hash = "b3:e6b54d9fe3b714942587820fa6a814b8607f44daa568d83c9ed2f50767f94d21"
+hash = "b3:40f468e1325f2336ac5e2b304ba63e10645184aaa438f41faf8c2f00e814a93a"
 
 [nodes."docs/rules/boundary-violation.md"]
 type = "file"
@@ -150,7 +150,7 @@ hash = "b3:9021b3e262f5e2bfd4affda673e977ab70130611622b5d4958d75f7b9ef7e05f"
 
 [nodes."docs/rules/orphan-node.md"]
 type = "file"
-hash = "b3:ac0d625b7c7f667f9bcf7e4421ab4f6c8cc19a8fa7bce338efb35b36e58143d5"
+hash = "b3:b7f56e1ed2b8c16aa6be4e937d3944441c75405614fd872e319b9d435b75b65a"
 
 [nodes."docs/rules/redundant-edge.md"]
 type = "file"
@@ -386,7 +386,7 @@ hash = "b3:b26b854f367e055d6088798f005f486081e35a654bdc071598a707ce648a1731"
 
 [nodes."src/rules/README.md"]
 type = "file"
-hash = "b3:56630cf9629fe5c656e4cbb4bf30d57c5d2e13cb8e1af1710789ce949c68de76"
+hash = "b3:a569d1f685674f589e5a75f3b2ae06312da011a6c9ef19197ed2368426848294"
 
 [nodes."src/rules/boundary_violation.rs"]
 type = "file"
@@ -426,7 +426,7 @@ hash = "b3:d4bb5f83273e32fc7dba23e81057627652fac04341fb02c3e6a3913294ddb15c"
 
 [nodes."src/rules/orphan_node.rs"]
 type = "file"
-hash = "b3:c321554fc0e9405791683a7886db8b8fcd3cafb60fc606c1e1ace5f9e872503b"
+hash = "b3:fb24e3e0340d9f15156f70e6c8e5064979568abc7665ba874061f7a279b10ebd"
 
 [nodes."src/rules/redundant_edge.rs"]
 type = "file"
@@ -454,7 +454,7 @@ hash = "b3:75575695fcd52b190b3d8392bcf091fe678b8f761090138715051e38eca28069"
 
 [nodes."tests/check.rs"]
 type = "file"
-hash = "b3:54ed5a9a6bd8442c437451bc87c71e52dd4c2915b3781085ab75a6edcfe668e8"
+hash = "b3:48fe1d9f9d8a160ace4643ac9e903fe8756f26fb2ac39423d52282747e14770b"
 
 [nodes."tests/common/mod.rs"]
 type = "file"

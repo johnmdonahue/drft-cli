@@ -21,7 +21,7 @@ fragility = "off" # suppress if tree-shaped graphs are expected
 | [fragility](fragility.md)                             | Cut vertices and bridge edges (structural single points of failure) | [bridges](../analyses/bridges.md)                           |
 | [fragmentation](fragmentation.md)                     | Disconnected components in the graph                                | [connected-components](../analyses/connected-components.md) |
 | [layer-violation](layer-violation.md)                 | Upward or skip-layer links in the depth hierarchy                   | [depth](../analyses/depth.md)                               |
-| [orphan-node](orphan-node.md)                         | Nodes with no inbound edges                                         | [degree](../analyses/degree.md)                             |
+| [orphan-node](orphan-node.md)                         | Nodes with no connections (no inbound or outbound edges)            | [degree](../analyses/degree.md)                             |
 | [redundant-edge](redundant-edge.md)                   | Direct links that are transitively redundant                        | [transitive-reduction](../analyses/transitive-reduction.md) |
 | [schema-violation](schema-violation.md)               | Node metadata violates required fields or allowed values            | graph (metadata)                                            |
 | [stale](stale.md)                                     | Files whose content has changed since the last lock                 | [change-propagation](../analyses/change-propagation.md)     |
