@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/transitive_reduction.rs
+---
+
 # Transitive reduction
 
 ## The concept
@@ -95,7 +100,3 @@ Edges to nodes outside the graph (broken links, external URLs) and self-loops ar
 
 - [Transitive reduction](https://en.wikipedia.org/wiki/Transitive_reduction) on Wikipedia
 - Aho, Garey, and Ullman (1972), "The transitive reduction of a directed graph" — the original paper establishing that every finite directed graph has a unique transitive reduction
-
-## Source
-
-[`src/analyses/transitive_reduction.rs`](../../src/analyses/transitive_reduction.rs)

@@ -1,12 +1,13 @@
+---
+sources:
+  - ../../src/rules/schema_violation.rs
+---
+
 # schema-violation
 
 Validates that File nodes have the required metadata fields and that field values are within allowed sets. This rule only produces diagnostics when configured with options — without options, it does nothing.
 
 **Default severity:** `warn`
-
-## Source
-
-[`src/rules/schema_violation.rs`](../../src/rules/schema_violation.rs)
 
 ## How it works
 

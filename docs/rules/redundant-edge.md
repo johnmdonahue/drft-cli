@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/redundant_edge.rs
+---
+
 # redundant-edge
 
 Flags direct links that are transitively redundant -- the source already reaches the target through an intermediate path.
@@ -32,7 +37,3 @@ ignore = ["index.md"]
 ## Analysis
 
 Uses the [transitive-reduction](../analyses/transitive-reduction.md) analysis, which computes the minimal edge set that preserves all reachability.
-
-## Source
-
-[`src/rules/redundant_edge.rs`](../../src/rules/redundant_edge.rs)

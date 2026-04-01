@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/parsers/custom.rs
+---
+
 # Custom parser
 
 ## The concept
@@ -130,7 +135,3 @@ command = "./scripts/parse-yaml-refs.sh"
 ```
 
 Now `drft check` and `drft report` will include edges from YAML `$ref` values alongside the standard markdown links.
-
-## Source
-
-[`src/parsers/custom.rs`](../../src/parsers/custom.rs)

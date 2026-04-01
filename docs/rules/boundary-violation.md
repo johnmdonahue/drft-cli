@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/boundary_violation.rs
+---
+
 # boundary-violation
 
 Flags edges that escape the graph boundary (reach outside the directory tracked by `drft.lock`).
@@ -34,7 +39,3 @@ ignore = ["README.md"]
 ## Analysis
 
 Uses the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which identifies edges that cross graph boundaries.
-
-## Source
-
-[`src/rules/boundary_violation.rs`](../../src/rules/boundary_violation.rs)

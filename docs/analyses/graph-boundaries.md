@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/graph_boundaries.rs
+---
+
 # Graph boundaries
 
 ## The concept
@@ -59,7 +64,3 @@ Two rules consume this analysis:
 ## Algorithm
 
 For escapes: checks for nodes with `graph: ".."` (targets that escaped the graph boundary). For encapsulation: iterates Directory nodes with `is_graph`, reads each child graph's interface configuration, and identifies edges from local nodes to child-graph nodes that are not in the interface.
-
-## Source
-
-[`src/analyses/graph_boundaries.rs`](../../src/analyses/graph_boundaries.rs)

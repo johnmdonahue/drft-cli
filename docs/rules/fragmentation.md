@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/fragmentation.rs
+---
+
 # fragmentation
 
 Flags disconnected components in the graph.
@@ -35,7 +40,3 @@ ignore = ["CHANGELOG.md"]
 ## Analysis
 
 Uses the [connected-components](../analyses/connected-components.md) analysis, which finds weakly connected components in the undirected projection of the graph.
-
-## Source
-
-[`src/rules/fragmentation.rs`](../../src/rules/fragmentation.rs)

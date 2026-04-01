@@ -1,3 +1,9 @@
+---
+sources:
+  - ../src/config.rs
+  - ../src/cli.rs
+---
+
 # Configuration
 
 `drft.toml` in the graph root controls file discovery, parsers, rules, and encapsulation.
@@ -88,7 +94,3 @@ Parsers and rules share the same config pattern:
 - **Options sub-table** — `[parsers.<name>.options]`, `[rules.<name>.options]` for arbitrary structured data passed through to the parser or rule
 
 The `command` field is the discriminant: present means custom, absent means built-in.
-
-## Source
-
-[`src/config.rs`](../src/config.rs)

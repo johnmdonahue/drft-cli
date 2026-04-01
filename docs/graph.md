@@ -1,3 +1,11 @@
+---
+sources:
+  - ../src/discovery.rs
+  - ../src/graph.rs
+  - ../src/diagnostic.rs
+  - ../src/lockfile.rs
+---
+
 # Graph builder
 
 The graph builder sits between parsers and rules. It takes raw parser output and produces the enriched graph that everything else consumes.
@@ -139,7 +147,3 @@ The lockfile omits edges. If a file's links change, its content hash changes. Di
 Staleness is conservative. When A → B → C and C changes, drft flags both B and A as stale ("stale via C" and "stale via B" respectively). A might not actually need updating — it depends on B, and B's content could still be accurate. drft can't know this; it flags the whole reverse-reachable set.
 
 "Stale via X" means "X changed and you depend on it — review whether your content still holds." It's a review prompt, not an error report.
-
-## Source
-
-[`src/graph.rs`](../src/graph.rs) · [`src/lockfile.rs`](../src/lockfile.rs)

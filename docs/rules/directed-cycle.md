@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/directed_cycle.rs
+---
+
 # directed-cycle
 
 Flags circular dependencies between files.
@@ -33,7 +38,3 @@ ignore = ["glossary.md"]
 ## Analysis
 
 Uses the [scc](../analyses/scc.md) (strongly connected components) analysis, which uses Tarjan's algorithm to find all cycles.
-
-## Source
-
-[`src/rules/directed_cycle.rs`](../../src/rules/directed_cycle.rs)

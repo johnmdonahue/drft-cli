@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/mod.rs
+---
+
 # Analyses
 
 drft treats a directory of files as a dependency graph — files are nodes, links are edges. **Analyses** compute structural properties of this graph. They describe shape, not correctness.

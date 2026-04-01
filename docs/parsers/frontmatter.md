@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/parsers/frontmatter.rs
+---
+
 # Frontmatter parser
 
 ## The concept
@@ -64,7 +69,3 @@ required = ["title"]
 required = ["title", "date", "status"]
 allowed.status = ["draft", "review", "final"]
 ```
-
-## Source
-
-[`src/parsers/frontmatter.rs`](../../src/parsers/frontmatter.rs)

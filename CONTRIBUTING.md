@@ -21,7 +21,7 @@ cargo run -- check -C examples/simple
 
 ## Testing
 
-Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in [`tests/`](tests/README.md) and run the binary as a subprocess against temp directories.
+Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in `tests/` and run the binary as a subprocess against temp directories.
 
 ```bash
 cargo test                    # all tests
@@ -45,17 +45,11 @@ Rules            → diagnostics
 
 Each layer's output feeds the next. Custom parsers and rules receive the same data as built-in implementations.
 
-- **[`src/parsers/`](src/parsers/README.md)** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes, and returns link strings + optional metadata. Built-in (markdown, frontmatter) and custom parsers share the same interface.
+- **`src/parsers/`** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes, and returns link strings + optional metadata. Built-in (markdown, frontmatter) and custom parsers share the same interface.
 - **[`src/graph.rs`](src/graph.rs)** — normalization, path resolution, node classification, filesystem probing. See [docs/graph.md](docs/graph.md) for the full contract.
-- **[`src/analyses/`](src/analyses/README.md)** — pure computation. Each analysis implements the `Analysis` trait and returns a typed result. No judgments, no formatting.
+- **`src/analyses/`** — pure computation. Each analysis implements the `Analysis` trait and returns a typed result. No judgments, no formatting.
 - **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction from analysis results. Named `Metric` values with a `MetricKind` (`Ratio`, `Count`, or `Score`).
-- **[`src/rules/`](src/rules/README.md)** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph, and emits `Diagnostic` structs. Rules are pure functions — no filesystem access, no config.
-
-### Module layout
-
-- [`src/README.md`](src/README.md) — source module index
-- [`tests/README.md`](tests/README.md) — integration test index
-- [`benches/README.md`](benches/README.md) — benchmark index
+- **`src/rules/`** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph, and emits `Diagnostic` structs. Rules are pure functions — no filesystem access, no config.
 
 ## Adding a new analysis
 
@@ -63,7 +57,7 @@ Each layer's output feeds the next. Custom parsers and rules receive the same da
 2. Add `pub mod <name>` to [`src/analyses/mod.rs`](src/analyses/mod.rs). Add the name to `all_analysis_names()`, add a field to `EnrichedGraph`, and wire it in `enrich_graph()`.
 3. Register in the report command's `all_analyses` list in [`src/main.rs`](src/main.rs).
 4. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in [`src/config.rs`](src/config.rs), add to the `drft init` template.
-5. Add unit tests in the analysis module, integration tests in [`tests/`](tests/README.md).
+5. Add unit tests in the analysis module, integration tests in `tests/`.
 6. Document in `docs/analyses/<name>.md` and update [`docs/analyses/README.md`](docs/analyses/README.md).
 
 ## Adding a new metric

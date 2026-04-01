@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/graph_stats.rs
+---
+
 # Graph stats
 
 ## The concept
@@ -60,7 +65,3 @@ When the graph is disconnected, `diameter` and `average_path_length` are `null` 
 ## Algorithm
 
 Density is computed as `|E| / (|V| * (|V| - 1))` for a directed graph. Diameter and average path length are computed via BFS from each real node (all-pairs shortest paths). This is O(V * (V + E)), which is fast for the size of markdown repos.
-
-## Source
-
-[`src/analyses/graph_stats.rs`](../../src/analyses/graph_stats.rs)

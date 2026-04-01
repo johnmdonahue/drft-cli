@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/mod.rs
+---
+
 # Rules
 
 Rules are predicates over the dependency graph that emit diagnostics. Each rule inspects the graph (or the output of an analysis) and reports violations as warnings or errors.

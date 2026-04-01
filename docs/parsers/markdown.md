@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/parsers/markdown.rs
+---
+
 # Markdown parser
 
 ## The concept
@@ -82,7 +87,3 @@ markdown = false
 ## External URLs
 
 External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw targets by the parser. The graph builder classifies them as External nodes. Anchor-only links (`#heading`) are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
-
-## Source
-
-[`src/parsers/markdown.rs`](../../src/parsers/markdown.rs)

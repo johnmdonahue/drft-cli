@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/untrackable_target.rs
+---
+
 # untrackable-target
 
 Flags edges to directory nodes that have no `drft.toml`. Without a config, drft cannot discover or hash the directory's contents, so it cannot track the target for staleness.
@@ -43,7 +48,3 @@ ignore = ["vendor/"]
 ## Analysis
 
 This rule inspects graph edges directly — it does not consume a separate analysis. For each edge whose target is a `Directory` node without a hash, it emits a diagnostic.
-
-## Source
-
-[`src/rules/untrackable_target.rs`](../../src/rules/untrackable_target.rs)

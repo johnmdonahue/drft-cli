@@ -67,7 +67,7 @@ cargo run -- check     # runs as `drft check`
 - Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
-- Pipeline: [`src/parsers/`](src/parsers/README.md) (parse links) → [`src/graph.rs`](src/graph.rs) (build graph) → [`src/analyses/`](src/analyses/README.md) (compute properties) → [`src/metrics.rs`](src/metrics.rs) (extract scalars) → [`src/rules/`](src/rules/README.md) (emit diagnostics)
+- Pipeline: `src/parsers/` (parse links) → [`src/graph.rs`](src/graph.rs) (build graph) → `src/analyses/` (compute properties) → [`src/metrics.rs`](src/metrics.rs) (extract scalars) → `src/rules/` (emit diagnostics)
 
 ## Git workflow
 

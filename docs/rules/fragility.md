@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/fragility.rs
+---
+
 # fragility
 
 Flags structural single points of failure: cut vertices and bridge edges.
@@ -34,7 +39,3 @@ ignore = ["index.md"]
 ## Analysis
 
 Uses the [bridges](../analyses/bridges.md) analysis, which uses Tarjan's bridge-finding algorithm to identify cut vertices and bridge edges in O(V + E).
-
-## Source
-
-[`src/rules/fragility.rs`](../../src/rules/fragility.rs)

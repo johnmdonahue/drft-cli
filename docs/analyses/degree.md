@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/analyses/degree.rs
+---
+
 # Degree distribution
 
 ## The concept
@@ -74,7 +79,3 @@ orphan-node = "warn"
 ## Algorithm
 
 For each real node, count the entries in the forward adjacency list (out-degree) and reverse adjacency list (in-degree), filtering to only count edges where the other endpoint is also a real node. This is O(V + E).
-
-## Source
-
-[`src/analyses/degree.rs`](../../src/analyses/degree.rs)

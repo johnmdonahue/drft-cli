@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/orphan_node.rs
+---
+
 # orphan-node
 
 Flags nodes with no connections — no inbound edges and no outbound edges. These are files that exist in the graph but don't participate in any link relationships.
@@ -35,7 +40,3 @@ ignore = ["CHANGELOG.md"]
 ## Analysis
 
 Uses the [degree](../analyses/degree.md) analysis, which computes in-degree and out-degree for every node.
-
-## Source
-
-[`src/rules/orphan_node.rs`](../../src/rules/orphan_node.rs)

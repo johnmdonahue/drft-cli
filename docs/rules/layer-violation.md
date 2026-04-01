@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/layer_violation.rs
+---
+
 # layer-violation
 
 Flags links that violate the depth hierarchy: upward links (deeper file linking to a shallower one) and skip-layer links (jumping more than one level down).
@@ -39,7 +44,3 @@ ignore = ["index.md"]
 ## Analysis
 
 Uses the [depth](../analyses/depth.md) analysis, which computes the longest-path depth of each node from the graph roots.
-
-## Source
-
-[`src/rules/layer_violation.rs`](../../src/rules/layer_violation.rs)

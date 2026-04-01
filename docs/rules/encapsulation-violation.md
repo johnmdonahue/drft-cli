@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../src/rules/encapsulation_violation.rs
+---
+
 # encapsulation-violation
 
 Flags edges from outside a child graph that bypass its declared interface.
@@ -35,7 +40,3 @@ ignore = []
 ## Analysis
 
 Uses the [graph-boundaries](../analyses/graph-boundaries.md) analysis, which reads child graph configurations to determine interface boundaries.
-
-## Source
-
-[`src/rules/encapsulation_violation.rs`](../../src/rules/encapsulation_violation.rs)
