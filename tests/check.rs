@@ -3,11 +3,12 @@ use common::drft_bin;
 use std::fs;
 use tempfile::TempDir;
 
-/// Scenario 1: Zero setup — just markdown files, all links valid.
+/// Scenario 1: Minimal config — just markdown files, all links valid.
 /// drft check should exit 0 with no broken links or errors.
 #[test]
 fn scenario_1_zero_setup_clean() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [faq](faq.md)",
@@ -39,6 +40,7 @@ fn scenario_1_zero_setup_clean() {
 #[test]
 fn scenario_2_broken_link() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [missing](gone.md)",
@@ -70,6 +72,7 @@ fn scenario_2_broken_link() {
 #[test]
 fn scenario_2_broken_link_json() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
 
     let output = drft_bin()
@@ -129,6 +132,7 @@ fn scenario_3_broken_link_error_severity() {
 #[test]
 fn scenario_4_cycle_detection() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
     fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
     fs::write(dir.path().join("c.md"), "[a](a.md)").unwrap();
@@ -157,31 +161,23 @@ fn scenario_4_cycle_detection() {
     );
 }
 
-/// Scenario 20: Directory links.
-/// A link to a directory without a lockfile should warn.
+/// Running without drft.toml should fail with exit 2.
 #[test]
-fn scenario_20_untrackable_target() {
+fn no_config_exits_with_error() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("index.md"), "[guides](guides/)").unwrap();
-    let guides = dir.path().join("guides");
-    fs::create_dir(&guides).unwrap();
-    fs::write(guides.join("README.md"), "# Guides").unwrap();
+    fs::write(dir.path().join("index.md"), "# Hello").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stdout.contains("warn[untrackable-target]"),
-        "expected untrackable-target warning, got: {stdout}"
+        stderr.contains("no drft.toml found"),
+        "expected config error, got: {stderr}"
     );
-    assert!(
-        stdout.contains("guides"),
-        "should mention the directory target"
-    );
-    assert!(output.status.success(), "expected exit code 0");
+    assert_eq!(output.status.code(), Some(2), "expected exit code 2");
 }
 
 /// Scenario 23: Orphan rule — warn by default.
@@ -189,6 +185,7 @@ fn scenario_20_untrackable_target() {
 #[test]
 fn scenario_23_orphan_warn_by_default() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 

@@ -6,6 +6,7 @@ use tempfile::TempDir;
 #[test]
 fn graph_json_follows_jgf() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -28,12 +29,13 @@ fn graph_json_follows_jgf() {
 #[test]
 fn graph_recursive_produces_multiple_graphs() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
 
     let child = dir.path().join("child");
     fs::create_dir(&child).unwrap();
     fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
+    fs::write(child.join("drft.toml"), "").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])

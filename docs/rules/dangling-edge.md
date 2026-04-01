@@ -32,7 +32,7 @@ ignore = ["drafts/"]
 
 ## Analysis
 
-This rule inspects graph edges directly — it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists as a node in the graph. Edges to symlinks are skipped (handled by `symlink-edge`). Directories are represented as `Directory` nodes in the graph, so they are not flagged by this rule — `untrackable-target` handles directories without lockfiles.
+This rule inspects graph edges directly — it does not consume a separate analysis. For each edge with a local target, it checks whether the target exists as a node in the graph. Edges to symlinks are skipped (handled by `symlink-edge`).
 
 ## Source
 

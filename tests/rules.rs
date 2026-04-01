@@ -37,6 +37,7 @@ fn ignore_rules_suppresses_diagnostics() {
 #[test]
 fn lockfile_contains_version() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
 
     drft_bin()
@@ -54,6 +55,7 @@ fn lockfile_contains_version() {
 #[test]
 fn redundant_edge_warn_by_default() {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md) [c](c.md)").unwrap();
     fs::write(dir.path().join("b.md"), "[c](c.md)").unwrap();
     fs::write(dir.path().join("c.md"), "# C").unwrap();
@@ -272,7 +274,7 @@ fn boundary_violation_catches_escape() {
     let dir = TempDir::new().unwrap();
     let child = dir.path().join("docs");
     fs::create_dir(&child).unwrap();
-    fs::write(child.join("drft.lock"), "lockfile_version = 2\n").unwrap();
+    fs::write(child.join("drft.toml"), "").unwrap();
     fs::write(child.join("index.md"), "[escape](../README.md)").unwrap();
     fs::write(dir.path().join("README.md"), "# Root").unwrap();
 

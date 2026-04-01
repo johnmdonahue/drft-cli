@@ -127,6 +127,56 @@ pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
 }
 
+/// Load a child graph's config, and if it declares an `[interface]`,
+/// add each interface file as an External node with a coupling edge
+/// to the child's Directory node.
+fn promote_interface_files(
+    root: &Path,
+    child_name: &str,
+    graph: &mut Graph,
+    implicit_edges: &mut Vec<Edge>,
+) {
+    let child_dir = root.join(child_name);
+    let config = match Config::load(&child_dir) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let interface_files = match &config.interface {
+        Some(iface) => &iface.files,
+        None => return,
+    };
+
+    // Resolve interface globs to actual files
+    let included = match discover(&child_dir, interface_files, &[]) {
+        Ok(files) => files,
+        Err(_) => return,
+    };
+
+    for file in included {
+        let node_path = format!("{child_name}/{file}");
+        if graph.nodes.contains_key(&node_path) {
+            continue;
+        }
+        let file_path = child_dir.join(&file);
+        let hash = std::fs::read(&file_path).ok().map(|c| hash_bytes(&c));
+        graph.add_node(Node {
+            path: node_path.clone(),
+            node_type: NodeType::External,
+            hash,
+            graph: Some(child_name.into()),
+            is_graph: false,
+            metadata: HashMap::new(),
+        });
+        implicit_edges.push(Edge {
+            source: node_path,
+            target: child_name.into(),
+            link: None,
+            parser: String::new(),
+        });
+    }
+}
+
 /// Build a graph from files in `root`.
 ///
 /// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
@@ -288,17 +338,24 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 // Ensure the child graph Directory node exists
                 if !graph.nodes.contains_key(child_name) {
                     let child_dir = root.join(child_name);
-                    let lock_hash = std::fs::read(child_dir.join("drft.lock"))
+                    let config_hash = std::fs::read(child_dir.join("drft.toml"))
                         .ok()
                         .map(|c| hash_bytes(&c));
                     graph.add_node(Node {
                         path: child_name.clone(),
                         node_type: NodeType::Directory,
-                        hash: lock_hash,
+                        hash: config_hash,
                         graph: Some(".".into()),
                         is_graph: true,
                         metadata: HashMap::new(),
                     });
+                    // Promote interface files into parent graph
+                    promote_interface_files(
+                        root,
+                        child_name,
+                        &mut graph,
+                        &mut implicit_edges,
+                    );
                 }
                 // Synthetic coupling edge: child-graph file → Directory node
                 implicit_edges.push(Edge {
@@ -316,8 +373,13 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         // Directory on disk → Directory node
         if target_path.is_dir() {
             let has_config = target_path.join("drft.toml").exists();
-            let lockfile_path = target_path.join("drft.lock");
-            let hash = std::fs::read(&lockfile_path).ok().map(|c| hash_bytes(&c));
+            let hash = if has_config {
+                std::fs::read(target_path.join("drft.toml"))
+                    .ok()
+                    .map(|c| hash_bytes(&c))
+            } else {
+                None
+            };
             graph.add_node(Node {
                 path: edge.target.clone(),
                 node_type: NodeType::Directory,
@@ -326,6 +388,14 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 is_graph: has_config,
                 metadata: HashMap::new(),
             });
+            if has_config {
+                promote_interface_files(
+                    root,
+                    &edge.target,
+                    &mut graph,
+                    &mut implicit_edges,
+                );
+            }
             continue;
         }
 

@@ -5,6 +5,7 @@ use tempfile::TempDir;
 
 fn setup_graph() -> TempDir {
     let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     dir

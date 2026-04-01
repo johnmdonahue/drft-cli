@@ -18,7 +18,7 @@ drft builds the graph in a single pass: discover files, run parsers, normalize l
 | Type        | Meaning                                                                                                                          |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `File`      | A path matched by `include` (minus `exclude`). Hashed, tracked, sent to parsers.                                                 |
-| `Directory` | A directory on disk. When it contains a `drft.toml` or `drft.lock`, it's a child graph (hashed via its lockfile).                |
+| `Directory` | A directory on disk. When it contains a `drft.toml`, it's a child graph (`is_graph`). Hashed on the fly from the child's discovered files. |
 | `External`  | Discovered via an edge — target not in `include`. Validated for existence, not tracked. Covers both file paths on disk and URIs. |
 
 `include`/`exclude` drive node classification, not parsers. The `include` patterns declare the graph's known universe of files. Everything outside is an exit.
@@ -80,7 +80,7 @@ See [`docs/rules/README.md`](docs/rules/README.md) for the full list with descri
 
 ## Graph nesting
 
-Any directory is a graph. A child directory with its own `drft.toml` or `drft.lock` appears as a `Directory` node in the parent, and file discovery stops at that boundary. This nesting is recursive.
+A directory with a `drft.toml` is a graph. A child directory with its own `drft.toml` appears as a `Directory` node in the parent, and file discovery stops at that boundary. This nesting is recursive.
 
 - A graph with `[interface]` in its `drft.toml` enforces encapsulation: only interface nodes can be linked to from parent graphs.
 - A graph without `[interface]` is open -- anything can link into it.
@@ -95,7 +95,7 @@ Any directory is a graph. A child directory with its own `drft.toml` or `drft.lo
 - **Change propagation** — BFS from changed nodes through reverse edges to find transitively stale dependents.
 - **Structural drift detection** — node additions and removals since last lock.
 
-The lockfile omits edges. If a file's links change, its content hash changes. Directory nodes are hashed against the child's `drft.lock`, so internal changes behind a stable interface don't trigger parent staleness.
+The lockfile omits edges. If a file's links change, its content hash changes. Directory nodes with `drft.toml` are hashed on the fly — drft discovers the child's files, hashes each one, and combines them into a single deterministic hash. The parent does not depend on the child's lockfile.
 
 ## Commands
 

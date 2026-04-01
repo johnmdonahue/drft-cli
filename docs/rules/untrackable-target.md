@@ -1,23 +1,31 @@
 # untrackable-target
 
-Flags edges that point to a directory with no lockfile — there is nothing to hash, so drft cannot track it for staleness.
-
-Edges to directories that have a `drft.lock` produce no diagnostic from this rule. The lockfile is hashed and the `stale` rule handles the rest.
+Flags edges to directory nodes that have no `drft.toml`. Without a config, drft cannot discover or hash the directory's contents, so it cannot track the target for staleness.
 
 ## Example
 
 ```
-docs/
-  index.md       # contains [guides](guides)
-  guides/
-    README.md
-    setup.md
+project/
+  index.md       # contains [research](research/)
+  research/      # no drft.toml
+    notes.md
 ```
 
+`research/` is a directory without `drft.toml`, so `drft check` reports:
+
 ```
-warn[untrackable-target]: index.md -> guides (directory has no lockfile — cannot track for staleness)
-fix: lock it (drft init -C guides && drft lock -C guides) or link to a specific file
+warn[untrackable-target]: index.md -> research (directory has no drft.toml — cannot track for staleness)
 ```
+
+## Fix
+
+Add a `drft.toml` to the target directory to declare it as a graph:
+
+```bash
+drft init -C research
+```
+
+Once the directory has a config, drft computes a content hash from the child graph's files and tracks it for staleness.
 
 ## Configuration
 
@@ -29,12 +37,12 @@ untrackable-target = "warn" # default
 ```toml
 [rules.untrackable-target]
 severity = "warn"
-ignore = []
+ignore = ["vendor/"]
 ```
 
 ## Analysis
 
-This rule inspects graph nodes directly. For each edge whose target is a `Directory` node with no hash, it emits a diagnostic. Directory nodes get a hash when they have a `drft.lock` — that lockfile content is hashed.
+This rule inspects graph edges directly — it does not consume a separate analysis. For each edge whose target is a `Directory` node without a hash, it emits a diagnostic.
 
 ## Source
 
