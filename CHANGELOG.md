@@ -2,6 +2,24 @@
 
 All notable changes to drft are documented here.
 
+## 0.5.1 (2026-04-01)
+
+Post-v0.5 audit — simplify graph, enforce frontmatter, remove noisy rules.
+
+### Breaking changes
+
+- **Removed rules**: `fragility`, `layer-violation`, and `redundant-edge` flagged properties inherent to tree-shaped filesystems. The underlying analyses remain in `drft report`.
+- **`orphan-node` semantics changed** — flags isolated nodes (in-degree 0 AND out-degree 0), not roots. Files with outbound links but no inbound links are entry points, not orphans.
+
+### Changes
+
+- **Frontmatter as dependency layer** — doc files use `sources:` YAML frontmatter instead of prose `## Source` sections. `schema-violation` enforces `required = ["sources"]` on `docs/**`.
+- **Removed artificial READMEs** — directory index files in `src/`, `tests/`, `benches/`, and `docs/` subdirectories that existed only to satisfy drft rules. Graph went from 103 nodes / 181 edges to 80 / 118.
+- **Simplified `drft.toml`** — removed all ignore rules (now zero), deduplicated config.
+- **Rewrote README** — leads with the mental model (links create obligations, lockfile is a checkpoint, graphs nest like directories).
+- **Added `docs/config.md`** — configuration reference with examples.
+- **CI: `cargo bench --no-run`** — catches benchmark compilation failures.
+
 ## 0.5.0 (2026-03-31)
 
 drft.toml as the sole graph marker — simpler mental model, no ordering constraints.
