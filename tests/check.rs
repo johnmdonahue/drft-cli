@@ -228,6 +228,42 @@ fn scenario_7b_orphan_enabled() {
     assert!(output.status.success());
 }
 
+/// Per-rule parser scoping: directed-cycle scoped to frontmatter should not
+/// detect a cycle that only exists through markdown edges.
+#[test]
+fn rule_parser_scoping() {
+    let dir = TempDir::new().unwrap();
+
+    // Config: both parsers, cycle rule scoped to frontmatter only
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n\n[rules.directed-cycle]\nparsers = [\"frontmatter\"]\n",
+    )
+    .unwrap();
+
+    // Create a cycle through markdown links only (a -> b -> a)
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "[a](a.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "check",
+            "--rule",
+            "directed-cycle",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("directed-cycle"),
+        "cycle through markdown edges should not be detected when rule is scoped to frontmatter, got: {stdout}"
+    );
+    assert!(output.status.success());
+}
+
 /// Scenario 29: --rule filtering.
 /// Only the specified rule runs.
 #[test]

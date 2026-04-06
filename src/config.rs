@@ -158,6 +158,8 @@ pub struct RuleConfig {
     pub files: Vec<String>,
     /// Exclude nodes from diagnostics (default: none).
     pub ignore: Vec<String>,
+    /// Scope which parser edges the rule evaluates (default: all).
+    pub parsers: Vec<String>,
     pub command: Option<String>,
     /// Arbitrary structured data passed through to the rule. drft doesn't interpret it.
     pub options: Option<toml::Value>,
@@ -179,6 +181,9 @@ impl Serialize for RuleConfig {
         if !self.ignore.is_empty() {
             len += 1;
         }
+        if !self.parsers.is_empty() {
+            len += 1;
+        }
         if self.command.is_some() {
             len += 1;
         }
@@ -192,6 +197,9 @@ impl Serialize for RuleConfig {
         }
         if !self.ignore.is_empty() {
             map.serialize_entry("ignore", &self.ignore)?;
+        }
+        if !self.parsers.is_empty() {
+            map.serialize_entry("parsers", &self.parsers)?;
         }
         if let Some(ref command) = self.command {
             map.serialize_entry("command", command)?;
@@ -208,6 +216,7 @@ impl RuleConfig {
         severity: RuleSeverity,
         files: Vec<String>,
         ignore: Vec<String>,
+        parsers: Vec<String>,
         command: Option<String>,
         options: Option<toml::Value>,
     ) -> Result<Self> {
@@ -217,6 +226,7 @@ impl RuleConfig {
             severity,
             files,
             ignore,
+            parsers,
             command,
             options,
             files_compiled,
@@ -254,6 +264,8 @@ enum RawRuleValue {
         files: Vec<String>,
         #[serde(default)]
         ignore: Vec<String>,
+        #[serde(default)]
+        parsers: Vec<String>,
         command: Option<String>,
         options: Option<toml::Value>,
     },
@@ -344,7 +356,7 @@ impl Config {
         .map(|(k, v)| {
             (
                 k.to_string(),
-                RuleConfig::new(v, Vec::new(), Vec::new(), None, None)
+                RuleConfig::new(v, Vec::new(), Vec::new(), Vec::new(), None, None)
                     .expect("default rule config"),
             )
         })
@@ -436,21 +448,31 @@ impl Config {
             for (name, value) in raw_rules {
                 let rule_config = match value {
                     RawRuleValue::Severity(severity) => {
-                        RuleConfig::new(severity, Vec::new(), Vec::new(), None, None)?
+                        RuleConfig::new(severity, Vec::new(), Vec::new(), Vec::new(), None, None)?
                     }
                     RawRuleValue::Table {
                         severity,
                         files,
                         ignore,
+                        parsers,
                         command,
                         options,
-                    } => RuleConfig::new(severity, files, ignore, command, options)
+                    } => RuleConfig::new(severity, files, ignore, parsers, command, options)
                         .with_context(|| format!("invalid globs in rules.{name}"))?,
                 };
 
                 // Warn about unknown built-in rules (but allow custom rules with command)
                 if rule_config.command.is_none() && !BUILTIN_RULES.contains(&name.as_str()) {
                     eprintln!("warn: unknown rule \"{name}\" in drft.toml (ignored)");
+                }
+
+                // Warn about unknown parser references in rule parsers
+                for parser_name in &rule_config.parsers {
+                    if !config.parsers.contains_key(parser_name) {
+                        eprintln!(
+                            "warn: unknown parser \"{parser_name}\" in rules.{name}.parsers in drft.toml"
+                        );
+                    }
                 }
 
                 config.rules.insert(name, rule_config);
@@ -490,6 +512,14 @@ impl Config {
     /// Get a rule's options (the `[rules.<name>.options]` section).
     pub fn rule_options(&self, name: &str) -> Option<&toml::Value> {
         self.rules.get(name).and_then(|r| r.options.as_ref())
+    }
+
+    /// Get parser names a rule is scoped to (empty = all parsers).
+    pub fn rule_parsers(&self, name: &str) -> &[String] {
+        self.rules
+            .get(name)
+            .map(|r| r.parsers.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Get custom rules (rules with a command field).

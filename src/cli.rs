@@ -63,6 +63,10 @@ pub enum Commands {
         /// Output as GraphViz DOT
         #[arg(long)]
         dot: bool,
+
+        /// Only include edges from this parser
+        #[arg(long)]
+        parser: Option<String>,
     },
 
     /// Show what depends on the given files (transitively)
@@ -70,6 +74,10 @@ pub enum Commands {
         /// Files to analyze (relative paths)
         #[arg(required = true)]
         files: Vec<String>,
+
+        /// Only include edges from this parser
+        #[arg(long)]
+        parser: Option<String>,
     },
 
     /// [unstable] Run graph analyses and health metrics

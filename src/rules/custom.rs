@@ -42,7 +42,7 @@ pub fn run_custom_rules(enriched: &EnrichedGraph, root: &Path, config: &Config) 
     diagnostics
 }
 
-fn run_one(
+pub fn run_one(
     rule_name: &str,
     rule_config: &RuleConfig,
     enriched: &EnrichedGraph,
@@ -263,6 +263,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             files: Vec::new(),
             ignore: Vec::new(),
+            parsers: Vec::new(),
             options: None,
             files_compiled: None,
             ignore_compiled: None,
@@ -295,6 +296,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             files: Vec::new(),
             ignore: Vec::new(),
+            parsers: Vec::new(),
             options: None,
             files_compiled: None,
             ignore_compiled: None,
@@ -335,6 +337,7 @@ mod tests {
             severity: crate::config::RuleSeverity::Warn,
             files: Vec::new(),
             ignore: Vec::new(),
+            parsers: Vec::new(),
             options: None,
             files_compiled: None,
             ignore_compiled: None,
@@ -381,6 +384,7 @@ fi
             severity: crate::config::RuleSeverity::Warn,
             files: Vec::new(),
             ignore: Vec::new(),
+            parsers: Vec::new(),
             options: Some(options),
             files_compiled: None,
             ignore_compiled: None,
@@ -425,6 +429,7 @@ fi
             severity: crate::config::RuleSeverity::Warn,
             files: Vec::new(),
             ignore: Vec::new(),
+            parsers: Vec::new(),
             options: None,
             files_compiled: None,
             ignore_compiled: None,

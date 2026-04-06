@@ -1,6 +1,7 @@
 ---
 sources:
   - ../../src/rules/mod.rs
+  - ../../src/config.rs
 ---
 
 # Rules
@@ -36,7 +37,7 @@ You can define custom rules that run an external command. See [custom](custom.md
 
 ## Per-rule configuration
 
-Every rule supports `files` and `ignore` (glob patterns), applied at the runner level:
+Every rule supports `files`, `ignore`, and `parsers`, applied at the runner level:
 
 ```toml
 [rules.orphan-node]
@@ -46,7 +47,11 @@ ignore = ["CHANGELOG.md"]
 [rules.schema-violation]
 severity = "warn"
 files = ["docs/**"] # only evaluate this rule against docs
+
+[rules.directed-cycle]
+parsers = ["frontmatter"] # only detect cycles through frontmatter edges
 ```
 
 - `files`: scope which nodes the rule evaluates (default: all)
 - `ignore`: exclude nodes from diagnostics (default: none)
+- `parsers`: scope which parser edges the rule evaluates (default: all). When set, the rule runs against a filtered graph containing only edges from the named parsers. This lets you distinguish structural dependencies from navigation links.
