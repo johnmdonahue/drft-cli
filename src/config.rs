@@ -466,6 +466,15 @@ impl Config {
                     eprintln!("warn: unknown rule \"{name}\" in drft.toml (ignored)");
                 }
 
+                // Warn about unknown parser references in rule parsers
+                for parser_name in &rule_config.parsers {
+                    if !config.parsers.contains_key(parser_name) {
+                        eprintln!(
+                            "warn: unknown parser \"{parser_name}\" in rules.{name}.parsers in drft.toml"
+                        );
+                    }
+                }
+
                 config.rules.insert(name, rule_config);
             }
         }

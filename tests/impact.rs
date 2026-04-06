@@ -53,6 +53,42 @@ fn impact_json_format() {
 }
 
 #[test]
+fn impact_parser_filter() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n",
+    )
+    .unwrap();
+    // index.md links to setup.md via markdown only
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    // Without filter: index.md depends on setup.md
+    let all = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact", "setup.md"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&all.stdout);
+    assert!(stdout.contains("index.md"));
+
+    // With frontmatter filter: no dependents (link is markdown, not frontmatter)
+    let filtered = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "setup.md",
+            "--parser",
+            "frontmatter",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&filtered.stdout);
+    assert!(stdout.contains("no dependents"));
+}
+
+#[test]
 fn impact_md_extension_fallback() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), "").unwrap();

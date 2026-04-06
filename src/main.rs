@@ -725,7 +725,8 @@ fn collect_jgf_graphs(
     let g = build_graph(root, &config)?;
     let g = if let Some(name) = parser {
         if !config.parsers.contains_key(name) {
-            let available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            let mut available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            available.sort();
             anyhow::bail!(
                 "unknown parser \"{name}\" (available: {})",
                 available.join(", ")
@@ -791,7 +792,8 @@ fn run_impact(
     let graph = graph::build_graph(&graph_root, &config)?;
     let graph = if let Some(name) = parser {
         if !config.parsers.contains_key(name) {
-            let available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            let mut available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            available.sort();
             anyhow::bail!(
                 "unknown parser \"{name}\" (available: {})",
                 available.join(", ")

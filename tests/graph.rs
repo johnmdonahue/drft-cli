@@ -27,6 +27,76 @@ fn graph_json_follows_jgf() {
 }
 
 #[test]
+fn graph_parser_filter_reduces_edges() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n",
+    )
+    .unwrap();
+    // frontmatter links to docs/setup.md, markdown links to config.md — different targets
+    let docs = dir.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "---\nsources:\n  - docs/setup.md\n---\n[config](config.md)",
+    )
+    .unwrap();
+    fs::write(docs.join("setup.md"), "# Setup").unwrap();
+    fs::write(dir.path().join("config.md"), "# Config").unwrap();
+
+    // Without filter: both markdown and frontmatter edges
+    let all = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph"])
+        .output()
+        .unwrap();
+    let all_json: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&all.stdout)).unwrap();
+    let all_edges = all_json["graph"]["edges"].as_array().unwrap();
+    assert_eq!(all_edges.len(), 2);
+
+    // With filter: only frontmatter edges
+    let filtered = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--parser",
+            "frontmatter",
+        ])
+        .output()
+        .unwrap();
+    let filtered_json: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&filtered.stdout)).unwrap();
+    let filtered_edges = filtered_json["graph"]["edges"].as_array().unwrap();
+    assert_eq!(filtered_edges.len(), 1);
+    assert_eq!(filtered_edges[0]["parser"], "frontmatter");
+}
+
+#[test]
+fn graph_unknown_parser_errors() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--parser",
+            "nonexistent",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("unknown parser \"nonexistent\""));
+    assert!(stderr.contains("available:"));
+}
+
+#[test]
 fn graph_recursive_produces_multiple_graphs() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), "").unwrap();
