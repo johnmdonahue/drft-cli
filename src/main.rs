@@ -1134,10 +1134,14 @@ fn check_graph(
     let lockfile = lockfile::read_lockfile(root)?;
     let base_graph = graph::build_graph(root, &config)?;
 
-    // Collect distinct parser filter sets needed by rules that will run.
+    // Collect distinct parser filter sets needed by rules that will actually run
+    // (respects both --rule filter and severity=off).
     let mut parser_sets: Vec<Vec<String>> = Vec::new();
     for rule in all_rules() {
         if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == rule.name()) {
+            continue;
+        }
+        if rule_filter.is_empty() && config.rule_severity(rule.name()) == RuleSeverity::Off {
             continue;
         }
         let parsers = config.rule_parsers(rule.name()).to_vec();
@@ -1148,6 +1152,9 @@ fn check_graph(
     // Also collect from custom rules
     for (name, rule_config) in config.custom_rules() {
         if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == name) {
+            continue;
+        }
+        if rule_filter.is_empty() && rule_config.severity == RuleSeverity::Off {
             continue;
         }
         let parsers = rule_config.parsers.clone();
