@@ -20,15 +20,16 @@ File path references found in YAML frontmatter.
 ```markdown
 ---
 sources:
+  - setup.md
   - ../shared/glossary.md
   - ./prior-art.md
 template: docs/templates/page.md
 ---
 ```
 
-The parser uses a heuristic to distinguish file paths from plain string values: a value is treated as a path if it contains a `/` or starts with `./`, and the last path component contains a `.` (i.e., it has a file extension). Values that start with `{`, `[`, `"`, or `'` are skipped, as are URLs starting with `http://` or `https://`.
+The parser uses a heuristic to distinguish file paths from plain string values: a value is treated as a path if it has a file extension (contains a `.` in the last path component). Numeric values (e.g., `1.0`), values that start with `{`, `[`, `"`, or `'`, and URIs are skipped.
 
-This means `sources: ../shared/glossary.md` is detected, but `title: My Document` and `version: 1.0` are not.
+This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not.
 
 ## Metadata
 
