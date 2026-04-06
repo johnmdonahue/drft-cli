@@ -79,14 +79,23 @@ fn try_main() -> Result<i32> {
             max_depth,
         } => run_lock(&root, *check, *recursive, *max_depth),
         Commands::Report { names } => run_report(&root, cli.format, names),
-        Commands::Impact { files, parser } => run_impact(&root, cli.format, files, parser.as_deref()),
+        Commands::Impact { files, parser } => {
+            run_impact(&root, cli.format, files, parser.as_deref())
+        }
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
         Commands::Graph {
             recursive,
             max_depth,
             dot,
             parser,
-        } => run_graph(&root, cli.format, *recursive, *max_depth, *dot, parser.as_deref()),
+        } => run_graph(
+            &root,
+            cli.format,
+            *recursive,
+            *max_depth,
+            *dot,
+            parser.as_deref(),
+        ),
         Commands::Check {
             rules: rule_filter,
             recursive,
@@ -770,7 +779,12 @@ fn collect_jgf_graphs(
     Ok(graphs)
 }
 
-fn run_impact(root: &Path, format: OutputFormat, files: &[String], parser: Option<&str>) -> Result<i32> {
+fn run_impact(
+    root: &Path,
+    format: OutputFormat,
+    files: &[String],
+    parser: Option<&str>,
+) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let lockfile = lockfile::read_lockfile(&graph_root)?;
@@ -1229,9 +1243,7 @@ fn check_graph(
                             .flatten()
                             .collect();
                     let in_scope = paths.is_empty()
-                        || paths
-                            .iter()
-                            .any(|p| config.is_rule_in_scope(rule_name, p));
+                        || paths.iter().any(|p| config.is_rule_in_scope(rule_name, p));
                     let ignored = paths.iter().any(|p| config.is_rule_ignored(rule_name, p));
                     in_scope && !ignored
                 });
