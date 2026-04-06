@@ -315,7 +315,7 @@ hash = "b3:63c60b10aa1f9c726e960fe4f0e00e000518b730fc8079b397286e6f6e44356e"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:f440a0cf535179fbced37199416f3a0b405594c9e1fad0a06a75a08a9672743b"
+hash = "b3:2b638b56c61e700f837288677b38014d313041b47a2d18c5c3c198d37ed1ba5e"
 
 [nodes."src/metrics.rs"]
 type = "file"
