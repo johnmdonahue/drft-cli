@@ -120,6 +120,26 @@ impl Graph {
     pub fn target_props(&self, target: &str) -> Option<&TargetProperties> {
         self.target_properties.get(target)
     }
+
+    /// Create a new graph containing only edges from the specified parsers.
+    /// All nodes are preserved. Adjacency maps are rebuilt for the filtered edge set.
+    pub fn filter_by_parsers(&self, parsers: &[String]) -> Graph {
+        let mut filtered = Graph {
+            nodes: self.nodes.clone(),
+            child_graphs: self.child_graphs.clone(),
+            interface: self.interface.clone(),
+            target_properties: self.target_properties.clone(),
+            ..Default::default()
+        };
+
+        for edge in &self.edges {
+            if parsers.iter().any(|p| p == &edge.parser) {
+                filtered.add_edge(edge.clone());
+            }
+        }
+
+        filtered
+    }
 }
 
 /// Hash file contents with BLAKE3, returning `b3:<hex>`.
@@ -738,5 +758,109 @@ mod tests {
         let n = normalize_link_target("mailto:user@example.com").unwrap();
         assert_eq!(n.target, "mailto:user@example.com");
         assert!(n.fragment.is_none());
+    }
+
+    #[test]
+    fn filter_by_single_parser() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_node(test_helpers::make_node("c.md"));
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "b.md".into(),
+            link: None,
+            parser: "markdown".into(),
+        });
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "c.md".into(),
+            link: None,
+            parser: "frontmatter".into(),
+        });
+
+        let filtered = g.filter_by_parsers(&["frontmatter".into()]);
+        assert_eq!(filtered.edges.len(), 1);
+        assert_eq!(filtered.edges[0].target, "c.md");
+        assert_eq!(filtered.edges[0].parser, "frontmatter");
+    }
+
+    #[test]
+    fn filter_preserves_all_nodes() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "b.md".into(),
+            link: None,
+            parser: "markdown".into(),
+        });
+
+        let filtered = g.filter_by_parsers(&["frontmatter".into()]);
+        assert_eq!(filtered.nodes.len(), 2);
+        assert!(filtered.nodes.contains_key("a.md"));
+        assert!(filtered.nodes.contains_key("b.md"));
+        assert!(filtered.edges.is_empty());
+    }
+
+    #[test]
+    fn filter_rebuilds_adjacency_maps() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_node(test_helpers::make_node("c.md"));
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "b.md".into(),
+            link: None,
+            parser: "markdown".into(),
+        });
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "c.md".into(),
+            link: None,
+            parser: "frontmatter".into(),
+        });
+
+        let filtered = g.filter_by_parsers(&["frontmatter".into()]);
+        assert_eq!(filtered.forward["a.md"], vec![0]);
+        assert_eq!(filtered.reverse["c.md"], vec![0]);
+        assert!(!filtered.reverse.contains_key("b.md"));
+    }
+
+    #[test]
+    fn filter_by_multiple_parsers() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_node(test_helpers::make_node("c.md"));
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "b.md".into(),
+            link: None,
+            parser: "markdown".into(),
+        });
+        g.add_edge(Edge {
+            source: "a.md".into(),
+            target: "c.md".into(),
+            link: None,
+            parser: "frontmatter".into(),
+        });
+
+        let filtered = g.filter_by_parsers(&["markdown".into(), "frontmatter".into()]);
+        assert_eq!(filtered.edges.len(), 2);
+    }
+
+    #[test]
+    fn filter_empty_parsers_removes_all_edges() {
+        let mut g = Graph::new();
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_edge(test_helpers::make_edge("a.md", "b.md"));
+
+        let filtered = g.filter_by_parsers(&[]);
+        assert!(filtered.edges.is_empty());
+        assert_eq!(filtered.nodes.len(), 2);
     }
 }

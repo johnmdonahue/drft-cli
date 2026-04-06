@@ -66,6 +66,9 @@ severity = "warn"
 files = ["docs/**"] # only evaluate against docs
 ignore = ["README.md"] # exclude from diagnostics
 
+[rules.directed-cycle] # scoped to frontmatter edges only
+parsers = ["frontmatter"]
+
 [rules.max-fan-out] # custom rule (has command)
 command = "./scripts/max-fan-out.sh"
 severity = "warn"
@@ -74,12 +77,13 @@ severity = "warn"
 threshold = 5
 ```
 
-| Field      | Required | Default | Description                                         |
-| ---------- | -------- | ------- | --------------------------------------------------- |
-| `severity` | no       | warn    | `"error"`, `"warn"`, or `"off"`                     |
-| `files`    | no       | all     | Glob patterns — which nodes the rule evaluates      |
-| `ignore`   | no       | none    | Glob patterns — exclude nodes from diagnostics      |
-| `command`  | no       | —       | Shell command (present = custom, absent = built-in) |
+| Field      | Required | Default | Description                                                                |
+| ---------- | -------- | ------- | -------------------------------------------------------------------------- |
+| `severity` | no       | warn    | `"error"`, `"warn"`, or `"off"`                                            |
+| `files`    | no       | all     | Glob patterns — which nodes the rule evaluates                             |
+| `ignore`   | no       | none    | Glob patterns — exclude nodes from diagnostics                             |
+| `parsers`  | no       | all     | Parser names — which edges the rule evaluates (filters by edge provenance) |
+| `command`  | no       | —       | Shell command (present = custom, absent = built-in)                        |
 
 Rule-specific options go under `[rules.<name>.options]` and are passed to the rule. See [custom rules](rules/custom.md) for the protocol.
 

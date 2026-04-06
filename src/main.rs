@@ -79,13 +79,14 @@ fn try_main() -> Result<i32> {
             max_depth,
         } => run_lock(&root, *check, *recursive, *max_depth),
         Commands::Report { names } => run_report(&root, cli.format, names),
-        Commands::Impact { files } => run_impact(&root, cli.format, files),
+        Commands::Impact { files, parser } => run_impact(&root, cli.format, files, parser.as_deref()),
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
         Commands::Graph {
             recursive,
             max_depth,
             dot,
-        } => run_graph(&root, cli.format, *recursive, *max_depth, *dot),
+            parser,
+        } => run_graph(&root, cli.format, *recursive, *max_depth, *dot, parser.as_deref()),
         Commands::Check {
             rules: rule_filter,
             recursive,
@@ -591,11 +592,12 @@ fn run_graph(
     recursive: bool,
     max_depth: Option<usize>,
     dot: bool,
+    parser: Option<&str>,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
 
     if dot {
-        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
+        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth, parser)?;
         println!("digraph {{");
         let mut all_nodes = Vec::new();
         let mut all_edges = Vec::new();
@@ -636,7 +638,7 @@ fn run_graph(
         println!("}}");
     } else {
         // JSON Graph Format (JGF)
-        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth)?;
+        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth, parser)?;
 
         let jgf_graphs: Vec<serde_json::Value> = graphs
             .iter()
@@ -708,9 +710,22 @@ fn collect_jgf_graphs(
     id: &str,
     recursive: bool,
     max_depth: Option<usize>,
+    parser: Option<&str>,
 ) -> Result<Vec<GraphExport>> {
     let config = Config::load(root)?;
     let g = build_graph(root, &config)?;
+    let g = if let Some(name) = parser {
+        if !config.parsers.contains_key(name) {
+            let available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            anyhow::bail!(
+                "unknown parser \"{name}\" (available: {})",
+                available.join(", ")
+            );
+        }
+        g.filter_by_parsers(&[name.to_string()])
+    } else {
+        g
+    };
 
     let nodes: Vec<(String, graph::NodeType, Option<String>)> = g
         .nodes
@@ -747,7 +762,7 @@ fn collect_jgf_graphs(
             } else {
                 format!("{id}/{child_graph}")
             };
-            let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth)?;
+            let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth, parser)?;
             graphs.extend(sub_graphs);
         }
     }
@@ -755,11 +770,24 @@ fn collect_jgf_graphs(
     Ok(graphs)
 }
 
-fn run_impact(root: &Path, format: OutputFormat, files: &[String]) -> Result<i32> {
+fn run_impact(root: &Path, format: OutputFormat, files: &[String], parser: Option<&str>) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let lockfile = lockfile::read_lockfile(&graph_root)?;
-    let enriched = analyses::enrich(&graph_root, &config, lockfile.as_ref())?;
+    let graph = graph::build_graph(&graph_root, &config)?;
+    let graph = if let Some(name) = parser {
+        if !config.parsers.contains_key(name) {
+            let available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
+            anyhow::bail!(
+                "unknown parser \"{name}\" (available: {})",
+                available.join(", ")
+            );
+        }
+        graph.filter_by_parsers(&[name.to_string()])
+    } else {
+        graph
+    };
+    let enriched = analyses::enrich_graph(graph, &graph_root, &config, lockfile.as_ref());
     let graph = &enriched.graph;
 
     // Resolve file args (try with .md extension if not found)
@@ -1088,7 +1116,41 @@ fn check_graph(
 ) -> Result<Vec<Diagnostic>> {
     let config = Config::load(root)?;
     let lockfile = lockfile::read_lockfile(root)?;
-    let enriched = analyses::enrich(root, &config, lockfile.as_ref())?;
+    let base_graph = graph::build_graph(root, &config)?;
+
+    // Collect distinct parser filter sets needed by rules that will run.
+    let mut parser_sets: Vec<Vec<String>> = Vec::new();
+    for rule in all_rules() {
+        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == rule.name()) {
+            continue;
+        }
+        let parsers = config.rule_parsers(rule.name()).to_vec();
+        if !parsers.is_empty() && !parser_sets.contains(&parsers) {
+            parser_sets.push(parsers);
+        }
+    }
+    // Also collect from custom rules
+    for (name, rule_config) in config.custom_rules() {
+        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == name) {
+            continue;
+        }
+        let parsers = rule_config.parsers.clone();
+        if !parsers.is_empty() && !parser_sets.contains(&parsers) {
+            parser_sets.push(parsers);
+        }
+    }
+
+    // Build filtered enriched graphs BEFORE consuming the base graph.
+    let mut filtered_cache: std::collections::HashMap<Vec<String>, analyses::EnrichedGraph> =
+        std::collections::HashMap::new();
+    for parser_set in &parser_sets {
+        let filtered = base_graph.filter_by_parsers(parser_set);
+        let enriched = analyses::enrich_graph(filtered, root, &config, lockfile.as_ref());
+        filtered_cache.insert(parser_set.clone(), enriched);
+    }
+
+    // Now consume the base graph for the unfiltered enriched graph.
+    let base_enriched = analyses::enrich_graph(base_graph, root, &config, lockfile.as_ref());
 
     let mut diagnostics = Vec::new();
 
@@ -1111,8 +1173,15 @@ fn check_graph(
             severity
         };
 
+        let rule_parsers = config.rule_parsers(rule.name());
+        let enriched = if rule_parsers.is_empty() {
+            &base_enriched
+        } else {
+            filtered_cache.get(rule_parsers).unwrap()
+        };
+
         let rule_ctx = rules::RuleContext {
-            graph: &enriched,
+            graph: enriched,
             options: config.rule_options(rule.name()),
         };
         let mut findings = rule.evaluate(&rule_ctx);
@@ -1139,44 +1208,60 @@ fn check_graph(
         diagnostics.extend(findings);
     }
 
-    // Run custom rules (respecting --rule filter)
-    let has_custom_rules = config.custom_rules().next().is_some();
-    let run_custom = if rule_filter.is_empty() {
-        has_custom_rules
-    } else {
-        config
-            .custom_rules()
-            .any(|(name, _)| rule_filter.iter().any(|f| f == name))
-    };
-    if run_custom {
-        let mut custom_findings = rules::custom::run_custom_rules(&enriched, root, &config);
-        // Filter to only requested rules if --rule is set
-        if !rule_filter.is_empty() {
-            custom_findings.retain(|d| rule_filter.iter().any(|f| f == &d.rule));
+    // Run custom rules individually (respecting --rule filter and per-rule parser scoping)
+    let config_dir = config.config_dir.as_deref().unwrap_or(root);
+    for (rule_name, rule_config) in config.custom_rules() {
+        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == rule_name) {
+            continue;
         }
-        // Apply per-rule files/ignore filtering to custom rule diagnostics
-        custom_findings.retain(|d| {
-            let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
-                .into_iter()
-                .flatten()
-                .collect();
-            let in_scope =
-                paths.is_empty() || paths.iter().any(|p| config.is_rule_in_scope(&d.rule, p));
-            let ignored = paths.iter().any(|p| config.is_rule_ignored(&d.rule, p));
-            in_scope && !ignored
-        });
-        for d in &mut custom_findings {
-            if graph_prefix.is_some() {
-                d.graph = graph_prefix.map(|s| s.to_string());
+        let enriched = if rule_config.parsers.is_empty() {
+            &base_enriched
+        } else {
+            filtered_cache.get(&rule_config.parsers).unwrap()
+        };
+        match rules::custom::run_one(rule_name, rule_config, enriched, root, config_dir) {
+            Ok(mut findings) => {
+                // Apply per-rule files/ignore filtering
+                findings.retain(|d| {
+                    let paths: Vec<&str> =
+                        [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .collect();
+                    let in_scope = paths.is_empty()
+                        || paths
+                            .iter()
+                            .any(|p| config.is_rule_in_scope(rule_name, p));
+                    let ignored = paths.iter().any(|p| config.is_rule_ignored(rule_name, p));
+                    in_scope && !ignored
+                });
+                for d in &mut findings {
+                    if graph_prefix.is_some() {
+                        d.graph = graph_prefix.map(|s| s.to_string());
+                    }
+                }
+                diagnostics.extend(findings);
+            }
+            Err(e) => {
+                eprintln!("warn: custom rule \"{rule_name}\" failed: {e}");
+                diagnostics.push(Diagnostic {
+                    rule: rule_name.to_string(),
+                    severity: rule_config.severity,
+                    message: format!("custom rule failed: {e}"),
+                    fix: Some(format!(
+                        "custom rule \"{rule_name}\" failed to execute — check the command path and script"
+                    )),
+                    graph: graph_prefix.map(|s| s.to_string()),
+                    ..Default::default()
+                });
             }
         }
-        diagnostics.extend(custom_findings);
     }
 
     // Recursively check child graphs if --recursive
     if recursive && max_depth != Some(0) {
         let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_graph in &enriched.graph.child_graphs {
+        for child_graph in &base_enriched.graph.child_graphs {
             let child_dir = root.join(child_graph);
             let child_prefix = match graph_prefix {
                 Some(parent) => format!("{parent}/{child_graph}"),
