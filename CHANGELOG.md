@@ -2,6 +2,22 @@
 
 All notable changes to drft are documented here.
 
+## 0.5.2 (2026-04-06)
+
+Parser-scoped rules and frontmatter improvements.
+
+### Features
+
+- **Per-rule parser scoping** — rules can scope to specific parsers via `parsers = ["frontmatter"]` in config. The rule evaluates against a filtered graph containing only edges from the named parsers, distinguishing structural dependencies from navigation links.
+- **`--parser` flag on `graph` and `impact`** — filter edges by parser for ad-hoc exploration. `drft graph --parser frontmatter` shows only frontmatter edges.
+- **`Graph::filter_by_parsers()`** — new graph primitive that produces a parser-filtered view while preserving all nodes.
+
+### Fixes
+
+- **Frontmatter parser detects same-directory references** — `sources: [setup.md]` is now extracted as a link. Previously required a path separator (`./setup.md` or `dir/setup.md`).
+- **Unknown parser names in rule config produce warnings** — a typo in `parsers = ["fronmatter"]` now warns instead of silently running against an empty graph.
+- **Sorted parser names in error messages** — `--parser nonexistent` error output is deterministic.
+
 ## 0.5.1 (2026-04-01)
 
 Post-v0.5 audit — simplify graph, enforce frontmatter, remove noisy rules.
