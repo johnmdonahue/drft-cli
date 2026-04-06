@@ -68,8 +68,12 @@ fn extract_frontmatter_links(content: &str) -> Vec<String> {
             continue;
         }
 
-        let looks_like_path =
-            (value.contains('/') || value.starts_with("./")) && has_file_extension(value);
+        // Skip numeric values (e.g., "1.0") — not file paths
+        if value.parse::<f64>().is_ok() {
+            continue;
+        }
+
+        let looks_like_path = has_file_extension(value);
 
         if !looks_like_path {
             continue;
@@ -171,6 +175,15 @@ mod tests {
         assert_eq!(result.links.len(), 2);
         assert_eq!(result.links[0], "../shared/glossary.md");
         assert_eq!(result.links[1], "./prior-art.md");
+    }
+
+    #[test]
+    fn extracts_same_directory_links() {
+        let content = "---\nsources:\n  - setup.md\n  - config.rs\n---\n";
+        let result = parse(content);
+        assert_eq!(result.links.len(), 2);
+        assert_eq!(result.links[0], "setup.md");
+        assert_eq!(result.links[1], "config.rs");
     }
 
     #[test]
