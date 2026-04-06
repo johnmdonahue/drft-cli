@@ -8,7 +8,7 @@ on:
 
 jobs:
   publish-crates:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -16,7 +16,7 @@ jobs:
       - run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   publish-npm:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
