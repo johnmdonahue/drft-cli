@@ -94,7 +94,7 @@ hash = "b3:944489f9d11ef3836e15cc1256ce0a832e1426a5944b51bc8c27c2c22d0e627e"
 
 [nodes."docs/parsers/frontmatter.md"]
 type = "file"
-hash = "b3:78307d721f4742cc0b18dcda4dd56efd6d5e00db465ee19d04bf420deb5f0f07"
+hash = "b3:aa8190d174272766f8cd83b9ccec5636b02fc735df8276077a9c00b37854f2f6"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
@@ -295,7 +295,7 @@ hash = "b3:611264d44fb640a6d91c299566899c55c1781b7386727bc21950cf81b05ac777"
 
 [nodes."src/config.rs"]
 type = "file"
-hash = "b3:ae7d8767269f89e2186892cb5505004886208fcb9f5f8dd50feccc3e0ce503a4"
+hash = "b3:7f5ffbb8205f9a172ba5c278f531551beb2d7c8bb6f5f0c85c6f614b2661bad6"
 
 [nodes."src/diagnostic.rs"]
 type = "file"
@@ -315,7 +315,7 @@ hash = "b3:63c60b10aa1f9c726e960fe4f0e00e000518b730fc8079b397286e6f6e44356e"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:bf3723c17191c07fd47c6ba16c411654dbfdf03d760c420ee315eee999eb677d"
+hash = "b3:f440a0cf535179fbced37199416f3a0b405594c9e1fad0a06a75a08a9672743b"
 
 [nodes."src/metrics.rs"]
 type = "file"
@@ -327,7 +327,7 @@ hash = "b3:edd9afac31f40c2c581d8ccc0daa79e6399c986f5b9d78e11861a9ab56405754"
 
 [nodes."src/parsers/frontmatter.rs"]
 type = "file"
-hash = "b3:dcbde8b1cc7205502d85d27f4ec71b57bce9439709e6ca3b2badc1bfb28e068d"
+hash = "b3:d325cb8e614893f21a99745eb54148d7c11f83ebbef9366a80df1d3cb79d78cd"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"
