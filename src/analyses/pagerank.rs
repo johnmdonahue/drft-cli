@@ -32,7 +32,7 @@ impl Analysis for PageRank {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -55,9 +55,7 @@ impl Analysis for PageRank {
         }
 
         for edge in &graph.edges {
-            if graph.is_file_node(&edge.source)
-                && graph.is_file_node(&edge.target)
-                && edge.source != edge.target
+            if graph.is_internal_edge(edge) && edge.source != edge.target
             {
                 *out_degree.get_mut(edge.source.as_str()).unwrap() += 1;
                 inbound

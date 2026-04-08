@@ -32,7 +32,7 @@ impl Analysis for ImpactRadius {
         let mut nodes: Vec<ImpactRadiusNode> = graph
             .nodes
             .keys()
-            .filter(|path| graph.is_file_node(path))
+            .filter(|path| graph.is_included_node(path))
             .map(|path| {
                 // BFS on reverse edges to find all transitive dependents
                 let mut visited = HashSet::new();
@@ -48,7 +48,7 @@ impl Analysis for ImpactRadius {
                     if let Some(edge_indices) = graph.reverse.get(current) {
                         for &idx in edge_indices {
                             let dependent = graph.edges[idx].source.as_str();
-                            if !graph.is_file_node(dependent) {
+                            if !graph.is_included_node(dependent) {
                                 continue;
                             }
                             if visited.insert(dependent) {
@@ -222,6 +222,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

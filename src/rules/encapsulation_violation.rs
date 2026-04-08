@@ -87,6 +87,7 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "research".into(),
@@ -95,26 +96,30 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/overview.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -139,6 +144,7 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "research".into(),
@@ -147,20 +153,23 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/internal.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "research/internal.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());

@@ -25,7 +25,7 @@ impl Analysis for GraphStats {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -35,7 +35,7 @@ impl Analysis for GraphStats {
         let edge_count = graph
             .edges
             .iter()
-            .filter(|e| graph.is_file_node(&e.source) && graph.is_file_node(&e.target))
+            .filter(|e| graph.is_internal_edge(e))
             .count();
 
         // Density for directed graph: |E| / (|V| * (|V| - 1))
@@ -117,8 +117,9 @@ fn bfs_distances<'a>(graph: &'a Graph, source: &'a str) -> HashMap<&'a str, usiz
         let current_dist = distances[current];
         if let Some(edge_indices) = graph.forward.get(current) {
             for &idx in edge_indices {
-                let target = graph.edges[idx].target.as_str();
-                if graph.is_file_node(target) && !distances.contains_key(target) {
+                let edge = &graph.edges[idx];
+                let target = edge.target.as_str();
+                if graph.is_internal_edge(edge) && !distances.contains_key(target) {
                     distances.insert(target, current_dist + 1);
                     queue.push_back(target);
                 }

@@ -49,6 +49,10 @@ pub struct Node {
     /// Structured metadata from parsers, keyed by parser name.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, serde_json::Value>,
+    /// True when this node was matched by `include` during discovery.
+    /// False for nodes discovered via edge targets (outside include, child graph files, etc.).
+    #[serde(default)]
+    pub included: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -96,11 +100,23 @@ impl Graph {
     }
 
     /// Returns true for File nodes (excludes External and Directory).
-    /// Used by structural analyses that operate only on declared file-backed nodes.
     pub fn is_file_node(&self, path: &str) -> bool {
         self.nodes
             .get(path)
             .is_some_and(|n| n.node_type == NodeType::File)
+    }
+
+    /// Returns true when the node was matched by `include` during discovery.
+    pub fn is_included_node(&self, path: &str) -> bool {
+        self.nodes
+            .get(path)
+            .is_some_and(|n| n.included)
+    }
+
+    /// Returns true when both endpoints are included nodes (the edge stays
+    /// within the declared scope of the graph).
+    pub fn is_internal_edge(&self, edge: &Edge) -> bool {
+        self.is_included_node(&edge.source) && self.is_included_node(&edge.target)
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
@@ -148,7 +164,7 @@ pub fn hash_bytes(content: &[u8]) -> String {
 }
 
 /// Load a child graph's config, and if it declares an `[interface]`,
-/// add each interface file as an External node with a coupling edge
+/// add each interface file as a File node with a coupling edge
 /// to the child's Directory node.
 fn promote_interface_files(
     root: &Path,
@@ -185,11 +201,12 @@ fn promote_interface_files(
         let hash = std::fs::read(&file_path).ok().map(|c| hash_bytes(&c));
         graph.add_node(Node {
             path: node_path.clone(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash,
             graph: Some(child_name.into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         implicit_edges.push(Edge {
             source: node_path,
@@ -205,7 +222,7 @@ fn promote_interface_files(
 /// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
 /// 2. Read text content for parser input (graceful skip for binary files).
 /// 3. Run parsers to extract edges.
-/// 4. Edge targets outside `include` become External nodes (not tracked).
+/// 4. Edge targets outside `include` become File nodes (discovered, not tracked).
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let included_files = discover(root, &config.include, &config.exclude)?;
     let child_graphs = find_child_graphs(root, &config.exclude)?;
@@ -229,6 +246,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
 
         // Try to read as text for parser input — binary files just won't have text
@@ -236,6 +254,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             file_text.insert(file.clone(), text);
         }
     }
+
 
     // 2. Build parser registry and determine which files each parser receives
     let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
@@ -325,24 +344,51 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 graph: None,
                 is_graph: false,
                 metadata: HashMap::new(),
+                included: false,
             });
             continue;
         }
 
-        // Boundary escape (../ targets) → External with graph: ".."
+        // Boundary escape (../ targets) — File if exists on disk, no node otherwise.
+        // The graph: ".." field is kept for boundary-violation rule compatibility.
+        // dangling-edge catches non-existent targets.
         if edge.target.starts_with("../") || edge.target == ".." {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::External,
-                hash: None,
-                graph: Some("..".into()),
-                is_graph: false,
-                metadata: HashMap::new(),
-            });
+            let target_path = root.join(&edge.target);
+            if target_path.is_file() {
+                let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
+                graph.add_node(Node {
+                    path: edge.target.clone(),
+                    node_type: NodeType::File,
+                    hash,
+                    graph: Some("..".into()),
+                    is_graph: false,
+                    metadata: HashMap::new(),
+                    included: false,
+                });
+            } else if target_path.is_dir() {
+                let has_config = target_path.join("drft.toml").exists();
+                let hash = if has_config {
+                    std::fs::read(target_path.join("drft.toml"))
+                        .ok()
+                        .map(|c| hash_bytes(&c))
+                } else {
+                    None
+                };
+                graph.add_node(Node {
+                    path: edge.target.clone(),
+                    node_type: NodeType::Directory,
+                    hash,
+                    graph: Some("..".into()),
+                    is_graph: has_config,
+                    metadata: HashMap::new(),
+                    included: false,
+                });
+            }
+            // If target doesn't exist: no node created. dangling-edge handles it.
             continue;
         }
 
-        // Target inside a child graph → External with graph: "child"
+        // Target inside a child graph → File with graph: "child"
         let in_child_graph = graph_prefixes
             .iter()
             .find(|s| edge.target.starts_with(&format!("{s}/")));
@@ -352,11 +398,12 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
                 graph.add_node(Node {
                     path: edge.target.clone(),
-                    node_type: NodeType::External,
+                    node_type: NodeType::File,
                     hash,
                     graph: Some(child_name.clone()),
                     is_graph: false,
                     metadata: HashMap::new(),
+                    included: false,
                 });
                 // Ensure the child graph Directory node exists
                 if !graph.nodes.contains_key(child_name) {
@@ -371,6 +418,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         graph: Some(".".into()),
                         is_graph: true,
                         metadata: HashMap::new(),
+                        included: false,
                     });
                     // Promote interface files into parent graph
                     promote_interface_files(root, child_name, &mut graph, &mut implicit_edges);
@@ -405,6 +453,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 graph: Some(".".into()),
                 is_graph: has_config,
                 metadata: HashMap::new(),
+                included: false,
             });
             if has_config {
                 promote_interface_files(root, &edge.target, &mut graph, &mut implicit_edges);
@@ -412,16 +461,17 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // File exists on disk but not in include → External (local)
+        // File exists on disk but not in include → File (local, not tracked)
         if target_path.is_file() {
             let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
             graph.add_node(Node {
                 path: edge.target.clone(),
-                node_type: NodeType::External,
+                node_type: NodeType::File,
                 hash,
                 graph: Some(".".into()),
                 is_graph: false,
                 metadata: HashMap::new(),
+                included: false,
             });
         }
         // If doesn't exist: no node created. dangling-edge rule handles this.
@@ -453,7 +503,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         );
     }
 
-    // Add all edges (explicit + implicit) to the graph
+    // Add all edges (explicit + implicit) to the graph.
     for edge in pending_edges {
         graph.add_edge(edge);
     }
@@ -573,6 +623,7 @@ pub mod test_helpers {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         }
     }
 
@@ -584,6 +635,7 @@ pub mod test_helpers {
             parser: "markdown".into(),
         }
     }
+
 
     pub fn make_enriched(graph: Graph) -> crate::analyses::EnrichedGraph {
         crate::analyses::enrich_graph(
@@ -668,6 +720,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         g.add_node(Node {
             path: "b.md".into(),
@@ -676,6 +729,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         g.add_edge(Edge {
             source: "a.md".into(),

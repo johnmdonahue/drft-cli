@@ -26,28 +26,18 @@ impl Analysis for Degree {
         let mut nodes: Vec<NodeDegree> = graph
             .nodes
             .keys()
-            .filter(|path| graph.is_file_node(path))
+            .filter(|path| graph.is_included_node(path))
             .map(|path| {
                 let in_degree = graph
                     .reverse
                     .get(path.as_str())
-                    .map(|indices| {
-                        indices
-                            .iter()
-                            .filter(|&&idx| graph.is_file_node(&graph.edges[idx].source))
-                            .count()
-                    })
+                    .map(|indices| indices.len())
                     .unwrap_or(0);
 
                 let out_degree = graph
                     .forward
                     .get(path.as_str())
-                    .map(|indices| {
-                        indices
-                            .iter()
-                            .filter(|&&idx| graph.is_file_node(&graph.edges[idx].target))
-                            .count()
-                    })
+                    .map(|indices| indices.len())
                     .unwrap_or(0);
 
                 NodeDegree {
@@ -142,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn excludes_synthetic_nodes() {
+    fn counts_edges_to_external_nodes() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(Node {
@@ -152,6 +142,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 
@@ -159,7 +150,7 @@ mod tests {
         let result = Degree.run(&make_ctx(&graph, &config));
         assert_eq!(result.nodes.len(), 1);
         assert_eq!(result.nodes[0].node, "a.md");
-        assert_eq!(result.nodes[0].out_degree, 0);
+        assert_eq!(result.nodes[0].out_degree, 1);
     }
 
     #[test]

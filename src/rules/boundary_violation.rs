@@ -56,20 +56,23 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "../README.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("..".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../README.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -96,20 +99,23 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "../../other.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("..".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "../../other.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -134,12 +140,14 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -161,6 +169,7 @@ mod tests {
             target: "../escape.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());

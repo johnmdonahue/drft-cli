@@ -48,12 +48,31 @@ fn build_file_filter(patterns: &Option<Vec<String>>, name: &str) -> Option<globs
     }
 }
 
-/// Check whether the last component of a path has a file extension.
-pub(crate) fn has_file_extension(path: &str) -> bool {
-    if let Some(basename) = path.rsplit('/').next() {
-        basename.contains('.')
+/// Check whether a frontmatter value looks like a link target (file path or URI).
+pub(crate) fn is_link_candidate(value: &str) -> bool {
+    // URIs are always candidates — graph builder creates External nodes
+    if crate::graph::is_uri(value) {
+        return true;
+    }
+    // Explicit path prefixes are always candidates
+    if value.starts_with("./") || value.starts_with("../") || value.starts_with('/') {
+        return true;
+    }
+    // Prose contains spaces — file paths don't
+    if value.contains(' ') {
+        return false;
+    }
+    // Must have a plausible file extension: dot followed by 1-4 alphanumeric
+    // chars that aren't all digits (rejects v2.0, e.g., Dr.)
+    let basename = value.rsplit('/').next().unwrap_or(value);
+    if let Some(dot_pos) = basename.rfind('.') {
+        let ext = &basename[dot_pos + 1..];
+        !ext.is_empty()
+            && ext.len() <= 4
+            && ext.chars().all(|c| c.is_ascii_alphanumeric())
+            && !ext.chars().all(|c| c.is_ascii_digit())
     } else {
-        path.contains('.')
+        false
     }
 }
 

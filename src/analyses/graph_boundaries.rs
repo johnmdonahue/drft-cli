@@ -156,11 +156,12 @@ mod tests {
         graph.add_node(make_node("index.md"));
         graph.add_node(Node {
             path: "../README.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("..".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("index.md", "../README.md"));
 
@@ -222,14 +223,16 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/internal.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("index.md", "research/internal.md"));
 
@@ -278,14 +281,16 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("index.md", "research/overview.md"));
 

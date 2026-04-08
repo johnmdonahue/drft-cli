@@ -131,6 +131,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         }
     }
 
@@ -140,6 +141,7 @@ mod tests {
             target: target.into(),
             link: None,
             parser: "markdown".into(),
+            
         }
     }
 

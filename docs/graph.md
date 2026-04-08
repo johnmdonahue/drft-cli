@@ -77,14 +77,15 @@ Uses standard path joining with `..` / `.` normalization.
 
 Edge targets that aren't already in the graph get classified:
 
-| Condition                                   | Node type                                        | Tracked?                                          |
-| ------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| Target matches `include` patterns           | **File**                                         | Yes — hashed, parsed                              |
-| Target is a URI                             | **External**                                     | No                                                |
-| Target exists on disk but outside `include` | **External**                                     | Yes — hashed                                      |
-| Target is inside a child graph              | **External** (with `graph` field)                | Yes — hashed                                      |
-| Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | When `drft.toml` exists — hashed from `drft.toml` |
-| Target doesn't exist on disk                | No node created                                  | dangling-edge candidate                           |
+| Condition                                   | Node type                                        | `included` | Tracked?                                          |
+| ------------------------------------------- | ------------------------------------------------ | ---------- | ------------------------------------------------- |
+| Target matches `include` patterns           | **File**                                         | `true`     | Yes — hashed, parsed                              |
+| Target is a URI                             | **External**                                     | `false`    | No                                                |
+| Target exists on disk but outside `include` | **File**                                         | `false`    | Yes — hashed                                      |
+| Target is inside a child graph              | **File**                                         | `false`    | Yes — hashed                                      |
+| Target escapes to parent (`../`)            | **File** (if exists)                             | `false`    | Yes — hashed                                      |
+| Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | `false`    | When `drft.toml` exists — hashed from `drft.toml` |
+| Target doesn't exist on disk                | No node created                                  | —          | dangling-edge candidate                           |
 
 ### 5. Probe filesystem properties
 
@@ -104,7 +105,7 @@ After building, `enrich()` computes all [structural analyses](analyses/README.md
 
 ## Edge structure
 
-Edges are minimal — just the relationship and provenance:
+Edges carry the relationship and provenance:
 
 | Field    | Type             | Description                                                        |
 | -------- | ---------------- | ------------------------------------------------------------------ |
@@ -115,22 +116,37 @@ Edges are minimal — just the relationship and provenance:
 
 `target` is always the node ID. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
 
+Whether an edge is **internal** (both endpoints are `included` nodes) is derived from node state, not stored on the edge. Use `graph.is_internal_edge(&edge)` to check.
+
 ## JSON output
 
+The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) schema. Parser provenance and computed properties live in edge `metadata`:
+
 ```json
-{"source": "index.md", "target": "bar.md", "parser": "markdown"}
-{"source": "index.md", "target": "bar.md", "link": "bar.md#heading", "parser": "markdown"}
+{
+  "source": "index.md",
+  "target": "bar.md",
+  "metadata": { "parser": "markdown", "internal": true }
+}
 ```
 
-`link` is omitted when it would be identical to `target`.
+Node metadata includes `type`, `hash`, and `included`:
+
+```json
+{
+  "metadata": { "type": "file", "hash": "b3:...", "included": true }
+}
+```
 
 ## Utilities
 
-| Function                     | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| `is_uri(target)`             | Check if target is a URI (RFC 3986 scheme detection) |
-| `graph.target_props(target)` | Get filesystem properties for a target               |
-| `graph.is_file_node(path)`   | Check if a path is a File node                       |
+| Function                        | Purpose                                                   |
+| ------------------------------- | --------------------------------------------------------- |
+| `is_uri(target)`                | Check if target is a URI (RFC 3986 scheme detection)      |
+| `graph.target_props(target)`    | Get filesystem properties for a target                    |
+| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)         |
+| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)    |
+| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes) |
 
 ## Lockfile
 

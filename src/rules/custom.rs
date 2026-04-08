@@ -214,6 +214,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         g.add_node(Node {
             path: "setup.md".into(),
@@ -222,12 +223,14 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         g.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
         let config = crate::config::Config {
             include: vec!["*.md".into()],

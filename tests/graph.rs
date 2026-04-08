@@ -3,6 +3,8 @@ use common::drft_bin;
 use std::fs;
 use tempfile::TempDir;
 
+/// Validate that single-graph JSON output complies with JGF v2.0 schema.
+/// See https://jsongraphformat.info/v2.0/json-graph-schema.json
 #[test]
 fn graph_json_follows_jgf() {
     let dir = TempDir::new().unwrap();
@@ -18,12 +20,115 @@ fn graph_json_follows_jgf() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
-    // JGF single graph format
-    assert!(v["graph"]["directed"].as_bool().unwrap());
-    assert!(v["graph"]["nodes"]["index.md"].is_object());
-    assert!(v["graph"]["nodes"]["setup.md"].is_object());
-    assert_eq!(v["graph"]["nodes"]["index.md"]["metadata"]["type"], "file");
-    assert!(!v["graph"]["edges"].as_array().unwrap().is_empty());
+    // Root: must have "graph" key and nothing else
+    let root = v.as_object().expect("root is object");
+    assert!(root.contains_key("graph"), "root must contain 'graph'");
+    for key in root.keys() {
+        assert!(
+            key == "graph",
+            "root has unexpected key '{key}' (JGF allows only 'graph' or 'graphs')"
+        );
+    }
+
+    let graph = root["graph"].as_object().expect("graph is object");
+    let allowed_graph_keys = ["id", "label", "directed", "type", "metadata", "nodes", "edges"];
+    for key in graph.keys() {
+        assert!(
+            allowed_graph_keys.contains(&key.as_str()),
+            "graph has unexpected key '{key}'"
+        );
+    }
+    assert!(graph["directed"].as_bool().unwrap());
+
+    // Nodes: map of { "label"?, "metadata"? }
+    let nodes = graph["nodes"].as_object().expect("nodes is object");
+    assert!(nodes.contains_key("index.md"));
+    assert!(nodes.contains_key("setup.md"));
+    let allowed_node_keys = ["label", "metadata"];
+    for (path, node) in nodes {
+        let node = node.as_object().unwrap_or_else(|| panic!("node '{path}' is object"));
+        for key in node.keys() {
+            assert!(
+                allowed_node_keys.contains(&key.as_str()),
+                "node '{path}' has unexpected key '{key}'"
+            );
+        }
+    }
+    assert_eq!(nodes["index.md"]["metadata"]["type"], "file");
+
+    // Edges: array of { "source", "target", "id"?, "relation"?, "directed"?, "label"?, "metadata"? }
+    let edges = graph["edges"].as_array().expect("edges is array");
+    assert!(!edges.is_empty());
+    let allowed_edge_keys = ["id", "source", "target", "relation", "directed", "label", "metadata"];
+    for (i, edge) in edges.iter().enumerate() {
+        let edge = edge.as_object().unwrap_or_else(|| panic!("edge {i} is object"));
+        assert!(edge.contains_key("source"), "edge {i} missing 'source'");
+        assert!(edge.contains_key("target"), "edge {i} missing 'target'");
+        for key in edge.keys() {
+            assert!(
+                allowed_edge_keys.contains(&key.as_str()),
+                "edge {i} has unexpected key '{key}'"
+            );
+        }
+        // Parser provenance is in relation
+        if let Some(relation) = edge.get("relation") {
+            assert!(relation.is_string(), "edge {i} relation is string");
+        }
+        // internal is computed in metadata
+        if let Some(meta) = edge.get("metadata") {
+            assert!(meta.is_object(), "edge {i} metadata is object");
+        }
+    }
+}
+
+/// Validate that multi-graph JSON output also complies with JGF v2.0.
+#[test]
+fn graph_json_recursive_follows_jgf() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
+
+    let child = dir.path().join("child");
+    fs::create_dir(&child).unwrap();
+    fs::write(child.join("index.md"), "# Child").unwrap();
+    fs::write(child.join("drft.toml"), "").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    // Root: must have "graphs" key
+    let root = v.as_object().expect("root is object");
+    assert!(root.contains_key("graphs"), "root must contain 'graphs'");
+
+    let graphs = root["graphs"].as_array().expect("graphs is array");
+    let allowed_graph_keys = ["id", "label", "directed", "type", "metadata", "nodes", "edges"];
+    let allowed_edge_keys = ["id", "source", "target", "relation", "directed", "label", "metadata"];
+
+    for (gi, graph) in graphs.iter().enumerate() {
+        let graph = graph.as_object().unwrap_or_else(|| panic!("graph {gi} is object"));
+        for key in graph.keys() {
+            assert!(
+                allowed_graph_keys.contains(&key.as_str()),
+                "graph {gi} has unexpected key '{key}'"
+            );
+        }
+        if let Some(edges) = graph.get("edges") {
+            for (ei, edge) in edges.as_array().unwrap().iter().enumerate() {
+                let edge = edge.as_object().unwrap();
+                for key in edge.keys() {
+                    assert!(
+                        allowed_edge_keys.contains(&key.as_str()),
+                        "graph {gi} edge {ei} has unexpected key '{key}'"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -70,7 +175,7 @@ fn graph_parser_filter_reduces_edges() {
         serde_json::from_str(&String::from_utf8_lossy(&filtered.stdout)).unwrap();
     let filtered_edges = filtered_json["graph"]["edges"].as_array().unwrap();
     assert_eq!(filtered_edges.len(), 1);
-    assert_eq!(filtered_edges[0]["parser"], "frontmatter");
+    assert_eq!(filtered_edges[0]["metadata"]["parser"], "frontmatter");
 }
 
 #[test]

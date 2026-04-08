@@ -30,10 +30,10 @@ fn scenario_10_child_graph_open() {
         .output()
         .unwrap();
 
-    // Verify lockfile has graph + child-graph resource nodes
+    // Verify lockfile has graph + child-graph file nodes
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains(r#"type = "directory""#));
-    assert!(lockfile.contains(r#"type = "external""#));
+    assert!(lockfile.contains(r#"type = "file""#));
 
     // Check should be clean (unsealed = no encapsulation)
     let output = drft_bin()

@@ -63,6 +63,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.target_properties.insert(
             "setup.md".into(),
@@ -77,6 +78,7 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched(graph);
@@ -100,12 +102,14 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
+            
         });
 
         let enriched = make_enriched(graph);
