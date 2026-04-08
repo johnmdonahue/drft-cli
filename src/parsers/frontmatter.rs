@@ -15,13 +15,13 @@ fn is_link_candidate(value: &str) -> bool {
     if value.contains(' ') {
         return false;
     }
-    // Must have a plausible file extension: dot followed by 1-4 alphanumeric
+    // Must have a plausible file extension: dot followed by 1-6 alphanumeric
     // chars that aren't all digits (rejects v2.0, e.g., Dr.)
     let basename = value.rsplit('/').next().unwrap_or(value);
     if let Some(dot_pos) = basename.rfind('.') {
         let ext = &basename[dot_pos + 1..];
         !ext.is_empty()
-            && ext.len() <= 4
+            && ext.len() <= 6
             && ext.chars().all(|c| c.is_ascii_alphanumeric())
             && !ext.chars().all(|c| c.is_ascii_digit())
     } else {
@@ -134,56 +134,54 @@ impl Parser for FrontmatterParser {
 /// inside fenced code block examples.
 fn extract_frontmatter_links(content: &str) -> Vec<String> {
     let content = &strip_code(content);
-    let mut links = Vec::new();
 
     if !content.starts_with("---") {
-        return links;
+        return Vec::new();
     }
 
     let rest = &content[3..];
     let end = match rest.find("\n---") {
         Some(idx) => idx,
-        None => return links,
+        None => return Vec::new(),
     };
 
-    let frontmatter = &rest[..end];
-
-    for line in frontmatter.lines() {
-        let line = line.trim();
-
-        let value = if let Some(stripped) = line.strip_prefix("- ") {
-            stripped.trim()
-        } else if let Some((_key, val)) = line.split_once(':') {
-            val.trim()
-        } else {
-            continue;
-        };
-
-        if value.is_empty() {
-            continue;
-        }
-
-        if value.starts_with('{')
-            || value.starts_with('[')
-            || value.starts_with('"')
-            || value.starts_with('\'')
-        {
-            continue;
-        }
-
-        // Skip numeric values (e.g., "1.0") — not file paths
-        if value.parse::<f64>().is_ok() {
-            continue;
-        }
-
-        if !is_link_candidate(value) {
-            continue;
-        }
-
-        links.push(value.to_string());
+    let yaml_str = &rest[..end];
+    if yaml_str.trim().is_empty() {
+        return Vec::new();
     }
 
+    let yaml: serde_yml::Value = match serde_yml::from_str(yaml_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("warn: frontmatter parser: invalid YAML: {e}");
+            return Vec::new();
+        }
+    };
+
+    let mut links = Vec::new();
+    collect_string_leaves(&yaml, &mut links);
+    links.retain(|v| is_link_candidate(v));
     links
+}
+
+/// Recursively collect all string leaf values from a YAML structure.
+/// Skips keys (only visits values) and non-string types (numbers, bools, null).
+fn collect_string_leaves(value: &serde_yml::Value, out: &mut Vec<String>) {
+    match value {
+        serde_yml::Value::String(s) => out.push(s.clone()),
+        serde_yml::Value::Sequence(seq) => {
+            for item in seq {
+                collect_string_leaves(item, out);
+            }
+        }
+        serde_yml::Value::Mapping(map) => {
+            for (_key, val) in map {
+                collect_string_leaves(val, out);
+            }
+        }
+        serde_yml::Value::Tagged(tagged) => collect_string_leaves(&tagged.value, out),
+        _ => {}
+    }
 }
 
 /// Parse YAML frontmatter into a JSON value for node metadata.
@@ -383,5 +381,14 @@ mod tests {
         let result = parse(content);
         assert_eq!(result.links.len(), 1);
         assert_eq!(result.links[0], "/usr/local/config.toml");
+    }
+
+    #[test]
+    fn yaml_list_values_not_parsed_as_uris() {
+        // Regression: `- name: foo bar bazz` was split on `- ` to get
+        // `name: foo bar bazz`, which the old is_uri matched as scheme `name:`
+        let content = "---\ntags:\n  - name: foo bar bazz\n  - status: draft\n---\n";
+        let result = parse(content);
+        assert!(result.links.is_empty());
     }
 }

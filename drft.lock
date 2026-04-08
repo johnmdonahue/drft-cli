@@ -82,7 +82,7 @@ hash = "b3:8cad0b7321ef2a411b436f91e8cd572ca315597d6dfc6bdd7e46d90a4f20a3fc"
 
 [nodes."docs/graph.md"]
 type = "file"
-hash = "b3:d28e36ea22bcdf44ddc597c9299c9737f96a8f3122f0208ceda19cb5ce026e22"
+hash = "b3:805e062a9f7732c2bdd0f3fed3bd27b17c33946c98a030eb3847ddc578b97014"
 
 [nodes."docs/parsers/README.md"]
 type = "file"
@@ -94,7 +94,7 @@ hash = "b3:944489f9d11ef3836e15cc1256ce0a832e1426a5944b51bc8c27c2c22d0e627e"
 
 [nodes."docs/parsers/frontmatter.md"]
 type = "file"
-hash = "b3:aa8190d174272766f8cd83b9ccec5636b02fc735df8276077a9c00b37854f2f6"
+hash = "b3:d32546ad2a462e93e576b3cf1bf2345ab533b84a6f197176ad3de883fa54462d"
 
 [nodes."docs/parsers/markdown.md"]
 type = "file"
@@ -219,6 +219,9 @@ type = "file"
 hash = "b3:482518ecf2ae9eb07ddbb55f420df6ce48bd360f453f94b05575fc1ecde65671"
 graph = "examples/with-config"
 
+[nodes."https://docs.rs/url"]
+type = "external"
+
 [nodes."https://en.wikipedia.org/wiki/Betweenness_centrality"]
 type = "external"
 
@@ -235,9 +238,6 @@ type = "external"
 type = "external"
 
 [nodes."https://jsongraphformat.info/"]
-type = "external"
-
-[nodes."https://www.rfc-editor.org/rfc/rfc3986"]
 type = "external"
 
 [nodes."src/analyses/betweenness.rs"]
@@ -310,7 +310,7 @@ hash = "b3:8a0a213d2c8f0667c6f3a3002ab95744e988526d2324cbed8511722d51a5f9cd"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:5abcc3e55f7091a55c3d2d9d6f54197299fffb4980e93cc8bc6e23c4ea12f45b"
+hash = "b3:77370abc16be1d56e566d4b0195cb4520d6c15cad39f8d53ab56de0185b218a7"
 
 [nodes."src/lockfile.rs"]
 type = "file"
@@ -318,7 +318,7 @@ hash = "b3:0fc4597b4c96efd0694bb101efece099c88f7f1eb71432dc2aa61dbe353d531a"
 
 [nodes."src/main.rs"]
 type = "file"
-hash = "b3:5d82555beeece6596ede7763832737b536b83fa98d86ae8023cfc56a83ce46f2"
+hash = "b3:b7fcd2ec3060a90f1d148008e0f70a9b04fea5181a014c62d69ce9514fb09723"
 
 [nodes."src/metrics.rs"]
 type = "file"
@@ -330,7 +330,7 @@ hash = "b3:edd9afac31f40c2c581d8ccc0daa79e6399c986f5b9d78e11861a9ab56405754"
 
 [nodes."src/parsers/frontmatter.rs"]
 type = "file"
-hash = "b3:140962a8b3d49ad695fc2b265c00e2463bcc66a010500896bba5ceb4ac4d5e17"
+hash = "b3:03b3f4775e67858fa4f10ae2872ad02612ee0bfc8ed9225207a2d796324de437"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"

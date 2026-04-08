@@ -27,9 +27,9 @@ template: docs/templates/page.md
 ---
 ```
 
-The parser uses a heuristic to distinguish file paths from plain string values: a value is treated as a path if it has a file extension (contains a `.` in the last path component). Numeric values (e.g., `1.0`), values that start with `{`, `[`, `"`, or `'`, and URIs are skipped.
+The parser uses `serde_yml` to parse the YAML structure, then collects all string leaf values and filters them through a heuristic: a value is treated as a link if it has an explicit path prefix (`./`, `../`, `/`), is a valid URI, or has a plausible file extension (1-6 alphanumeric characters after the last dot, not all digits). Non-string types (numbers, booleans, null) are skipped by the YAML parser. Strings with spaces are rejected as prose.
 
-This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not.
+This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
 
 ## Metadata
 

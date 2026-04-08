@@ -56,7 +56,7 @@ Only two things are dropped: empty targets and anchor-only targets (no file to r
 
 ### 2. Detect URIs
 
-`is_uri()` checks if a target has a URI scheme per [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986): `[a-zA-Z][a-zA-Z0-9+.-]*:`. Any valid scheme is recognized without maintaining an explicit list.
+`is_uri()` uses the [`url`](https://docs.rs/url) crate (WHATWG URL Standard) to parse the target, then accepts it as a URI if it has authority (`://`) or uses a known opaque scheme (`mailto`, `tel`, `data`, `urn`, `javascript`).
 
 URI targets skip path resolution (they're not relative file paths) and become External nodes.
 
@@ -142,23 +142,48 @@ The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) sche
 }
 ```
 
-Node metadata includes `type`, `hash`, and `included`:
+Node metadata includes `type`, `hash`, `graph`, `is_graph`, `included`, and any parser-extracted metadata keyed by parser name:
 
 ```json
 {
-  "metadata": { "type": "file", "hash": "b3:...", "included": true }
+  "metadata": {
+    "type": "file",
+    "hash": "b3:...",
+    "graph": ".",
+    "included": true,
+    "frontmatter": { "title": "Setup", "sources": ["../shared/glossary.md"] }
+  }
+}
+```
+
+Graph-level metadata includes `interface` (when configured) and `target_properties` (filesystem properties of edge targets):
+
+```json
+{
+  "graph": {
+    "id": ".",
+    "directed": true,
+    "metadata": {
+      "interface": ["README.md"],
+      "target_properties": {
+        "setup.md": { "is_symlink": false, "is_directory": false }
+      }
+    },
+    "nodes": {},
+    "edges": []
+  }
 }
 ```
 
 ## Utilities
 
-| Function                        | Purpose                                                   |
-| ------------------------------- | --------------------------------------------------------- |
-| `is_uri(target)`                | Check if target is a URI (RFC 3986 scheme detection)      |
-| `graph.target_props(target)`    | Get filesystem properties for a target                    |
-| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)         |
-| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)    |
-| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes) |
+| Function                        | Purpose                                                       |
+| ------------------------------- | ------------------------------------------------------------- |
+| `is_uri(target)`                | Check if target is a URI (WHATWG URL parsing + scheme filter) |
+| `graph.target_props(target)`    | Get filesystem properties for a target                        |
+| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)             |
+| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)        |
+| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes)     |
 
 ## Lockfile
 
