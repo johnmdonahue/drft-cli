@@ -87,7 +87,19 @@ Edge targets that aren't already in the graph get classified:
 | Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | `false`    | When `drft.toml` exists — hashed from `drft.toml` |
 | Target doesn't exist on disk                | No node created                                  | —          | dangling-edge candidate                           |
 
-### 5. Probe filesystem properties
+### 5. Directory traversal prevention
+
+The graph builder only reads and hashes files that canonicalize to within the graph root. Every filesystem access — during discovery and edge resolution — passes through `is_within_root()`, which resolves symlinks via `canonicalize()` and verifies the result starts with the canonical root path.
+
+This prevents content access via:
+
+- **`../` chains** — `../../etc/passwd` resolves outside the root
+- **Symlinks** — a symlink inside the root pointing to `/etc/passwd` canonicalizes outside
+- **Absolute paths** — `/etc/hosts` from a markdown link resolves outside the root
+
+Nodes are still created for these targets so rules can flag the references (boundary-violation, dangling-edge). Only content reading and hashing is gated.
+
+### 6. Probe filesystem properties
 
 For non-URI edge targets, the graph builder probes the filesystem and stores results per-target in `graph.target_properties`:
 

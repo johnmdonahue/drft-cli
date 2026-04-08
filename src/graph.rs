@@ -244,6 +244,12 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
     for file in &included_files {
         let file_path = root.join(file);
+
+        // Safety: skip files that resolve outside the graph root (e.g. symlinks)
+        if !is_within_root(&file_path, &canonical_root) {
+            continue;
+        }
+
         let raw = std::fs::read(&file_path)?;
         let hash = hash_bytes(&raw);
 

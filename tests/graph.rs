@@ -145,6 +145,171 @@ fn graph_json_recursive_follows_jgf() {
     }
 }
 
+/// Directory traversal: ../ targets create nodes but are not hashed.
+#[test]
+fn traversal_parent_escape_not_hashed() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("index.md"), "[escape](../outside.md)").unwrap();
+
+    // Create the target outside the graph root
+    let parent = dir.path().parent().unwrap();
+    fs::write(parent.join("outside.md"), "secret content").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    // Node exists (for boundary-violation detection)
+    let nodes = v["graph"]["nodes"].as_object().unwrap();
+    let escape_node = &nodes["../outside.md"];
+    assert_eq!(escape_node["metadata"]["type"], "file");
+
+    // But no hash — content was not read
+    assert!(
+        escape_node["metadata"].get("hash").is_none() || escape_node["metadata"]["hash"].is_null(),
+        "escaped target should not be hashed"
+    );
+
+    // Clean up
+    let _ = fs::remove_file(parent.join("outside.md"));
+}
+
+/// Directory traversal: symlink inside root pointing outside is not hashed.
+#[test]
+fn traversal_symlink_escape_not_hashed() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("index.md"), "[link](trap.md)").unwrap();
+
+    // Create a file outside the root and symlink to it from inside
+    let parent = dir.path().parent().unwrap();
+    fs::write(parent.join("secret.md"), "secret content").unwrap();
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(parent.join("secret.md"), dir.path().join("trap.md")).unwrap();
+    #[cfg(not(unix))]
+    {
+        // Skip on non-unix (symlink behavior differs)
+        let _ = fs::remove_file(parent.join("secret.md"));
+        return;
+    }
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    // trap.md exists as a node (it's a file on disk from the graph's perspective)
+    let nodes = v["graph"]["nodes"].as_object().unwrap();
+    if let Some(trap_node) = nodes.get("trap.md") {
+        // If it has a hash, the symlink was followed — that's a traversal
+        assert!(
+            trap_node["metadata"].get("hash").is_none() || trap_node["metadata"]["hash"].is_null(),
+            "symlink-escaped target should not be hashed"
+        );
+    }
+
+    // Clean up
+    let _ = fs::remove_file(parent.join("secret.md"));
+}
+
+/// Directory traversal: absolute path from markdown link is not hashed.
+#[test]
+fn traversal_absolute_path_not_hashed() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    // Markdown link to an absolute path
+    fs::write(dir.path().join("index.md"), "[root](/etc/hosts)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    let nodes = v["graph"]["nodes"].as_object().unwrap();
+    // The absolute path target should not have been hashed
+    for (path, node) in nodes {
+        if path.contains("etc") || path.starts_with('/') {
+            assert!(
+                node["metadata"].get("hash").is_none() || node["metadata"]["hash"].is_null(),
+                "absolute path target '{path}' should not be hashed"
+            );
+        }
+    }
+}
+
+/// Directory traversal: nested ../ that escapes root is not hashed.
+#[test]
+fn traversal_nested_escape_not_hashed() {
+    let dir = TempDir::new().unwrap();
+    let sub = dir.path().join("sub");
+    fs::create_dir(&sub).unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    // Link from sub/ that escapes via ../../
+    fs::write(sub.join("doc.md"), "[escape](../../outside.md)").unwrap();
+
+    // Create target two levels up
+    let grandparent = dir.path().parent().and_then(|p| p.parent());
+    if let Some(gp) = grandparent {
+        let _ = fs::write(gp.join("outside.md"), "secret");
+
+        let output = drft_bin()
+            .args([
+                "-C",
+                dir.path().to_str().unwrap(),
+                "graph",
+                "--format",
+                "json",
+            ])
+            .output()
+            .unwrap();
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+        let nodes = v["graph"]["nodes"].as_object().unwrap();
+        for (path, node) in nodes {
+            if path.contains("outside") {
+                assert!(
+                    node["metadata"].get("hash").is_none() || node["metadata"]["hash"].is_null(),
+                    "nested escape target '{path}' should not be hashed"
+                );
+            }
+        }
+
+        let _ = fs::remove_file(gp.join("outside.md"));
+    }
+}
+
 #[test]
 fn graph_parser_filter_reduces_edges() {
     let dir = TempDir::new().unwrap();
