@@ -245,8 +245,21 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     for file in &included_files {
         let file_path = root.join(file);
 
-        // Safety: skip files that resolve outside the graph root (e.g. symlinks)
+        // Safety: don't read files that resolve outside the graph root (e.g. symlinks).
+        // Still create the node so it's visible, but warn.
         if !is_within_root(&file_path, &canonical_root) {
+            eprintln!(
+                "warn: included file '{file}' resolves outside the graph root and was not read"
+            );
+            graph.add_node(Node {
+                path: file.clone(),
+                node_type: NodeType::File,
+                hash: None,
+                graph: Some(".".into()),
+                is_graph: false,
+                metadata: HashMap::new(),
+                included: true,
+            });
             continue;
         }
 
@@ -403,17 +416,14 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Determine which graph this target belongs to
-        let graph_field = if edge.target.starts_with("../") || edge.target == ".." {
-            Some("..".to_string())
-        } else {
-            graph_prefixes
-                .iter()
-                .find(|s| edge.target.starts_with(&format!("{s}/")))
-                .cloned()
-        };
+        // Determine which graph this target belongs to.
+        // (../ and absolute paths already handled by escapes_root above)
+        let graph_field = graph_prefixes
+            .iter()
+            .find(|s| edge.target.starts_with(&format!("{s}/")))
+            .cloned();
 
-        // Boundary escape or child graph target
+        // Child graph target
         if let Some(ref membership) = graph_field {
             if target_path.is_file() {
                 let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
@@ -426,31 +436,29 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     metadata: HashMap::new(),
                     included: false,
                 });
-                // Child graph: ensure Directory node exists + coupling edge
-                if membership != ".." {
-                    if !graph.nodes.contains_key(membership.as_str()) {
-                        let child_dir = root.join(membership);
-                        let config_hash = std::fs::read(child_dir.join("drft.toml"))
-                            .ok()
-                            .map(|c| hash_bytes(&c));
-                        graph.add_node(Node {
-                            path: membership.clone(),
-                            node_type: NodeType::Directory,
-                            hash: config_hash,
-                            graph: Some(".".into()),
-                            is_graph: true,
-                            metadata: HashMap::new(),
-                            included: false,
-                        });
-                        promote_interface_files(root, membership, &mut graph, &mut implicit_edges);
-                    }
-                    implicit_edges.push(Edge {
-                        source: edge.target.clone(),
-                        target: membership.clone(),
-                        link: None,
-                        parser: edge.parser.clone(),
+                // Ensure Directory node exists + coupling edge
+                if !graph.nodes.contains_key(membership.as_str()) {
+                    let child_dir = root.join(membership);
+                    let config_hash = std::fs::read(child_dir.join("drft.toml"))
+                        .ok()
+                        .map(|c| hash_bytes(&c));
+                    graph.add_node(Node {
+                        path: membership.clone(),
+                        node_type: NodeType::Directory,
+                        hash: config_hash,
+                        graph: Some(".".into()),
+                        is_graph: true,
+                        metadata: HashMap::new(),
+                        included: false,
                     });
+                    promote_interface_files(root, membership, &mut graph, &mut implicit_edges);
                 }
+                implicit_edges.push(Edge {
+                    source: edge.target.clone(),
+                    target: membership.clone(),
+                    link: None,
+                    parser: edge.parser.clone(),
+                });
             } else if target_path.is_dir() {
                 let has_config = target_path.join("drft.toml").exists();
                 graph.add_node(Node {
