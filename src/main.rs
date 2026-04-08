@@ -150,7 +150,7 @@ include = ["*.md"]
 # stale = "error"  # recommended for LLM workflows and CI
 
 # [interface]
-# nodes = ["overview.md", "api/*.md"]
+# files = ["overview.md", "api/*.md"]
 "#;
 
     std::fs::write(&config_path, content)
@@ -612,7 +612,7 @@ fn run_graph(
         let mut all_edges = Vec::new();
         for g in &graphs {
             let prefix = if g.id == "." { "" } else { g.id.as_str() };
-            for (path, _, _) in &g.nodes {
+            for (path, _, _, _) in &g.nodes {
                 let full = if prefix.is_empty() {
                     path.clone()
                 } else {
@@ -653,15 +653,23 @@ fn run_graph(
             .iter()
             .map(|g| {
                 let mut nodes = serde_json::Map::new();
-                let mut sorted: Vec<&(String, graph::NodeType, Option<String>)> =
+                let mut sorted: Vec<&(String, graph::NodeType, Option<String>, bool)> =
                     g.nodes.iter().collect();
                 sorted.sort_by(|a, b| a.0.cmp(&b.0));
-                for (path, node_type, hash) in sorted {
+                // Build a lookup for included status to compute edge.internal
+                let included: std::collections::HashSet<&str> = g
+                    .nodes
+                    .iter()
+                    .filter(|(_, _, _, inc)| *inc)
+                    .map(|(p, _, _, _)| p.as_str())
+                    .collect();
+                for (path, node_type, hash, inc) in &*sorted {
                     let mut meta = serde_json::Map::new();
                     meta.insert("type".into(), serde_json::json!(node_type));
                     if let Some(h) = hash {
                         meta.insert("hash".into(), serde_json::json!(h));
                     }
+                    meta.insert("included".into(), serde_json::json!(inc));
                     nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
                 }
 
@@ -669,15 +677,19 @@ fn run_graph(
                     .edges
                     .iter()
                     .map(|(source, target, reference, parser)| {
-                        let mut edge = serde_json::json!({
+                        let internal = included.contains(source.as_str())
+                            && included.contains(target.as_str());
+                        let mut meta = serde_json::Map::new();
+                        meta.insert("parser".into(), serde_json::json!(parser));
+                        meta.insert("internal".into(), serde_json::json!(internal));
+                        if let Some(r) = reference {
+                            meta.insert("link".into(), serde_json::json!(r));
+                        }
+                        serde_json::json!({
                             "source": source,
                             "target": target,
-                            "parser": parser,
-                        });
-                        if let Some(r) = reference {
-                            edge["link"] = serde_json::json!(r);
-                        }
-                        edge
+                            "metadata": meta,
+                        })
                     })
                     .collect();
                 edges.sort_by(|a, b| {
@@ -709,7 +721,7 @@ fn run_graph(
 
 struct GraphExport {
     id: String,
-    nodes: Vec<(String, graph::NodeType, Option<String>)>, // path, type, hash
+    nodes: Vec<(String, graph::NodeType, Option<String>, bool)>, // path, type, hash, included
     edges: Vec<(String, String, Option<String>, String)>, // source, target (node ID), reference, parser
 }
 
@@ -737,10 +749,17 @@ fn collect_jgf_graphs(
         g
     };
 
-    let nodes: Vec<(String, graph::NodeType, Option<String>)> = g
+    let nodes: Vec<(String, graph::NodeType, Option<String>, bool)> = g
         .nodes
         .iter()
-        .map(|(path, node)| (path.clone(), node.node_type, node.hash.clone()))
+        .map(|(path, node)| {
+            (
+                path.clone(),
+                node.node_type,
+                node.hash.clone(),
+                node.included,
+            )
+        })
         .collect();
 
     let edges: Vec<(String, String, Option<String>, String)> = g

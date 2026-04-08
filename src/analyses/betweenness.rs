@@ -26,7 +26,7 @@ impl Analysis for Betweenness {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -75,10 +75,11 @@ impl Analysis for Betweenness {
 
                 if let Some(edge_indices) = graph.forward.get(v) {
                     for &idx in edge_indices {
-                        let w = graph.edges[idx].target.as_str();
-                        if !graph.is_file_node(w) {
+                        let edge = &graph.edges[idx];
+                        if !graph.is_internal_edge(edge) {
                             continue;
                         }
+                        let w = edge.target.as_str();
                         if dist[w] < 0 {
                             dist.insert(w, v_dist + 1);
                             queue.push_back(w);

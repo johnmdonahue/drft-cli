@@ -53,7 +53,7 @@ impl Analysis for Depth {
         }
 
         for edge in &graph.edges {
-            if !graph.is_file_node(&edge.source) || !graph.is_file_node(&edge.target) {
+            if !graph.is_internal_edge(edge) {
                 continue;
             }
             let src_super = node_to_super[&edge.source];
@@ -107,7 +107,7 @@ impl Analysis for Depth {
         let mut real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
         real_nodes.sort();

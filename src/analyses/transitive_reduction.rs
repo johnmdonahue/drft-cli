@@ -131,6 +131,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         }
     }
 

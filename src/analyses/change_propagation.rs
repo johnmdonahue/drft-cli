@@ -208,6 +208,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
@@ -216,6 +217,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

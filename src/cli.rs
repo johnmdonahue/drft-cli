@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "drft",
+    version,
     about = "Structural integrity checker for linked file systems"
 )]
 pub struct Cli {

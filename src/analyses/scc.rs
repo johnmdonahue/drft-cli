@@ -30,7 +30,7 @@ impl Analysis for StronglyConnectedComponents {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -61,7 +61,7 @@ impl Analysis for StronglyConnectedComponents {
         // Check for self-loops to determine non-trivial single-node SCCs
         let mut has_self_loop: HashMap<&str, bool> = HashMap::new();
         for edge in &graph.edges {
-            if edge.source == edge.target && graph.is_file_node(&edge.source) {
+            if edge.source == edge.target && graph.is_internal_edge(edge) {
                 has_self_loop.insert(edge.source.as_str(), true);
             }
         }
@@ -123,10 +123,11 @@ impl<'a> TarjanState<'a> {
         // Visit successors
         if let Some(edge_indices) = self.graph.forward.get(v) {
             for &idx in edge_indices {
-                let w = self.graph.edges[idx].target.as_str();
-                if !self.graph.is_file_node(w) {
+                let edge = &self.graph.edges[idx];
+                if !self.graph.is_internal_edge(edge) {
                     continue;
                 }
+                let w = edge.target.as_str();
                 if !self.index.contains_key(w) {
                     self.strongconnect(w);
                     let w_low = self.lowlink[w];

@@ -64,7 +64,7 @@ pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
     let total_nodes = graph
         .nodes
         .values()
-        .filter(|n| graph.is_file_node(&n.path))
+        .filter(|n| graph.is_included_node(&n.path))
         .count() as f64;
     if total_nodes > 0.0 {
         let orphans = inputs
@@ -107,9 +107,14 @@ pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
         kind: MetricKind::Ratio,
         dimension: "complexity".into(),
     });
+    let internal_edge_count = graph
+        .edges
+        .iter()
+        .filter(|e| graph.is_internal_edge(e))
+        .count();
     metrics.push(Metric {
         name: "cyclomatic_complexity".into(),
-        value: (graph.edges.len() as f64 - graph.nodes.len() as f64
+        value: (internal_edge_count as f64 - total_nodes
             + inputs.connected_components.components.len() as f64),
         kind: MetricKind::Count,
         dimension: "complexity".into(),
@@ -132,7 +137,7 @@ pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
     }
 
     // Conciseness
-    let total_edges = graph.edges.len() as f64;
+    let total_edges = internal_edge_count as f64;
     if total_edges > 0.0 {
         metrics.push(Metric {
             name: "redundant_edge_ratio".into(),

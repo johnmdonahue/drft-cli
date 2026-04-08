@@ -128,6 +128,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         g.add_node(Node {
             path: "setup.md".into(),
@@ -136,6 +137,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         g
     }

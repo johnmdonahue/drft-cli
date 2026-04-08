@@ -224,6 +224,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: meta_map,
+            included: true,
         }
     }
 
@@ -388,6 +389,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
 
         let enriched = make_enriched(graph);

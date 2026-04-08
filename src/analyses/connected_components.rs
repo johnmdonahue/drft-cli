@@ -28,7 +28,7 @@ impl Analysis for ConnectedComponents {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_file_node(p))
+            .filter(|p| graph.is_included_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -38,7 +38,7 @@ impl Analysis for ConnectedComponents {
         }
 
         for edge in &graph.edges {
-            if graph.is_file_node(&edge.source) && graph.is_file_node(&edge.target) {
+            if graph.is_internal_edge(edge) {
                 adj.entry(edge.source.as_str())
                     .or_default()
                     .insert(edge.target.as_str());
@@ -178,6 +178,7 @@ mod tests {
             graph: None,
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

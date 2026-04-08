@@ -87,6 +87,7 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "research".into(),
@@ -95,14 +96,16 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/overview.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -139,6 +142,7 @@ mod tests {
             graph: Some(".".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: true,
         });
         graph.add_node(Node {
             path: "research".into(),
@@ -147,14 +151,16 @@ mod tests {
             graph: Some(".".into()),
             is_graph: true,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_node(Node {
             path: "research/internal.md".into(),
-            node_type: NodeType::External,
+            node_type: NodeType::File,
             hash: None,
             graph: Some("research".into()),
             is_graph: false,
             metadata: HashMap::new(),
+            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
