@@ -258,7 +258,7 @@ hash = "b3:168b06dc26faa6370c65fc37335c44db8e8be0168690ab45c899c9bbc2876018"
 
 [nodes."src/analyses/degree.rs"]
 type = "file"
-hash = "b3:2b7e6d3d4fda7cc2600877869f28fecce65b4d162b2ffe59137ddb25804d3163"
+hash = "b3:8c8d557045682270452e9fd4d1d4f974f46914c1b622aaa83a20f4eb5a89267d"
 
 [nodes."src/analyses/depth.rs"]
 type = "file"
@@ -322,7 +322,7 @@ hash = "b3:5d82555beeece6596ede7763832737b536b83fa98d86ae8023cfc56a83ce46f2"
 
 [nodes."src/metrics.rs"]
 type = "file"
-hash = "b3:db9113f5cf18414454ccbf4687534786374815e01b32e59c625bc7d43b1df2db"
+hash = "b3:0ea7898572b9f134158130645cff71084076e252455783fee1bc7e1a0520d9c0"
 
 [nodes."src/parsers/custom.rs"]
 type = "file"
