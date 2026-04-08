@@ -221,7 +221,17 @@ fn promote_interface_files(
 /// 2. Read text content for parser input (graceful skip for binary files).
 /// 3. Run parsers to extract edges.
 /// 4. Edge targets outside `include` become File nodes (discovered, not tracked).
+/// Returns true if `target_path` resolves to a location within `canonical_root`.
+/// Uses canonicalization to resolve symlinks and normalize paths.
+/// Returns false if the path doesn't exist or escapes the root.
+fn is_within_root(target_path: &Path, canonical_root: &Path) -> bool {
+    target_path
+        .canonicalize()
+        .is_ok_and(|canonical| canonical.starts_with(canonical_root))
+}
+
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
+    let canonical_root = root.canonicalize()?;
     let included_files = discover(root, &config.include, &config.exclude)?;
     let child_graphs = find_child_graphs(root, &config.exclude)?;
     let mut graph = Graph::new();
@@ -346,41 +356,73 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Absolute paths escape the graph root — record as External (no filesystem access).
-        if edge.target.starts_with('/') {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::External,
-                hash: None,
-                graph: None,
-                is_graph: false,
-                metadata: HashMap::new(),
-                included: false,
-            });
-            continue;
-        }
+        let target_path = root.join(&edge.target);
 
-        // Boundary escape (../ targets) — record the node for boundary-violation
-        // detection but do NOT read or hash content outside the graph root.
-        if edge.target.starts_with("../") || edge.target == ".." {
-            let target_path = root.join(&edge.target);
+        // Safety: only read/hash files that canonicalize to within the graph root.
+        // Prevents directory traversal via ../, symlinks, or absolute paths.
+        let within_root = is_within_root(&target_path, &canonical_root);
+        let safe_hash = |path: &Path| -> Option<String> {
+            if within_root {
+                std::fs::read(path).ok().map(|c| hash_bytes(&c))
+            } else {
+                None
+            }
+        };
+
+        // Determine which graph this target belongs to
+        let graph_field = if edge.target.starts_with("../") || edge.target == ".." {
+            Some("..".to_string())
+        } else if let Some(child) = graph_prefixes
+            .iter()
+            .find(|s| edge.target.starts_with(&format!("{s}/")))
+        {
+            Some(child.clone())
+        } else {
+            None
+        };
+
+        // Boundary escape or child graph target
+        if let Some(ref membership) = graph_field {
             if target_path.is_file() {
                 graph.add_node(Node {
                     path: edge.target.clone(),
                     node_type: NodeType::File,
-                    hash: None,
-                    graph: Some("..".into()),
+                    hash: safe_hash(&target_path),
+                    graph: Some(membership.clone()),
                     is_graph: false,
                     metadata: HashMap::new(),
                     included: false,
                 });
+                // Child graph: ensure Directory node exists + coupling edge
+                if membership != ".." {
+                    if !graph.nodes.contains_key(membership.as_str()) {
+                        let child_dir = root.join(membership);
+                        graph.add_node(Node {
+                            path: membership.clone(),
+                            node_type: NodeType::Directory,
+                            hash: safe_hash(&child_dir.join("drft.toml")),
+                            graph: Some(".".into()),
+                            is_graph: true,
+                            metadata: HashMap::new(),
+                            included: false,
+                        });
+                        promote_interface_files(root, membership, &mut graph, &mut implicit_edges);
+                    }
+                    implicit_edges.push(Edge {
+                        source: edge.target.clone(),
+                        target: membership.clone(),
+                        link: None,
+                        parser: edge.parser.clone(),
+                    });
+                }
             } else if target_path.is_dir() {
+                let has_config = within_root && target_path.join("drft.toml").exists();
                 graph.add_node(Node {
                     path: edge.target.clone(),
                     node_type: NodeType::Directory,
                     hash: None,
-                    graph: Some("..".into()),
-                    is_graph: target_path.join("drft.toml").exists(),
+                    graph: Some(membership.clone()),
+                    is_graph: has_config,
                     metadata: HashMap::new(),
                     included: false,
                 });
@@ -389,61 +431,13 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Target inside a child graph → File with graph: "child"
-        let in_child_graph = graph_prefixes
-            .iter()
-            .find(|s| edge.target.starts_with(&format!("{s}/")));
-        if let Some(child_name) = in_child_graph {
-            let target_path = root.join(&edge.target);
-            if target_path.is_file() {
-                let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
-                graph.add_node(Node {
-                    path: edge.target.clone(),
-                    node_type: NodeType::File,
-                    hash,
-                    graph: Some(child_name.clone()),
-                    is_graph: false,
-                    metadata: HashMap::new(),
-                    included: false,
-                });
-                // Ensure the child graph Directory node exists
-                if !graph.nodes.contains_key(child_name) {
-                    let child_dir = root.join(child_name);
-                    let config_hash = std::fs::read(child_dir.join("drft.toml"))
-                        .ok()
-                        .map(|c| hash_bytes(&c));
-                    graph.add_node(Node {
-                        path: child_name.clone(),
-                        node_type: NodeType::Directory,
-                        hash: config_hash,
-                        graph: Some(".".into()),
-                        is_graph: true,
-                        metadata: HashMap::new(),
-                        included: false,
-                    });
-                    // Promote interface files into parent graph
-                    promote_interface_files(root, child_name, &mut graph, &mut implicit_edges);
-                }
-                // Synthetic coupling edge: child-graph file → Directory node
-                implicit_edges.push(Edge {
-                    source: edge.target.clone(),
-                    target: child_name.clone(),
-                    link: None,
-                    parser: edge.parser.clone(),
-                });
-            }
-            continue;
-        }
-
-        let target_path = root.join(&edge.target);
+        // Local target (within current graph scope)
 
         // Directory on disk → Directory node
         if target_path.is_dir() {
             let has_config = target_path.join("drft.toml").exists();
             let hash = if has_config {
-                std::fs::read(target_path.join("drft.toml"))
-                    .ok()
-                    .map(|c| hash_bytes(&c))
+                safe_hash(&target_path.join("drft.toml"))
             } else {
                 None
             };
@@ -464,11 +458,10 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
         // File exists on disk but not in include → File (local, not tracked)
         if target_path.is_file() {
-            let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
             graph.add_node(Node {
                 path: edge.target.clone(),
                 node_type: NodeType::File,
-                hash,
+                hash: safe_hash(&target_path),
                 graph: Some(".".into()),
                 is_graph: false,
                 metadata: HashMap::new(),

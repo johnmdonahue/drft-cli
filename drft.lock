@@ -310,7 +310,7 @@ hash = "b3:8a0a213d2c8f0667c6f3a3002ab95744e988526d2324cbed8511722d51a5f9cd"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:d765c602b7c3288d516e850f88e309e46ce49b875fc5f2e47ab599c988ebfa9c"
+hash = "b3:8b73b8e57c8a88f67a5951124bb1cc6b81b2a8914116aad871c0e0496a999ef0"
 
 [nodes."src/lockfile.rs"]
 type = "file"
