@@ -82,7 +82,7 @@ hash = "b3:8cad0b7321ef2a411b436f91e8cd572ca315597d6dfc6bdd7e46d90a4f20a3fc"
 
 [nodes."docs/graph.md"]
 type = "file"
-hash = "b3:bb4b37002abf432ed867673aa0033f4646fd67f9eff292fc4fa65c8f925359e3"
+hash = "b3:d28e36ea22bcdf44ddc597c9299c9737f96a8f3122f0208ceda19cb5ce026e22"
 
 [nodes."docs/parsers/README.md"]
 type = "file"
@@ -310,7 +310,7 @@ hash = "b3:8a0a213d2c8f0667c6f3a3002ab95744e988526d2324cbed8511722d51a5f9cd"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:dc49ef903ab953149259cc512750cd2a3e5c37ae8a0a472a3cc12cdb481ab0fc"
+hash = "b3:08c27c93a1a8b1203712e5b7160464bdfed008be2f5d3a17fd19125b280ba094"
 
 [nodes."src/lockfile.rs"]
 type = "file"
@@ -330,7 +330,7 @@ hash = "b3:edd9afac31f40c2c581d8ccc0daa79e6399c986f5b9d78e11861a9ab56405754"
 
 [nodes."src/parsers/frontmatter.rs"]
 type = "file"
-hash = "b3:0269548b9bc46299f6b7b98599f43df9a31190c45fa0c1bf3f25fb17083c56f0"
+hash = "b3:140962a8b3d49ad695fc2b265c00e2463bcc66a010500896bba5ceb4ac4d5e17"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"

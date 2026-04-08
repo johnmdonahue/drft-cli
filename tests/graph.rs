@@ -78,11 +78,11 @@ fn graph_json_follows_jgf() {
                 "edge {i} has unexpected key '{key}'"
             );
         }
-        // Parser provenance is in relation
+        // relation is reserved for future semantic relationships
         if let Some(relation) = edge.get("relation") {
             assert!(relation.is_string(), "edge {i} relation is string");
         }
-        // internal is computed in metadata
+        // parser provenance and internal flag are in metadata
         if let Some(meta) = edge.get("metadata") {
             assert!(meta.is_object(), "edge {i} metadata is object");
         }

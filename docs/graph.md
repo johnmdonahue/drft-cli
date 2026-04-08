@@ -83,7 +83,7 @@ Edge targets that aren't already in the graph get classified:
 | Target is a URI                             | **External**                                     | `false`    | No                                                |
 | Target exists on disk but outside `include` | **File**                                         | `false`    | Yes — hashed                                      |
 | Target is inside a child graph              | **File**                                         | `false`    | Yes — hashed                                      |
-| Target escapes to parent (`../`)            | **File** (if exists)                             | `false`    | Yes — hashed                                      |
+| Target escapes to parent (`../`)            | **File**                                         | `false`    | No — node created, not hashed (outside root)      |
 | Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | `false`    | When `drft.toml` exists — hashed from `drft.toml` |
 | Target doesn't exist on disk                | No node created                                  | —          | dangling-edge candidate                           |
 

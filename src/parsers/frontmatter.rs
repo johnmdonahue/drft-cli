@@ -7,7 +7,7 @@ fn is_link_candidate(value: &str) -> bool {
         return true;
     }
     // Explicit path prefixes are always candidates.
-    // The graph builder guards filesystem access for absolute and ../ paths.
+    // The graph builder gates all filesystem access for out-of-root targets.
     if value.starts_with("./") || value.starts_with("../") || value.starts_with('/') {
         return true;
     }
