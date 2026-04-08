@@ -346,37 +346,27 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
-        // Boundary escape (../ targets) — File if exists on disk, no node otherwise.
-        // The graph: ".." field is kept for boundary-violation rule compatibility.
-        // dangling-edge catches non-existent targets.
+        // Boundary escape (../ targets) — record the node for boundary-violation
+        // detection but do NOT read or hash content outside the graph root.
         if edge.target.starts_with("../") || edge.target == ".." {
             let target_path = root.join(&edge.target);
             if target_path.is_file() {
-                let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
                 graph.add_node(Node {
                     path: edge.target.clone(),
                     node_type: NodeType::File,
-                    hash,
+                    hash: None,
                     graph: Some("..".into()),
                     is_graph: false,
                     metadata: HashMap::new(),
                     included: false,
                 });
             } else if target_path.is_dir() {
-                let has_config = target_path.join("drft.toml").exists();
-                let hash = if has_config {
-                    std::fs::read(target_path.join("drft.toml"))
-                        .ok()
-                        .map(|c| hash_bytes(&c))
-                } else {
-                    None
-                };
                 graph.add_node(Node {
                     path: edge.target.clone(),
                     node_type: NodeType::Directory,
-                    hash,
+                    hash: None,
                     graph: Some("..".into()),
-                    is_graph: has_config,
+                    is_graph: target_path.join("drft.toml").exists(),
                     metadata: HashMap::new(),
                     included: false,
                 });
