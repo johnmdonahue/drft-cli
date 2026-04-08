@@ -2,6 +2,34 @@
 
 All notable changes to drft are documented here.
 
+## 0.6.0 (2026-04-08)
+
+Node/edge model refinement — scope as a first-class concept, JGF compliance, directory traversal prevention.
+
+### Breaking changes
+
+- **`External` node type narrowed** — only URLs are `External`. Files discovered via edges (outside `include`, in child graphs, `../` targets) are `File` with `included: false`.
+- **JSON graph output follows JGF v2.0** — `parser` moved from top-level edge field to `edge.metadata.parser`. `internal` computed in `edge.metadata.internal`. Node metadata includes `included`.
+- **Degree counts all edges** — `orphan-node` no longer produces false positives for files linking only to URLs or directories.
+- **Lockfile node types changed** — nodes previously typed `"external"` for on-disk files are now `"file"`. Requires `drft lock` after upgrade.
+
+### New features
+
+- **`included: bool` on nodes** — marks whether a node was matched by `include` during discovery. Available in JSON output and to custom rules.
+- **`graph.is_internal_edge()`** — derived from node `included` state. Structural analyses scope to included nodes and internal edges.
+- **`drft --version` / `drft -V`** — version output support.
+- **Frontmatter parser emits URIs** — URLs in YAML frontmatter produce External edges instead of being silently dropped.
+- **Improved frontmatter link detection** — `has_file_extension` replaced with `is_link_candidate`: rejects prose with spaces, abbreviations (`e.g.`), version numbers (`v2.0`).
+
+### Security
+
+- **Directory traversal prevention** — all filesystem access gated by canonical path verification. Targets outside the graph root (via `../`, symlinks, absolute paths) get nodes but no content is read or hashed. Included files that resolve outside root via symlinks produce a warning.
+
+### Fixes
+
+- **`drft init` template** — `[interface]` section uses `files` (not `nodes`).
+- **Metrics scope** — cyclomatic complexity and redundant edge ratio use internal edges consistently.
+
 ## 0.5.2 (2026-04-06)
 
 Parser-scoped rules and frontmatter improvements.
