@@ -152,7 +152,10 @@ fn extract_frontmatter_links(content: &str) -> Vec<String> {
 
     let yaml: serde_yml::Value = match serde_yml::from_str(yaml_str) {
         Ok(v) => v,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            eprintln!("warn: frontmatter parser: invalid YAML: {e}");
+            return Vec::new();
+        }
     };
 
     let mut links = Vec::new();

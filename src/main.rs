@@ -676,8 +676,10 @@ fn run_graph(
                         meta.insert("is_graph".into(), serde_json::json!(true));
                     }
                     meta.insert("included".into(), serde_json::json!(n.included));
-                    for (key, value) in &n.metadata {
-                        meta.insert(key.clone(), value.clone());
+                    let mut metadata_keys: Vec<&String> = n.metadata.keys().collect();
+                    metadata_keys.sort();
+                    for key in metadata_keys {
+                        meta.insert(key.clone(), n.metadata[key].clone());
                     }
                     nodes.insert(n.path.clone(), serde_json::json!({ "metadata": meta }));
                 }
@@ -713,9 +715,11 @@ fn run_graph(
                     graph_meta.insert("interface".into(), serde_json::json!(g.interface));
                 }
                 if !g.target_properties.is_empty() {
+                    let sorted: std::collections::BTreeMap<&String, &graph::TargetProperties> =
+                        g.target_properties.iter().collect();
                     graph_meta.insert(
                         "target_properties".into(),
-                        serde_json::json!(g.target_properties),
+                        serde_json::json!(sorted),
                     );
                 }
 

@@ -814,6 +814,7 @@ mod tests {
         assert!(is_uri("ftp://files.example.com"));
         assert!(is_uri("tel:+1234567890"));
         assert!(is_uri("ssh://git@github.com"));
+        assert!(is_uri("custom+scheme://foo"));
     }
 
     #[test]
