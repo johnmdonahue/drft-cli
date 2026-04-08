@@ -82,7 +82,7 @@ hash = "b3:8cad0b7321ef2a411b436f91e8cd572ca315597d6dfc6bdd7e46d90a4f20a3fc"
 
 [nodes."docs/graph.md"]
 type = "file"
-hash = "b3:878fbcbea68a8543f971e0b185425636414320c56dd799ecaf3a44e9a43de1fc"
+hash = "b3:805e062a9f7732c2bdd0f3fed3bd27b17c33946c98a030eb3847ddc578b97014"
 
 [nodes."docs/parsers/README.md"]
 type = "file"

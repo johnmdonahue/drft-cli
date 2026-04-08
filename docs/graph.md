@@ -177,13 +177,13 @@ Graph-level metadata includes `interface` (when configured) and `target_properti
 
 ## Utilities
 
-| Function                        | Purpose                                                   |
-| ------------------------------- | --------------------------------------------------------- |
+| Function                        | Purpose                                                       |
+| ------------------------------- | ------------------------------------------------------------- |
 | `is_uri(target)`                | Check if target is a URI (WHATWG URL parsing + scheme filter) |
-| `graph.target_props(target)`    | Get filesystem properties for a target                    |
-| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)         |
-| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)    |
-| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes) |
+| `graph.target_props(target)`    | Get filesystem properties for a target                        |
+| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)             |
+| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)        |
+| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes)     |
 
 ## Lockfile
 
