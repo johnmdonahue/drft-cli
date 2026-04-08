@@ -23,6 +23,9 @@ impl Analysis for Degree {
 
     fn run(&self, ctx: &AnalysisContext) -> DegreeResult {
         let graph = ctx.graph;
+        // Degree counts ALL edges (internal + outbound) for included nodes.
+        // A file linking to a URL or a non-included file has out_degree > 0.
+        // This differs from connectivity analyses which scope to internal edges.
         let mut nodes: Vec<NodeDegree> = graph
             .nodes
             .keys()
