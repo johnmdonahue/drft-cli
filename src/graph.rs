@@ -346,6 +346,20 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             continue;
         }
 
+        // Absolute paths escape the graph root — record as External (no filesystem access).
+        if edge.target.starts_with('/') {
+            graph.add_node(Node {
+                path: edge.target.clone(),
+                node_type: NodeType::External,
+                hash: None,
+                graph: None,
+                is_graph: false,
+                metadata: HashMap::new(),
+                included: false,
+            });
+            continue;
+        }
+
         // Boundary escape (../ targets) — record the node for boundary-violation
         // detection but do NOT read or hash content outside the graph root.
         if edge.target.starts_with("../") || edge.target == ".." {

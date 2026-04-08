@@ -275,12 +275,10 @@ mod tests {
     }
 
     #[test]
-    fn rejects_absolute_paths() {
+    fn emits_absolute_paths() {
         let content = "---\nsource: /usr/local/config.toml\n---\n";
         let result = parse(content);
-        assert!(
-            result.links.is_empty(),
-            "absolute paths should be rejected (escape graph root)"
-        );
+        assert_eq!(result.links.len(), 1);
+        assert_eq!(result.links[0], "/usr/local/config.toml");
     }
 }

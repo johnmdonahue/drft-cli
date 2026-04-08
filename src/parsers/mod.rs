@@ -54,14 +54,10 @@ pub(crate) fn is_link_candidate(value: &str) -> bool {
     if crate::graph::is_uri(value) {
         return true;
     }
-    // Explicit relative path prefixes are always candidates.
-    // Absolute paths (leading /) are not accepted — they escape the graph root.
-    if value.starts_with("./") || value.starts_with("../") {
+    // Explicit path prefixes are always candidates.
+    // The graph builder guards filesystem access for absolute and ../ paths.
+    if value.starts_with("./") || value.starts_with("../") || value.starts_with('/') {
         return true;
-    }
-    // Absolute paths escape the graph root — reject
-    if value.starts_with('/') {
-        return false;
     }
     // Prose contains spaces — file paths don't
     if value.contains(' ') {
