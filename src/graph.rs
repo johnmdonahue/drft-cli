@@ -108,9 +108,7 @@ impl Graph {
 
     /// Returns true when the node was matched by `include` during discovery.
     pub fn is_included_node(&self, path: &str) -> bool {
-        self.nodes
-            .get(path)
-            .is_some_and(|n| n.included)
+        self.nodes.get(path).is_some_and(|n| n.included)
     }
 
     /// Returns true when both endpoints are included nodes (the edge stays
@@ -254,7 +252,6 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             file_text.insert(file.clone(), text);
         }
     }
-
 
     // 2. Build parser registry and determine which files each parser receives
     let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
@@ -635,7 +632,6 @@ pub mod test_helpers {
             parser: "markdown".into(),
         }
     }
-
 
     pub fn make_enriched(graph: Graph) -> crate::analyses::EnrichedGraph {
         crate::analyses::enrich_graph(

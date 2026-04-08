@@ -752,7 +752,14 @@ fn collect_jgf_graphs(
     let nodes: Vec<(String, graph::NodeType, Option<String>, bool)> = g
         .nodes
         .iter()
-        .map(|(path, node)| (path.clone(), node.node_type, node.hash.clone(), node.included))
+        .map(|(path, node)| {
+            (
+                path.clone(),
+                node.node_type,
+                node.hash.clone(),
+                node.included,
+            )
+        })
         .collect();
 
     let edges: Vec<(String, String, Option<String>, String)> = g

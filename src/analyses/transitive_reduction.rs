@@ -141,7 +141,6 @@ mod tests {
             target: target.into(),
             link: None,
             parser: "markdown".into(),
-            
         }
     }
 

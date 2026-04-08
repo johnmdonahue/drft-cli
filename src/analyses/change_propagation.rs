@@ -224,7 +224,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let lockfile = Lockfile::from_graph(&graph);

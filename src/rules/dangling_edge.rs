@@ -75,7 +75,6 @@ mod tests {
             target: "gone.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);
@@ -116,7 +115,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);
@@ -153,7 +151,6 @@ mod tests {
             target: "linked.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);
@@ -192,7 +189,6 @@ mod tests {
             target: "guides".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);

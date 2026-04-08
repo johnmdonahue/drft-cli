@@ -31,7 +31,9 @@ fn graph_json_follows_jgf() {
     }
 
     let graph = root["graph"].as_object().expect("graph is object");
-    let allowed_graph_keys = ["id", "label", "directed", "type", "metadata", "nodes", "edges"];
+    let allowed_graph_keys = [
+        "id", "label", "directed", "type", "metadata", "nodes", "edges",
+    ];
     for key in graph.keys() {
         assert!(
             allowed_graph_keys.contains(&key.as_str()),
@@ -46,7 +48,9 @@ fn graph_json_follows_jgf() {
     assert!(nodes.contains_key("setup.md"));
     let allowed_node_keys = ["label", "metadata"];
     for (path, node) in nodes {
-        let node = node.as_object().unwrap_or_else(|| panic!("node '{path}' is object"));
+        let node = node
+            .as_object()
+            .unwrap_or_else(|| panic!("node '{path}' is object"));
         for key in node.keys() {
             assert!(
                 allowed_node_keys.contains(&key.as_str()),
@@ -59,9 +63,13 @@ fn graph_json_follows_jgf() {
     // Edges: array of { "source", "target", "id"?, "relation"?, "directed"?, "label"?, "metadata"? }
     let edges = graph["edges"].as_array().expect("edges is array");
     assert!(!edges.is_empty());
-    let allowed_edge_keys = ["id", "source", "target", "relation", "directed", "label", "metadata"];
+    let allowed_edge_keys = [
+        "id", "source", "target", "relation", "directed", "label", "metadata",
+    ];
     for (i, edge) in edges.iter().enumerate() {
-        let edge = edge.as_object().unwrap_or_else(|| panic!("edge {i} is object"));
+        let edge = edge
+            .as_object()
+            .unwrap_or_else(|| panic!("edge {i} is object"));
         assert!(edge.contains_key("source"), "edge {i} missing 'source'");
         assert!(edge.contains_key("target"), "edge {i} missing 'target'");
         for key in edge.keys() {
@@ -106,11 +114,17 @@ fn graph_json_recursive_follows_jgf() {
     assert!(root.contains_key("graphs"), "root must contain 'graphs'");
 
     let graphs = root["graphs"].as_array().expect("graphs is array");
-    let allowed_graph_keys = ["id", "label", "directed", "type", "metadata", "nodes", "edges"];
-    let allowed_edge_keys = ["id", "source", "target", "relation", "directed", "label", "metadata"];
+    let allowed_graph_keys = [
+        "id", "label", "directed", "type", "metadata", "nodes", "edges",
+    ];
+    let allowed_edge_keys = [
+        "id", "source", "target", "relation", "directed", "label", "metadata",
+    ];
 
     for (gi, graph) in graphs.iter().enumerate() {
-        let graph = graph.as_object().unwrap_or_else(|| panic!("graph {gi} is object"));
+        let graph = graph
+            .as_object()
+            .unwrap_or_else(|| panic!("graph {gi} is object"));
         for key in graph.keys() {
             assert!(
                 allowed_graph_keys.contains(&key.as_str()),

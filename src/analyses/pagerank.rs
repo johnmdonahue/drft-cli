@@ -55,8 +55,7 @@ impl Analysis for PageRank {
         }
 
         for edge in &graph.edges {
-            if graph.is_internal_edge(edge) && edge.source != edge.target
-            {
+            if graph.is_internal_edge(edge) && edge.source != edge.target {
                 *out_degree.get_mut(edge.source.as_str()).unwrap() += 1;
                 inbound
                     .get_mut(edge.target.as_str())

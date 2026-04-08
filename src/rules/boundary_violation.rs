@@ -72,7 +72,6 @@ mod tests {
             target: "../README.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -115,7 +114,6 @@ mod tests {
             target: "../../other.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -147,7 +145,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -169,7 +166,6 @@ mod tests {
             target: "../escape.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());

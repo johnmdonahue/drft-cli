@@ -112,14 +112,12 @@ mod tests {
             target: "research/overview.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
         graph.add_edge(Edge {
             source: "research/overview.md".into(),
             target: "research".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());
@@ -169,7 +167,6 @@ mod tests {
             target: "research/internal.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched_with_root(graph, dir.path());

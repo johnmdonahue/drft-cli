@@ -230,7 +230,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
         let config = crate::config::Config {
             include: vec!["*.md".into()],

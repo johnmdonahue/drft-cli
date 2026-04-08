@@ -78,7 +78,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);
@@ -109,7 +108,6 @@ mod tests {
             target: "setup.md".into(),
             link: None,
             parser: "markdown".into(),
-            
         });
 
         let enriched = make_enriched(graph);

@@ -38,8 +38,7 @@ impl Analysis for Bridges {
         }
 
         for edge in &graph.edges {
-            if graph.is_internal_edge(edge) && edge.source != edge.target
-            {
+            if graph.is_internal_edge(edge) && edge.source != edge.target {
                 adj.entry(edge.source.as_str())
                     .or_default()
                     .push(edge.target.as_str());
