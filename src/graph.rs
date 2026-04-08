@@ -215,12 +215,6 @@ fn promote_interface_files(
     }
 }
 
-/// Build a graph from files in `root`.
-///
-/// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
-/// 2. Read text content for parser input (graceful skip for binary files).
-/// 3. Run parsers to extract edges.
-/// 4. Edge targets outside `include` become File nodes (discovered, not tracked).
 /// Returns true if `target_path` resolves to a location within `canonical_root`.
 /// Uses canonicalization to resolve symlinks and normalize paths.
 /// Returns false if the path doesn't exist or escapes the root.
@@ -230,6 +224,12 @@ fn is_within_root(target_path: &Path, canonical_root: &Path) -> bool {
         .is_ok_and(|canonical| canonical.starts_with(canonical_root))
 }
 
+/// Build a graph from files in `root`.
+///
+/// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
+/// 2. Read text content for parser input (graceful skip for binary files).
+/// 3. Run parsers to extract edges.
+/// 4. Edge targets outside `include` become File nodes (discovered, not tracked).
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let canonical_root = root.canonicalize()?;
     let included_files = discover(root, &config.include, &config.exclude)?;
@@ -378,13 +378,11 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         // Determine which graph this target belongs to
         let graph_field = if edge.target.starts_with("../") || edge.target == ".." {
             Some("..".to_string())
-        } else if let Some(child) = graph_prefixes
-            .iter()
-            .find(|s| edge.target.starts_with(&format!("{s}/")))
-        {
-            Some(child.clone())
         } else {
-            None
+            graph_prefixes
+                .iter()
+                .find(|s| edge.target.starts_with(&format!("{s}/")))
+                .cloned()
         };
 
         // Boundary escape or child graph target

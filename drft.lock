@@ -310,7 +310,7 @@ hash = "b3:8a0a213d2c8f0667c6f3a3002ab95744e988526d2324cbed8511722d51a5f9cd"
 
 [nodes."src/graph.rs"]
 type = "file"
-hash = "b3:52d51bfd56475f607df62c09a784a0d7b7d911a2214bc7673e41385fe65e5ded"
+hash = "b3:dc49ef903ab953149259cc512750cd2a3e5c37ae8a0a472a3cc12cdb481ab0fc"
 
 [nodes."src/lockfile.rs"]
 type = "file"
@@ -330,7 +330,7 @@ hash = "b3:edd9afac31f40c2c581d8ccc0daa79e6399c986f5b9d78e11861a9ab56405754"
 
 [nodes."src/parsers/frontmatter.rs"]
 type = "file"
-hash = "b3:c33652ff28125204d87657db1eb68cfa33fc629ca0401975258a9230968f8632"
+hash = "b3:0269548b9bc46299f6b7b98599f43df9a31190c45fa0c1bf3f25fb17083c56f0"
 
 [nodes."src/parsers/markdown.rs"]
 type = "file"
@@ -338,7 +338,7 @@ hash = "b3:28da93c1e7f1791dafbc473cd8813a62a2d490fb24f85f742935ede7207f8df2"
 
 [nodes."src/parsers/mod.rs"]
 type = "file"
-hash = "b3:ea8cbdd5b2eaef8c9dcea4938de1f5fe326bbac0d1a582248c730273df1e65f5"
+hash = "b3:b2c2e8a4e6287ee922a6fb55c9a294261f8d746b646197111043eb85944d6a9f"
 
 [nodes."src/rules/boundary_violation.rs"]
 type = "file"
