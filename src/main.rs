@@ -717,10 +717,7 @@ fn run_graph(
                 if !g.target_properties.is_empty() {
                     let sorted: std::collections::BTreeMap<&String, &graph::TargetProperties> =
                         g.target_properties.iter().collect();
-                    graph_meta.insert(
-                        "target_properties".into(),
-                        serde_json::json!(sorted),
-                    );
+                    graph_meta.insert("target_properties".into(), serde_json::json!(sorted));
                 }
 
                 let mut graph_obj = serde_json::Map::new();

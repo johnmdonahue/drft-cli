@@ -18,7 +18,10 @@ pub fn is_uri(target: &str) -> bool {
             if url.has_authority() {
                 return true;
             }
-            matches!(url.scheme(), "mailto" | "tel" | "data" | "urn" | "javascript")
+            matches!(
+                url.scheme(),
+                "mailto" | "tel" | "data" | "urn" | "javascript"
+            )
         }
         Err(_) => false,
     }
