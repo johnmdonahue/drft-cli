@@ -12,6 +12,7 @@ use drft::rules;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
@@ -612,7 +613,7 @@ fn run_graph(
         let mut all_edges = Vec::new();
         for g in &graphs {
             let prefix = if g.id == "." { "" } else { g.id.as_str() };
-            for (path, _, _, _) in &g.nodes {
+            for NodeExport { path, .. } in &g.nodes {
                 let full = if prefix.is_empty() {
                     path.clone()
                 } else {
@@ -653,24 +654,32 @@ fn run_graph(
             .iter()
             .map(|g| {
                 let mut nodes = serde_json::Map::new();
-                let mut sorted: Vec<&(String, graph::NodeType, Option<String>, bool)> =
-                    g.nodes.iter().collect();
-                sorted.sort_by(|a, b| a.0.cmp(&b.0));
+                let mut sorted: Vec<&NodeExport> = g.nodes.iter().collect();
+                sorted.sort_by(|a, b| a.path.cmp(&b.path));
                 // Build a lookup for included status to compute edge.internal
                 let included: std::collections::HashSet<&str> = g
                     .nodes
                     .iter()
-                    .filter(|(_, _, _, inc)| *inc)
-                    .map(|(p, _, _, _)| p.as_str())
+                    .filter(|n| n.included)
+                    .map(|n| n.path.as_str())
                     .collect();
-                for (path, node_type, hash, inc) in &*sorted {
+                for n in &*sorted {
                     let mut meta = serde_json::Map::new();
-                    meta.insert("type".into(), serde_json::json!(node_type));
-                    if let Some(h) = hash {
+                    meta.insert("type".into(), serde_json::json!(n.node_type));
+                    if let Some(h) = &n.hash {
                         meta.insert("hash".into(), serde_json::json!(h));
                     }
-                    meta.insert("included".into(), serde_json::json!(inc));
-                    nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
+                    if let Some(gr) = &n.graph {
+                        meta.insert("graph".into(), serde_json::json!(gr));
+                    }
+                    if n.is_graph {
+                        meta.insert("is_graph".into(), serde_json::json!(true));
+                    }
+                    meta.insert("included".into(), serde_json::json!(n.included));
+                    for (key, value) in &n.metadata {
+                        meta.insert(key.clone(), value.clone());
+                    }
+                    nodes.insert(n.path.clone(), serde_json::json!({ "metadata": meta }));
                 }
 
                 let mut edges: Vec<serde_json::Value> = g
@@ -699,12 +708,26 @@ fn run_graph(
                         .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
                 });
 
-                serde_json::json!({
-                    "id": g.id,
-                    "directed": true,
-                    "nodes": nodes,
-                    "edges": edges,
-                })
+                let mut graph_meta = serde_json::Map::new();
+                if !g.interface.is_empty() {
+                    graph_meta.insert("interface".into(), serde_json::json!(g.interface));
+                }
+                if !g.target_properties.is_empty() {
+                    graph_meta.insert(
+                        "target_properties".into(),
+                        serde_json::json!(g.target_properties),
+                    );
+                }
+
+                let mut graph_obj = serde_json::Map::new();
+                graph_obj.insert("id".into(), serde_json::json!(g.id));
+                graph_obj.insert("directed".into(), serde_json::json!(true));
+                if !graph_meta.is_empty() {
+                    graph_obj.insert("metadata".into(), serde_json::Value::Object(graph_meta));
+                }
+                graph_obj.insert("nodes".into(), serde_json::json!(nodes));
+                graph_obj.insert("edges".into(), serde_json::json!(edges));
+                serde_json::Value::Object(graph_obj)
             })
             .collect();
 
@@ -719,10 +742,22 @@ fn run_graph(
     Ok(0)
 }
 
+struct NodeExport {
+    path: String,
+    node_type: graph::NodeType,
+    hash: Option<String>,
+    graph: Option<String>,
+    is_graph: bool,
+    included: bool,
+    metadata: HashMap<String, serde_json::Value>,
+}
+
 struct GraphExport {
     id: String,
-    nodes: Vec<(String, graph::NodeType, Option<String>, bool)>, // path, type, hash, included
+    nodes: Vec<NodeExport>,
     edges: Vec<(String, String, Option<String>, String)>, // source, target (node ID), reference, parser
+    interface: Vec<String>,
+    target_properties: HashMap<String, graph::TargetProperties>,
 }
 
 /// Collect JGF graph(s) from a graph root and optionally its children.
@@ -749,16 +784,17 @@ fn collect_jgf_graphs(
         g
     };
 
-    let nodes: Vec<(String, graph::NodeType, Option<String>, bool)> = g
+    let nodes: Vec<NodeExport> = g
         .nodes
         .iter()
-        .map(|(path, node)| {
-            (
-                path.clone(),
-                node.node_type,
-                node.hash.clone(),
-                node.included,
-            )
+        .map(|(path, node)| NodeExport {
+            path: path.clone(),
+            node_type: node.node_type,
+            hash: node.hash.clone(),
+            graph: node.graph.clone(),
+            is_graph: node.is_graph,
+            included: node.included,
+            metadata: node.metadata.clone(),
         })
         .collect();
 
@@ -776,10 +812,15 @@ fn collect_jgf_graphs(
         })
         .collect();
 
+    let interface = g.interface.clone();
+    let target_properties = g.target_properties.clone();
+
     let mut graphs = vec![GraphExport {
         id: id.to_string(),
         nodes,
         edges,
+        interface,
+        target_properties,
     }];
 
     if recursive && max_depth != Some(0) {

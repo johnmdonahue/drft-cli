@@ -6,22 +6,22 @@ use crate::config::Config;
 use crate::discovery::{discover, find_child_graphs};
 use crate::parsers;
 
-/// Check if a target string is a URI (has a scheme per RFC 3986).
-/// A scheme is `[a-zA-Z][a-zA-Z0-9+.-]*:` — e.g., `http:`, `mailto:`, `ftp:`, `tel:`.
+/// Check if a target string is a valid URI.
+///
+/// Uses the `url` crate (WHATWG URL Standard) for parsing, then filters to
+/// URIs that either have authority (`://`) or use a known opaque scheme.
+/// Without this filter, any `word:stuff` passes WHATWG parsing — e.g.,
+/// YAML values like `name: foo` would be treated as URIs with scheme `name`.
 pub fn is_uri(target: &str) -> bool {
-    let bytes = target.as_bytes();
-    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
-        return false;
-    }
-    for &b in &bytes[1..] {
-        if b == b':' {
-            return true;
+    match url::Url::parse(target) {
+        Ok(url) => {
+            if url.has_authority() {
+                return true;
+            }
+            matches!(url.scheme(), "mailto" | "tel" | "data" | "urn" | "javascript")
         }
-        if !b.is_ascii_alphanumeric() && b != b'+' && b != b'-' && b != b'.' {
-            return false;
-        }
+        Err(_) => false,
     }
-    false
 }
 
 #[derive(
@@ -70,10 +70,11 @@ pub struct Edge {
 
 /// Filesystem properties of an edge target, probed during graph building.
 /// Stored per-target on the Graph, not per-edge.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct TargetProperties {
     pub is_symlink: bool,
     pub is_directory: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub symlink_target: Option<String>,
 }
 
@@ -813,7 +814,6 @@ mod tests {
         assert!(is_uri("ftp://files.example.com"));
         assert!(is_uri("tel:+1234567890"));
         assert!(is_uri("ssh://git@github.com"));
-        assert!(is_uri("custom+scheme://foo"));
     }
 
     #[test]
@@ -823,7 +823,18 @@ mod tests {
         assert!(!is_uri("../parent.md"));
         assert!(!is_uri("#heading"));
         assert!(!is_uri(""));
-        assert!(!is_uri("path/with:colon.md")); // colon after slash = not a scheme
+        assert!(!is_uri("path/with:colon.md"));
+    }
+
+    #[test]
+    fn is_uri_rejects_bare_schemes() {
+        // WHATWG parses any `word:stuff` as a valid URL, so we require
+        // authority (://) or a known opaque scheme (mailto, tel, etc.)
+        assert!(!is_uri("name: foo bar bazz"));
+        assert!(!is_uri("status: draft"));
+        assert!(!is_uri("title: My Document"));
+        assert!(!is_uri("name:foo"));
+        assert!(!is_uri("x:y"));
     }
 
     #[test]

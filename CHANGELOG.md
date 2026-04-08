@@ -2,6 +2,20 @@
 
 All notable changes to drft are documented here.
 
+## 0.6.1 (2026-04-08)
+
+Edge detection hardening — proper URI validation and frontmatter parsing, full JGF export.
+
+### Fixes
+
+- **False positive URI detection** — `is_uri` replaced hand-rolled RFC 3986 scheme check with the `url` crate (WHATWG URL Standard). YAML values like `name: foo bar` no longer match as URIs.
+- **Frontmatter link extraction** — replaced line-by-line string splitting with `serde_yml` tree walking. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
+- **Extension heuristic cap** — bumped from 4 to 6 characters, covering `.swift`, `.proto`, `.patch`, `.class`, and similar.
+
+### New features
+
+- **Full JGF export** — `drft graph --format json` now includes all internal graph data: node `graph` membership, `is_graph` flag, parser metadata (e.g., frontmatter YAML payload), and graph-level `interface` and `target_properties` in `graph.metadata`.
+
 ## 0.6.0 (2026-04-08)
 
 Node/edge model refinement — scope as a first-class concept, JGF compliance, directory traversal prevention.
