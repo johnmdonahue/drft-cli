@@ -78,27 +78,3 @@ fn fragmentation_rule_fires() {
         "expected disconnected component message, got: {stdout}"
     );
 }
-
-// ── Containment escape ─────────────────────────────────────────
-
-/// Issue #9: ../  links should trigger boundary-violation rule.
-#[test]
-fn boundary_violation_catches_escape() {
-    let dir = TempDir::new().unwrap();
-    let child = dir.path().join("docs");
-    fs::create_dir(&child).unwrap();
-    fs::write(child.join("drft.toml"), "").unwrap();
-    fs::write(child.join("index.md"), "[escape](../README.md)").unwrap();
-    fs::write(dir.path().join("README.md"), "# Root").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", child.to_str().unwrap(), "check"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("boundary-violation"),
-        "expected boundary-violation for ../README.md, got: {stdout}"
-    );
-}

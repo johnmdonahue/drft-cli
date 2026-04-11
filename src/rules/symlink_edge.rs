@@ -60,10 +60,7 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.target_properties.insert(
             "setup.md".into(),
@@ -98,10 +95,7 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

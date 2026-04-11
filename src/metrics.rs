@@ -64,7 +64,7 @@ pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
     let total_nodes = graph
         .nodes
         .values()
-        .filter(|n| graph.is_included_node(&n.path))
+        .filter(|n| graph.is_file_node(&n.path))
         .count() as f64;
     if total_nodes > 0.0 {
         let orphans = inputs

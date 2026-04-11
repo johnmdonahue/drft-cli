@@ -28,7 +28,7 @@ impl Analysis for ConnectedComponents {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_included_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 
@@ -175,10 +175,7 @@ mod tests {
             path: "https://example.com".into(),
             node_type: NodeType::External,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

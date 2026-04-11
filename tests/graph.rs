@@ -89,62 +89,6 @@ fn graph_json_follows_jgf() {
     }
 }
 
-/// Validate that multi-graph JSON output also complies with JGF v2.0.
-#[test]
-fn graph_json_recursive_follows_jgf() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
-    fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
-
-    let child = dir.path().join("child");
-    fs::create_dir(&child).unwrap();
-    fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.toml"), "").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-
-    // Root: must have "graphs" key
-    let root = v.as_object().expect("root is object");
-    assert!(root.contains_key("graphs"), "root must contain 'graphs'");
-
-    let graphs = root["graphs"].as_array().expect("graphs is array");
-    let allowed_graph_keys = [
-        "id", "label", "directed", "type", "metadata", "nodes", "edges",
-    ];
-    let allowed_edge_keys = [
-        "id", "source", "target", "relation", "directed", "label", "metadata",
-    ];
-
-    for (gi, graph) in graphs.iter().enumerate() {
-        let graph = graph
-            .as_object()
-            .unwrap_or_else(|| panic!("graph {gi} is object"));
-        for key in graph.keys() {
-            assert!(
-                allowed_graph_keys.contains(&key.as_str()),
-                "graph {gi} has unexpected key '{key}'"
-            );
-        }
-        if let Some(edges) = graph.get("edges") {
-            for (ei, edge) in edges.as_array().unwrap().iter().enumerate() {
-                let edge = edge.as_object().unwrap();
-                for key in edge.keys() {
-                    assert!(
-                        allowed_edge_keys.contains(&key.as_str()),
-                        "graph {gi} edge {ei} has unexpected key '{key}'"
-                    );
-                }
-            }
-        }
-    }
-}
-
 /// Directory traversal: ../ targets create nodes but are not hashed.
 #[test]
 fn traversal_parent_escape_not_hashed() {
@@ -363,28 +307,4 @@ fn graph_unknown_parser_errors() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("unknown parser \"nonexistent\""));
     assert!(stderr.contains("available:"));
-}
-
-#[test]
-fn graph_recursive_produces_multiple_graphs() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
-    fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
-
-    let child = dir.path().join("child");
-    fs::create_dir(&child).unwrap();
-    fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.toml"), "").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-
-    // JGF multi-graph format
-    let graphs = v["graphs"].as_array().expect("should have graphs array");
-    assert!(graphs.len() >= 2, "should have root + child graph");
 }

@@ -44,26 +44,6 @@ impl Rule for StaleRule {
             });
         }
 
-        for change in &result.boundary_changes {
-            diagnostics.push(Diagnostic {
-                rule: "stale".into(),
-                message: "graph boundary changed".into(),
-                node: Some(change.node.clone()),
-                fix: Some(match change.reason.as_str() {
-                    "child graph removed" => format!(
-                        "{} no longer has a drft.lock \u{2014} run drft lock to update the parent lockfile",
-                        change.node
-                    ),
-                    "new child graph" => format!(
-                        "{} is a new child graph \u{2014} run drft lock to update the parent lockfile",
-                        change.node
-                    ),
-                    _ => "run drft lock to update the lockfile".to_string(),
-                }),
-                ..Default::default()
-            });
-        }
-
         diagnostics.sort_by(|a, b| a.node.cmp(&b.node));
         diagnostics
     }
@@ -93,19 +73,13 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: Some(index_hash),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: Some(setup_hash),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),

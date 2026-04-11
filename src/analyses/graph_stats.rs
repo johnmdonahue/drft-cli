@@ -25,7 +25,7 @@ impl Analysis for GraphStats {
         let real_nodes: Vec<&str> = graph
             .nodes
             .keys()
-            .filter(|p| graph.is_included_node(p))
+            .filter(|p| graph.is_file_node(p))
             .map(|s| s.as_str())
             .collect();
 

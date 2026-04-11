@@ -88,6 +88,43 @@ fn impact_parser_filter() {
     assert!(stdout.contains("no dependents"));
 }
 
+/// v0.7 regression: a file inside a subdirectory containing a stray
+/// `drft.toml` must still be resolvable by `drft impact`. Under v0.6 the
+/// subdirectory would have been treated as a child graph and the file
+/// excluded from the parent's graph.
+#[test]
+fn impact_resolves_file_under_nested_drft_toml() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "include = [\"**/*.md\"]\n").unwrap();
+    fs::write(dir.path().join("index.md"), "[inner](nested/inner.md)").unwrap();
+
+    let nested = dir.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join("drft.toml"), "").unwrap();
+    fs::write(nested.join("inner.md"), "# Inner").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "nested/inner.md",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "expected impact to resolve the nested file, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("index.md"),
+        "expected index.md to show as a dependent of nested/inner.md: {stdout}"
+    );
+}
+
 #[test]
 fn impact_md_extension_fallback() {
     let dir = TempDir::new().unwrap();

@@ -221,10 +221,7 @@ mod tests {
             path: path.into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: meta_map,
-            included: true,
         }
     }
 
@@ -386,10 +383,7 @@ mod tests {
             path: "no-frontmatter.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
 
         let enriched = make_enriched(graph);

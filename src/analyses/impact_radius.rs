@@ -1,4 +1,5 @@
 use super::{Analysis, AnalysisContext};
+use crate::graph::NodeType;
 use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -31,9 +32,9 @@ impl Analysis for ImpactRadius {
 
         let mut nodes: Vec<ImpactRadiusNode> = graph
             .nodes
-            .keys()
-            .filter(|path| graph.is_included_node(path))
-            .map(|path| {
+            .iter()
+            .filter(|(_, node)| node.node_type != NodeType::External)
+            .map(|(path, _)| {
                 // BFS on reverse edges to find all transitive dependents
                 let mut visited = HashSet::new();
                 let mut queue = VecDeque::new();
@@ -48,7 +49,12 @@ impl Analysis for ImpactRadius {
                     if let Some(edge_indices) = graph.reverse.get(current) {
                         for &idx in edge_indices {
                             let dependent = graph.edges[idx].source.as_str();
-                            if !graph.is_included_node(dependent) {
+                            // Skip External dependents — URIs can't "depend on" anything
+                            if graph
+                                .nodes
+                                .get(dependent)
+                                .is_some_and(|n| n.node_type == NodeType::External)
+                            {
                                 continue;
                             }
                             if visited.insert(dependent) {
@@ -219,10 +225,7 @@ mod tests {
             path: "https://example.com".into(),
             node_type: NodeType::External,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

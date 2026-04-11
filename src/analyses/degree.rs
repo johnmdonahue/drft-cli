@@ -29,7 +29,7 @@ impl Analysis for Degree {
         let mut nodes: Vec<NodeDegree> = graph
             .nodes
             .keys()
-            .filter(|path| graph.is_included_node(path))
+            .filter(|path| graph.is_file_node(path))
             .map(|path| {
                 let in_degree = graph
                     .reverse
@@ -142,10 +142,7 @@ mod tests {
             path: "https://example.com".into(),
             node_type: NodeType::External,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         graph.add_edge(make_edge("a.md", "https://example.com"));
 

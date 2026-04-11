@@ -128,10 +128,7 @@ mod tests {
             path: path.into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         }
     }
 

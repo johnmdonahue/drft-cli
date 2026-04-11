@@ -138,15 +138,6 @@ impl From<RawParserValue> for Option<ParserConfig> {
     }
 }
 
-// ── Interface config ───────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InterfaceConfig {
-    pub files: Vec<String>,
-    #[serde(default)]
-    pub ignore: Vec<String>,
-}
-
 // ── Rule config ────────────────────────────────────────────────
 
 /// Configuration for a single rule under `[rules]`.
@@ -286,8 +277,6 @@ pub struct Config {
     /// Also respects `.gitignore`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub interface: Option<InterfaceConfig>,
     pub parsers: HashMap<String, ParserConfig>,
     pub rules: HashMap<String, RuleConfig>,
     /// Directory containing the drft.toml this config was loaded from.
@@ -300,7 +289,6 @@ pub struct Config {
 struct RawConfig {
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
-    interface: Option<InterfaceConfig>,
     parsers: Option<HashMap<String, RawParserValue>>,
     rules: Option<HashMap<String, RawRuleValue>>,
     // v0.3 key — accepted as alias for `exclude`
@@ -315,16 +303,13 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
-    "boundary-violation",
     "dangling-edge",
     "directed-cycle",
-    "encapsulation-violation",
     "fragmentation",
     "orphan-node",
     "schema-violation",
     "stale",
     "symlink-edge",
-    "untrackable-target",
 ];
 
 impl Config {
@@ -342,15 +327,12 @@ impl Config {
         );
 
         let rules = [
-            ("boundary-violation", RuleSeverity::Warn),
             ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
-            ("encapsulation-violation", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
             ("orphan-node", RuleSeverity::Warn),
             ("stale", RuleSeverity::Warn),
             ("symlink-edge", RuleSeverity::Warn),
-            ("untrackable-target", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -365,7 +347,6 @@ impl Config {
         Config {
             include: vec!["*.md".to_string()],
             exclude: Vec::new(),
-            interface: None,
             parsers,
             rules,
             config_dir: None,
@@ -387,7 +368,7 @@ impl Config {
 
         // Warn about v0.2 config keys
         if raw.manifest.is_some() {
-            eprintln!("warn: drft.toml uses v0.2 'manifest' key — migrate to [interface] section");
+            eprintln!("warn: drft.toml uses v0.2 'manifest' key — use 'include' instead");
         }
         if raw.custom_rules.is_some() {
             eprintln!(
@@ -430,8 +411,6 @@ impl Config {
         if let Some(exclude) = raw.exclude {
             config.exclude = exclude;
         }
-
-        config.interface = raw.interface;
 
         // Parse parsers
         if let Some(raw_parsers) = raw.parsers {
@@ -704,19 +683,6 @@ required = ["title", "date", "status"]
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert!(!config.parsers.contains_key("markdown"));
-    }
-
-    #[test]
-    fn loads_interface() {
-        let dir = TempDir::new().unwrap();
-        fs::write(
-            dir.path().join("drft.toml"),
-            "[interface]\nfiles = [\"overview.md\", \"api/*.md\"]\n",
-        )
-        .unwrap();
-        let config = Config::load(dir.path()).unwrap();
-        let iface = config.interface.unwrap();
-        assert_eq!(iface.files, vec!["overview.md", "api/*.md"]);
     }
 
     #[test]

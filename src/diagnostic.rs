@@ -17,8 +17,6 @@ pub struct Diagnostic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub graph: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
 }
 
@@ -33,7 +31,6 @@ impl Default for Diagnostic {
             node: None,
             via: None,
             path: None,
-            graph: None,
             fix: None,
         }
     }
@@ -168,22 +165,5 @@ mod tests {
         assert!(json.contains("\"source\":\"index.md\""));
         assert!(json.contains("\"target\":\"gone.md\""));
         assert!(!json.contains("\"node\""));
-    }
-
-    #[test]
-    fn text_format_with_graph_prefix() {
-        let d = Diagnostic {
-            rule: "orphan-node".into(),
-            severity: RuleSeverity::Warn,
-            message: "no inbound links".into(),
-            node: Some("orphan.md".into()),
-            graph: Some("beta".into()),
-            ..Default::default()
-        };
-        // Scope is handled by the output loop, not format_text
-        assert_eq!(
-            d.format_text(),
-            "warn[orphan-node]: orphan.md (no inbound links)"
-        );
     }
 }

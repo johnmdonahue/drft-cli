@@ -4,7 +4,6 @@ pub mod change_propagation;
 pub mod connected_components;
 pub mod degree;
 pub mod depth;
-pub mod graph_boundaries;
 pub mod graph_stats;
 pub mod impact_radius;
 pub mod pagerank;
@@ -34,7 +33,6 @@ pub fn all_analysis_names() -> &'static [&'static str] {
         "connected-components",
         "degree",
         "depth",
-        "graph-boundaries",
         "graph-stats",
         "impact-radius",
         "pagerank",
@@ -65,7 +63,6 @@ pub struct EnrichedGraph {
     pub connected_components: connected_components::ConnectedComponentsResult,
     pub degree: degree::DegreeResult,
     pub depth: depth::DepthResult,
-    pub graph_boundaries: graph_boundaries::GraphBoundariesResult,
     pub graph_stats: graph_stats::GraphStatsResult,
     pub impact_radius: impact_radius::ImpactRadiusResult,
     pub pagerank: pagerank::PageRankResult,
@@ -103,7 +100,6 @@ pub fn enrich_graph(
     let connected_components = connected_components::ConnectedComponents.run(&ctx);
     let degree = degree::Degree.run(&ctx);
     let depth = depth::Depth.run(&ctx);
-    let graph_boundaries = graph_boundaries::GraphBoundaries.run(&ctx);
     let graph_stats = graph_stats::GraphStats.run(&ctx);
     let impact_radius = impact_radius::ImpactRadius.run(&ctx);
     let pagerank = pagerank::PageRank.run(&ctx);
@@ -118,7 +114,6 @@ pub fn enrich_graph(
         connected_components,
         degree,
         depth,
-        graph_boundaries,
         graph_stats,
         impact_radius,
         pagerank,

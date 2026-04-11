@@ -15,6 +15,11 @@ fn init_creates_config() {
     let config = fs::read_to_string(dir.path().join("drft.toml")).unwrap();
     assert!(config.contains("[rules]"));
     assert!(config.contains("stale"));
+    // v0.7: no interface section in the template
+    assert!(
+        !config.contains("[interface]"),
+        "init template should not emit [interface]"
+    );
 }
 
 #[test]

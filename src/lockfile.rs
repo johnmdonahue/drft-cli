@@ -5,23 +5,11 @@ use std::path::Path;
 
 use crate::graph::{Graph, NodeType};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct LockfileInterface {
-    pub files: Vec<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Lockfile {
     pub lockfile_version: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub interface: Option<LockfileInterface>,
     #[serde(default)]
     pub nodes: BTreeMap<String, LockfileNode>,
-}
-
-/// Skip serializing graph when it's "." (the common local case).
-fn is_local_graph(g: &Option<String>) -> bool {
-    matches!(g.as_deref(), None | Some("."))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -30,8 +18,6 @@ pub struct LockfileNode {
     pub node_type: NodeType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
-    #[serde(skip_serializing_if = "is_local_graph")]
-    pub graph: Option<String>,
 }
 
 impl Lockfile {
@@ -46,22 +32,12 @@ impl Lockfile {
                 LockfileNode {
                     node_type: node.node_type,
                     hash: node.hash.clone(),
-                    graph: node.graph.clone(),
                 },
             );
         }
 
-        let interface = if graph.interface.is_empty() {
-            None
-        } else {
-            Some(LockfileInterface {
-                files: graph.interface.clone(),
-            })
-        };
-
         Lockfile {
             lockfile_version: 2,
-            interface,
             nodes,
         }
     }
@@ -125,19 +101,13 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         g.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         g
     }
@@ -188,22 +158,6 @@ mod tests {
             !toml_str.contains("[[edges]]"),
             "lockfile v2 should not contain edges"
         );
-    }
-
-    #[test]
-    fn stores_interface_when_present() {
-        let mut g = make_graph();
-        g.interface = vec!["index.md".to_string()];
-        let lf = Lockfile::from_graph(&g);
-        assert!(lf.interface.is_some());
-        assert_eq!(lf.interface.unwrap().files, vec!["index.md"]);
-    }
-
-    #[test]
-    fn no_interface_when_empty() {
-        let g = make_graph();
-        let lf = Lockfile::from_graph(&g);
-        assert!(lf.interface.is_none());
     }
 
     #[test]

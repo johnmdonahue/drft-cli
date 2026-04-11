@@ -175,7 +175,6 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
         "connected_components": enriched.connected_components,
         "degree": enriched.degree,
         "depth": enriched.depth,
-        "graph_boundaries": enriched.graph_boundaries,
         "graph_stats": enriched.graph_stats,
         "impact_radius": enriched.impact_radius,
         "pagerank": enriched.pagerank,
@@ -211,19 +210,13 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         g.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         g.add_edge(Edge {
             source: "index.md".into(),
@@ -234,7 +227,6 @@ mod tests {
         let config = crate::config::Config {
             include: vec!["*.md".into()],
             exclude: vec![],
-            interface: None,
             parsers: std::collections::HashMap::new(),
             rules: std::collections::HashMap::new(),
             config_dir: None,

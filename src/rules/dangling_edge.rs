@@ -65,10 +65,7 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -96,19 +93,13 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_node(Node {
             path: "setup.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
@@ -133,10 +124,7 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         graph.target_properties.insert(
             "linked.md".into(),
@@ -169,20 +157,14 @@ mod tests {
             path: "index.md".into(),
             node_type: NodeType::File,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: true,
         });
         // Directories now get proper Directory nodes in the graph
         graph.add_node(Node {
             path: "guides".into(),
             node_type: NodeType::Directory,
             hash: None,
-            graph: None,
-            is_graph: false,
             metadata: HashMap::new(),
-            included: false,
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
