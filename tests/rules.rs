@@ -78,3 +78,32 @@ fn fragmentation_rule_fires() {
         "expected disconnected component message, got: {stdout}"
     );
 }
+
+// ── Containment escape ─────────────────────────────────────────
+
+/// A link that resolves above the graph root violates the boundary.
+#[test]
+fn boundary_violation_catches_parent_escape() {
+    // outer/project is the graph; it links to outer/outside.md via ../
+    let outer = TempDir::new().unwrap();
+    let graph_root = outer.path().join("project");
+    fs::create_dir(&graph_root).unwrap();
+    fs::write(graph_root.join("drft.toml"), "").unwrap();
+    fs::write(graph_root.join("index.md"), "[escape](../outside.md)").unwrap();
+    fs::write(outer.path().join("outside.md"), "# Outside").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", graph_root.to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("boundary-violation"),
+        "expected boundary-violation for ../outside.md, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("../outside.md"),
+        "expected target path in diagnostic, got: {stdout}"
+    );
+}

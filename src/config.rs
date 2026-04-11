@@ -303,6 +303,7 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
+    "boundary-violation",
     "dangling-edge",
     "directed-cycle",
     "fragmentation",
@@ -327,6 +328,7 @@ impl Config {
         );
 
         let rules = [
+            ("boundary-violation", RuleSeverity::Warn),
             ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),

@@ -1,3 +1,4 @@
+pub mod boundary_violation;
 pub mod custom;
 pub mod dangling_edge;
 pub mod directed_cycle;
@@ -27,6 +28,7 @@ pub trait Rule {
 
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
     vec![
+        Box::new(boundary_violation::BoundaryViolationRule),
         Box::new(dangling_edge::DanglingEdgeRule),
         Box::new(directed_cycle::DirectedCycleRule),
         Box::new(fragmentation::FragmentationRule),

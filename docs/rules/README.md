@@ -18,15 +18,16 @@ orphan-node = "off" # suppress if expected
 
 ## Built-in rules
 
-| Rule                                    | What it checks                                           | Analysis                                                    |
-| --------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
-| [dangling-edge](dangling-edge.md)       | Edges to nodes that don't exist                          | graph (direct)                                              |
-| [directed-cycle](directed-cycle.md)     | Circular dependencies between files                      | [scc](../analyses/scc.md)                                   |
-| [fragmentation](fragmentation.md)       | Disconnected components in the graph                     | [connected-components](../analyses/connected-components.md) |
-| [orphan-node](orphan-node.md)           | Nodes with no connections (no inbound or outbound edges) | [degree](../analyses/degree.md)                             |
-| [schema-violation](schema-violation.md) | Node metadata violates required fields or allowed values | graph (metadata)                                            |
-| [stale](stale.md)                       | Files whose content has changed since the last lock      | [change-propagation](../analyses/change-propagation.md)     |
-| [symlink-edge](symlink-edge.md)         | Edges whose target is a symlink                          | graph (direct)                                              |
+| Rule                                        | What it checks                                           | Analysis                                                    |
+| ------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
+| [boundary-violation](boundary-violation.md) | Edges whose target resolves above the graph root         | graph (direct)                                              |
+| [dangling-edge](dangling-edge.md)           | Edges to nodes that don't exist                          | graph (direct)                                              |
+| [directed-cycle](directed-cycle.md)         | Circular dependencies between files                      | [scc](../analyses/scc.md)                                   |
+| [fragmentation](fragmentation.md)           | Disconnected components in the graph                     | [connected-components](../analyses/connected-components.md) |
+| [orphan-node](orphan-node.md)               | Nodes with no connections (no inbound or outbound edges) | [degree](../analyses/degree.md)                             |
+| [schema-violation](schema-violation.md)     | Node metadata violates required fields or allowed values | graph (metadata)                                            |
+| [stale](stale.md)                           | Files whose content has changed since the last lock      | [change-propagation](../analyses/change-propagation.md)     |
+| [symlink-edge](symlink-edge.md)             | Edges whose target is a symlink                          | graph (direct)                                              |
 
 ## Custom rules
 
