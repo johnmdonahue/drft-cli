@@ -1,7 +1,7 @@
 # drft.toml — drft dogfooding itself
 
 include = ["*.md", "src/**/*.rs", ".claude/settings.json"]
-exclude = ["src/lib.rs", "CHANGELOG.md", "npm/*"]
+exclude = ["src/lib.rs", "CHANGELOG.md", "npm/*", "examples/**"]
 
 [parsers.markdown]
 files = ["*.md"]
