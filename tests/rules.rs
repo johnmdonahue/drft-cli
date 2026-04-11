@@ -81,9 +81,9 @@ fn fragmentation_rule_fires() {
 
 // ── Containment escape ─────────────────────────────────────────
 
-/// A link that resolves above the graph root violates the boundary.
+/// An edge whose target resolves above the graph root is a boundary edge.
 #[test]
-fn boundary_violation_catches_parent_escape() {
+fn boundary_edge_catches_parent_escape() {
     // outer/project is the graph; it links to outer/outside.md via ../
     let outer = TempDir::new().unwrap();
     let graph_root = outer.path().join("project");
@@ -99,8 +99,8 @@ fn boundary_violation_catches_parent_escape() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("boundary-violation"),
-        "expected boundary-violation for ../outside.md, got: {stdout}"
+        stdout.contains("boundary-edge"),
+        "expected boundary-edge for ../outside.md, got: {stdout}"
     );
     assert!(
         stdout.contains("../outside.md"),

@@ -1,11 +1,11 @@
 use crate::diagnostic::Diagnostic;
 use crate::rules::{Rule, RuleContext};
 
-pub struct BoundaryViolationRule;
+pub struct BoundaryEdgeRule;
 
-impl Rule for BoundaryViolationRule {
+impl Rule for BoundaryEdgeRule {
     fn name(&self) -> &str {
-        "boundary-violation"
+        "boundary-edge"
     }
 
     fn evaluate(&self, ctx: &RuleContext) -> Vec<Diagnostic> {
@@ -17,8 +17,8 @@ impl Rule for BoundaryViolationRule {
                 continue;
             }
             diagnostics.push(Diagnostic {
-                rule: "boundary-violation".into(),
-                message: "link escapes the graph root".into(),
+                rule: "boundary-edge".into(),
+                message: "link crosses the graph boundary".into(),
                 source: Some(edge.source.clone()),
                 target: Some(edge.target.clone()),
                 fix: Some(format!(
@@ -72,9 +72,9 @@ mod tests {
             graph: &enriched,
             options: None,
         };
-        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
+        let diagnostics = BoundaryEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule, "boundary-violation");
+        assert_eq!(diagnostics[0].rule, "boundary-edge");
         assert_eq!(diagnostics[0].source.as_deref(), Some("index.md"));
         assert_eq!(diagnostics[0].target.as_deref(), Some("../outside.md"));
     }
@@ -91,7 +91,7 @@ mod tests {
             graph: &enriched,
             options: None,
         };
-        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
+        let diagnostics = BoundaryEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].target.as_deref(), Some("/etc/hosts"));
     }
@@ -108,7 +108,7 @@ mod tests {
             graph: &enriched,
             options: None,
         };
-        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
+        let diagnostics = BoundaryEdgeRule.evaluate(&ctx);
         assert_eq!(diagnostics.len(), 1);
     }
 
@@ -124,7 +124,7 @@ mod tests {
             graph: &enriched,
             options: None,
         };
-        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
+        let diagnostics = BoundaryEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 
@@ -141,7 +141,7 @@ mod tests {
             graph: &enriched,
             options: None,
         };
-        let diagnostics = BoundaryViolationRule.evaluate(&ctx);
+        let diagnostics = BoundaryEdgeRule.evaluate(&ctx);
         assert!(diagnostics.is_empty());
     }
 }
