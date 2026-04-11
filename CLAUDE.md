@@ -74,6 +74,14 @@ cargo run -- check     # runs as `drft check`
 
 Main is protected. All changes go through branches and pull requests — never push directly to main.
 
+## Scratch files
+
+`.scratch/` is a gitignored working-tree directory for ephemeral design notes, exploration, and planning docs. Files there are not versioned and are not visible to anyone who clones the repo.
+
+Put ephemeral notes — design explorations, implementation plans, scratch thinking — in `.scratch/`, not in the repo root or alongside source files. This keeps the tracked tree clean and prevents accidental commits of working notes.
+
+Never reference `.scratch/` files from durable artifacts — commit messages, PR descriptions, code comments, CHANGELOG, or any checked-in doc. A reader who clones the repo cannot follow the link. If anything in a scratch doc needs to be durable, graduate it to a non-ignored location (docs, PR body, or a code comment) before landing the work.
+
 ## Releasing
 
 See [RELEASING.md](RELEASING.md). Releases go through a PR, then tag on main after merge.
