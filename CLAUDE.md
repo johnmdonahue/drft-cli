@@ -59,12 +59,12 @@ cargo run -- check     # runs as `drft check`
 - Error handling: `anyhow` for application errors, `thiserror` for typed library errors (add when needed)
 - All output: diagnostics to stdout, progress/errors to stderr
 - Exit codes: 0 (clean), 1 (violations), 2 (usage/config error)
-- Lockfile (`drft.lock`): TOML v2 format, nodes + hashes only (no edges), fully deterministic, no timestamps
-- Config (`drft.toml`): TOML, unified `[parsers]` and `[rules]` sections, `[interface]` for graph boundary
+- Lockfile (`drft.lock`): TOML v2 format, File nodes + hashes only (no edges, no Directory hashes), fully deterministic, no timestamps
+- Config (`drft.toml`): TOML with `include`/`exclude`, `[parsers]`, and `[rules]` sections. Each config declares exactly one graph; nested `drft.toml` files found while walking are ordinary files.
 - Hashes use BLAKE3 with `b3:` prefix
 - Edges carry parser provenance in metadata (e.g., `"metadata": {"parser": "markdown"}`)
-- Node types: `File` (on disk, hashed), `Directory` (directory on disk, `is_graph` when `drft.toml` exists, hashed via `drft.lock`), `External` (URLs only, not on filesystem). Nodes have `included: true` when matched by `include`, `false` when discovered via edges.
-- Edge scope is derived from nodes: `graph.is_internal_edge(&edge)` returns true when both endpoints are `included`
+- Node types: `File` (on disk, hashed), `Directory` (existence-only leaf created as an edge target — no hash, no outbound edges), `External` (URLs only, not on filesystem)
+- Edge scope: `graph.is_internal_edge(&edge)` returns true when both endpoints are File nodes
 - Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)

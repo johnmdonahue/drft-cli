@@ -6,7 +6,7 @@ sources:
 
 # Configuration
 
-`drft.toml` in the graph root controls file discovery, parsers, rules, and encapsulation.
+`drft.toml` in the graph root controls file discovery, parsers, and rules. Each `drft.toml` declares exactly one graph — nested `drft.toml` files found while walking are ordinary files on disk, not graph boundaries.
 
 ## Graph declaration
 
@@ -16,16 +16,6 @@ exclude = ["drafts/*"] # remove from the graph (also respects .gitignore)
 ```
 
 `include` determines which files become nodes. `exclude` removes paths before discovery. Both use glob patterns. drft also respects `.gitignore` automatically.
-
-## Interface
-
-```toml
-[interface]
-files = ["overview.md", "api/*.md"]
-ignore = ["internal/*"]
-```
-
-Declares which files are accessible from parent graphs. If `[interface]` is present, edges from a parent graph into non-interface files trigger `encapsulation-violation`. If `[interface]` is absent, the graph is open — anything can link into it.
 
 ## Parsers
 

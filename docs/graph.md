@@ -77,15 +77,16 @@ Uses standard path joining with `..` / `.` normalization.
 
 Edge targets that aren't already in the graph get classified:
 
-| Condition                                   | Node type                                        | `included` | Tracked?                                          |
-| ------------------------------------------- | ------------------------------------------------ | ---------- | ------------------------------------------------- |
-| Target matches `include` patterns           | **File**                                         | `true`     | Yes — hashed, parsed                              |
-| Target is a URI                             | **External**                                     | `false`    | No                                                |
-| Target exists on disk but outside `include` | **File**                                         | `false`    | Yes — hashed                                      |
-| Target is inside a child graph              | **File**                                         | `false`    | Yes — hashed                                      |
-| Target escapes to parent (`../`)            | **File**                                         | `false`    | No — node created, not hashed (outside root)      |
-| Target is a directory                       | **Directory** (`is_graph` if `drft.toml` exists) | `false`    | When `drft.toml` exists — hashed from `drft.toml` |
-| Target doesn't exist on disk                | No node created                                  | —          | dangling-edge candidate                           |
+| Condition                                | Node type                           | Tracked?                                     |
+| ---------------------------------------- | ----------------------------------- | -------------------------------------------- |
+| Target matches `include` patterns        | **File**                            | Yes — hashed, parsed                         |
+| Target is a URI                          | **External**                        | No                                           |
+| Target is a file on disk outside include | **File**                            | Yes — hashed                                 |
+| Target is a directory on disk            | **Directory** (existence-only leaf) | No hash, no outbound edges                   |
+| Target escapes the graph root            | **File**                            | No — node created, not hashed (outside root) |
+| Target doesn't exist on disk             | No node created                     | dangling-edge candidate                      |
+
+File targets outside `include` are first-class File nodes: hashed and tracked like anything else. Directory targets exist to keep links from dangling and carry no content of their own.
 
 ### 5. Directory traversal prevention
 
@@ -97,7 +98,7 @@ This prevents content access via:
 - **Symlinks** — a symlink inside the root pointing to `/etc/passwd` canonicalizes outside
 - **Absolute paths** — `/etc/hosts` from a markdown link resolves outside the root
 
-Nodes are still created for these targets so rules can flag the references (boundary-violation, dangling-edge). Only content reading and hashing is gated.
+Nodes are still created for these targets so rules can flag the references (dangling-edge). Only content reading and hashing is gated.
 
 ### 6. Probe filesystem properties
 
@@ -128,43 +129,39 @@ Edges carry the relationship and provenance:
 
 `target` is always the node ID. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
 
-Whether an edge is **internal** (both endpoints are `included` nodes) is derived from node state, not stored on the edge. Use `graph.is_internal_edge(&edge)` to check.
+Whether an edge is **internal** (both endpoints are File nodes — excludes URIs, Directory leaves, and dangling targets) is derived from node state, not stored on the edge. Use `graph.is_internal_edge(&edge)` to check.
 
 ## JSON output
 
-The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) schema. Parser provenance and computed properties live in edge `metadata`:
+The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) schema. Parser provenance lives in edge `metadata`:
 
 ```json
 {
   "source": "index.md",
   "target": "bar.md",
-  "metadata": { "parser": "markdown", "internal": true }
+  "metadata": { "parser": "markdown" }
 }
 ```
 
-Node metadata includes `type`, `hash`, `graph`, `is_graph`, `included`, and any parser-extracted metadata keyed by parser name:
+Node metadata includes `type`, `hash`, and any parser-extracted metadata keyed by parser name:
 
 ```json
 {
   "metadata": {
     "type": "file",
     "hash": "b3:...",
-    "graph": ".",
-    "included": true,
     "frontmatter": { "title": "Setup", "sources": ["../shared/glossary.md"] }
   }
 }
 ```
 
-Graph-level metadata includes `interface` (when configured) and `target_properties` (filesystem properties of edge targets):
+Graph-level metadata includes `target_properties` (filesystem properties of edge targets):
 
 ```json
 {
   "graph": {
-    "id": ".",
     "directed": true,
     "metadata": {
-      "interface": ["README.md"],
       "target_properties": {
         "setup.md": { "is_symlink": false, "is_directory": false }
       }
@@ -182,8 +179,7 @@ Graph-level metadata includes `interface` (when configured) and `target_properti
 | `is_uri(target)`                | Check if target is a URI (WHATWG URL parsing + scheme filter) |
 | `graph.target_props(target)`    | Get filesystem properties for a target                        |
 | `graph.is_file_node(path)`      | Check if a path is a File node (capability check)             |
-| `graph.is_included_node(path)`  | Check if a node was matched by `include` (scope check)        |
-| `graph.is_internal_edge(&edge)` | Check if both endpoints are included (derived from nodes)     |
+| `graph.is_internal_edge(&edge)` | Check if both endpoints are File nodes                        |
 
 ## Lockfile
 
@@ -193,7 +189,7 @@ Graph-level metadata includes `interface` (when configured) and `target_properti
 - **Change propagation** — BFS from changed nodes through reverse edges to find transitively stale dependents.
 - **Structural drift detection** — node additions and removals since last lock.
 
-The lockfile omits edges. If a file's links change, its content hash changes. Directory nodes with `drft.toml` are hashed from the child's `drft.toml` content — a config change in a child graph triggers staleness in the parent. The parent does not depend on the child's lockfile.
+The lockfile omits edges. If a file's links change, its content hash changes. Only File nodes appear in the lockfile — Directory leaves have no hash.
 
 ### Staleness propagation
 

@@ -35,7 +35,7 @@ This is the reverse complement of depth. Depth asks "how far is this node from a
 | `direct_dependents` | Count of direct dependents (immediate reverse neighbors)           |
 | `max_depth`         | Longest reverse path from this node to a dependent                 |
 
-Nodes are sorted alphabetically by path. Only File nodes are included — External and Directory nodes are excluded.
+Nodes are sorted alphabetically by path. External (URI) nodes are excluded from the seed set; File and Directory nodes are fair game.
 
 ## Used by `drft impact`
 
@@ -43,4 +43,4 @@ The `drft impact` command annotates each impacted node with its impact radius an
 
 ## Algorithm
 
-BFS on reverse edges per File node. For each node, walk all transitive dependents, counting total reach (radius), immediate neighbors (direct_dependents), and maximum path length (max_depth). O(V*(V+E)) worst case, negligible at drft scale.
+BFS on reverse edges per seed node. For each node, walk all transitive dependents, counting total reach (radius), immediate neighbors (direct_dependents), and maximum path length (max_depth). External dependents are skipped during traversal. O(V*(V+E)) worst case, negligible at drft scale.

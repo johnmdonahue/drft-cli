@@ -21,7 +21,7 @@ warn[stale]: setup.md (content changed)
 warn[stale]: index.md (stale via setup.md)
 ```
 
-The rule also detects graph boundary changes (new or removed child graphs). Without a `drft.lock`, this rule has nothing to check.
+Without a `drft.lock`, this rule has nothing to check.
 
 ## Configuration
 

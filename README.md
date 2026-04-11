@@ -6,7 +6,7 @@ Files link to other files. When a target changes, the files that depend on it ma
 
 It treats your directory as a graph — files are nodes, links are edges — and validates the structure. `drft check` catches broken links, cycles, and staleness. `drft lock` snapshots hashes so it can detect when a dependency changes and flag everything downstream. `drft impact <file>` tells you what to review when you touch a file.
 
-A subdirectory with its own `drft.toml` becomes a child graph with its own boundary. Links into it from outside are violations unless you declare public interface files. That's the model — everything else is configuration.
+Each `drft.toml` declares exactly one graph. Run drft from anywhere inside the directory tree and it walks up to the nearest config. That's the model — everything else is configuration.
 
 ## Install
 
@@ -35,8 +35,7 @@ drft discovers files matching your `include` patterns, runs parsers to extract l
 - **Broken links** — edges to files that don't exist (`dangling-edge`)
 - **Cycles** — circular dependencies (`directed-cycle`)
 - **Staleness** — files changed since last lock, including transitive dependents (`stale`)
-- **Boundary escapes** — links that reach outside the graph (`boundary-violation`)
-- **Encapsulation** — links into a child graph that bypass its interface (`encapsulation-violation`)
+- **Isolation** — nodes with no connections or disconnected components (`orphan-node`, `fragmentation`)
 
 drft ships with [built-in rules](docs/rules/README.md) covering structural integrity, plus support for [custom rules](docs/rules/custom.md) via external commands. All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
 
@@ -55,7 +54,7 @@ Underneath the rules, drft computes [structural analyses](docs/analyses/README.m
 | `drft config show` | Display resolved configuration                              |
 | `drft init`        | Create a default `drft.toml`                                |
 
-Most commands support `--format json`, `--recursive`, and `--watch`. Run `drft --help` for the full flag reference.
+Most commands support `--format json` and `drft check` supports `--watch`. Run `drft --help` for the full flag reference.
 
 ## Configuration
 
@@ -77,24 +76,6 @@ ignore = ["README.md"]
 ```
 
 Parsers extract links from files. drft includes markdown and YAML frontmatter parsers; you can add [custom parsers](docs/parsers/custom.md) for any format. See the [configuration reference](docs/config.md) for all options.
-
-## Graph nesting
-
-A directory with a `drft.toml` is a graph. A child directory with its own config is a child graph — it appears as a single node in the parent and is checked independently.
-
-```
-project/
-  drft.toml
-  index.md
-  docs/
-    overview.md
-  research/
-    drft.toml          # child graph
-    overview.md
-    internal.md
-```
-
-Use `--recursive` to check or lock all graphs in one command. Declare `[interface]` in a child's `drft.toml` to specify which files are accessible from parent graphs.
 
 ## LLM integration
 

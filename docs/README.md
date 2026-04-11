@@ -4,7 +4,7 @@ drft builds a dependency graph from your files and validates it. The documentati
 
 ## Reference
 
-- [Configuration](config.md) — `drft.toml` options: include/exclude, parsers, rules, interface
+- [Configuration](config.md) — `drft.toml` options: include/exclude, parsers, rules
 - [Parsers](parsers/README.md) — how links and metadata are extracted from files
 - [Graph builder](graph.md) — normalization, node classification, path resolution, lockfile
 - [Analyses](analyses/README.md) — structural properties computed from the graph
