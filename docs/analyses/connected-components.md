@@ -58,7 +58,7 @@ JSON output:
 }
 ```
 
-Components are sorted by size (largest first). Members within each component are sorted alphabetically. Only File nodes are included — External and Directory nodes are excluded.
+Components are sorted by size (largest first). Members within each component are sorted alphabetically. The analysis operates on all nodes and internal edges.
 
 ### As a rule (`drft check`)
 

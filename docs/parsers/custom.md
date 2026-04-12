@@ -15,7 +15,7 @@ Custom parsers are defined under `[parsers]` in `drft.toml`. The parser name is 
 
 ```toml
 [parsers.yaml-refs]
-files = ["*.yaml"]
+files = ["**/*.yaml"]
 command = "./scripts/parse-yaml-refs.sh"
 ```
 
@@ -96,7 +96,7 @@ The default timeout is 5000ms (5 seconds). Override it if the command needs more
 
 ```toml
 [parsers.yaml-refs]
-files = ["*.yaml"]
+files = ["**/*.yaml"]
 command = "./scripts/parse-yaml-refs.sh"
 timeout = 10000
 ```
@@ -130,7 +130,7 @@ Configure it:
 
 ```toml
 [parsers.yaml-refs]
-files = ["*.yaml", "*.yml"]
+files = ["**/*.yaml", "**/*.yml"]
 command = "./scripts/parse-yaml-refs.sh"
 ```
 

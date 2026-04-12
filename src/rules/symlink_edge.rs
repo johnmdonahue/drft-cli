@@ -48,20 +48,14 @@ impl Rule for SymlinkEdgeRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::test_helpers::make_enriched;
-    use crate::graph::{Edge, Graph, Node, NodeType, TargetProperties};
+    use crate::graph::test_helpers::{make_enriched, make_node};
+    use crate::graph::{Edge, Graph, Location, TargetKind, TargetProperties};
     use crate::rules::RuleContext;
-    use std::collections::HashMap;
 
     #[test]
     fn detects_symlink_target() {
         let mut graph = Graph::new();
-        graph.add_node(Node {
-            path: "index.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            metadata: HashMap::new(),
-        });
+        graph.add_node(make_node("index.md"));
         graph.target_properties.insert(
             "setup.md".into(),
             TargetProperties {
@@ -73,6 +67,7 @@ mod tests {
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
+            target_kind: TargetKind::External(Location::Local),
             link: None,
             parser: "markdown".into(),
         });
@@ -91,15 +86,11 @@ mod tests {
     #[test]
     fn no_diagnostic_for_regular_file() {
         let mut graph = Graph::new();
-        graph.add_node(Node {
-            path: "index.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            metadata: HashMap::new(),
-        });
+        graph.add_node(make_node("index.md"));
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
+            target_kind: TargetKind::External(Location::Local),
             link: None,
             parser: "markdown".into(),
         });

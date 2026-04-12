@@ -119,27 +119,8 @@ mod tests {
     use super::*;
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
-    use crate::graph::{Edge, Node, NodeType};
-    use std::collections::HashMap;
+    use crate::graph::test_helpers::{make_edge, make_node};
     use std::path::Path;
-
-    fn make_node(path: &str) -> Node {
-        Node {
-            path: path.into(),
-            node_type: NodeType::File,
-            hash: None,
-            metadata: HashMap::new(),
-        }
-    }
-
-    fn make_edge(source: &str, target: &str) -> Edge {
-        Edge {
-            source: source.into(),
-            target: target.into(),
-            link: None,
-            parser: "markdown".into(),
-        }
-    }
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
         AnalysisContext {

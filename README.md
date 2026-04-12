@@ -32,7 +32,7 @@ drft check                # now detects staleness too
 
 drft discovers files matching your `include` patterns, runs parsers to extract links, and builds a dependency graph. It then validates the graph against rules:
 
-- **Broken links** — edges to files that don't exist (`dangling-edge`)
+- **Broken links** — edges to files that don't exist (`unresolved-edge`)
 - **Cycles** — circular dependencies (`directed-cycle`)
 - **Staleness** — files changed since last lock, including transitive dependents (`stale`)
 - **Isolation** — nodes with no connections or disconnected components (`orphan-node`, `fragmentation`)
@@ -61,7 +61,7 @@ Most commands support `--format json` and `drft check` supports `--watch`. Run `
 `drft.toml` in the directory root:
 
 ```toml
-include = ["*.md"] # which files become nodes (default)
+include = ["**/*.md"] # which files become nodes (default)
 exclude = ["drafts/*"] # also respects .gitignore
 
 [parsers.markdown] # built-in parser, no config needed

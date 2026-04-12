@@ -1,5 +1,0 @@
-[parsers]
-markdown = true
-
-[rules]
-orphan-node = "warn"

@@ -29,7 +29,6 @@ impl Analysis for Degree {
         let mut nodes: Vec<NodeDegree> = graph
             .nodes
             .keys()
-            .filter(|path| graph.is_file_node(path))
             .map(|path| {
                 let in_degree = graph
                     .reverse
@@ -63,8 +62,7 @@ mod tests {
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Graph, Node, NodeType};
-    use std::collections::HashMap;
+    use crate::graph::{Edge, Graph, Location, TargetKind};
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -135,16 +133,16 @@ mod tests {
     }
 
     #[test]
-    fn counts_edges_to_external_nodes() {
+    fn counts_edges_to_external_targets() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
-        graph.add_node(Node {
-            path: "https://example.com".into(),
-            node_type: NodeType::External,
-            hash: None,
-            metadata: HashMap::new(),
+        graph.add_edge(Edge {
+            source: "a.md".into(),
+            target: "https://example.com".into(),
+            target_kind: TargetKind::External(Location::Remote),
+            link: None,
+            parser: "markdown".into(),
         });
-        graph.add_edge(make_edge("a.md", "https://example.com"));
 
         let config = Config::defaults();
         let result = Degree.run(&make_ctx(&graph, &config));

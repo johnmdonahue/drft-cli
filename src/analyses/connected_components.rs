@@ -25,12 +25,7 @@ impl Analysis for ConnectedComponents {
     fn run(&self, ctx: &AnalysisContext) -> ConnectedComponentsResult {
         let graph = ctx.graph;
         // Build undirected adjacency among real nodes
-        let real_nodes: Vec<&str> = graph
-            .nodes
-            .keys()
-            .filter(|p| graph.is_file_node(p))
-            .map(|s| s.as_str())
-            .collect();
+        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
 
         let mut adj: HashMap<&str, HashSet<&str>> = HashMap::new();
         for node in &real_nodes {
@@ -107,8 +102,7 @@ mod tests {
     use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Node, NodeType};
-    use std::collections::HashMap;
+    use crate::graph::{Edge, Location, TargetKind};
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -168,16 +162,16 @@ mod tests {
     }
 
     #[test]
-    fn excludes_external_nodes() {
+    fn external_edges_excluded() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
-        graph.add_node(Node {
-            path: "https://example.com".into(),
-            node_type: NodeType::External,
-            hash: None,
-            metadata: HashMap::new(),
+        graph.add_edge(Edge {
+            source: "a.md".into(),
+            target: "https://example.com".into(),
+            target_kind: TargetKind::External(Location::Remote),
+            link: None,
+            parser: "markdown".into(),
         });
-        graph.add_edge(make_edge("a.md", "https://example.com"));
 
         let config = Config::defaults();
         let result = ConnectedComponents.run(&make_ctx(&graph, &config));

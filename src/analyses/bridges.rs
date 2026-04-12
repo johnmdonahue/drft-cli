@@ -26,12 +26,7 @@ impl Analysis for Bridges {
         let graph = ctx.graph;
         // Build undirected adjacency among real nodes
         let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
-        let real_nodes: Vec<&str> = graph
-            .nodes
-            .keys()
-            .filter(|p| graph.is_file_node(p))
-            .map(|s| s.as_str())
-            .collect();
+        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
 
         for node in &real_nodes {
             adj.entry(node).or_default();

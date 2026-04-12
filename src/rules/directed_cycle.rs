@@ -42,6 +42,7 @@ mod tests {
     use super::*;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
+    use crate::graph::{Edge, Resolution, TargetKind};
     use crate::rules::RuleContext;
 
     #[test]
@@ -92,7 +93,13 @@ mod tests {
     fn ignores_broken_link_edges() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
-        graph.add_edge(make_edge("a.md", "missing.md"));
+        graph.add_edge(Edge {
+            source: "a.md".into(),
+            target: "missing.md".into(),
+            target_kind: TargetKind::Internal(Resolution::Missing),
+            link: None,
+            parser: "markdown".into(),
+        });
 
         let enriched = make_enriched(graph);
         let ctx = RuleContext {

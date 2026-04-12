@@ -34,6 +34,7 @@ mod tests {
     use super::*;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
+    use crate::graph::{Edge, Resolution, TargetKind};
     use crate::rules::RuleContext;
 
     #[test]
@@ -41,7 +42,13 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
         graph.add_node(make_node("orphan.md"));
-        graph.add_edge(make_edge("index.md", "setup.md"));
+        graph.add_edge(Edge {
+            source: "index.md".into(),
+            target: "setup.md".into(),
+            target_kind: TargetKind::Internal(Resolution::Missing),
+            link: None,
+            parser: "markdown".into(),
+        });
 
         let enriched = make_enriched(graph);
         let ctx = RuleContext {

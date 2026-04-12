@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../docs/rules/directed-cycle.md
+---
+
 # Cyclic
 
 Three files that form a circular dependency: a links to b, b links to c, c links back to a.

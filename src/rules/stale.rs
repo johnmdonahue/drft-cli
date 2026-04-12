@@ -53,7 +53,8 @@ impl Rule for StaleRule {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::graph::{Edge, Graph, Node, NodeType, hash_bytes};
+    use crate::graph::test_helpers::make_edge;
+    use crate::graph::{Graph, Node, hash_bytes};
     use crate::lockfile::{Lockfile, write_lockfile};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
@@ -71,22 +72,15 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::File,
             hash: Some(index_hash),
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::File,
             hash: Some(setup_hash),
             metadata: HashMap::new(),
         });
-        graph.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        graph.add_edge(make_edge("index.md", "setup.md"));
 
         let lockfile = Lockfile::from_graph(&graph);
         write_lockfile(dir.path(), &lockfile).unwrap();

@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn text_format_edge_rule() {
         let d = Diagnostic {
-            rule: "dangling-edge".into(),
+            rule: "unresolved-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -145,14 +145,14 @@ mod tests {
         };
         assert_eq!(
             d.format_text(),
-            "warn[dangling-edge]: index.md \u{2192} gone.md (file not found)"
+            "warn[unresolved-edge]: index.md \u{2192} gone.md (file not found)"
         );
     }
 
     #[test]
     fn json_serialization() {
         let d = Diagnostic {
-            rule: "dangling-edge".into(),
+            rule: "unresolved-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -160,7 +160,7 @@ mod tests {
             ..Default::default()
         };
         let json = serde_json::to_string(&d).unwrap();
-        assert!(json.contains("\"rule\":\"dangling-edge\""));
+        assert!(json.contains("\"rule\":\"unresolved-edge\""));
         assert!(json.contains("\"severity\":\"warn\""));
         assert!(json.contains("\"source\":\"index.md\""));
         assert!(json.contains("\"target\":\"gone.md\""));

@@ -78,32 +78,3 @@ fn fragmentation_rule_fires() {
         "expected disconnected component message, got: {stdout}"
     );
 }
-
-// ── Containment escape ─────────────────────────────────────────
-
-/// An edge whose target resolves above the graph root is a boundary edge.
-#[test]
-fn boundary_edge_catches_parent_escape() {
-    // outer/project is the graph; it links to outer/outside.md via ../
-    let outer = TempDir::new().unwrap();
-    let graph_root = outer.path().join("project");
-    fs::create_dir(&graph_root).unwrap();
-    fs::write(graph_root.join("drft.toml"), "").unwrap();
-    fs::write(graph_root.join("index.md"), "[escape](../outside.md)").unwrap();
-    fs::write(outer.path().join("outside.md"), "# Outside").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", graph_root.to_str().unwrap(), "check"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("boundary-edge"),
-        "expected boundary-edge for ../outside.md, got: {stdout}"
-    );
-    assert!(
-        stdout.contains("../outside.md"),
-        "expected target path in diagnostic, got: {stdout}"
-    );
-}

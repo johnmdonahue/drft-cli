@@ -99,17 +99,17 @@ fn run_init(root: &Path) -> Result<i32> {
 
     let content = r#"# drft.toml
 
-# Which paths become File nodes (default: ["*.md"])
-include = ["*.md"]
+# Which paths become nodes (default: ["**/*.md"])
+include = ["**/*.md"]
 
 # Remove from the graph (also respects .gitignore)
 # exclude = []
 
 [parsers.markdown]
-# files = ["*.md"]   # uncomment to restrict (receives all included files by default)
+# files = ["**/*.md"]   # uncomment to restrict (receives all included files by default)
 
 # [parsers.frontmatter]
-# files = ["*.md"]   # frontmatter link extraction + metadata
+# files = ["**/*.md"]   # frontmatter link extraction + metadata
 
 [rules]
 # All rules default to warn. Override only what you need.
@@ -473,7 +473,6 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
         sorted.sort_by(|a, b| a.path.cmp(&b.path));
         for n in &*sorted {
             let mut meta = serde_json::Map::new();
-            meta.insert("type".into(), serde_json::json!(n.node_type));
             if let Some(h) = &n.hash {
                 meta.insert("hash".into(), serde_json::json!(h));
             }
@@ -532,7 +531,6 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
 
 struct NodeExport {
     path: String,
-    node_type: graph::NodeType,
     hash: Option<String>,
     metadata: HashMap<String, serde_json::Value>,
 }
@@ -566,7 +564,6 @@ fn collect_jgf_graph(root: &Path, parser: Option<&str>) -> Result<GraphExport> {
         .iter()
         .map(|(path, node)| NodeExport {
             path: path.clone(),
-            node_type: node.node_type,
             hash: node.hash.clone(),
             metadata: node.metadata.clone(),
         })

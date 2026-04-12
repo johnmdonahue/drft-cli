@@ -1,17 +1,19 @@
 use anyhow::{Context, Result};
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
 /// Compile a list of glob patterns into a GlobSet. Returns None if patterns is empty.
+/// Uses literal_separator so `*` matches a single path component (like shell globs)
+/// and `**` matches across directory boundaries.
 pub fn compile_globs(patterns: &[String]) -> Result<Option<GlobSet>> {
     if patterns.is_empty() {
         return Ok(None);
     }
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        builder.add(Glob::new(pattern)?);
+        builder.add(GlobBuilder::new(pattern).literal_separator(true).build()?);
     }
     Ok(Some(builder.build()?))
 }
@@ -303,14 +305,13 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
-    "boundary-edge",
-    "dangling-edge",
     "directed-cycle",
     "fragmentation",
     "orphan-node",
     "schema-violation",
     "stale",
     "symlink-edge",
+    "unresolved-edge",
 ];
 
 impl Config {
@@ -328,13 +329,12 @@ impl Config {
         );
 
         let rules = [
-            ("boundary-edge", RuleSeverity::Warn),
-            ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
             ("orphan-node", RuleSeverity::Warn),
             ("stale", RuleSeverity::Warn),
             ("symlink-edge", RuleSeverity::Warn),
+            ("unresolved-edge", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -347,7 +347,7 @@ impl Config {
         .collect();
 
         Config {
-            include: vec!["*.md".to_string()],
+            include: vec!["**/*.md".to_string()],
             exclude: Vec::new(),
             parsers,
             rules,
@@ -536,11 +536,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\ndangling-edge = \"error\"\norphan-node = \"warn\"\n",
+            "[rules]\nunresolved-edge = \"error\"\norphan-node = \"warn\"\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Error);
+        assert_eq!(config.rule_severity("unresolved-edge"), RuleSeverity::Error);
         assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
         assert_eq!(config.rule_severity("directed-cycle"), RuleSeverity::Warn);
     }
@@ -558,7 +558,7 @@ mod tests {
         assert!(config.is_rule_ignored("orphan-node", "README.md"));
         assert!(config.is_rule_ignored("orphan-node", "index.md"));
         assert!(!config.is_rule_ignored("orphan-node", "other.md"));
-        assert!(!config.is_rule_ignored("dangling-edge", "README.md"));
+        assert!(!config.is_rule_ignored("unresolved-edge", "README.md"));
     }
 
     #[test]
@@ -592,11 +592,11 @@ required = ["title", "date", "status"]
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\ndangling-edge = \"error\"\n",
+            "[rules]\nunresolved-edge = \"error\"\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert!(config.rule_options("dangling-edge").is_none());
+        assert!(config.rule_options("unresolved-edge").is_none());
     }
 
     #[test]

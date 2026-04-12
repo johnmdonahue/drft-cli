@@ -20,7 +20,7 @@ The rule reads node metadata (populated by parsers like the [frontmatter parser]
 
 ```toml
 [parsers.frontmatter]
-files = ["*.md"] # enable frontmatter metadata extraction
+files = ["**/*.md"] # enable frontmatter metadata extraction
 
 [rules.schema-violation]
 severity = "warn"

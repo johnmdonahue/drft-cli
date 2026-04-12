@@ -27,32 +27,43 @@ pub fn is_uri(target: &str) -> bool {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum NodeType {
-    File,
-    Directory,
-    External,
-}
-
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Node {
     pub path: String,
-    pub node_type: NodeType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
     /// Structured metadata from parsers, keyed by parser name.
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
+/// Classification of an edge's target, computed during graph building.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum TargetKind {
+    Internal(Resolution),
+    External(Location),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum Resolution {
+    Found,
+    Missing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum Location {
+    Local,
+    Remote,
+}
+
 #[derive(Debug, Clone)]
 pub struct Edge {
     pub source: String,
-    /// Node identity — always matches a key in `graph.nodes` (or is a dangling target).
-    /// Fragment-stripped: `bar.md`, not `bar.md#heading`.
+    /// Node identity — for internal edges this matches a key in `graph.nodes`
+    /// when `target_kind` is `Internal(Found)`. Fragment-stripped.
     pub target: String,
+    /// Classification of the target into the four-variant TargetKind.
+    pub target_kind: TargetKind,
     /// Original link when it differs from target (e.g., `bar.md#heading`).
     /// Absent when the link resolved to exactly the node ID.
     pub link: Option<String>,
@@ -89,20 +100,11 @@ impl Graph {
         self.nodes.insert(node.path.clone(), node);
     }
 
-    /// Returns true for File nodes (excludes External and Directory).
-    pub fn is_file_node(&self, path: &str) -> bool {
-        self.nodes
-            .get(path)
-            .is_some_and(|n| n.node_type == NodeType::File)
-    }
-
-    /// Returns true when both endpoints are File nodes. Excludes edges that
-    /// touch External (URI) nodes, Directory (existence-only) leaves, or
-    /// dangling targets missing from the graph. Analyses that reason about
-    /// density, reachability, and similar on-graph properties use this to
-    /// scope to the file-to-file subgraph.
+    /// Returns true when the edge target resolves to a node in the graph.
+    /// Analyses that reason about density, reachability, and similar
+    /// on-graph properties use this to scope to the in-graph subgraph.
     pub fn is_internal_edge(&self, edge: &Edge) -> bool {
-        self.is_file_node(&edge.source) && self.is_file_node(&edge.target)
+        matches!(edge.target_kind, TargetKind::Internal(Resolution::Found))
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
@@ -156,39 +158,72 @@ fn is_within_root(target_path: &Path, canonical_root: &Path) -> bool {
         .is_ok_and(|canonical| canonical.starts_with(canonical_root))
 }
 
+/// Intermediate edge representation used before classification.
+struct PendingEdge {
+    source: String,
+    target: String,
+    link: Option<String>,
+    parser: String,
+}
+
 /// Build a graph from files in `root`.
 ///
-/// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
-/// 2. Read text content for parser input (graceful skip for binary files).
-/// 3. Run parsers to extract edges.
-/// 4. Edge targets become File/Directory/External nodes based on what they
-///    resolve to on disk. File targets outside `include` are hashed and
-///    tracked like any other File node.
+/// 1. Discover nodes via `include`/`exclude` — hash raw bytes.
+/// 2. Run parsers to extract links.
+/// 3. Classify each edge target into a `TargetKind`.
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let canonical_root = root.canonicalize()?;
     let included_files = discover(root, &config.include, &config.exclude)?;
+    let include_globs = crate::config::compile_globs(&config.include)?;
     let mut graph = Graph::new();
-    let mut pending_edges = Vec::new();
+    let mut pending_edges: Vec<PendingEdge> = Vec::new();
 
-    // 1. Create File nodes for everything in include — hash raw bytes.
-    //    Separately read text content for files parsers will need.
-    let mut file_text: HashMap<String, String> = HashMap::new(); // path → text content
+    // 1. Create nodes for everything in include — hash raw bytes.
+    //    Files that resolve outside the graph root (via symlink) get a
+    //    hash-less node — content is intentionally not read.
+    let mut file_text: HashMap<String, String> = HashMap::new();
 
     for file in &included_files {
         let file_path = root.join(file);
+        let is_symlink = file_path
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink());
 
-        // Safety: don't read files that resolve outside the graph root (e.g. symlinks).
-        // Still create the node so it's visible, but warn.
-        if !is_within_root(&file_path, &canonical_root) {
-            eprintln!(
-                "warn: included file '{file}' resolves outside the graph root and was not read"
-            );
-            graph.add_node(Node {
-                path: file.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                metadata: HashMap::new(),
-            });
+        if is_symlink {
+            match file_path.canonicalize() {
+                Err(_) => {
+                    eprintln!("warn: symlink '{file}' could not be resolved — skipping");
+                    continue;
+                }
+                Ok(canonical) => {
+                    let should_hash = canonical.starts_with(&canonical_root)
+                        && canonical.strip_prefix(&canonical_root).is_ok_and(|rel| {
+                            let rel_str = rel.to_string_lossy();
+                            include_globs
+                                .as_ref()
+                                .is_some_and(|set| set.is_match(rel_str.as_ref()))
+                        });
+
+                    if should_hash {
+                        let raw = std::fs::read(&file_path)?;
+                        let hash = hash_bytes(&raw);
+                        graph.add_node(Node {
+                            path: file.clone(),
+                            hash: Some(hash),
+                            metadata: HashMap::new(),
+                        });
+                        if let Ok(text) = String::from_utf8(raw) {
+                            file_text.insert(file.clone(), text);
+                        }
+                    } else {
+                        graph.add_node(Node {
+                            path: file.clone(),
+                            hash: None,
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
+            }
             continue;
         }
 
@@ -197,18 +232,16 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
         graph.add_node(Node {
             path: file.clone(),
-            node_type: NodeType::File,
             hash: Some(hash),
             metadata: HashMap::new(),
         });
 
-        // Try to read as text for parser input — binary files just won't have text
         if let Ok(text) = String::from_utf8(raw) {
             file_text.insert(file.clone(), text);
         }
     }
 
-    // 2. Build parser registry and determine which files each parser receives
+    // 2. Build parser registry and determine which files each parser receives.
     let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
     let mut parser_files: Vec<Vec<String>> = vec![Vec::new(); parser_list.len()];
 
@@ -220,7 +253,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 3. Run each parser in batch mode
+    // 3. Run each parser in batch mode.
     for (i, parser) in parser_list.iter().enumerate() {
         let files: Vec<(&str, &str)> = parser_files[i]
             .iter()
@@ -238,7 +271,6 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         let batch_results = parser.parse_batch(&files);
 
         for (file, result) in batch_results {
-            // Attach metadata to node if parser returned it
             if let Some(metadata) = result.metadata
                 && let Some(node) = graph.nodes.get_mut(&file)
             {
@@ -248,7 +280,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             for link in result.links {
                 let normalized = match normalize_link_target(&link) {
                     Some(n) => n,
-                    None => continue, // filtered (empty, anchor-only)
+                    None => continue,
                 };
 
                 let target = if is_uri(&normalized.target) {
@@ -256,9 +288,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 } else {
                     resolve_link(&file, &normalized.target)
                 };
-                // link carries the full original when it has a fragment
                 let link = normalized.fragment.map(|frag| format!("{target}{frag}"));
-                pending_edges.push(Edge {
+                pending_edges.push(PendingEdge {
                     source: file.clone(),
                     target,
                     link,
@@ -268,87 +299,33 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 4. Edge-driven node creation.
-    //    Every edge target not already in the graph is classified by what it
-    //    resolves to on disk. No child-graph machinery — this is a flat graph.
-    for edge in &pending_edges {
-        if graph.nodes.contains_key(&edge.target) {
+    // 4. Classify each edge target into a TargetKind.
+    //    String ops + hashmap lookups. No filesystem probing.
+    let target_kinds: Vec<TargetKind> = pending_edges
+        .iter()
+        .map(|p| {
+            if is_uri(&p.target) {
+                TargetKind::External(Location::Remote)
+            } else if !include_globs
+                .as_ref()
+                .is_some_and(|set| set.is_match(&p.target))
+            {
+                TargetKind::External(Location::Local)
+            } else if graph.nodes.contains_key(&p.target) {
+                TargetKind::Internal(Resolution::Found)
+            } else {
+                TargetKind::Internal(Resolution::Missing)
+            }
+        })
+        .collect();
+
+    // 5. Probe target properties for non-URI edge targets within root.
+    //    Needed by the symlink-edge rule; orthogonal to TargetKind.
+    for pending in &pending_edges {
+        if is_uri(&pending.target) || graph.target_properties.contains_key(&pending.target) {
             continue;
         }
-
-        // URIs → External (not on filesystem)
-        if is_uri(&edge.target) {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::External,
-                hash: None,
-                metadata: HashMap::new(),
-            });
-            continue;
-        }
-
-        // Safety: targets that lexically escape the graph root (../, absolute
-        // paths) get a hash-less File node — no filesystem access. Prevents
-        // directory traversal.
-        let escapes_root =
-            edge.target.starts_with("../") || edge.target == ".." || edge.target.starts_with('/');
-        if escapes_root {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                metadata: HashMap::new(),
-            });
-            continue;
-        }
-
-        let target_path = root.join(&edge.target);
-
-        // Safety: verify the resolved path stays within root before any
-        // filesystem access. Catches symlinks pointing outside the graph.
-        if target_path.exists() && !is_within_root(&target_path, &canonical_root) {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                metadata: HashMap::new(),
-            });
-            continue;
-        }
-
-        // Directory on disk → existence-only Directory leaf (no hash, no
-        // outbound edges — just validates the link target).
-        if target_path.is_dir() {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::Directory,
-                hash: None,
-                metadata: HashMap::new(),
-            });
-            continue;
-        }
-
-        // File on disk → hashed File node. Out-of-include file targets become
-        // first-class nodes just like included files.
-        if target_path.is_file() {
-            let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash,
-                metadata: HashMap::new(),
-            });
-        }
-        // If doesn't exist: no node created. dangling-edge rule handles this.
-    }
-
-    // Probe filesystem properties for non-URI edge targets (stored per-target, not per-edge).
-    // Only probe targets within the graph root — no filesystem access for escaped targets.
-    for edge in &pending_edges {
-        if is_uri(&edge.target) || graph.target_properties.contains_key(&edge.target) {
-            continue;
-        }
-        let target_path = root.join(&edge.target);
+        let target_path = root.join(&pending.target);
         if !is_within_root(&target_path, &canonical_root) {
             continue;
         }
@@ -362,7 +339,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             None
         };
         graph.target_properties.insert(
-            edge.target.clone(),
+            pending.target.clone(),
             TargetProperties {
                 is_symlink,
                 is_directory,
@@ -371,9 +348,15 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         );
     }
 
-    // Add all edges to the graph.
-    for edge in pending_edges {
-        graph.add_edge(edge);
+    // 6. Attach each pending edge with its classified target_kind.
+    for (pending, target_kind) in pending_edges.into_iter().zip(target_kinds) {
+        graph.add_edge(Edge {
+            source: pending.source,
+            target: pending.target,
+            target_kind,
+            link: pending.link,
+            parser: pending.parser,
+        });
     }
 
     Ok(graph)
@@ -457,7 +440,6 @@ pub mod test_helpers {
     pub fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::File,
             hash: None,
             metadata: HashMap::new(),
         }
@@ -467,6 +449,7 @@ pub mod test_helpers {
         Edge {
             source: source.into(),
             target: target.into(),
+            target_kind: TargetKind::Internal(Resolution::Found),
             link: None,
             parser: "markdown".into(),
         }
@@ -548,24 +531,9 @@ mod tests {
     #[test]
     fn graph_adjacency() {
         let mut g = Graph::new();
-        g.add_node(Node {
-            path: "a.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            metadata: HashMap::new(),
-        });
-        g.add_node(Node {
-            path: "b.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            metadata: HashMap::new(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_edge(test_helpers::make_edge("a.md", "b.md"));
         assert_eq!(g.forward["a.md"], vec![0]);
         assert_eq!(g.reverse["b.md"], vec![0]);
         assert!(!g.forward.contains_key("b.md"));
@@ -579,6 +547,7 @@ mod tests {
         g.add_edge(Edge {
             source: "a.md".into(),
             target: "b.md".into(),
+            target_kind: TargetKind::Internal(Resolution::Found),
             link: Some("b.md#heading".into()),
             parser: "markdown".into(),
         });
@@ -654,24 +623,24 @@ mod tests {
         assert!(n.fragment.is_none());
     }
 
+    fn edge_with_parser(source: &str, target: &str, parser: &str) -> Edge {
+        Edge {
+            source: source.into(),
+            target: target.into(),
+            target_kind: TargetKind::Internal(Resolution::Found),
+            link: None,
+            parser: parser.into(),
+        }
+    }
+
     #[test]
     fn filter_by_single_parser() {
         let mut g = Graph::new();
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.edges.len(), 1);
@@ -684,12 +653,7 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.nodes.len(), 2);
@@ -704,18 +668,8 @@ mod tests {
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.forward["a.md"], vec![0]);
@@ -729,18 +683,8 @@ mod tests {
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["markdown".into(), "frontmatter".into()]);
         assert_eq!(filtered.edges.len(), 2);

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::graph::{Graph, NodeType};
+use crate::graph::Graph;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Lockfile {
@@ -14,8 +14,6 @@ pub struct Lockfile {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct LockfileNode {
-    #[serde(rename = "type")]
-    pub node_type: NodeType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
 }
@@ -30,7 +28,6 @@ impl Lockfile {
             nodes.insert(
                 path.clone(),
                 LockfileNode {
-                    node_type: node.node_type,
                     hash: node.hash.clone(),
                 },
             );
@@ -91,7 +88,7 @@ pub fn write_lockfile(root: &Path, lockfile: &Lockfile) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Node, NodeType};
+    use crate::graph::Node;
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -99,13 +96,11 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             metadata: HashMap::new(),
         });

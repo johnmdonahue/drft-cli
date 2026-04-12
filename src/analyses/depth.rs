@@ -104,12 +104,7 @@ impl Analysis for Depth {
         let mut nodes: Vec<NodeDepth> = Vec::new();
         let mut max_depth: usize = 0;
 
-        let mut real_nodes: Vec<&str> = graph
-            .nodes
-            .keys()
-            .filter(|p| graph.is_file_node(p))
-            .map(|s| s.as_str())
-            .collect();
+        let mut real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
         real_nodes.sort();
 
         for node in real_nodes {

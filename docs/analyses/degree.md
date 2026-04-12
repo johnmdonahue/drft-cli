@@ -59,7 +59,7 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Only File nodes are included — External and Directory nodes are excluded. Degree counts only edges between File nodes.
+Nodes are sorted alphabetically by path. Degree counts all edges, including those to external targets.
 
 ### As a rule (`drft check`)
 

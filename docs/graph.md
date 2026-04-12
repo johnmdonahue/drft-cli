@@ -15,7 +15,7 @@ The graph builder sits between parsers and rules. It takes raw parser output and
 | Layer             | Responsibility                                           | Does NOT do                                       |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------- |
 | **Parsers**       | Emit raw link strings as they appear in source           | No normalization, no classification, no filtering |
-| **Graph builder** | Normalize targets, classify nodes, resolve paths, enrich | No judgment — that's rules                        |
+| **Graph builder** | Normalize targets, classify edges, resolve paths, enrich | No judgment — that's rules                        |
 | **Rules**         | Judge the enriched graph, emit diagnostics               | No filesystem access, no re-computation           |
 
 Parsers should emit what they find. The graph builder decides what it means.
@@ -58,7 +58,7 @@ Only two things are dropped: empty targets and anchor-only targets (no file to r
 
 `is_uri()` uses the [`url`](https://docs.rs/url) crate (WHATWG URL Standard) to parse the target, then accepts it as a URI if it has authority (`://`) or uses a known opaque scheme (`mailto`, `tel`, `data`, `urn`, `javascript`).
 
-URI targets skip path resolution (they're not relative file paths) and become External nodes.
+URI targets skip path resolution (they're not relative file paths) and are classified as `External(Remote)` on the edge.
 
 ### 3. Resolve paths
 
@@ -73,32 +73,29 @@ edge.link: setup.md#heading  (resolved path with fragment)
 
 Uses standard path joining with `..` / `.` normalization.
 
-### 4. Classify nodes
+### 4. Classify edge targets
 
-Edge targets that aren't already in the graph get classified:
+Every edge target is classified into a `TargetKind`. This is a pure operation — string comparisons and hashmap lookups, no filesystem probing:
 
-| Condition                                | Node type                           | Tracked?                                     |
-| ---------------------------------------- | ----------------------------------- | -------------------------------------------- |
-| Target matches `include` patterns        | **File**                            | Yes — hashed, parsed                         |
-| Target is a URI                          | **External**                        | No                                           |
-| Target is a file on disk outside include | **File**                            | Yes — hashed                                 |
-| Target is a directory on disk            | **Directory** (existence-only leaf) | No hash, no outbound edges                   |
-| Target escapes the graph root            | **File**                            | No — node created, not hashed (outside root) |
-| Target doesn't exist on disk             | No node created                     | dangling-edge candidate                      |
+| Condition                                         | `TargetKind`        | Meaning                                        |
+| ------------------------------------------------- | ------------------- | ---------------------------------------------- |
+| Target is a URI (`is_uri()`)                      | `External(Remote)`  | Off-graph, remote resource                     |
+| Target doesn't match any `include` pattern        | `External(Local)`   | Filesystem-shaped but outside drft's authority |
+| Target matches `include` and is in `graph.nodes`  | `Internal(Found)`   | Resolved — both endpoints are in the graph     |
+| Target matches `include` but not in `graph.nodes` | `Internal(Missing)` | Expected file is absent — broken link          |
 
-File targets outside `include` are first-class File nodes: hashed and tracked like anything else. Directory targets exist to keep links from dangling and carry no content of their own.
+`include` is drft's sole authority for what gets read from disk. Targets outside `include` — whether they exist on disk or not — are `External(Local)`. drft does not probe the filesystem to classify them.
 
-### 5. Directory traversal prevention
+### 5. Symlink policy
 
-The graph builder only reads and hashes files that canonicalize to within the graph root. Every filesystem access — during discovery and edge resolution — passes through `is_within_root()`, which resolves symlinks via `canonicalize()` and verifies the result starts with the canonical root path.
+The walker follows symlinks so symlinked directories are traversable. The security boundary is enforced at hashing, not at walking.
 
-This prevents content access via:
+For each entry matching `include`:
 
-- **`../` chains** — `../../etc/passwd` resolves outside the root
-- **Symlinks** — a symlink inside the root pointing to `/etc/passwd` canonicalizes outside
-- **Absolute paths** — `/etc/hosts` from a markdown link resolves outside the root
+1. If not a symlink: read, hash, create node.
+2. If a symlink: canonicalize the path. If the canonical form is under the graph root and matches `include`, read and hash. Otherwise, create the node with `hash = None` — content is intentionally not read.
 
-Nodes are still created for these targets so rules can flag the references (dangling-edge). Only content reading and hashing is gated.
+This prevents content access through symlinks pointing outside the graph. `include` patterns don't traverse above the root (the walker is rooted at the `drft.toml` directory).
 
 ### 6. Probe filesystem properties
 
@@ -118,18 +115,19 @@ After building, `enrich()` computes all [structural analyses](analyses/README.md
 
 ## Edge structure
 
-Edges carry the relationship and provenance:
+Edges carry the relationship, classification, and provenance:
 
-| Field    | Type             | Description                                                        |
-| -------- | ---------------- | ------------------------------------------------------------------ |
-| `source` | String           | Source file path                                                   |
-| `target` | String           | Node ID — always matches a node key (or is a dangling target)      |
-| `link`   | Option\<String\> | Original link when it differs from target (e.g., `bar.md#heading`) |
-| `parser` | String           | Which parser discovered this edge (provenance)                     |
+| Field         | Type             | Description                                                                          |
+| ------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| `source`      | String           | Source file path                                                                     |
+| `target`      | String           | Target path or URI                                                                   |
+| `target_kind` | TargetKind       | Classification of the target (see [classify edge targets](#4-classify-edge-targets)) |
+| `link`        | Option\<String\> | Original link when it differs from target (e.g., `bar.md#heading`)                   |
+| `parser`      | String           | Which parser discovered this edge (provenance)                                       |
 
-`target` is always the node ID. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
+`target` is always the node ID for internal edges. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
 
-Whether an edge is **internal** (both endpoints are File nodes — excludes URIs, Directory leaves, and dangling targets) is derived from node state, not stored on the edge. Use `graph.is_internal_edge(&edge)` to check.
+An edge is **internal** when `target_kind` is `Internal(Found)`. Use `graph.is_internal_edge(&edge)` to check.
 
 ## JSON output
 
@@ -143,12 +141,11 @@ The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) sche
 }
 ```
 
-Node metadata includes `type`, `hash`, and any parser-extracted metadata keyed by parser name:
+Node metadata includes `hash` (when present) and any parser-extracted metadata keyed by parser name:
 
 ```json
 {
   "metadata": {
-    "type": "file",
     "hash": "b3:...",
     "frontmatter": { "title": "Setup", "sources": ["../shared/glossary.md"] }
   }
@@ -178,18 +175,17 @@ Graph-level metadata includes `target_properties` (filesystem properties of edge
 | ------------------------------- | ------------------------------------------------------------- |
 | `is_uri(target)`                | Check if target is a URI (WHATWG URL parsing + scheme filter) |
 | `graph.target_props(target)`    | Get filesystem properties for a target                        |
-| `graph.is_file_node(path)`      | Check if a path is a File node (capability check)             |
-| `graph.is_internal_edge(&edge)` | Check if both endpoints are File nodes                        |
+| `graph.is_internal_edge(&edge)` | Check if the edge's `target_kind` is `Internal(Found)`        |
 
 ## Lockfile
 
-`drft.lock` is a deterministic TOML snapshot of the graph's node set and content hashes. All File nodes are hashed via BLAKE3 (raw bytes). It enables:
+`drft.lock` is a deterministic TOML snapshot of the graph's node set and content hashes. Nodes are hashed via BLAKE3 (raw bytes). It enables:
 
 - **Staleness detection** — compare current hashes to locked hashes.
 - **Change propagation** — BFS from changed nodes through reverse edges to find transitively stale dependents.
 - **Structural drift detection** — node additions and removals since last lock.
 
-The lockfile omits edges. If a file's links change, its content hash changes. Only File nodes appear in the lockfile — Directory leaves have no hash.
+The lockfile omits edges. If a file's links change, its content hash changes. Nodes with `hash = None` (symlinks whose canonical target is outside `include`) are stored but skipped during staleness comparison.
 
 ### Staleness propagation
 

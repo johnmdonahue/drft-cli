@@ -1,5 +1,0 @@
-[parsers]
-markdown = true
-
-[rules]
-dangling-edge = "error"

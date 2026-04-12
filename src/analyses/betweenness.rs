@@ -23,12 +23,7 @@ impl Analysis for Betweenness {
 
     fn run(&self, ctx: &AnalysisContext) -> BetweennessResult {
         let graph = ctx.graph;
-        let real_nodes: Vec<&str> = graph
-            .nodes
-            .keys()
-            .filter(|p| graph.is_file_node(p))
-            .map(|s| s.as_str())
-            .collect();
+        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
 
         let n = real_nodes.len();
         let mut centrality: HashMap<&str, f64> = HashMap::new();

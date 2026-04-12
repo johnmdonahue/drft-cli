@@ -144,11 +144,13 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
     let mut nodes = serde_json::Map::new();
     for (path, node) in &graph.nodes {
         let mut meta = serde_json::Map::new();
-        meta.insert("type".into(), serde_json::json!(node.node_type));
         if let Some(h) = &node.hash {
             meta.insert("hash".into(), serde_json::json!(h));
         }
-        nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
+        if !node.metadata.is_empty() {
+            meta.insert("metadata".into(), serde_json::json!(node.metadata));
+        }
+        nodes.insert(path.clone(), serde_json::json!(meta));
     }
 
     let edges: Vec<serde_json::Value> = graph
@@ -199,7 +201,8 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
 mod tests {
     use super::*;
     use crate::analyses::enrich_graph;
-    use crate::graph::{Edge, Graph, Node, NodeType};
+    use crate::graph::test_helpers::make_edge;
+    use crate::graph::{Graph, Node};
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
@@ -208,22 +211,15 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::File,
             hash: Some("b3:aaa".into()),
             metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::File,
             hash: Some("b3:bbb".into()),
             metadata: HashMap::new(),
         });
-        g.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        g.add_edge(make_edge("index.md", "setup.md"));
         let config = crate::config::Config {
             include: vec!["*.md".into()],
             exclude: vec![],

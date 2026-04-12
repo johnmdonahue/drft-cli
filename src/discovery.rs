@@ -50,6 +50,22 @@ pub fn discover(
         files.push(relative);
     }
 
+    // Literal include paths (no glob characters) may live inside gitignored
+    // directories. The walker respects gitignore and won't enter those dirs,
+    // so we check for them explicitly as a fallback.
+    for pattern in include_patterns {
+        if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
+            continue;
+        }
+        if files.iter().any(|f| f == pattern) {
+            continue;
+        }
+        let path = root.join(pattern);
+        if path.is_file() {
+            files.push(pattern.to_string());
+        }
+    }
+
     files.sort();
     Ok(files)
 }

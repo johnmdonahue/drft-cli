@@ -27,8 +27,8 @@ fn config_show_defaults() {
     );
     // Default rules should be present
     assert!(
-        stdout.contains("dangling-edge"),
-        "expected dangling-edge rule: {stdout}"
+        stdout.contains("unresolved-edge"),
+        "expected unresolved-edge rule: {stdout}"
     );
 }
 

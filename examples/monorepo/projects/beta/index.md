@@ -1,3 +1,0 @@
-# Beta
-
-- [Roadmap](roadmap.md)
