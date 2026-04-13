@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Config;
-use crate::discovery::{discover, find_child_graphs};
+use crate::discovery::discover;
 use crate::parsers;
 
 /// Check if a target string is a valid URI.
@@ -27,58 +27,40 @@ pub fn is_uri(target: &str) -> bool {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Node {
+    pub path: String,
+    /// What kind of entity: file, directory, symlink, uri. None when stat failed (broken link).
+    #[serde(rename = "type")]
+    pub node_type: Option<NodeType>,
+    /// Whether this node matched include patterns — drft reads, hashes, and manages included nodes.
+    pub included: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    /// Structured metadata from parsers, keyed by parser name.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// What kind of filesystem entity this node represents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
     File,
     Directory,
-    External,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct Node {
-    pub path: String,
-    pub node_type: NodeType,
-    pub hash: Option<String>,
-    /// Which graph this node belongs to — mirrors filesystem directory entries:
-    /// `"."` = local, `".."` = parent (escape), `"child"` = child graph, `None` = not on filesystem.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub graph: Option<String>,
-    /// True when this Directory node has a drft.toml (is a drft graph).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub is_graph: bool,
-    /// Structured metadata from parsers, keyed by parser name.
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, serde_json::Value>,
-    /// True when this node was matched by `include` during discovery.
-    /// False for nodes discovered via edge targets (outside include, child graph files, etc.).
-    #[serde(default)]
-    pub included: bool,
+    Symlink,
+    Uri,
 }
 
 #[derive(Debug, Clone)]
 pub struct Edge {
     pub source: String,
-    /// Node identity — always matches a key in `graph.nodes` (or is a dangling target).
-    /// Fragment-stripped: `bar.md`, not `bar.md#heading`.
+    /// Node identity — always matches a key in `graph.nodes`. Fragment-stripped.
     pub target: String,
     /// Original link when it differs from target (e.g., `bar.md#heading`).
-    /// Absent when the link resolved to exactly the node ID.
     pub link: Option<String>,
     /// Which parser discovered this edge (provenance).
     pub parser: String,
-}
-
-/// Filesystem properties of an edge target, probed during graph building.
-/// Stored per-target on the Graph, not per-edge.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct TargetProperties {
-    pub is_symlink: bool,
-    pub is_directory: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub symlink_target: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -87,11 +69,6 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     pub forward: HashMap<String, Vec<usize>>,
     pub reverse: HashMap<String, Vec<usize>>,
-    pub child_graphs: Vec<String>,
-    /// Resolved interface nodes from config (empty = open graph).
-    pub interface: Vec<String>,
-    /// Filesystem properties of edge targets, keyed by node identity (fragment-stripped).
-    pub target_properties: HashMap<String, TargetProperties>,
 }
 
 impl Graph {
@@ -103,22 +80,9 @@ impl Graph {
         self.nodes.insert(node.path.clone(), node);
     }
 
-    /// Returns true for File nodes (excludes External and Directory).
-    pub fn is_file_node(&self, path: &str) -> bool {
-        self.nodes
-            .get(path)
-            .is_some_and(|n| n.node_type == NodeType::File)
-    }
-
-    /// Returns true when the node was matched by `include` during discovery.
-    pub fn is_included_node(&self, path: &str) -> bool {
-        self.nodes.get(path).is_some_and(|n| n.included)
-    }
-
-    /// Returns true when both endpoints are included nodes (the edge stays
-    /// within the declared scope of the graph).
+    /// Returns true when the edge target is an included node in the graph.
     pub fn is_internal_edge(&self, edge: &Edge) -> bool {
-        self.is_included_node(&edge.source) && self.is_included_node(&edge.target)
+        self.nodes.get(&edge.target).is_some_and(|n| n.included)
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
@@ -134,9 +98,9 @@ impl Graph {
         self.edges.push(edge);
     }
 
-    /// Get filesystem properties for an edge target.
-    pub fn target_props(&self, target: &str) -> Option<&TargetProperties> {
-        self.target_properties.get(target)
+    /// Iterate over nodes that match include patterns.
+    pub fn included_nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
+        self.nodes.iter().filter(|(_, n)| n.included)
     }
 
     /// Create a new graph containing only edges from the specified parsers.
@@ -144,9 +108,6 @@ impl Graph {
     pub fn filter_by_parsers(&self, parsers: &[String]) -> Graph {
         let mut filtered = Graph {
             nodes: self.nodes.clone(),
-            child_graphs: self.child_graphs.clone(),
-            interface: self.interface.clone(),
-            target_properties: self.target_properties.clone(),
             ..Default::default()
         };
 
@@ -165,105 +126,78 @@ pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
 }
 
-/// Load a child graph's config, and if it declares an `[interface]`,
-/// add each interface file as a File node with a coupling edge
-/// to the child's Directory node.
-fn promote_interface_files(
-    root: &Path,
-    child_name: &str,
-    graph: &mut Graph,
-    implicit_edges: &mut Vec<Edge>,
-) {
-    let child_dir = root.join(child_name);
-    let config = match Config::load(&child_dir) {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    let (interface_files, interface_ignore) = match &config.interface {
-        Some(iface) => (&iface.files, &iface.ignore),
-        None => return,
-    };
-
-    // Resolve interface globs to actual files, honoring child excludes and interface ignores
-    let mut exclude_patterns = config.exclude.clone();
-    exclude_patterns.extend(interface_ignore.iter().cloned());
-
-    let included = match discover(&child_dir, interface_files, &exclude_patterns) {
-        Ok(files) => files,
-        Err(_) => return,
-    };
-
-    for file in included {
-        let node_path = format!("{child_name}/{file}");
-        if graph.nodes.contains_key(&node_path) {
-            continue;
-        }
-        let file_path = child_dir.join(&file);
-        let hash = std::fs::read(&file_path).ok().map(|c| hash_bytes(&c));
-        graph.add_node(Node {
-            path: node_path.clone(),
-            node_type: NodeType::File,
-            hash,
-            graph: Some(child_name.into()),
-            is_graph: false,
-            metadata: HashMap::new(),
-            included: false,
-        });
-        implicit_edges.push(Edge {
-            source: node_path,
-            target: child_name.into(),
-            link: None,
-            parser: String::new(),
-        });
-    }
-}
-
-/// Returns true if `target_path` resolves to a location within `canonical_root`.
-/// Uses canonicalization to resolve symlinks and normalize paths.
-/// Returns false if the path doesn't exist or escapes the root.
-fn is_within_root(target_path: &Path, canonical_root: &Path) -> bool {
-    target_path
-        .canonicalize()
-        .is_ok_and(|canonical| canonical.starts_with(canonical_root))
+/// Intermediate edge representation used before classification.
+struct PendingEdge {
+    source: String,
+    target: String,
+    link: Option<String>,
+    parser: String,
 }
 
 /// Build a graph from files in `root`.
 ///
-/// 1. Discover File nodes via `include`/`exclude` — hash raw bytes for all.
-/// 2. Read text content for parser input (graceful skip for binary files).
-/// 3. Run parsers to extract edges.
-/// 4. Edge targets outside `include` become File nodes (`included: false`).
+/// 1. Discover included nodes via `include`/`exclude` — hash raw bytes.
+/// 2. Run parsers to extract links.
+/// 3. Create referenced nodes for all edge targets not already in the graph.
+/// 4. Create filesystem edges for symlinks.
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let canonical_root = root.canonicalize()?;
     let included_files = discover(root, &config.include, &config.exclude)?;
-    let child_graphs = find_child_graphs(root, &config.exclude)?;
+    let include_globs = crate::config::compile_globs(&config.include)?;
+    let exclude_globs = crate::config::compile_globs(&config.exclude)?;
     let mut graph = Graph::new();
-    graph.child_graphs = child_graphs;
-    let mut pending_edges = Vec::new();
+    let mut pending_edges: Vec<PendingEdge> = Vec::new();
 
-    // 1. Create File nodes for everything in include — hash raw bytes.
-    //    Separately read text content for files parsers will need.
-    let mut file_text: HashMap<String, String> = HashMap::new(); // path → text content
+    // 1. Create nodes for everything in include — hash raw bytes.
+    //    Files that resolve outside the graph root (via symlink) get a
+    //    hash-less node — content is intentionally not read.
+    let mut file_text: HashMap<String, String> = HashMap::new();
 
     for file in &included_files {
         let file_path = root.join(file);
+        let is_symlink = file_path
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink());
 
-        // Safety: don't read files that resolve outside the graph root (e.g. symlinks).
-        // Still create the node so it's visible, but warn.
-        if !is_within_root(&file_path, &canonical_root) {
-            eprintln!(
-                "warn: included file '{file}' resolves outside the graph root and was not read"
-            );
-            graph.add_node(Node {
-                path: file.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                graph: Some(".".into()),
-                is_graph: false,
-                metadata: HashMap::new(),
-                included: true,
-            });
+        if is_symlink {
+            match file_path.canonicalize() {
+                Err(_) => {
+                    eprintln!("warn: symlink '{file}' could not be resolved — skipping");
+                    continue;
+                }
+                Ok(canonical) => {
+                    let should_hash = canonical.starts_with(&canonical_root)
+                        && canonical.strip_prefix(&canonical_root).is_ok_and(|rel| {
+                            let rel_str = rel.to_string_lossy().replace('\\', "/");
+                            include_globs
+                                .as_ref()
+                                .is_some_and(|set| set.is_match(rel_str.as_str()))
+                        });
+
+                    if should_hash {
+                        let raw = std::fs::read(&file_path)?;
+                        let hash = hash_bytes(&raw);
+                        graph.add_node(Node {
+                            path: file.clone(),
+                            node_type: Some(NodeType::Symlink),
+                            included: true,
+                            hash: Some(hash),
+                            metadata: HashMap::new(),
+                        });
+                        if let Ok(text) = String::from_utf8(raw) {
+                            file_text.insert(file.clone(), text);
+                        }
+                    } else {
+                        graph.add_node(Node {
+                            path: file.clone(),
+                            node_type: Some(NodeType::Symlink),
+                            included: true,
+                            hash: None,
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
+            }
             continue;
         }
 
@@ -272,21 +206,18 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
         graph.add_node(Node {
             path: file.clone(),
-            node_type: NodeType::File,
-            hash: Some(hash),
-            graph: Some(".".into()),
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(NodeType::File),
             included: true,
+            hash: Some(hash),
+            metadata: HashMap::new(),
         });
 
-        // Try to read as text for parser input — binary files just won't have text
         if let Ok(text) = String::from_utf8(raw) {
             file_text.insert(file.clone(), text);
         }
     }
 
-    // 2. Build parser registry and determine which files each parser receives
+    // 2. Build parser registry and determine which files each parser receives.
     let parser_list = parsers::build_parsers(&config.parsers, config.config_dir.as_deref(), root);
     let mut parser_files: Vec<Vec<String>> = vec![Vec::new(); parser_list.len()];
 
@@ -298,7 +229,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 3. Run each parser in batch mode
+    // 3. Run each parser in batch mode.
     for (i, parser) in parser_list.iter().enumerate() {
         let files: Vec<(&str, &str)> = parser_files[i]
             .iter()
@@ -316,7 +247,6 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         let batch_results = parser.parse_batch(&files);
 
         for (file, result) in batch_results {
-            // Attach metadata to node if parser returned it
             if let Some(metadata) = result.metadata
                 && let Some(node) = graph.nodes.get_mut(&file)
             {
@@ -326,7 +256,7 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             for link in result.links {
                 let normalized = match normalize_link_target(&link) {
                     Some(n) => n,
-                    None => continue, // filtered (empty, anchor-only)
+                    None => continue,
                 };
 
                 let target = if is_uri(&normalized.target) {
@@ -334,9 +264,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 } else {
                     resolve_link(&file, &normalized.target)
                 };
-                // link carries the full original when it has a fragment
                 let link = normalized.fragment.map(|frag| format!("{target}{frag}"));
-                pending_edges.push(Edge {
+                pending_edges.push(PendingEdge {
                     source: file.clone(),
                     target,
                     link,
@@ -346,244 +275,133 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 4. Edge-driven node creation.
-    //    Child graph directories are NOT pre-created — they only get nodes when
-    //    an edge references them or a file inside them. This keeps the model
-    //    uniform: edges create nodes, discovery creates files.
-    let graph_prefixes: Vec<String> = graph.child_graphs.clone();
-
-    // 5. Classify edge targets not already in the graph.
-    //    edge.target is already the node identity (fragment-stripped).
-    //    graph field uses filesystem-relative convention:
-    //      "."           — belongs to current graph
-    //      ".."          — escaped to parent graph
-    //      "research"    — belongs to child graph "research"
-    //      None          — not on the filesystem (URI)
-    let mut implicit_edges = Vec::new();
-    for edge in &pending_edges {
-        if graph.nodes.contains_key(&edge.target) {
+    // 4. Create referenced nodes for edge targets not already in the graph.
+    //    Stat non-URI targets within root to determine their type.
+    for pending in &pending_edges {
+        if graph.nodes.contains_key(&pending.target) {
             continue;
         }
-
-        // URIs → External (not on filesystem)
-        if is_uri(&edge.target) {
+        if is_uri(&pending.target) {
             graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::External,
+                path: pending.target.clone(),
+                node_type: Some(NodeType::Uri),
+                included: false,
                 hash: None,
-                graph: None,
-                is_graph: false,
                 metadata: HashMap::new(),
-                included: false,
             });
             continue;
         }
-
-        let target_path = root.join(&edge.target);
-
-        // Safety: targets that logically escape the graph root (../, absolute paths)
-        // get a node but no filesystem access. Prevents directory traversal.
-        // Non-existent targets within root fall through to normal classification
-        // (no node created = dangling-edge).
-        let escapes_root =
-            edge.target.starts_with("../") || edge.target == ".." || edge.target.starts_with('/');
-        if escapes_root {
-            let graph_field = if edge.target.starts_with("../") || edge.target == ".." {
-                Some("..".into())
-            } else {
-                None
-            };
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                graph: graph_field,
-                is_graph: false,
-                metadata: HashMap::new(),
-                included: false,
-            });
-            continue;
-        }
-
-        // From here: target is logically within root.
-        // Symlink check: verify the resolved path stays within root before any filesystem access.
-        if target_path.exists() && !is_within_root(&target_path, &canonical_root) {
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash: None,
-                graph: Some(".".into()),
-                is_graph: false,
-                metadata: HashMap::new(),
-                included: false,
-            });
-            continue;
-        }
-
-        // Determine which graph this target belongs to.
-        // (../ and absolute paths already handled by escapes_root above)
-        let graph_field = graph_prefixes
-            .iter()
-            .find(|s| edge.target.starts_with(&format!("{s}/")))
-            .cloned();
-
-        // Child graph target
-        if let Some(ref membership) = graph_field {
-            if target_path.is_file() {
-                let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
-                graph.add_node(Node {
-                    path: edge.target.clone(),
-                    node_type: NodeType::File,
-                    hash,
-                    graph: Some(membership.clone()),
-                    is_graph: false,
-                    metadata: HashMap::new(),
-                    included: false,
-                });
-                // Ensure Directory node exists + coupling edge
-                if !graph.nodes.contains_key(membership.as_str()) {
-                    let child_dir = root.join(membership);
-                    let config_hash = std::fs::read(child_dir.join("drft.toml"))
-                        .ok()
-                        .map(|c| hash_bytes(&c));
-                    graph.add_node(Node {
-                        path: membership.clone(),
-                        node_type: NodeType::Directory,
-                        hash: config_hash,
-                        graph: Some(".".into()),
-                        is_graph: true,
-                        metadata: HashMap::new(),
-                        included: false,
-                    });
-                    promote_interface_files(root, membership, &mut graph, &mut implicit_edges);
-                }
-                implicit_edges.push(Edge {
-                    source: edge.target.clone(),
-                    target: membership.clone(),
-                    link: None,
-                    parser: edge.parser.clone(),
-                });
-            } else if target_path.is_dir() {
-                let has_config = target_path.join("drft.toml").exists();
-                graph.add_node(Node {
-                    path: edge.target.clone(),
-                    node_type: NodeType::Directory,
-                    hash: None,
-                    graph: Some(membership.clone()),
-                    is_graph: has_config,
-                    metadata: HashMap::new(),
-                    included: false,
-                });
-            }
-            // If target doesn't exist: no node created. dangling-edge handles it.
-            continue;
-        }
-
-        // Local target (within current graph scope)
-
-        // Directory on disk → Directory node
-        if target_path.is_dir() {
-            let has_config = target_path.join("drft.toml").exists();
-            let hash = if has_config {
-                std::fs::read(target_path.join("drft.toml"))
-                    .ok()
-                    .map(|c| hash_bytes(&c))
-            } else {
-                None
-            };
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::Directory,
-                hash,
-                graph: Some(".".into()),
-                is_graph: has_config,
-                metadata: HashMap::new(),
-                included: false,
-            });
-            if has_config {
-                promote_interface_files(root, &edge.target, &mut graph, &mut implicit_edges);
-            }
-            continue;
-        }
-
-        // File exists on disk but not in include → File (local, not tracked)
-        if target_path.is_file() {
-            let hash = std::fs::read(&target_path).ok().map(|c| hash_bytes(&c));
-            graph.add_node(Node {
-                path: edge.target.clone(),
-                node_type: NodeType::File,
-                hash,
-                graph: Some(".".into()),
-                is_graph: false,
-                metadata: HashMap::new(),
-                included: false,
-            });
-        }
-        // If doesn't exist: no node created. dangling-edge rule handles this.
-    }
-
-    // Probe filesystem properties for non-URI edge targets (stored per-target, not per-edge).
-    // Only probe targets within the graph root — no filesystem access for escaped targets.
-    pending_edges.extend(implicit_edges);
-    for edge in &pending_edges {
-        if is_uri(&edge.target) || graph.target_properties.contains_key(&edge.target) {
-            continue;
-        }
-        let target_path = root.join(&edge.target);
-        if !is_within_root(&target_path, &canonical_root) {
-            continue;
-        }
-        let is_symlink = target_path.is_symlink();
-        let is_directory = target_path.is_dir();
-        let symlink_target = if is_symlink {
-            std::fs::read_link(&target_path)
-                .ok()
-                .map(|p| p.to_string_lossy().to_string())
-        } else {
+        // Stat non-URI targets to determine type. Skip absolute paths and
+        // paths escaping root — don't probe outside the graph root.
+        let escapes_root = Path::new(&pending.target)
+            .components()
+            .next()
+            .is_some_and(|c| matches!(c, std::path::Component::ParentDir));
+        let is_absolute = Path::new(&pending.target).is_absolute();
+        let node_type = if is_absolute || escapes_root {
             None
+        } else {
+            let target_path = root.join(&pending.target);
+            target_path.symlink_metadata().ok().map(|m| {
+                if m.file_type().is_symlink() {
+                    NodeType::Symlink
+                } else if m.is_dir() {
+                    NodeType::Directory
+                } else {
+                    NodeType::File
+                }
+            })
         };
-        graph.target_properties.insert(
-            edge.target.clone(),
-            TargetProperties {
-                is_symlink,
-                is_directory,
-                symlink_target,
-            },
-        );
+        // A target that matches include && !exclude is included even if it
+        // doesn't exist on disk — that's a broken link in scope.
+        // Paths escaping the root or absolute paths are never included.
+        let matches_include = !escapes_root
+            && !is_absolute
+            && include_globs
+                .as_ref()
+                .is_some_and(|set| set.is_match(&pending.target));
+        let matches_exclude = exclude_globs
+            .as_ref()
+            .is_some_and(|set| set.is_match(&pending.target));
+        let included = matches_include && !matches_exclude;
+        graph.add_node(Node {
+            path: pending.target.clone(),
+            node_type,
+            included,
+            hash: None,
+            metadata: HashMap::new(),
+        });
     }
 
-    // Add all edges (explicit + implicit) to the graph.
-    for edge in pending_edges {
-        graph.add_edge(edge);
-    }
-
-    // Resolve interface from config (files included, ignore excluded)
-    if let Some(ref iface) = config.interface {
-        let ignore_set = crate::config::compile_globs(&iface.ignore)?;
-
-        let mut resolved = Vec::new();
-        for pattern in &iface.files {
-            if let Ok(glob) = globset::Glob::new(pattern) {
-                let matcher = glob.compile_matcher();
-                for path in graph.nodes.keys() {
-                    if matcher.is_match(path) {
-                        resolved.push(path.clone());
-                    }
+    // 5. Create filesystem edges for symlinks in include.
+    //    A symlink is a link — model it as an edge with "filesystem" provenance.
+    for file in &included_files {
+        let file_path = root.join(file);
+        if !file_path
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
+            continue;
+        }
+        if let Ok(link_target) = std::fs::read_link(&file_path) {
+            // If the symlink target is absolute, resolve it relative to root.
+            // If it's outside root, canonicalize and make relative if possible.
+            let resolved = if link_target.is_absolute() {
+                match link_target.canonicalize() {
+                    Ok(canonical) => match canonical.strip_prefix(&canonical_root) {
+                        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+                        Err(_) => continue, // symlink escapes root — skip filesystem edge
+                    },
+                    Err(_) => continue, // broken absolute symlink — skip
                 }
             } else {
-                if graph.nodes.contains_key(pattern) {
-                    resolved.push(pattern.clone());
-                }
+                resolve_link(file, &link_target.to_string_lossy())
+            };
+            // Skip filesystem edges for targets that escape root
+            let resolved_escapes = Path::new(&resolved)
+                .components()
+                .next()
+                .is_some_and(|c| matches!(c, std::path::Component::ParentDir));
+            if resolved_escapes {
+                continue;
             }
+            // Ensure the resolved target is a node
+            if !graph.nodes.contains_key(&resolved) {
+                let resolved_path = root.join(&resolved);
+                let node_type = resolved_path.symlink_metadata().ok().map(|m| {
+                    if m.file_type().is_symlink() {
+                        NodeType::Symlink
+                    } else if m.is_dir() {
+                        NodeType::Directory
+                    } else {
+                        NodeType::File
+                    }
+                });
+                graph.add_node(Node {
+                    path: resolved.clone(),
+                    node_type,
+                    included: false,
+                    hash: None,
+                    metadata: HashMap::new(),
+                });
+            }
+            graph.add_edge(Edge {
+                source: file.clone(),
+                target: resolved,
+                link: None,
+                parser: "filesystem".into(),
+            });
         }
+    }
 
-        if let Some(ref ignore) = ignore_set {
-            resolved.retain(|p| !ignore.is_match(p));
-        }
-
-        resolved.sort();
-        resolved.dedup();
-        graph.interface = resolved;
+    // 6. Attach pending edges.
+    for pending in pending_edges {
+        graph.add_edge(Edge {
+            source: pending.source,
+            target: pending.target,
+            link: pending.link,
+            parser: pending.parser,
+        });
     }
 
     Ok(graph)
@@ -667,12 +485,10 @@ pub mod test_helpers {
     pub fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: Some(".".into()),
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(NodeType::File),
             included: true,
+            hash: None,
+            metadata: HashMap::new(),
         }
     }
 
@@ -761,30 +577,9 @@ mod tests {
     #[test]
     fn graph_adjacency() {
         let mut g = Graph::new();
-        g.add_node(Node {
-            path: "a.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
-            included: false,
-        });
-        g.add_node(Node {
-            path: "b.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
-            included: false,
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        g.add_node(test_helpers::make_node("a.md"));
+        g.add_node(test_helpers::make_node("b.md"));
+        g.add_edge(test_helpers::make_edge("a.md", "b.md"));
         assert_eq!(g.forward["a.md"], vec![0]);
         assert_eq!(g.reverse["b.md"], vec![0]);
         assert!(!g.forward.contains_key("b.md"));
@@ -873,24 +668,23 @@ mod tests {
         assert!(n.fragment.is_none());
     }
 
+    fn edge_with_parser(source: &str, target: &str, parser: &str) -> Edge {
+        Edge {
+            source: source.into(),
+            target: target.into(),
+            link: None,
+            parser: parser.into(),
+        }
+    }
+
     #[test]
     fn filter_by_single_parser() {
         let mut g = Graph::new();
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.edges.len(), 1);
@@ -903,12 +697,7 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.nodes.len(), 2);
@@ -923,18 +712,8 @@ mod tests {
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["frontmatter".into()]);
         assert_eq!(filtered.forward["a.md"], vec![0]);
@@ -948,18 +727,8 @@ mod tests {
         g.add_node(test_helpers::make_node("a.md"));
         g.add_node(test_helpers::make_node("b.md"));
         g.add_node(test_helpers::make_node("c.md"));
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "b.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
-        g.add_edge(Edge {
-            source: "a.md".into(),
-            target: "c.md".into(),
-            link: None,
-            parser: "frontmatter".into(),
-        });
+        g.add_edge(edge_with_parser("a.md", "b.md", "markdown"));
+        g.add_edge(edge_with_parser("a.md", "c.md", "frontmatter"));
 
         let filtered = g.filter_by_parsers(&["markdown".into(), "frontmatter".into()]);
         assert_eq!(filtered.edges.len(), 2);

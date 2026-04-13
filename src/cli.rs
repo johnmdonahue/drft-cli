@@ -34,14 +34,6 @@ pub enum Commands {
         /// Verify lockfile is up to date without writing
         #[arg(long)]
         check: bool,
-
-        /// Lock child graphs recursively (bottom-up)
-        #[arg(long, short = 'r')]
-        recursive: bool,
-
-        /// Max graph nesting depth for --recursive
-        #[arg(long, requires = "recursive")]
-        max_depth: Option<usize>,
     },
 
     /// Show raw parser output (edges and metadata)
@@ -53,14 +45,6 @@ pub enum Commands {
 
     /// Export the dependency graph
     Graph {
-        /// Include child graphs
-        #[arg(long, short = 'r')]
-        recursive: bool,
-
-        /// Max graph nesting depth for --recursive
-        #[arg(long, requires = "recursive")]
-        max_depth: Option<usize>,
-
         /// Output as GraphViz DOT
         #[arg(long)]
         dot: bool,
@@ -99,14 +83,6 @@ pub enum Commands {
         #[arg(long = "rule")]
         rules: Vec<String>,
 
-        /// Check child graphs recursively
-        #[arg(long, short = 'r')]
-        recursive: bool,
-
-        /// Max graph nesting depth for --recursive
-        #[arg(long, requires = "recursive")]
-        max_depth: Option<usize>,
-
         /// Watch for changes and re-check
         #[arg(long, short = 'w')]
         watch: bool,
@@ -116,15 +92,7 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum ConfigAction {
     /// Print the resolved configuration (defaults filled in)
-    Show {
-        /// Show config for each graph in the tree
-        #[arg(long, short = 'r')]
-        recursive: bool,
-
-        /// Max graph nesting depth for --recursive
-        #[arg(long, requires = "recursive")]
-        max_depth: Option<usize>,
-    },
+    Show,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

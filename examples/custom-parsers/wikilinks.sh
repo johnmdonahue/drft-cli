@@ -4,7 +4,7 @@
 # Usage in drft.toml:
 #
 #   [parsers.wikilinks]
-#   files = ["*.md"]
+#   files = ["**/*.md"]
 #   command = "./examples/custom-parsers/wikilinks.sh"
 #
 # Protocol:

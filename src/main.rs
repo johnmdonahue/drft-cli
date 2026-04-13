@@ -13,7 +13,7 @@ use drft::rules;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
 use config::{Config, RuleSeverity};
@@ -69,58 +69,23 @@ fn try_main() -> Result<i32> {
     match &cli.command {
         Commands::Init => run_init(&root),
         Commands::Config { action } => match action {
-            ConfigAction::Show {
-                recursive,
-                max_depth,
-            } => run_config_show(&root, cli.format, *recursive, *max_depth),
+            ConfigAction::Show => run_config_show(&root, cli.format),
         },
-        Commands::Lock {
-            check,
-            recursive,
-            max_depth,
-        } => run_lock(&root, *check, *recursive, *max_depth),
+        Commands::Lock { check } => run_lock(&root, *check),
         Commands::Report { names } => run_report(&root, cli.format, names),
         Commands::Impact { files, parser } => {
             run_impact(&root, cli.format, files, parser.as_deref())
         }
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
-        Commands::Graph {
-            recursive,
-            max_depth,
-            dot,
-            parser,
-        } => run_graph(
-            &root,
-            cli.format,
-            *recursive,
-            *max_depth,
-            *dot,
-            parser.as_deref(),
-        ),
+        Commands::Graph { dot, parser } => run_graph(&root, cli.format, *dot, parser.as_deref()),
         Commands::Check {
             rules: rule_filter,
-            recursive,
-            max_depth,
             watch,
         } => {
             if *watch {
-                run_check_watch(
-                    &root,
-                    cli.format,
-                    cli.color,
-                    rule_filter,
-                    *recursive,
-                    *max_depth,
-                )
+                run_check_watch(&root, cli.format, cli.color, rule_filter)
             } else {
-                run_check(
-                    &root,
-                    cli.format,
-                    cli.color,
-                    rule_filter,
-                    *recursive,
-                    *max_depth,
-                )
+                run_check(&root, cli.format, cli.color, rule_filter)
             }
         }
     }
@@ -134,24 +99,21 @@ fn run_init(root: &Path) -> Result<i32> {
 
     let content = r#"# drft.toml
 
-# Which paths become File nodes (default: ["*.md"])
-include = ["*.md"]
+# Which paths become nodes (default: ["**/*.md"])
+include = ["**/*.md"]
 
 # Remove from the graph (also respects .gitignore)
 # exclude = []
 
 [parsers.markdown]
-# files = ["*.md"]   # uncomment to restrict (receives all included files by default)
+# files = ["**/*.md"]   # uncomment to restrict (receives all included files by default)
 
 # [parsers.frontmatter]
-# files = ["*.md"]   # frontmatter link extraction + metadata
+# files = ["**/*.md"]   # frontmatter link extraction + metadata
 
 [rules]
 # All rules default to warn. Override only what you need.
 # stale = "error"  # recommended for LLM workflows and CI
-
-# [interface]
-# files = ["overview.md", "api/*.md"]
 "#;
 
     std::fs::write(&config_path, content)
@@ -160,133 +122,22 @@ include = ["*.md"]
     Ok(0)
 }
 
-fn run_config_show(
-    root: &Path,
-    format: OutputFormat,
-    recursive: bool,
-    max_depth: Option<usize>,
-) -> Result<i32> {
-    if recursive {
-        match format {
-            OutputFormat::Json => {
-                let mut entries = Vec::new();
-                collect_configs_recursive(root, ".", max_depth, &mut entries)?;
-                println!("{}", serde_json::to_string_pretty(&entries)?);
-            }
-            OutputFormat::Text => {
-                print_configs_recursive(root, ".", max_depth, true)?;
-            }
+fn run_config_show(root: &Path, format: OutputFormat) -> Result<i32> {
+    let config = Config::load(root)?;
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&config)?);
         }
-    } else {
-        let config = Config::load(root)?;
-        match format {
-            OutputFormat::Json => {
-                println!("{}", serde_json::to_string_pretty(&config)?);
-            }
-            OutputFormat::Text => {
-                let toml_str = toml::to_string_pretty(&config)
-                    .context("failed to serialize config as TOML")?;
-                print!("{}", toml_str);
-            }
+        OutputFormat::Text => {
+            let toml_str =
+                toml::to_string_pretty(&config).context("failed to serialize config as TOML")?;
+            print!("{}", toml_str);
         }
     }
     Ok(0)
 }
 
-fn normalize_label(root: &Path, child_dir: &Path) -> String {
-    child_dir
-        .strip_prefix(root)
-        .unwrap_or(child_dir)
-        .to_string_lossy()
-        .replace('\\', "/")
-}
-
-fn collect_configs_recursive(
-    root: &Path,
-    label: &str,
-    max_depth: Option<usize>,
-    entries: &mut Vec<serde_json::Value>,
-) -> Result<()> {
-    let config = Config::load(root)?;
-    let mut value = serde_json::to_value(&config)?;
-    if let serde_json::Value::Object(ref mut map) = value {
-        map.insert("path".to_string(), serde_json::json!(label));
-    }
-    entries.push(value);
-
-    if max_depth == Some(0) {
-        return Ok(());
-    }
-
-    let next_depth = max_depth.map(|d| d.saturating_sub(1));
-    let child_graphs = find_lockable_graphs(root)?;
-    for child_dir in &child_graphs {
-        let relative = normalize_label(root, child_dir);
-        let child_label = if label == "." {
-            relative
-        } else {
-            format!("{label}/{relative}")
-        };
-        collect_configs_recursive(child_dir, &child_label, next_depth, entries)?;
-    }
-    Ok(())
-}
-
-fn print_configs_recursive(
-    root: &Path,
-    label: &str,
-    max_depth: Option<usize>,
-    first: bool,
-) -> Result<()> {
-    let config = Config::load(root)?;
-    if !first {
-        println!();
-    }
-    println!("# {}", label);
-    let toml_str = toml::to_string_pretty(&config).context("failed to serialize config as TOML")?;
-    print!("{}", toml_str);
-
-    if max_depth == Some(0) {
-        return Ok(());
-    }
-
-    let next_depth = max_depth.map(|d| d.saturating_sub(1));
-    let child_graphs = find_lockable_graphs(root)?;
-    for child_dir in &child_graphs {
-        let relative = normalize_label(root, child_dir);
-        let child_label = if label == "." {
-            relative
-        } else {
-            format!("{label}/{relative}")
-        };
-        print_configs_recursive(child_dir, &child_label, next_depth, false)?;
-    }
-    Ok(())
-}
-
-fn run_lock(
-    root: &Path,
-    check_mode: bool,
-    recursive: bool,
-    max_depth: Option<usize>,
-) -> Result<i32> {
-    // Recursive: lock child graphs bottom-up first
-    if recursive && max_depth != Some(0) {
-        let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        let child_graphs = find_lockable_graphs(root)?;
-        for child_dir in &child_graphs {
-            let code = run_lock(child_dir, check_mode, true, next_depth)?;
-            if check_mode && code != 0 {
-                return Ok(code);
-            }
-        }
-    }
-
-    // Lock this graph
-    lock_graph(root, check_mode)
-}
-
-fn lock_graph(root: &Path, check_mode: bool) -> Result<i32> {
+fn run_lock(root: &Path, check_mode: bool) -> Result<i32> {
     let config = Config::load(root)?;
     let graph = build_graph(root, &config)?;
 
@@ -354,10 +205,6 @@ fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i3
         ),
         ("degree", serde_json::to_value(&enriched.degree)?),
         ("depth", serde_json::to_value(&enriched.depth)?),
-        (
-            "graph-boundaries",
-            serde_json::to_value(&enriched.graph_boundaries)?,
-        ),
         ("graph-stats", serde_json::to_value(&enriched.graph_stats)?),
         (
             "impact-radius",
@@ -596,50 +443,23 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
     Ok(0)
 }
 
-fn run_graph(
-    root: &Path,
-    _format: OutputFormat,
-    recursive: bool,
-    max_depth: Option<usize>,
-    dot: bool,
-    parser: Option<&str>,
-) -> Result<i32> {
+fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>) -> Result<i32> {
     let graph_root = find_graph_root(root);
+    let export = collect_jgf_graph(&graph_root, parser)?;
 
     if dot {
-        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth, parser)?;
         println!("digraph {{");
-        let mut all_nodes = Vec::new();
-        let mut all_edges = Vec::new();
-        for g in &graphs {
-            let prefix = if g.id == "." { "" } else { g.id.as_str() };
-            for NodeExport { path, .. } in &g.nodes {
-                let full = if prefix.is_empty() {
-                    path.clone()
-                } else {
-                    format!("{prefix}{path}")
-                };
-                all_nodes.push(full);
-            }
-            for (source, target, _, _) in &g.edges {
-                let fs = if prefix.is_empty() {
-                    source.clone()
-                } else {
-                    format!("{prefix}{source}")
-                };
-                let ft = if prefix.is_empty() {
-                    target.clone()
-                } else {
-                    format!("{prefix}{target}")
-                };
-                all_edges.push((fs, ft));
-            }
-        }
+        let mut all_nodes: Vec<&str> = export.nodes.iter().map(|n| n.path.as_str()).collect();
         all_nodes.sort();
         all_nodes.dedup();
         for path in &all_nodes {
             println!("  \"{path}\"");
         }
+        let mut all_edges: Vec<(&str, &str)> = export
+            .edges
+            .iter()
+            .map(|e| (e.source.as_str(), e.target.as_str()))
+            .collect();
         all_edges.sort();
         all_edges.dedup();
         for (source, target) in &all_edges {
@@ -648,95 +468,55 @@ fn run_graph(
         println!("}}");
     } else {
         // JSON Graph Format (JGF)
-        let graphs = collect_jgf_graphs(&graph_root, ".", recursive, max_depth, parser)?;
+        let mut nodes = serde_json::Map::new();
+        let mut sorted: Vec<&NodeExport> = export.nodes.iter().collect();
+        sorted.sort_by(|a, b| a.path.cmp(&b.path));
+        for n in &*sorted {
+            let mut meta = serde_json::Map::new();
+            if let Some(nt) = &n.node_type {
+                meta.insert("type".into(), serde_json::json!(nt));
+            }
+            meta.insert("included".into(), serde_json::json!(n.included));
+            if let Some(h) = &n.hash {
+                meta.insert("hash".into(), serde_json::json!(h));
+            }
+            let mut metadata_keys: Vec<&String> = n.metadata.keys().collect();
+            metadata_keys.sort();
+            for key in metadata_keys {
+                meta.insert(key.clone(), n.metadata[key].clone());
+            }
+            nodes.insert(n.path.clone(), serde_json::json!({ "metadata": meta }));
+        }
 
-        let jgf_graphs: Vec<serde_json::Value> = graphs
+        let mut edges: Vec<serde_json::Value> = export
+            .edges
             .iter()
-            .map(|g| {
-                let mut nodes = serde_json::Map::new();
-                let mut sorted: Vec<&NodeExport> = g.nodes.iter().collect();
-                sorted.sort_by(|a, b| a.path.cmp(&b.path));
-                // Build a lookup for included status to compute edge.internal
-                let included: std::collections::HashSet<&str> = g
-                    .nodes
-                    .iter()
-                    .filter(|n| n.included)
-                    .map(|n| n.path.as_str())
-                    .collect();
-                for n in &*sorted {
-                    let mut meta = serde_json::Map::new();
-                    meta.insert("type".into(), serde_json::json!(n.node_type));
-                    if let Some(h) = &n.hash {
-                        meta.insert("hash".into(), serde_json::json!(h));
-                    }
-                    if let Some(gr) = &n.graph {
-                        meta.insert("graph".into(), serde_json::json!(gr));
-                    }
-                    if n.is_graph {
-                        meta.insert("is_graph".into(), serde_json::json!(true));
-                    }
-                    meta.insert("included".into(), serde_json::json!(n.included));
-                    let mut metadata_keys: Vec<&String> = n.metadata.keys().collect();
-                    metadata_keys.sort();
-                    for key in metadata_keys {
-                        meta.insert(key.clone(), n.metadata[key].clone());
-                    }
-                    nodes.insert(n.path.clone(), serde_json::json!({ "metadata": meta }));
+            .map(|e| {
+                let mut meta = serde_json::Map::new();
+                meta.insert("parser".into(), serde_json::json!(e.parser));
+                if let Some(ref r) = e.link {
+                    meta.insert("link".into(), serde_json::json!(r));
                 }
-
-                let mut edges: Vec<serde_json::Value> = g
-                    .edges
-                    .iter()
-                    .map(|(source, target, reference, parser)| {
-                        let internal = included.contains(source.as_str())
-                            && included.contains(target.as_str());
-                        let mut meta = serde_json::Map::new();
-                        meta.insert("parser".into(), serde_json::json!(parser));
-                        meta.insert("internal".into(), serde_json::json!(internal));
-                        if let Some(r) = reference {
-                            meta.insert("link".into(), serde_json::json!(r));
-                        }
-                        serde_json::json!({
-                            "source": source,
-                            "target": target,
-                            "metadata": meta,
-                        })
-                    })
-                    .collect();
-                edges.sort_by(|a, b| {
-                    a["source"]
-                        .as_str()
-                        .cmp(&b["source"].as_str())
-                        .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
-                });
-
-                let mut graph_meta = serde_json::Map::new();
-                if !g.interface.is_empty() {
-                    graph_meta.insert("interface".into(), serde_json::json!(g.interface));
-                }
-                if !g.target_properties.is_empty() {
-                    let sorted: std::collections::BTreeMap<&String, &graph::TargetProperties> =
-                        g.target_properties.iter().collect();
-                    graph_meta.insert("target_properties".into(), serde_json::json!(sorted));
-                }
-
-                let mut graph_obj = serde_json::Map::new();
-                graph_obj.insert("id".into(), serde_json::json!(g.id));
-                graph_obj.insert("directed".into(), serde_json::json!(true));
-                if !graph_meta.is_empty() {
-                    graph_obj.insert("metadata".into(), serde_json::Value::Object(graph_meta));
-                }
-                graph_obj.insert("nodes".into(), serde_json::json!(nodes));
-                graph_obj.insert("edges".into(), serde_json::json!(edges));
-                serde_json::Value::Object(graph_obj)
+                serde_json::json!({
+                    "source": e.source,
+                    "target": e.target,
+                    "metadata": meta,
+                })
             })
             .collect();
+        edges.sort_by(|a, b| {
+            a["source"]
+                .as_str()
+                .cmp(&b["source"].as_str())
+                .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
+        });
 
-        let output = if jgf_graphs.len() == 1 {
-            serde_json::json!({ "graph": jgf_graphs[0] })
-        } else {
-            serde_json::json!({ "graphs": jgf_graphs })
-        };
+        let mut graph_obj = serde_json::Map::new();
+        graph_obj.insert("directed".into(), serde_json::json!(true));
+        graph_obj.insert("nodes".into(), serde_json::json!(nodes));
+        graph_obj.insert("edges".into(), serde_json::json!(edges));
+
+        let output = serde_json::json!({ "graph": serde_json::Value::Object(graph_obj) });
         println!("{}", serde_json::to_string_pretty(&output)?);
     }
 
@@ -745,30 +525,26 @@ fn run_graph(
 
 struct NodeExport {
     path: String,
-    node_type: graph::NodeType,
-    hash: Option<String>,
-    graph: Option<String>,
-    is_graph: bool,
+    node_type: Option<graph::NodeType>,
     included: bool,
+    hash: Option<String>,
     metadata: HashMap<String, serde_json::Value>,
 }
 
-struct GraphExport {
-    id: String,
-    nodes: Vec<NodeExport>,
-    edges: Vec<(String, String, Option<String>, String)>, // source, target (node ID), reference, parser
-    interface: Vec<String>,
-    target_properties: HashMap<String, graph::TargetProperties>,
+struct EdgeExport {
+    source: String,
+    target: String,
+    link: Option<String>,
+    parser: String,
 }
 
-/// Collect JGF graph(s) from a graph root and optionally its children.
-fn collect_jgf_graphs(
-    root: &Path,
-    id: &str,
-    recursive: bool,
-    max_depth: Option<usize>,
-    parser: Option<&str>,
-) -> Result<Vec<GraphExport>> {
+struct GraphExport {
+    nodes: Vec<NodeExport>,
+    edges: Vec<EdgeExport>,
+}
+
+/// Collect a JGF export for a single graph root.
+fn collect_jgf_graph(root: &Path, parser: Option<&str>) -> Result<GraphExport> {
     let config = Config::load(root)?;
     let g = build_graph(root, &config)?;
     let g = if let Some(name) = parser {
@@ -791,54 +567,24 @@ fn collect_jgf_graphs(
         .map(|(path, node)| NodeExport {
             path: path.clone(),
             node_type: node.node_type,
-            hash: node.hash.clone(),
-            graph: node.graph.clone(),
-            is_graph: node.is_graph,
             included: node.included,
+            hash: node.hash.clone(),
             metadata: node.metadata.clone(),
         })
         .collect();
 
-    let edges: Vec<(String, String, Option<String>, String)> = g
+    let edges: Vec<EdgeExport> = g
         .edges
         .iter()
-        .filter(|e| g.nodes.contains_key(&e.target))
-        .map(|e| {
-            (
-                e.source.clone(),
-                e.target.clone(),
-                e.link.clone(),
-                e.parser.clone(),
-            )
+        .map(|e| EdgeExport {
+            source: e.source.clone(),
+            target: e.target.clone(),
+            link: e.link.clone(),
+            parser: e.parser.clone(),
         })
         .collect();
 
-    let interface = g.interface.clone();
-    let target_properties = g.target_properties.clone();
-
-    let mut graphs = vec![GraphExport {
-        id: id.to_string(),
-        nodes,
-        edges,
-        interface,
-        target_properties,
-    }];
-
-    if recursive && max_depth != Some(0) {
-        let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_graph in &g.child_graphs {
-            let child_dir = root.join(child_graph);
-            let child_id = if id == "." {
-                child_graph.clone()
-            } else {
-                format!("{id}/{child_graph}")
-            };
-            let sub_graphs = collect_jgf_graphs(&child_dir, &child_id, true, next_depth, parser)?;
-            graphs.extend(sub_graphs);
-        }
-    }
-
-    Ok(graphs)
+    Ok(GraphExport { nodes, edges })
 }
 
 fn run_impact(
@@ -870,11 +616,15 @@ fn run_impact(
     // Resolve file args (try with .md extension if not found)
     let mut seeds: Vec<String> = Vec::new();
     for file in files {
-        if graph.nodes.contains_key(file.as_str()) {
+        if graph.nodes.get(file.as_str()).is_some_and(|n| n.included) {
             seeds.push(file.clone());
         } else {
             let with_ext = format!("{file}.md");
-            if graph.nodes.contains_key(with_ext.as_str()) {
+            if graph
+                .nodes
+                .get(with_ext.as_str())
+                .is_some_and(|n| n.included)
+            {
                 seeds.push(with_ext);
             } else {
                 anyhow::bail!("node not found: \"{file}\"");
@@ -981,8 +731,6 @@ fn run_check(
     format: OutputFormat,
     color: ColorChoice,
     rule_filter: &[String],
-    recursive: bool,
-    max_depth: Option<usize>,
 ) -> Result<i32> {
     // Validate rule names (built-in + custom rules from config)
     let graph_root = find_graph_root(root);
@@ -1000,36 +748,20 @@ fn run_check(
         }
     }
 
-    let mut diagnostics = check_graph(&graph_root, rule_filter, None, recursive, max_depth)?;
+    let mut diagnostics = check_graph(&graph_root, rule_filter)?;
 
     diagnostics.sort_by(|a, b| {
-        a.graph
-            .cmp(&b.graph)
-            .then_with(|| a.rule.cmp(&b.rule))
+        a.rule
+            .cmp(&b.rule)
             .then_with(|| a.source.cmp(&b.source))
             .then_with(|| a.target.cmp(&b.target))
             .then_with(|| a.node.cmp(&b.node))
     });
 
     let colorize = use_color(color, format);
-    let mut current_graph: Option<&Option<String>> = None;
     for d in &diagnostics {
         match format {
             OutputFormat::Text => {
-                // Print graph header when graph changes
-                if current_graph != Some(&d.graph) {
-                    if let Some(g) = &d.graph {
-                        if current_graph.is_some() {
-                            println!();
-                        }
-                        if colorize {
-                            println!("\x1b[1m[{g}]\x1b[0m");
-                        } else {
-                            println!("[{g}]");
-                        }
-                    }
-                    current_graph = Some(&d.graph);
-                }
                 if colorize {
                     println!("{}", d.format_text_color());
                 } else {
@@ -1079,8 +811,6 @@ fn run_check_watch(
     format: OutputFormat,
     color: ColorChoice,
     rule_filter: &[String],
-    recursive: bool,
-    max_depth: Option<usize>,
 ) -> Result<i32> {
     use notify_debouncer_mini::{DebouncedEventKind, new_debouncer};
     use std::sync::mpsc;
@@ -1090,7 +820,7 @@ fn run_check_watch(
 
     // Initial run
     print!("\x1b[2J\x1b[H"); // clear screen
-    let _ = run_check(root, format, color, rule_filter, recursive, max_depth);
+    let _ = run_check(root, format, color, rule_filter);
     eprintln!("\n\x1b[2m--- watching for changes (ctrl-c to stop) ---\x1b[0m");
 
     let (tx, rx) = mpsc::channel();
@@ -1118,7 +848,7 @@ fn run_check_watch(
                 }
 
                 print!("\x1b[2J\x1b[H"); // clear screen
-                let _ = run_check(root, format, color, rule_filter, recursive, max_depth);
+                let _ = run_check(root, format, color, rule_filter);
                 eprintln!("\n\x1b[2m--- watching for changes (ctrl-c to stop) ---\x1b[0m");
             }
             Ok(Err(e)) => {
@@ -1131,45 +861,7 @@ fn run_check_watch(
     Ok(0)
 }
 
-/// Find subdirectories that are lockable graphs (have drft.toml).
-/// Returns absolute paths, sorted, shallowest first. Does not recurse past graph boundaries.
-/// Respects .gitignore.
-fn find_lockable_graphs(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut graphs = Vec::new();
-    let mut found: Vec<PathBuf> = Vec::new();
-    let root_owned = root.to_path_buf();
-
-    let walker = ignore::WalkBuilder::new(root)
-        .follow_links(true)
-        .sort_by_file_name(|a, b| a.cmp(b))
-        .filter_entry(move |entry| {
-            entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.path() != root_owned
-                || entry.path() == root_owned
-        })
-        .build();
-
-    for entry in walker.filter_map(|e| e.ok()) {
-        if !entry.file_type().is_some_and(|ft| ft.is_dir()) || entry.path() == root {
-            continue;
-        }
-
-        // Skip if inside an already-found graph
-        let inside_existing = found.iter().any(|s| entry.path().starts_with(s));
-        if inside_existing {
-            continue;
-        }
-
-        if entry.path().join("drft.toml").exists() {
-            found.push(entry.path().to_path_buf());
-            graphs.push(entry.path().to_path_buf());
-        }
-    }
-
-    graphs.sort();
-    Ok(graphs)
-}
-
-/// Walk up from `start` to find the nearest ancestor directory with `drft.lock`.
+/// Walk up from `start` to find the nearest ancestor directory with `drft.toml`.
 /// If none found, returns `start`.
 fn find_graph_root(start: &Path) -> std::path::PathBuf {
     let mut current = start.to_path_buf();
@@ -1183,14 +875,8 @@ fn find_graph_root(start: &Path) -> std::path::PathBuf {
     }
 }
 
-/// Check a single graph and optionally recurse into child graphs.
-fn check_graph(
-    root: &Path,
-    rule_filter: &[String],
-    graph_prefix: Option<&str>,
-    recursive: bool,
-    max_depth: Option<usize>,
-) -> Result<Vec<Diagnostic>> {
+/// Check a single graph.
+fn check_graph(root: &Path, rule_filter: &[String]) -> Result<Vec<Diagnostic>> {
     let config = Config::load(root)?;
     let lockfile = lockfile::read_lockfile(root)?;
     let base_graph = graph::build_graph(root, &config)?;
@@ -1285,9 +971,6 @@ fn check_graph(
         });
         for d in &mut findings {
             d.severity = severity;
-            if graph_prefix.is_some() {
-                d.graph = graph_prefix.map(|s| s.to_string());
-            }
         }
         diagnostics.extend(findings);
     }
@@ -1317,11 +1000,6 @@ fn check_graph(
                     let ignored = paths.iter().any(|p| config.is_rule_ignored(rule_name, p));
                     in_scope && !ignored
                 });
-                for d in &mut findings {
-                    if graph_prefix.is_some() {
-                        d.graph = graph_prefix.map(|s| s.to_string());
-                    }
-                }
                 diagnostics.extend(findings);
             }
             Err(e) => {
@@ -1333,30 +1011,9 @@ fn check_graph(
                     fix: Some(format!(
                         "custom rule \"{rule_name}\" failed to execute — check the command path and script"
                     )),
-                    graph: graph_prefix.map(|s| s.to_string()),
                     ..Default::default()
                 });
             }
-        }
-    }
-
-    // Recursively check child graphs if --recursive
-    if recursive && max_depth != Some(0) {
-        let next_depth = max_depth.map(|d| d.saturating_sub(1));
-        for child_graph in &base_enriched.graph.child_graphs {
-            let child_dir = root.join(child_graph);
-            let child_prefix = match graph_prefix {
-                Some(parent) => format!("{parent}/{child_graph}"),
-                None => child_graph.clone(),
-            };
-            let child_diagnostics = check_graph(
-                &child_dir,
-                rule_filter,
-                Some(&child_prefix),
-                recursive,
-                next_depth,
-            )?;
-            diagnostics.extend(child_diagnostics);
         }
     }
 

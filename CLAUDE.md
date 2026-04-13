@@ -60,11 +60,11 @@ cargo run -- check     # runs as `drft check`
 - All output: diagnostics to stdout, progress/errors to stderr
 - Exit codes: 0 (clean), 1 (violations), 2 (usage/config error)
 - Lockfile (`drft.lock`): TOML v2 format, nodes + hashes only (no edges), fully deterministic, no timestamps
-- Config (`drft.toml`): TOML, unified `[parsers]` and `[rules]` sections, `[interface]` for graph boundary
+- Config (`drft.toml`): TOML with `include`/`exclude`, `[parsers]`, and `[rules]` sections. Each config declares exactly one graph; nested `drft.toml` files found while walking are ordinary files.
 - Hashes use BLAKE3 with `b3:` prefix
-- Edges carry parser provenance in metadata (e.g., `"metadata": {"parser": "markdown"}`)
-- Node types: `File` (on disk, hashed), `Directory` (directory on disk, `is_graph` when `drft.toml` exists, hashed via `drft.lock`), `External` (URLs only, not on filesystem). Nodes have `included: true` when matched by `include`, `false` when discovered via edges.
-- Edge scope is derived from nodes: `graph.is_internal_edge(&edge)` returns true when both endpoints are `included`
+- Every edge target exists as a node in the graph. Included nodes (`included: true`) are files drft reads and hashes. Referenced nodes (`included: false`) are edge targets drft knows about but doesn't manage.
+- Node type comes from stat: `file`, `directory`, `symlink`, `uri`, or `null` (broken link)
+- Edge scope: `graph.is_internal_edge(&edge)` returns true when the target node is included
 - Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
@@ -73,6 +73,14 @@ cargo run -- check     # runs as `drft check`
 ## Git workflow
 
 Main is protected. All changes go through branches and pull requests — never push directly to main.
+
+## Scratch files
+
+`.scratch/` is a gitignored working-tree directory for ephemeral design notes, exploration, and planning docs. Files there are not versioned and are not visible to anyone who clones the repo.
+
+Put ephemeral notes — design explorations, implementation plans, scratch thinking — in `.scratch/`, not in the repo root or alongside source files. This keeps the tracked tree clean and prevents accidental commits of working notes.
+
+Never reference `.scratch/` files from durable artifacts — commit messages, PR descriptions, code comments, CHANGELOG, or any checked-in doc. A reader who clones the repo cannot follow the link. If anything in a scratch doc needs to be durable, graduate it to a non-ignored location (docs, PR body, or a code comment) before landing the work.
 
 ## Releasing
 

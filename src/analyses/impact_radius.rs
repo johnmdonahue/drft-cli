@@ -30,11 +30,8 @@ impl Analysis for ImpactRadius {
         let graph = ctx.graph;
 
         let mut nodes: Vec<ImpactRadiusNode> = graph
-            .nodes
-            .keys()
-            .filter(|path| graph.is_included_node(path))
-            .map(|path| {
-                // BFS on reverse edges to find all transitive dependents
+            .included_nodes()
+            .map(|(path, _)| {
                 let mut visited = HashSet::new();
                 let mut queue = VecDeque::new();
                 visited.insert(path.as_str());
@@ -48,9 +45,6 @@ impl Analysis for ImpactRadius {
                     if let Some(edge_indices) = graph.reverse.get(current) {
                         for &idx in edge_indices {
                             let dependent = graph.edges[idx].source.as_str();
-                            if !graph.is_included_node(dependent) {
-                                continue;
-                            }
                             if visited.insert(dependent) {
                                 let next_depth = depth + 1;
                                 radius += 1;
@@ -87,7 +81,7 @@ mod tests {
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Graph, Node, NodeType};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use std::collections::HashMap;
     use std::path::Path;
 
@@ -212,23 +206,28 @@ mod tests {
     }
 
     #[test]
-    fn excludes_external_nodes() {
+    fn external_edges_dont_create_nodes() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
         graph.add_node(Node {
             path: "https://example.com".into(),
-            node_type: NodeType::External,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(NodeType::Uri),
             included: false,
+            hash: None,
+            metadata: HashMap::new(),
         });
-        graph.add_edge(make_edge("a.md", "https://example.com"));
+        graph.add_edge(Edge {
+            source: "a.md".into(),
+            target: "https://example.com".into(),
+            link: None,
+            parser: "markdown".into(),
+        });
 
         let config = Config::defaults();
         let result = ImpactRadius.run(&make_ctx(&graph, &config));
+        // Only included nodes appear in results — the URI is referenced, not included
         assert_eq!(result.nodes.len(), 1);
+        assert_eq!(result.nodes[0].node, "a.md");
         assert_eq!(result.nodes[0].radius, 0);
     }
 }

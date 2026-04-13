@@ -61,9 +61,6 @@ fn bench_analyses(c: &mut Criterion) {
     group.bench_function("pagerank", |b| {
         b.iter(|| analyses::pagerank::PageRank.run(&ctx));
     });
-    group.bench_function("graph_boundaries", |b| {
-        b.iter(|| analyses::graph_boundaries::GraphBoundaries.run(&ctx));
-    });
     group.bench_function("impact_radius", |b| {
         b.iter(|| analyses::impact_radius::ImpactRadius.run(&ctx));
     });

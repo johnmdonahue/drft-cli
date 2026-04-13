@@ -1,6 +1,5 @@
 use super::{Analysis, AnalysisContext};
-use crate::discovery::find_child_graphs;
-use crate::graph::{NodeType, hash_bytes};
+use crate::graph::hash_bytes;
 use crate::lockfile::read_lockfile;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -18,17 +17,10 @@ pub struct TransitiveStale {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct BoundaryChange {
-    pub node: String,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
 pub struct ChangePropagationResult {
     pub has_lockfile: bool,
     pub directly_changed: Vec<DirectChange>,
     pub transitively_stale: Vec<TransitiveStale>,
-    pub boundary_changes: Vec<BoundaryChange>,
 }
 
 pub struct ChangePropagation;
@@ -50,7 +42,6 @@ impl Analysis for ChangePropagation {
                     has_lockfile: false,
                     directly_changed: Vec::new(),
                     transitively_stale: Vec::new(),
-                    boundary_changes: Vec::new(),
                 };
             }
         };
@@ -60,7 +51,11 @@ impl Analysis for ChangePropagation {
         let mut directly_changed = Vec::new();
 
         for (path, locked_node) in &lockfile.nodes {
-            let current_hash = compute_current_hash(root, path, locked_node.node_type);
+            // Directory nodes are existence-only leaves with no hash.
+            if locked_node.hash.is_none() {
+                continue;
+            }
+            let current_hash = compute_current_hash(root, path);
             match (&locked_node.hash, &current_hash) {
                 (Some(locked), Some(current)) if locked != current => {
                     directly_stale.insert(path.clone());
@@ -77,37 +72,6 @@ impl Analysis for ChangePropagation {
                     });
                 }
                 _ => {}
-            }
-        }
-
-        // Boundary changes
-        let mut boundary_changes = Vec::new();
-        let current_graphs: HashSet<String> = find_child_graphs(root, &ctx.config.exclude)
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-
-        for (path, node) in &lockfile.nodes {
-            if node.node_type == NodeType::Directory && !current_graphs.contains(path.as_str()) {
-                boundary_changes.push(BoundaryChange {
-                    node: path.clone(),
-                    reason: "child graph removed".into(),
-                });
-            }
-        }
-
-        let lockfile_frontiers: HashSet<&str> = lockfile
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.node_type == NodeType::Directory)
-            .map(|(p, _)| p.as_str())
-            .collect();
-        for child_graph in &current_graphs {
-            if !lockfile_frontiers.contains(child_graph.as_str()) {
-                boundary_changes.push(BoundaryChange {
-                    node: child_graph.clone(),
-                    reason: "new child graph".into(),
-                });
             }
         }
 
@@ -148,28 +112,19 @@ impl Analysis for ChangePropagation {
         }
 
         directly_changed.sort_by(|a, b| a.node.cmp(&b.node));
-        boundary_changes.sort_by(|a, b| a.node.cmp(&b.node));
 
         ChangePropagationResult {
             has_lockfile: true,
             directly_changed,
             transitively_stale,
-            boundary_changes,
         }
     }
 }
 
-fn compute_current_hash(root: &Path, relative_path: &str, node_type: NodeType) -> Option<String> {
-    if node_type == NodeType::Directory {
-        let child_dir = root.join(relative_path);
-        let config_path = child_dir.join("drft.toml");
-        let content = std::fs::read(&config_path).ok()?;
-        Some(hash_bytes(&content))
-    } else {
-        let full_path = root.join(relative_path);
-        let content = std::fs::read(&full_path).ok()?;
-        Some(hash_bytes(&content))
-    }
+fn compute_current_hash(root: &Path, relative_path: &str) -> Option<String> {
+    let full_path = root.join(relative_path);
+    let content = std::fs::read(&full_path).ok()?;
+    Some(hash_bytes(&content))
 }
 
 #[cfg(test)]
@@ -177,7 +132,8 @@ mod tests {
     use super::*;
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
-    use crate::graph::{Edge, Graph, Node, NodeType};
+    use crate::graph::test_helpers::make_edge;
+    use crate::graph::{Graph, Node};
     use crate::lockfile::{Lockfile, write_lockfile};
     use std::collections::HashMap;
     use std::fs;
@@ -203,28 +159,19 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
-            node_type: NodeType::File,
-            hash: Some(index_hash),
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(crate::graph::NodeType::File),
             included: true,
+            hash: Some(index_hash),
+            metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
-            node_type: NodeType::File,
-            hash: Some(setup_hash),
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(crate::graph::NodeType::File),
             included: true,
+            hash: Some(setup_hash),
+            metadata: HashMap::new(),
         });
-        graph.add_edge(Edge {
-            source: "index.md".into(),
-            target: "setup.md".into(),
-            link: None,
-            parser: "markdown".into(),
-        });
+        graph.add_edge(make_edge("index.md", "setup.md"));
 
         let lockfile = Lockfile::from_graph(&graph);
         write_lockfile(dir.path(), &lockfile).unwrap();

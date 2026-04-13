@@ -38,7 +38,7 @@ See the [examples](examples/README.md) for sample projects used in manual testin
 
 ```
 Parsers          → raw link strings + metadata
-Graph builder    → normalized edges, classified nodes, filesystem properties
+Graph builder    → normalized edges, classified targets, filesystem properties
 Enrichment       → structural analyses (degree, SCC, bridges, pagerank, etc.)
 Rules            → diagnostics
 ```
@@ -46,7 +46,7 @@ Rules            → diagnostics
 Each layer's output feeds the next. Custom parsers and rules receive the same data as built-in implementations.
 
 - **`src/parsers/`** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes, and returns link strings + optional metadata. Built-in (markdown, frontmatter) and custom parsers share the same interface.
-- **[`src/graph.rs`](src/graph.rs)** — normalization, path resolution, node classification, filesystem probing. See [docs/graph.md](docs/graph.md) for the full contract.
+- **[`src/graph.rs`](src/graph.rs)** — normalization, path resolution, edge classification, filesystem probing. See [docs/graph.md](docs/graph.md) for the full contract.
 - **`src/analyses/`** — pure computation. Each analysis implements the `Analysis` trait and returns a typed result. No judgments, no formatting.
 - **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction from analysis results. Named `Metric` values with a `MetricKind` (`Ratio`, `Count`, or `Score`).
 - **`src/rules/`** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph, and emits `Diagnostic` structs. Rules are pure functions — no filesystem access, no config.
@@ -71,4 +71,4 @@ Add the metric extraction to [`src/metrics.rs`](src/metrics.rs) inside `compute_
 - **Parsers emit, the graph normalizes.** Parsers return raw strings. The graph builder handles URI detection, fragment stripping, path resolution, node classification. Parser authors don't bake in assumptions.
 - **No new dependencies for algorithms.** All graph algorithms (Tarjan's SCC, Brandes' betweenness, PageRank, BFS) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
 - **Deterministic output.** All results are sorted. No timestamps in lockfiles. Same input always produces same output.
-- **Explicit scope filtering.** Structural analyses operate on included nodes (matched by `include`) and internal edges (both endpoints included). Boundary analyses use the `graph` field on nodes. Each analysis declares what it scopes to.
+- **Explicit scope filtering.** Structural analyses operate on included nodes and internal edges (`graph.is_internal_edge()` checks whether the target is an included node). Edges to non-included nodes don't participate in structural analysis.

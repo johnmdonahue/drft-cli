@@ -1,17 +1,19 @@
 use anyhow::{Context, Result};
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
 /// Compile a list of glob patterns into a GlobSet. Returns None if patterns is empty.
+/// Uses literal_separator so `*` matches a single path component (like shell globs)
+/// and `**` matches across directory boundaries.
 pub fn compile_globs(patterns: &[String]) -> Result<Option<GlobSet>> {
     if patterns.is_empty() {
         return Ok(None);
     }
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        builder.add(Glob::new(pattern)?);
+        builder.add(GlobBuilder::new(pattern).literal_separator(true).build()?);
     }
     Ok(Some(builder.build()?))
 }
@@ -136,15 +138,6 @@ impl From<RawParserValue> for Option<ParserConfig> {
             }
         }
     }
-}
-
-// ── Interface config ───────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InterfaceConfig {
-    pub files: Vec<String>,
-    #[serde(default)]
-    pub ignore: Vec<String>,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -286,8 +279,6 @@ pub struct Config {
     /// Also respects `.gitignore`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub interface: Option<InterfaceConfig>,
     pub parsers: HashMap<String, ParserConfig>,
     pub rules: HashMap<String, RuleConfig>,
     /// Directory containing the drft.toml this config was loaded from.
@@ -300,7 +291,6 @@ pub struct Config {
 struct RawConfig {
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
-    interface: Option<InterfaceConfig>,
     parsers: Option<HashMap<String, RawParserValue>>,
     rules: Option<HashMap<String, RawRuleValue>>,
     // v0.3 key — accepted as alias for `exclude`
@@ -315,16 +305,13 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
-    "boundary-violation",
-    "dangling-edge",
     "directed-cycle",
-    "encapsulation-violation",
     "fragmentation",
     "orphan-node",
     "schema-violation",
     "stale",
     "symlink-edge",
-    "untrackable-target",
+    "unresolved-edge",
 ];
 
 impl Config {
@@ -342,15 +329,12 @@ impl Config {
         );
 
         let rules = [
-            ("boundary-violation", RuleSeverity::Warn),
-            ("dangling-edge", RuleSeverity::Warn),
             ("directed-cycle", RuleSeverity::Warn),
-            ("encapsulation-violation", RuleSeverity::Warn),
             ("fragmentation", RuleSeverity::Warn),
             ("orphan-node", RuleSeverity::Warn),
             ("stale", RuleSeverity::Warn),
             ("symlink-edge", RuleSeverity::Warn),
-            ("untrackable-target", RuleSeverity::Warn),
+            ("unresolved-edge", RuleSeverity::Warn),
         ]
         .into_iter()
         .map(|(k, v)| {
@@ -363,9 +347,8 @@ impl Config {
         .collect();
 
         Config {
-            include: vec!["*.md".to_string()],
+            include: vec!["**/*.md".to_string()],
             exclude: Vec::new(),
-            interface: None,
             parsers,
             rules,
             config_dir: None,
@@ -387,7 +370,7 @@ impl Config {
 
         // Warn about v0.2 config keys
         if raw.manifest.is_some() {
-            eprintln!("warn: drft.toml uses v0.2 'manifest' key — migrate to [interface] section");
+            eprintln!("warn: drft.toml uses v0.2 'manifest' key — use 'include' instead");
         }
         if raw.custom_rules.is_some() {
             eprintln!(
@@ -430,8 +413,6 @@ impl Config {
         if let Some(exclude) = raw.exclude {
             config.exclude = exclude;
         }
-
-        config.interface = raw.interface;
 
         // Parse parsers
         if let Some(raw_parsers) = raw.parsers {
@@ -555,11 +536,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\ndangling-edge = \"error\"\norphan-node = \"warn\"\n",
+            "[rules]\nunresolved-edge = \"error\"\norphan-node = \"warn\"\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(config.rule_severity("dangling-edge"), RuleSeverity::Error);
+        assert_eq!(config.rule_severity("unresolved-edge"), RuleSeverity::Error);
         assert_eq!(config.rule_severity("orphan-node"), RuleSeverity::Warn);
         assert_eq!(config.rule_severity("directed-cycle"), RuleSeverity::Warn);
     }
@@ -577,7 +558,7 @@ mod tests {
         assert!(config.is_rule_ignored("orphan-node", "README.md"));
         assert!(config.is_rule_ignored("orphan-node", "index.md"));
         assert!(!config.is_rule_ignored("orphan-node", "other.md"));
-        assert!(!config.is_rule_ignored("dangling-edge", "README.md"));
+        assert!(!config.is_rule_ignored("unresolved-edge", "README.md"));
     }
 
     #[test]
@@ -611,11 +592,11 @@ required = ["title", "date", "status"]
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[rules]\ndangling-edge = \"error\"\n",
+            "[rules]\nunresolved-edge = \"error\"\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert!(config.rule_options("dangling-edge").is_none());
+        assert!(config.rule_options("unresolved-edge").is_none());
     }
 
     #[test]
@@ -704,19 +685,6 @@ required = ["title", "date", "status"]
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert!(!config.parsers.contains_key("markdown"));
-    }
-
-    #[test]
-    fn loads_interface() {
-        let dir = TempDir::new().unwrap();
-        fs::write(
-            dir.path().join("drft.toml"),
-            "[interface]\nfiles = [\"overview.md\", \"api/*.md\"]\n",
-        )
-        .unwrap();
-        let config = Config::load(dir.path()).unwrap();
-        let iface = config.interface.unwrap();
-        assert_eq!(iface.files, vec!["overview.md", "api/*.md"]);
     }
 
     #[test]

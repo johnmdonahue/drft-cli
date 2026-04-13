@@ -25,7 +25,7 @@ fn scenario_1_zero_setup_clean() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !stdout.contains("dangling-edge"),
+        !stdout.contains("unresolved-edge"),
         "expected no broken links, got: {stdout}"
     );
     assert!(
@@ -55,8 +55,8 @@ fn scenario_2_broken_link() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("warn[dangling-edge]"),
-        "expected dangling-edge warning, got: {stdout}"
+        stdout.contains("warn[unresolved-edge]"),
+        "expected unresolved-edge warning, got: {stdout}"
     );
     assert!(
         stdout.contains("gone.md"),
@@ -93,8 +93,8 @@ fn scenario_2_broken_link_json() {
     let diagnostics = v["diagnostics"].as_array().unwrap();
     let broken = diagnostics
         .iter()
-        .find(|d| d["rule"] == "dangling-edge")
-        .expect("expected dangling-edge diagnostic");
+        .find(|d| d["rule"] == "unresolved-edge")
+        .expect("expected unresolved-edge diagnostic");
     assert_eq!(broken["severity"], "warn");
     assert_eq!(broken["source"], "index.md");
     assert_eq!(broken["target"], "gone.md");
@@ -109,7 +109,7 @@ fn scenario_3_broken_link_error_severity() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\ndangling-edge = \"error\"\n",
+        "[rules]\nunresolved-edge = \"error\"\n",
     )
     .unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
@@ -121,8 +121,8 @@ fn scenario_3_broken_link_error_severity() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("error[dangling-edge]"),
-        "expected error-level dangling-edge, got: {stdout}"
+        stdout.contains("error[unresolved-edge]"),
+        "expected error-level unresolved-edge, got: {stdout}"
     );
     assert_eq!(output.status.code(), Some(1), "expected exit code 1");
 }
@@ -277,7 +277,7 @@ fn scenario_29_rule_filtering() {
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
 
-    // Only run orphan-node rule — dangling-edge should not appear
+    // Only run orphan-node rule — unresolved-edge should not appear
     let output = drft_bin()
         .args([
             "-C",
@@ -295,8 +295,8 @@ fn scenario_29_rule_filtering() {
         "orphan rule should run, got: {stdout}"
     );
     assert!(
-        !stdout.contains("dangling-edge"),
-        "dangling-edge should not run when --rule orphan-node is specified"
+        !stdout.contains("unresolved-edge"),
+        "unresolved-edge should not run when --rule orphan-node is specified"
     );
     assert!(output.status.success());
 }

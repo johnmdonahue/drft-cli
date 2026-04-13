@@ -17,8 +17,6 @@ pub struct Diagnostic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub graph: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
 }
 
@@ -33,7 +31,6 @@ impl Default for Diagnostic {
             node: None,
             via: None,
             path: None,
-            graph: None,
             fix: None,
         }
     }
@@ -139,7 +136,7 @@ mod tests {
     #[test]
     fn text_format_edge_rule() {
         let d = Diagnostic {
-            rule: "dangling-edge".into(),
+            rule: "unresolved-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -148,14 +145,14 @@ mod tests {
         };
         assert_eq!(
             d.format_text(),
-            "warn[dangling-edge]: index.md \u{2192} gone.md (file not found)"
+            "warn[unresolved-edge]: index.md \u{2192} gone.md (file not found)"
         );
     }
 
     #[test]
     fn json_serialization() {
         let d = Diagnostic {
-            rule: "dangling-edge".into(),
+            rule: "unresolved-edge".into(),
             severity: RuleSeverity::Warn,
             message: "file not found".into(),
             source: Some("index.md".into()),
@@ -163,27 +160,10 @@ mod tests {
             ..Default::default()
         };
         let json = serde_json::to_string(&d).unwrap();
-        assert!(json.contains("\"rule\":\"dangling-edge\""));
+        assert!(json.contains("\"rule\":\"unresolved-edge\""));
         assert!(json.contains("\"severity\":\"warn\""));
         assert!(json.contains("\"source\":\"index.md\""));
         assert!(json.contains("\"target\":\"gone.md\""));
         assert!(!json.contains("\"node\""));
-    }
-
-    #[test]
-    fn text_format_with_graph_prefix() {
-        let d = Diagnostic {
-            rule: "orphan-node".into(),
-            severity: RuleSeverity::Warn,
-            message: "no inbound links".into(),
-            node: Some("orphan.md".into()),
-            graph: Some("beta".into()),
-            ..Default::default()
-        };
-        // Scope is handled by the output loop, not format_text
-        assert_eq!(
-            d.format_text(),
-            "warn[orphan-node]: orphan.md (no inbound links)"
-        );
     }
 }

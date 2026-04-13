@@ -86,8 +86,8 @@ fn wikilinks_custom_parser_creates_edges() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("dangling-edge"),
-        "broken wikilink should fire dangling-edge, got: {stdout}"
+        stdout.contains("unresolved-edge"),
+        "broken wikilink should fire unresolved-edge, got: {stdout}"
     );
 }
 

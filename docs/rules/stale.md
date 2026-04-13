@@ -21,7 +21,7 @@ warn[stale]: setup.md (content changed)
 warn[stale]: index.md (stale via setup.md)
 ```
 
-The rule also detects graph boundary changes (new or removed child graphs). Without a `drft.lock`, this rule has nothing to check.
+Without a `drft.lock`, this rule has nothing to check.
 
 ## Configuration
 
@@ -38,4 +38,4 @@ ignore = ["CHANGELOG.md"]
 
 ## Analysis
 
-Uses the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges.
+Uses the [change-propagation](../analyses/change-propagation.md) analysis, which compares current content hashes against the lockfile and propagates staleness along dependency edges. Nodes with no hash (symlinks whose canonical target resolves outside `include`) are skipped — drft cannot reason about content it did not read.

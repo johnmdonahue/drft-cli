@@ -6,26 +6,19 @@ sources:
 
 # Configuration
 
-`drft.toml` in the graph root controls file discovery, parsers, rules, and encapsulation.
+`drft.toml` in the graph root controls file discovery, parsers, and rules. Each `drft.toml` declares exactly one graph — nested `drft.toml` files found while walking are ordinary files on disk, not graph boundaries.
 
 ## Graph declaration
 
 ```toml
-include = ["*.md", "*.rs"] # which paths become File nodes (default: ["*.md"])
+include = [
+  "**/*.md",
+  "src/**/*.rs",
+] # which paths become nodes (default: ["**/*.md"])
 exclude = ["drafts/*"] # remove from the graph (also respects .gitignore)
 ```
 
-`include` determines which files become nodes. `exclude` removes paths before discovery. Both use glob patterns. drft also respects `.gitignore` automatically.
-
-## Interface
-
-```toml
-[interface]
-files = ["overview.md", "api/*.md"]
-ignore = ["internal/*"]
-```
-
-Declares which files are accessible from parent graphs. If `[interface]` is present, edges from a parent graph into non-interface files trigger `encapsulation-violation`. If `[interface]` is absent, the graph is open — anything can link into it.
+`include` is drft's sole authority for what gets read from disk. Files matching `include` become nodes; everything else is classified on edges, not as vertices. `exclude` removes paths before discovery. Both use glob patterns matched against paths under the graph root. Patterns attempting to reach above the root silently match nothing. drft also respects `.gitignore` automatically.
 
 ## Parsers
 
@@ -35,10 +28,10 @@ Parsers extract links from File nodes. Built-in parsers need no `command` field;
 [parsers.markdown] # built-in, all defaults
 
 [parsers.frontmatter] # built-in, restricted to .md files
-files = ["*.md"]
+files = ["**/*.md"]
 
 [parsers.tsx] # custom parser (has command)
-files = ["*.tsx"]
+files = ["**/*.tsx"]
 command = "./scripts/parse-tsx.sh"
 ```
 

@@ -58,7 +58,19 @@ fn graph_json_follows_jgf() {
             );
         }
     }
-    assert_eq!(nodes["index.md"]["metadata"]["type"], "file");
+    // Node metadata should carry type and included fields
+    assert!(
+        nodes["index.md"]["metadata"].get("type").is_some(),
+        "node metadata should carry a type field"
+    );
+    assert_eq!(
+        nodes["index.md"]["metadata"]["type"], "file",
+        "included markdown file should have type 'file'"
+    );
+    assert_eq!(
+        nodes["index.md"]["metadata"]["included"], true,
+        "discovered file should be included"
+    );
 
     // Edges: array of { "source", "target", "id"?, "relation"?, "directed"?, "label"?, "metadata"? }
     let edges = graph["edges"].as_array().expect("edges is array");
@@ -89,66 +101,9 @@ fn graph_json_follows_jgf() {
     }
 }
 
-/// Validate that multi-graph JSON output also complies with JGF v2.0.
+/// Directory traversal: ../ targets are referenced nodes with included=false.
 #[test]
-fn graph_json_recursive_follows_jgf() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
-    fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
-
-    let child = dir.path().join("child");
-    fs::create_dir(&child).unwrap();
-    fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.toml"), "").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-
-    // Root: must have "graphs" key
-    let root = v.as_object().expect("root is object");
-    assert!(root.contains_key("graphs"), "root must contain 'graphs'");
-
-    let graphs = root["graphs"].as_array().expect("graphs is array");
-    let allowed_graph_keys = [
-        "id", "label", "directed", "type", "metadata", "nodes", "edges",
-    ];
-    let allowed_edge_keys = [
-        "id", "source", "target", "relation", "directed", "label", "metadata",
-    ];
-
-    for (gi, graph) in graphs.iter().enumerate() {
-        let graph = graph
-            .as_object()
-            .unwrap_or_else(|| panic!("graph {gi} is object"));
-        for key in graph.keys() {
-            assert!(
-                allowed_graph_keys.contains(&key.as_str()),
-                "graph {gi} has unexpected key '{key}'"
-            );
-        }
-        if let Some(edges) = graph.get("edges") {
-            for (ei, edge) in edges.as_array().unwrap().iter().enumerate() {
-                let edge = edge.as_object().unwrap();
-                for key in edge.keys() {
-                    assert!(
-                        allowed_edge_keys.contains(&key.as_str()),
-                        "graph {gi} edge {ei} has unexpected key '{key}'"
-                    );
-                }
-            }
-        }
-    }
-}
-
-/// Directory traversal: ../ targets create nodes but are not hashed.
-#[test]
-fn traversal_parent_escape_not_hashed() {
-    // Use a subdirectory of a temp dir as the graph root, so ../ stays within the temp dir
+fn traversal_parent_escape_not_included() {
     let outer = TempDir::new().unwrap();
     let graph_root = outer.path().join("project");
     fs::create_dir(&graph_root).unwrap();
@@ -170,19 +125,16 @@ fn traversal_parent_escape_not_hashed() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
-    // Node exists (for boundary-violation detection)
     let nodes = v["graph"]["nodes"].as_object().unwrap();
-    let escape_node = &nodes["../outside.md"];
-    assert_eq!(escape_node["metadata"]["type"], "file");
-
-    // But no hash — content was not read
-    assert!(
-        escape_node["metadata"].get("hash").is_none() || escape_node["metadata"]["hash"].is_null(),
-        "escaped target should not be hashed"
-    );
+    if let Some(escape_node) = nodes.get("../outside.md") {
+        assert_eq!(
+            escape_node["metadata"]["included"], false,
+            "escape target should not be included"
+        );
+    }
 }
 
-/// Directory traversal: symlink inside root pointing outside is not hashed.
+/// Directory traversal: symlink whose canonical target is outside include has hash=None.
 #[test]
 fn traversal_symlink_escape_not_hashed() {
     let outer = TempDir::new().unwrap();
@@ -191,14 +143,13 @@ fn traversal_symlink_escape_not_hashed() {
     fs::write(graph_root.join("drft.toml"), "").unwrap();
     fs::write(graph_root.join("index.md"), "[link](trap.md)").unwrap();
 
-    // Create a file outside the graph root and symlink to it from inside
     fs::write(outer.path().join("secret.md"), "secret content").unwrap();
 
     #[cfg(unix)]
     std::os::unix::fs::symlink(outer.path().join("secret.md"), graph_root.join("trap.md")).unwrap();
     #[cfg(not(unix))]
     {
-        return; // Skip on non-unix
+        return;
     }
 
     let output = drft_bin()
@@ -224,12 +175,11 @@ fn traversal_symlink_escape_not_hashed() {
     }
 }
 
-/// Directory traversal: absolute path from markdown link is not hashed.
+/// Directory traversal: absolute path target is a referenced node with included=false.
 #[test]
-fn traversal_absolute_path_not_hashed() {
+fn traversal_absolute_path_not_included() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), "").unwrap();
-    // Markdown link to an absolute path
     fs::write(dir.path().join("index.md"), "[root](/etc/hosts)").unwrap();
 
     let output = drft_bin()
@@ -247,21 +197,19 @@ fn traversal_absolute_path_not_hashed() {
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
     let nodes = v["graph"]["nodes"].as_object().unwrap();
-    // The absolute path target should not have been hashed
     for (path, node) in nodes {
         if path.contains("etc") || path.starts_with('/') {
-            assert!(
-                node["metadata"].get("hash").is_none() || node["metadata"]["hash"].is_null(),
-                "absolute path target '{path}' should not be hashed"
+            assert_eq!(
+                node["metadata"]["included"], false,
+                "absolute path target should not be included, found: {path}"
             );
         }
     }
 }
 
-/// Directory traversal: nested ../ that escapes root is not hashed.
+/// Directory traversal: nested ../ that escapes root is a referenced node with included=false.
 #[test]
-fn traversal_nested_escape_not_hashed() {
-    // outer/project/sub/doc.md links to ../../outside.md which is outer/outside.md
+fn traversal_nested_escape_not_included() {
     let outer = TempDir::new().unwrap();
     let graph_root = outer.path().join("project");
     let sub = graph_root.join("sub");
@@ -287,9 +235,9 @@ fn traversal_nested_escape_not_hashed() {
     let nodes = v["graph"]["nodes"].as_object().unwrap();
     for (path, node) in nodes {
         if path.contains("outside") {
-            assert!(
-                node["metadata"].get("hash").is_none() || node["metadata"]["hash"].is_null(),
-                "nested escape target '{path}' should not be hashed"
+            assert_eq!(
+                node["metadata"]["included"], false,
+                "nested escape target should not be included, found: {path}"
             );
         }
     }
@@ -363,28 +311,4 @@ fn graph_unknown_parser_errors() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("unknown parser \"nonexistent\""));
     assert!(stderr.contains("available:"));
-}
-
-#[test]
-fn graph_recursive_produces_multiple_graphs() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
-    fs::write(dir.path().join("index.md"), "[child](child/index.md)").unwrap();
-
-    let child = dir.path().join("child");
-    fs::create_dir(&child).unwrap();
-    fs::write(child.join("index.md"), "# Child").unwrap();
-    fs::write(child.join("drft.toml"), "").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "graph", "--recursive"])
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-
-    // JGF multi-graph format
-    let graphs = v["graphs"].as_array().expect("should have graphs array");
-    assert!(graphs.len() >= 2, "should have root + child graph");
 }

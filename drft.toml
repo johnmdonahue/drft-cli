@@ -1,13 +1,23 @@
 # drft.toml — drft dogfooding itself
 
-include = ["*.md", "src/**/*.rs", ".claude/settings.json"]
-exclude = ["src/lib.rs", "CHANGELOG.md", "npm/*"]
+include = [
+  "CLAUDE.md",
+  "CONTRIBUTING.md",
+  "README.md",
+  "RELEASING.md",
+  "docs/**/*.md",
+  "examples/README.md",
+  "examples/*/README.md",
+  "src/**/*.rs",
+  ".claude/settings.json",
+]
+exclude = ["src/lib.rs"]
 
 [parsers.markdown]
-files = ["*.md"]
+files = ["**/*.md"]
 
 [parsers.frontmatter]
-files = ["*.md"]
+files = ["**/*.md"]
 
 [rules]
 stale = "error"

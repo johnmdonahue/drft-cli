@@ -1,3 +1,8 @@
+---
+sources:
+  - ../../docs/config.md
+---
+
 # Simple
 
 A clean project with no violations. Good for verifying drft works.

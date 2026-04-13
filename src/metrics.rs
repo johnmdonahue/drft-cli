@@ -61,11 +61,7 @@ pub fn compute_metrics(inputs: &AnalysisInputs, graph: &Graph) -> Vec<Metric> {
     let mut metrics: Vec<Metric> = Vec::new();
 
     // Connectivity
-    let total_nodes = graph
-        .nodes
-        .values()
-        .filter(|n| graph.is_included_node(&n.path))
-        .count() as f64;
+    let total_nodes = graph.included_nodes().count() as f64;
     if total_nodes > 0.0 {
         let orphans = inputs
             .degree

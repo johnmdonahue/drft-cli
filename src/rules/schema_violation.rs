@@ -1,5 +1,4 @@
 use crate::diagnostic::Diagnostic;
-use crate::graph::NodeType;
 use crate::rules::{Rule, RuleContext};
 
 pub struct SchemaViolationRule;
@@ -46,11 +45,6 @@ impl Rule for SchemaViolationRule {
         }
 
         for (path, node) in &ctx.graph.graph.nodes {
-            if node.node_type != NodeType::File {
-                continue;
-            }
-
-            // Collect all metadata across parser namespaces into one merged view
             let metadata = merge_metadata(&node.metadata);
             let source = metadata_source(&node.metadata);
 
@@ -210,7 +204,7 @@ fn value_as_string(value: &serde_json::Value) -> Option<String> {
 mod tests {
     use super::*;
     use crate::graph::test_helpers::make_enriched;
-    use crate::graph::{Graph, Node, NodeType};
+    use crate::graph::{Graph, Node};
     use crate::rules::RuleContext;
     use std::collections::HashMap;
 
@@ -219,12 +213,10 @@ mod tests {
         meta_map.insert("frontmatter".to_string(), metadata);
         Node {
             path: path.into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: meta_map,
+            node_type: Some(crate::graph::NodeType::File),
             included: true,
+            hash: None,
+            metadata: meta_map,
         }
     }
 
@@ -384,12 +376,10 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "no-frontmatter.md".into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
+            node_type: Some(crate::graph::NodeType::File),
             included: true,
+            hash: None,
+            metadata: HashMap::new(),
         });
 
         let enriched = make_enriched(graph);

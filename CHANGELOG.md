@@ -2,6 +2,34 @@
 
 All notable changes to drft are documented here.
 
+## 0.7.0 (2026-04-12)
+
+Included vs referenced nodes — every edge target is a node. `include` controls what drft reads and hashes, not what exists in the graph.
+
+### Breaking changes
+
+- **Node model redesigned.** Every edge target is a node. Included nodes (`included: true`) match `include` patterns — drft reads, hashes, and manages them. Referenced nodes (`included: false`) are edge targets drft knows about but doesn't manage.
+- **`NodeType` replaced.** Nodes carry `type` from stat: `file`, `directory`, `symlink`, `uri`, or `null` (broken link). Type is intrinsic — a file outside `include` is still `type: "file"`.
+- **`boundary-edge` rule removed.** The containment concept it encoded is handled by the included/referenced model.
+- **`dangling-edge` rule renamed to `unresolved-edge`.** Configs using the old name will see an "unknown rule" warning. Rename to `unresolved-edge` in `drft.toml`.
+- **`drft graph --format json`**: nodes carry `type` and `included` in metadata. Edges are simple (`source`, `target`, `parser`). No `target_kind` on edges, no `target_properties` at graph level. Lockfile entries no longer carry `type`. Existing lockfiles need regeneration with `drft lock`.
+- **Nested-graph machinery removed.** `[interface]` section, `is_graph` flag, `child_graphs` tracking, `--recursive` / `--max-depth` flags on `lock`/`check`/`graph`/`config show`.
+- **Glob patterns use shell semantics.** `*` matches a single path component (not `/`), `**` crosses directories. The default include changed from `["*.md"]` to `["**/*.md"]`. Parser `files` patterns like `["*.md"]` should become `["**/*.md"]`.
+
+### New
+
+- **Included vs referenced nodes** — `include` controls what drft reads and hashes, not what exists in the graph. Every edge target gets a node with `type` from stat and `included` from scope.
+- **Symlinks are filesystem edges** — symlinks in `include` get an edge to their resolved target with `parser: "filesystem"`. The symlink node has `type: "symlink"`.
+- **Symlink hash policy** — symlinks matching `include` become nodes, but drft only hashes content when the canonical target is also in `include`. Otherwise `hash = null`.
+- **Literal include path fallback** — `include` paths with no glob characters (e.g., `.claude/settings.json`) are checked directly on disk when the walker misses them due to gitignore directory exclusion.
+- **`docs/discovery.md`** — documents include/exclude patterns, glob semantics, and gitignore interaction.
+- **Examples tracked in root graph** — example READMEs are nodes with `sources:` frontmatter linking to the docs they illustrate.
+
+### Fixed
+
+- `drft impact <path>` works on any file under a graph root, even when an unrelated `drft.toml` lives in a subdirectory.
+- `monorepo` example removed (demonstrated nested graphs, which no longer exist).
+
 ## 0.6.1 (2026-04-08)
 
 Edge detection hardening — proper URI validation and frontmatter parsing, full JGF export.

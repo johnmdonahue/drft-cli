@@ -25,7 +25,7 @@ impl Analysis for TransitiveReduction {
 
     fn run(&self, ctx: &AnalysisContext) -> TransitiveReductionResult {
         let graph = ctx.graph;
-        let node_set: HashSet<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let node_set: HashSet<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
         let mut redundant_edges = Vec::new();
 
         for edge in &graph.edges {
@@ -119,30 +119,8 @@ mod tests {
     use super::*;
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
-    use crate::graph::{Edge, Node, NodeType};
-    use std::collections::HashMap;
+    use crate::graph::test_helpers::{make_edge, make_node};
     use std::path::Path;
-
-    fn make_node(path: &str) -> Node {
-        Node {
-            path: path.into(),
-            node_type: NodeType::File,
-            hash: None,
-            graph: None,
-            is_graph: false,
-            metadata: HashMap::new(),
-            included: true,
-        }
-    }
-
-    fn make_edge(source: &str, target: &str) -> Edge {
-        Edge {
-            source: source.into(),
-            target: target.into(),
-            link: None,
-            parser: "markdown".into(),
-        }
-    }
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
         AnalysisContext {

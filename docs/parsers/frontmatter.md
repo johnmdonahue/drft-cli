@@ -51,14 +51,14 @@ Restrict which File nodes the parser receives:
 
 ```toml
 [parsers.frontmatter]
-files = ["*.md"]
+files = ["**/*.md"]
 ```
 
 ### With schema validation
 
 ```toml
 [parsers.frontmatter]
-files = ["*.md"]
+files = ["**/*.md"]
 
 [rules.schema-violation]
 severity = "warn"

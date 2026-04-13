@@ -36,4 +36,4 @@ ignore = []
 
 ## Analysis
 
-This rule inspects graph edges and target properties directly — it does not consume a separate analysis. For each edge with a local target, it checks `graph.target_properties` for the `is_symlink` flag set during graph building.
+This rule checks whether an edge target is a node with `type: "symlink"` and reports the filesystem edge to the resolved target.

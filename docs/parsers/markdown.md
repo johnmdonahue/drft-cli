@@ -72,7 +72,7 @@ Restrict which File nodes the parser receives:
 
 ```toml
 [parsers.markdown]
-files = ["*.md", "*.mdx"]
+files = ["**/*.md", "**/*.mdx"]
 ```
 
 This is routing only — it does not affect which paths become nodes (that's `include`/`exclude`).
@@ -86,4 +86,4 @@ markdown = false
 
 ## External URLs
 
-External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw targets by the parser. The graph builder classifies them as External nodes. Anchor-only links (`#heading`) are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
+External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw targets by the parser. The graph builder creates referenced nodes with `type: "uri"` for them. Anchor-only links (`#heading`) are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
