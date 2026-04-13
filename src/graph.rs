@@ -291,23 +291,32 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             });
             continue;
         }
-        // Stat non-URI targets to determine type. Stat is cheap metadata —
-        // no content access, no security concern.
-        let target_path = root.join(&pending.target);
-        let node_type = target_path.symlink_metadata().ok().map(|m| {
-            if m.file_type().is_symlink() {
-                NodeType::Symlink
-            } else if m.is_dir() {
-                NodeType::Directory
-            } else {
-                NodeType::File
-            }
-        });
+        // Stat non-URI targets to determine type. Skip absolute paths and
+        // paths escaping root — don't probe outside the graph root.
+        let escapes_root = Path::new(&pending.target)
+            .components()
+            .next()
+            .is_some_and(|c| matches!(c, std::path::Component::ParentDir));
+        let is_absolute = Path::new(&pending.target).is_absolute();
+        let node_type = if is_absolute || escapes_root {
+            None
+        } else {
+            let target_path = root.join(&pending.target);
+            target_path.symlink_metadata().ok().map(|m| {
+                if m.file_type().is_symlink() {
+                    NodeType::Symlink
+                } else if m.is_dir() {
+                    NodeType::Directory
+                } else {
+                    NodeType::File
+                }
+            })
+        };
         // A target that matches include && !exclude is included even if it
         // doesn't exist on disk — that's a broken link in scope.
-        // Paths escaping the root (leading ..) are never included.
-        let escapes_root = pending.target.starts_with("..");
+        // Paths escaping the root or absolute paths are never included.
         let matches_include = !escapes_root
+            && !is_absolute
             && include_globs
                 .as_ref()
                 .is_some_and(|set| set.is_match(&pending.target));
@@ -345,6 +354,14 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
             } else {
                 resolve_link(file, &link_target.to_string_lossy())
             };
+            // Skip filesystem edges for targets that escape root
+            let resolved_escapes = Path::new(&resolved)
+                .components()
+                .next()
+                .is_some_and(|c| matches!(c, std::path::Component::ParentDir));
+            if resolved_escapes {
+                continue;
+            }
             // Ensure the resolved target is a node
             if !graph.nodes.contains_key(&resolved) {
                 let resolved_path = root.join(&resolved);

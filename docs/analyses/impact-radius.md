@@ -35,7 +35,7 @@ This is the reverse complement of depth. Depth asks "how far is this node from a
 | `direct_dependents` | Count of direct dependents (immediate reverse neighbors)           |
 | `max_depth`         | Longest reverse path from this node to a dependent                 |
 
-Nodes are sorted alphabetically by path. Every node in the graph is a valid seed.
+Nodes are sorted alphabetically by path. Only included nodes appear in the analysis output and are valid seeds for `drft impact`.
 
 ## Used by `drft impact`
 

@@ -860,7 +860,7 @@ fn run_check_watch(
     Ok(0)
 }
 
-/// Walk up from `start` to find the nearest ancestor directory with `drft.lock`.
+/// Walk up from `start` to find the nearest ancestor directory with `drft.toml`.
 /// If none found, returns `start`.
 fn find_graph_root(start: &Path) -> std::path::PathBuf {
     let mut current = start.to_path_buf();
