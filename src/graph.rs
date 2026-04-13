@@ -337,7 +337,10 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     //    A symlink is a link — model it as an edge with "filesystem" provenance.
     for file in &included_files {
         let file_path = root.join(file);
-        if !file_path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+        if !file_path
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink())
+        {
             continue;
         }
         if let Ok(link_target) = std::fs::read_link(&file_path) {

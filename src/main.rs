@@ -584,10 +584,7 @@ fn collect_jgf_graph(root: &Path, parser: Option<&str>) -> Result<GraphExport> {
         })
         .collect();
 
-    Ok(GraphExport {
-        nodes,
-        edges,
-    })
+    Ok(GraphExport { nodes, edges })
 }
 
 fn run_impact(
@@ -623,7 +620,11 @@ fn run_impact(
             seeds.push(file.clone());
         } else {
             let with_ext = format!("{file}.md");
-            if graph.nodes.get(with_ext.as_str()).is_some_and(|n| n.included) {
+            if graph
+                .nodes
+                .get(with_ext.as_str())
+                .is_some_and(|n| n.included)
+            {
                 seeds.push(with_ext);
             } else {
                 anyhow::bail!("node not found: \"{file}\"");
