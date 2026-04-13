@@ -12,11 +12,11 @@ The graph builder sits between parsers and rules. It takes raw parser output and
 
 ## Responsibility boundaries
 
-| Layer             | Responsibility                                           | Does NOT do                                       |
-| ----------------- | -------------------------------------------------------- | ------------------------------------------------- |
-| **Parsers**       | Emit raw link strings as they appear in source           | No normalization, no classification, no filtering |
-| **Graph builder** | Normalize targets, classify edges, resolve paths, enrich | No judgment — that's rules                        |
-| **Rules**         | Judge the enriched graph, emit diagnostics               | No filesystem access, no re-computation           |
+| Layer             | Responsibility                                         | Does NOT do                                       |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| **Parsers**       | Emit raw link strings as they appear in source         | No normalization, no classification, no filtering |
+| **Graph builder** | Normalize targets, resolve paths, create nodes, enrich | No judgment — that's rules                        |
+| **Rules**         | Judge the enriched graph, emit diagnostics             | No filesystem access, no re-computation           |
 
 Parsers should emit what they find. The graph builder decides what it means.
 
@@ -58,7 +58,7 @@ Only two things are dropped: empty targets and anchor-only targets (no file to r
 
 `is_uri()` uses the [`url`](https://docs.rs/url) crate (WHATWG URL Standard) to parse the target, then accepts it as a URI if it has authority (`://`) or uses a known opaque scheme (`mailto`, `tel`, `data`, `urn`, `javascript`).
 
-URI targets skip path resolution (they're not relative file paths) and are classified as `External(Remote)` on the edge.
+URI targets skip path resolution (they're not relative file paths) and become referenced nodes with `type: "uri"`.
 
 ### 3. Resolve paths
 
@@ -73,18 +73,21 @@ edge.link: setup.md#heading  (resolved path with fragment)
 
 Uses standard path joining with `..` / `.` normalization.
 
-### 4. Classify edge targets
+### 4. Create referenced nodes
 
-Every edge target is classified into a `TargetKind`. This is a pure operation — string comparisons and hashmap lookups, no filesystem probing:
+After parsing, every unique edge target that isn't already a node gets added to the graph as a **referenced node** with `included: false`. This ensures every `edge.target` resolves to a node — you can always join on it.
 
-| Condition                                         | `TargetKind`        | Meaning                                        |
-| ------------------------------------------------- | ------------------- | ---------------------------------------------- |
-| Target is a URI (`is_uri()`)                      | `External(Remote)`  | Off-graph, remote resource                     |
-| Target doesn't match any `include` pattern        | `External(Local)`   | Filesystem-shaped but outside drft's authority |
-| Target matches `include` and is in `graph.nodes`  | `Internal(Found)`   | Resolved — both endpoints are in the graph     |
-| Target matches `include` but not in `graph.nodes` | `Internal(Missing)` | Expected file is absent — broken link          |
+URI targets (detected by `is_uri()`) get `type: "uri"`. Filesystem targets get statted to determine their type:
 
-`include` is drft's sole authority for what gets read from disk. Targets outside `include` — whether they exist on disk or not — are `External(Local)`. drft does not probe the filesystem to classify them.
+| `type`        | Source         | Meaning                       |
+| ------------- | -------------- | ----------------------------- |
+| `"file"`      | stat           | Regular file on disk          |
+| `"directory"` | stat           | Directory on disk             |
+| `"symlink"`   | stat           | Symbolic link on disk         |
+| `"uri"`       | string parsing | Off-filesystem (http, mailto) |
+| `null`        | stat failed    | Nothing on disk — broken link |
+
+`include` controls what drft reads and hashes. drft stats any non-URI target within the graph root to determine its type.
 
 ### 5. Symlink policy
 
@@ -97,17 +100,7 @@ For each entry matching `include`:
 
 This prevents content access through symlinks pointing outside the graph. `include` patterns don't traverse above the root (the walker is rooted at the `drft.toml` directory).
 
-### 6. Probe filesystem properties
-
-For non-URI edge targets, the graph builder probes the filesystem and stores results per-target in `graph.target_properties`:
-
-| Property         | Type             | Description                  |
-| ---------------- | ---------------- | ---------------------------- |
-| `is_symlink`     | bool             | Target path is a symlink     |
-| `is_directory`   | bool             | Target path is a directory   |
-| `symlink_target` | Option\<String\> | Resolved symlink destination |
-
-Rules access these via `graph.target_props(&edge.target)`. Properties are stored once per target, not duplicated across edges.
+Symlinks in `include` also get a filesystem edge. The graph builder reads the symlink target, resolves it relative to the source, and adds an edge with `parser: "filesystem"`. If the resolved target isn't already a node, it gets statted and added as a referenced node.
 
 ### 6. Enrich
 
@@ -115,19 +108,18 @@ After building, `enrich()` computes all [structural analyses](analyses/README.md
 
 ## Edge structure
 
-Edges carry the relationship, classification, and provenance:
+Edges carry the relationship and provenance:
 
-| Field         | Type             | Description                                                                          |
-| ------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| `source`      | String           | Source file path                                                                     |
-| `target`      | String           | Target path or URI                                                                   |
-| `target_kind` | TargetKind       | Classification of the target (see [classify edge targets](#4-classify-edge-targets)) |
-| `link`        | Option\<String\> | Original link when it differs from target (e.g., `bar.md#heading`)                   |
-| `parser`      | String           | Which parser discovered this edge (provenance)                                       |
+| Field    | Type             | Description                                                        |
+| -------- | ---------------- | ------------------------------------------------------------------ |
+| `source` | String           | Source file path                                                   |
+| `target` | String           | Target path or URI (always matches a key in `graph.nodes`)         |
+| `link`   | Option\<String\> | Original link when it differs from target (e.g., `bar.md#heading`) |
+| `parser` | String           | Which parser discovered this edge (provenance)                     |
 
-`target` is always the node ID for internal edges. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
+`target` is always a node ID — you can join on it directly. `link` is present only when the original reference included a fragment. No transformation needed for consumers.
 
-An edge is **internal** when `target_kind` is `Internal(Found)`. Use `graph.is_internal_edge(&edge)` to check.
+An edge is **internal** when its target node is `included`. Use `graph.is_internal_edge(&edge)` to check.
 
 ## JSON output
 
@@ -141,30 +133,30 @@ The JSON graph output follows the [JGF v2.0](https://jsongraphformat.info/) sche
 }
 ```
 
-Node metadata includes `hash` (when present) and any parser-extracted metadata keyed by parser name:
+Edges include all targets — included, referenced, and missing.
+
+Node metadata includes `type`, `included`, `hash` (when present), and any parser-extracted metadata keyed by parser name:
 
 ```json
 {
+  "id": "setup.md",
   "metadata": {
+    "type": "file",
+    "included": true,
     "hash": "b3:...",
     "frontmatter": { "title": "Setup", "sources": ["../shared/glossary.md"] }
   }
 }
 ```
 
-Graph-level metadata includes `target_properties` (filesystem properties of edge targets):
+Referenced nodes (targets not in `include`) have `included: false` and no hash:
 
 ```json
 {
-  "graph": {
-    "directed": true,
-    "metadata": {
-      "target_properties": {
-        "setup.md": { "is_symlink": false, "is_directory": false }
-      }
-    },
-    "nodes": {},
-    "edges": []
+  "id": "https://example.com",
+  "metadata": {
+    "type": "uri",
+    "included": false
   }
 }
 ```
@@ -174,8 +166,8 @@ Graph-level metadata includes `target_properties` (filesystem properties of edge
 | Function                        | Purpose                                                       |
 | ------------------------------- | ------------------------------------------------------------- |
 | `is_uri(target)`                | Check if target is a URI (WHATWG URL parsing + scheme filter) |
-| `graph.target_props(target)`    | Get filesystem properties for a target                        |
-| `graph.is_internal_edge(&edge)` | Check if the edge's `target_kind` is `Internal(Found)`        |
+| `graph.included_nodes()`        | Iterate over nodes where `included` is true                   |
+| `graph.is_internal_edge(&edge)` | Check if the edge's target node is `included`                 |
 
 ## Lockfile
 

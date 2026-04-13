@@ -29,8 +29,8 @@ The command receives a JSON object on stdin with two top-level keys: `graph` (th
   "graph": {
     "directed": true,
     "nodes": {
-      "index.md": { "metadata": { "type": "file", "hash": "b3:abc..." } },
-      "setup.md": { "metadata": { "type": "file", "hash": "b3:def..." } }
+      "index.md": { "metadata": { "type": "file", "included": true, "hash": "b3:abc..." } },
+      "setup.md": { "metadata": { "type": "file", "included": true, "hash": "b3:def..." } }
     },
     "edges": [
       { "source": "index.md", "target": "setup.md", "parser": "markdown" }

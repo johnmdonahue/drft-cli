@@ -1,5 +1,4 @@
 use crate::diagnostic::Diagnostic;
-use crate::graph::{Resolution, TargetKind};
 use crate::rules::{Rule, RuleContext};
 
 pub struct UnresolvedEdgeRule;
@@ -16,7 +15,8 @@ impl Rule for UnresolvedEdgeRule {
             .edges
             .iter()
             .filter_map(|edge| {
-                if !matches!(edge.target_kind, TargetKind::Internal(Resolution::Missing)) {
+                let target_node = graph.nodes.get(&edge.target);
+                if target_node.is_none_or(|n| !n.included || n.node_type.is_some()) {
                     return None;
                 }
 
@@ -40,17 +40,24 @@ impl Rule for UnresolvedEdgeRule {
 mod tests {
     use super::*;
     use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
-    use crate::graph::{Edge, Graph, Location, TargetKind};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
 
     #[test]
     fn detects_unresolved_edge() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
+        graph.add_node(Node {
+            path: "gone.md".into(),
+            node_type: None,
+            included: true,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "gone.md".into(),
-            target_kind: TargetKind::Internal(Resolution::Missing),
             link: None,
             parser: "markdown".into(),
         });
@@ -87,17 +94,29 @@ mod tests {
     fn no_diagnostic_for_external_targets() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
+        graph.add_node(Node {
+            path: "assets/logo.png".into(),
+            node_type: Some(NodeType::File),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "https://example.com".into(),
+            node_type: Some(NodeType::Uri),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "assets/logo.png".into(),
-            target_kind: TargetKind::External(Location::Local),
             link: None,
             parser: "markdown".into(),
         });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "https://example.com".into(),
-            target_kind: TargetKind::External(Location::Remote),
             link: None,
             parser: "markdown".into(),
         });

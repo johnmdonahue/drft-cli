@@ -42,8 +42,9 @@ mod tests {
     use super::*;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_enriched, make_node};
-    use crate::graph::{Edge, Resolution, TargetKind};
+    use crate::graph::{Edge, Node};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
 
     #[test]
     fn detects_simple_cycle() {
@@ -93,10 +94,16 @@ mod tests {
     fn ignores_broken_link_edges() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
+        graph.add_node(Node {
+            path: "missing.md".into(),
+            node_type: None,
+            included: true,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "a.md".into(),
             target: "missing.md".into(),
-            target_kind: TargetKind::Internal(Resolution::Missing),
             link: None,
             parser: "markdown".into(),
         });

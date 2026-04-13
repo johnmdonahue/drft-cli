@@ -58,9 +58,18 @@ fn graph_json_follows_jgf() {
             );
         }
     }
+    // Node metadata should carry type and included fields
     assert!(
-        nodes["index.md"]["metadata"].get("type").is_none(),
-        "node metadata should not carry a type field"
+        nodes["index.md"]["metadata"].get("type").is_some(),
+        "node metadata should carry a type field"
+    );
+    assert_eq!(
+        nodes["index.md"]["metadata"]["type"], "file",
+        "included markdown file should have type 'file'"
+    );
+    assert_eq!(
+        nodes["index.md"]["metadata"]["included"], true,
+        "discovered file should be included"
     );
 
     // Edges: array of { "source", "target", "id"?, "relation"?, "directed"?, "label"?, "metadata"? }
@@ -92,9 +101,9 @@ fn graph_json_follows_jgf() {
     }
 }
 
-/// Directory traversal: ../ targets are External(Local) edges — no node created.
+/// Directory traversal: ../ targets are referenced nodes with included=false.
 #[test]
-fn traversal_parent_escape_no_node() {
+fn traversal_parent_escape_not_included() {
     let outer = TempDir::new().unwrap();
     let graph_root = outer.path().join("project");
     fs::create_dir(&graph_root).unwrap();
@@ -117,10 +126,12 @@ fn traversal_parent_escape_no_node() {
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
     let nodes = v["graph"]["nodes"].as_object().unwrap();
-    assert!(
-        !nodes.contains_key("../outside.md"),
-        "escape target should not appear as a node"
-    );
+    if let Some(escape_node) = nodes.get("../outside.md") {
+        assert_eq!(
+            escape_node["metadata"]["included"], false,
+            "escape target should not be included"
+        );
+    }
 }
 
 /// Directory traversal: symlink whose canonical target is outside include has hash=None.
@@ -164,9 +175,9 @@ fn traversal_symlink_escape_not_hashed() {
     }
 }
 
-/// Directory traversal: absolute path target is External(Local) — no node created.
+/// Directory traversal: absolute path target is a referenced node with included=false.
 #[test]
-fn traversal_absolute_path_no_node() {
+fn traversal_absolute_path_not_included() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(dir.path().join("index.md"), "[root](/etc/hosts)").unwrap();
@@ -186,17 +197,19 @@ fn traversal_absolute_path_no_node() {
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
     let nodes = v["graph"]["nodes"].as_object().unwrap();
-    for path in nodes.keys() {
-        assert!(
-            !path.contains("etc") && !path.starts_with('/'),
-            "absolute path target should not appear as a node, found: {path}"
-        );
+    for (path, node) in nodes {
+        if path.contains("etc") || path.starts_with('/') {
+            assert_eq!(
+                node["metadata"]["included"], false,
+                "absolute path target should not be included, found: {path}"
+            );
+        }
     }
 }
 
-/// Directory traversal: nested ../ that escapes root is External(Local) — no node.
+/// Directory traversal: nested ../ that escapes root is a referenced node with included=false.
 #[test]
-fn traversal_nested_escape_no_node() {
+fn traversal_nested_escape_not_included() {
     let outer = TempDir::new().unwrap();
     let graph_root = outer.path().join("project");
     let sub = graph_root.join("sub");
@@ -220,11 +233,13 @@ fn traversal_nested_escape_no_node() {
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
     let nodes = v["graph"]["nodes"].as_object().unwrap();
-    for path in nodes.keys() {
-        assert!(
-            !path.contains("outside"),
-            "nested escape target should not appear as a node, found: {path}"
-        );
+    for (path, node) in nodes {
+        if path.contains("outside") {
+            assert_eq!(
+                node["metadata"]["included"], false,
+                "nested escape target should not be included, found: {path}"
+            );
+        }
     }
 }
 

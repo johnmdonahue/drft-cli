@@ -59,7 +59,7 @@ JSON output:
 }
 ```
 
-Nodes are sorted alphabetically by path. Degree counts all edges, including those to external targets.
+Nodes are sorted alphabetically by path. Degree counts edges to all nodes (included and referenced). The analysis reports only on included nodes.
 
 ### As a rule (`drft check`)
 

@@ -29,7 +29,7 @@ impl Analysis for PageRank {
 
     fn run(&self, ctx: &AnalysisContext) -> PageRankResult {
         let graph = ctx.graph;
-        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let real_nodes: Vec<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
 
         let n = real_nodes.len();
         if n == 0 {

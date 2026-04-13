@@ -72,11 +72,15 @@ mod tests {
 
         graph.add_node(Node {
             path: "index.md".into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: Some(index_hash),
             metadata: HashMap::new(),
         });
         graph.add_node(Node {
             path: "setup.md".into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: Some(setup_hash),
             metadata: HashMap::new(),
         });

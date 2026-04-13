@@ -213,6 +213,8 @@ mod tests {
         meta_map.insert("frontmatter".to_string(), metadata);
         Node {
             path: path.into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: None,
             metadata: meta_map,
         }
@@ -374,6 +376,8 @@ mod tests {
         let mut graph = Graph::new();
         graph.add_node(Node {
             path: "no-frontmatter.md".into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: None,
             metadata: HashMap::new(),
         });

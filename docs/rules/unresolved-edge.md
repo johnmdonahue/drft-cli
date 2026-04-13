@@ -5,9 +5,7 @@ sources:
 
 # unresolved-edge
 
-Flags edges whose target matches an `include` pattern but does not exist as a node in the graph. This means the file is expected to be part of the graph but is missing — a broken internal link.
-
-Edges to targets outside `include` are classified as `External(Local)` and are not flagged by this rule. Edges to URIs are classified as `External(Remote)` and are also not flagged.
+Fires when an edge target is an included node (`included: true`) with `type: null` — meaning the file matches `include` patterns and should exist but doesn't.
 
 ## Example
 
@@ -37,4 +35,4 @@ ignore = ["drafts/"]
 
 ## Analysis
 
-This rule matches edges with `TargetKind::Internal(Resolution::Missing)`. The classification is computed during graph building — no filesystem probing at rule time.
+This rule checks whether the target node is included and has `type: null`. The classification is computed during graph building — no filesystem probing at rule time.

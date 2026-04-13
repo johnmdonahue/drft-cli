@@ -20,7 +20,7 @@ include = [
 ]
 ```
 
-`include` is drft's sole authority for what gets read from disk. Targets that parsers emit but that don't match `include` are classified as `External(Local)` on the edge — drft does not probe the filesystem for them.
+`include` is drft's sole authority for what gets read from disk. Targets that parsers emit but that don't match `include` become nodes with `included: false` — they exist in the graph for edge resolution but drft does not read or hash them.
 
 ## Exclude patterns
 

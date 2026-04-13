@@ -458,7 +458,7 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
         let mut all_edges: Vec<(&str, &str)> = export
             .edges
             .iter()
-            .map(|(s, t, _, _)| (s.as_str(), t.as_str()))
+            .map(|e| (e.source.as_str(), e.target.as_str()))
             .collect();
         all_edges.sort();
         all_edges.dedup();
@@ -473,6 +473,10 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
         sorted.sort_by(|a, b| a.path.cmp(&b.path));
         for n in &*sorted {
             let mut meta = serde_json::Map::new();
+            if let Some(nt) = &n.node_type {
+                meta.insert("type".into(), serde_json::json!(nt));
+            }
+            meta.insert("included".into(), serde_json::json!(n.included));
             if let Some(h) = &n.hash {
                 meta.insert("hash".into(), serde_json::json!(h));
             }
@@ -487,15 +491,15 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
         let mut edges: Vec<serde_json::Value> = export
             .edges
             .iter()
-            .map(|(source, target, reference, parser)| {
+            .map(|e| {
                 let mut meta = serde_json::Map::new();
-                meta.insert("parser".into(), serde_json::json!(parser));
-                if let Some(r) = reference {
+                meta.insert("parser".into(), serde_json::json!(e.parser));
+                if let Some(ref r) = e.link {
                     meta.insert("link".into(), serde_json::json!(r));
                 }
                 serde_json::json!({
-                    "source": source,
-                    "target": target,
+                    "source": e.source,
+                    "target": e.target,
                     "metadata": meta,
                 })
             })
@@ -507,18 +511,8 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
                 .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
         });
 
-        let mut graph_meta = serde_json::Map::new();
-        if !export.target_properties.is_empty() {
-            let sorted: std::collections::BTreeMap<&String, &graph::TargetProperties> =
-                export.target_properties.iter().collect();
-            graph_meta.insert("target_properties".into(), serde_json::json!(sorted));
-        }
-
         let mut graph_obj = serde_json::Map::new();
         graph_obj.insert("directed".into(), serde_json::json!(true));
-        if !graph_meta.is_empty() {
-            graph_obj.insert("metadata".into(), serde_json::Value::Object(graph_meta));
-        }
         graph_obj.insert("nodes".into(), serde_json::json!(nodes));
         graph_obj.insert("edges".into(), serde_json::json!(edges));
 
@@ -531,14 +525,22 @@ fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>
 
 struct NodeExport {
     path: String,
+    node_type: Option<graph::NodeType>,
+    included: bool,
     hash: Option<String>,
     metadata: HashMap<String, serde_json::Value>,
 }
 
+struct EdgeExport {
+    source: String,
+    target: String,
+    link: Option<String>,
+    parser: String,
+}
+
 struct GraphExport {
     nodes: Vec<NodeExport>,
-    edges: Vec<(String, String, Option<String>, String)>, // source, target, reference, parser
-    target_properties: HashMap<String, graph::TargetProperties>,
+    edges: Vec<EdgeExport>,
 }
 
 /// Collect a JGF export for a single graph root.
@@ -564,31 +566,27 @@ fn collect_jgf_graph(root: &Path, parser: Option<&str>) -> Result<GraphExport> {
         .iter()
         .map(|(path, node)| NodeExport {
             path: path.clone(),
+            node_type: node.node_type,
+            included: node.included,
             hash: node.hash.clone(),
             metadata: node.metadata.clone(),
         })
         .collect();
 
-    let edges: Vec<(String, String, Option<String>, String)> = g
+    let edges: Vec<EdgeExport> = g
         .edges
         .iter()
-        .filter(|e| g.nodes.contains_key(&e.target))
-        .map(|e| {
-            (
-                e.source.clone(),
-                e.target.clone(),
-                e.link.clone(),
-                e.parser.clone(),
-            )
+        .map(|e| EdgeExport {
+            source: e.source.clone(),
+            target: e.target.clone(),
+            link: e.link.clone(),
+            parser: e.parser.clone(),
         })
         .collect();
-
-    let target_properties = g.target_properties.clone();
 
     Ok(GraphExport {
         nodes,
         edges,
-        target_properties,
     })
 }
 
@@ -621,11 +619,11 @@ fn run_impact(
     // Resolve file args (try with .md extension if not found)
     let mut seeds: Vec<String> = Vec::new();
     for file in files {
-        if graph.nodes.contains_key(file.as_str()) {
+        if graph.nodes.get(file.as_str()).is_some_and(|n| n.included) {
             seeds.push(file.clone());
         } else {
             let with_ext = format!("{file}.md");
-            if graph.nodes.contains_key(with_ext.as_str()) {
+            if graph.nodes.get(with_ext.as_str()).is_some_and(|n| n.included) {
                 seeds.push(with_ext);
             } else {
                 anyhow::bail!("node not found: \"{file}\"");

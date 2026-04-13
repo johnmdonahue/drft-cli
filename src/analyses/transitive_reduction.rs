@@ -25,7 +25,7 @@ impl Analysis for TransitiveReduction {
 
     fn run(&self, ctx: &AnalysisContext) -> TransitiveReductionResult {
         let graph = ctx.graph;
-        let node_set: HashSet<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let node_set: HashSet<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
         let mut redundant_edges = Vec::new();
 
         for edge in &graph.edges {

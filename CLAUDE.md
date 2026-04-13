@@ -62,9 +62,9 @@ cargo run -- check     # runs as `drft check`
 - Lockfile (`drft.lock`): TOML v2 format, nodes + hashes only (no edges), fully deterministic, no timestamps
 - Config (`drft.toml`): TOML with `include`/`exclude`, `[parsers]`, and `[rules]` sections. Each config declares exactly one graph; nested `drft.toml` files found while walking are ordinary files.
 - Hashes use BLAKE3 with `b3:` prefix
-- Edges carry parser provenance and a `target_kind` classifying the target (`Internal(Found)`, `Internal(Missing)`, `External(Local)`, `External(Remote)`)
-- Every node is a file matched by `include`. `Node.hash` is `Some` when content was read, `None` for symlinks whose canonical target is outside `include`
-- Edge scope: `graph.is_internal_edge(&edge)` returns true when `target_kind` is `Internal(Found)`
+- Every edge target exists as a node in the graph. Included nodes (`included: true`) are files drft reads and hashes. Referenced nodes (`included: false`) are edge targets drft knows about but doesn't manage.
+- Node type comes from stat: `file`, `directory`, `symlink`, `uri`, or `null` (broken link)
+- Edge scope: `graph.is_internal_edge(&edge)` returns true when the target node is included
 - Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
 - Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)

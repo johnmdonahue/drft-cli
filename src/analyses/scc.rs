@@ -27,7 +27,7 @@ impl Analysis for StronglyConnectedComponents {
 
     fn run(&self, ctx: &AnalysisContext) -> SccResult {
         let graph = ctx.graph;
-        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let real_nodes: Vec<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
 
         let mut state = TarjanState {
             graph,

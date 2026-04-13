@@ -20,26 +20,32 @@ impl Rule for SymlinkEdgeRule {
                     return None;
                 }
 
-                // Check target properties set during graph building
-                let props = graph.target_properties.get(&edge.target);
-                if props.is_some_and(|p| p.is_symlink) {
-                    let resolved = props
-                        .and_then(|p| p.symlink_target.as_deref())
-                        .unwrap_or("unknown");
-                    Some(Diagnostic {
-                        rule: "symlink-edge".into(),
-                        message: format!("target is a symlink to {resolved}"),
-                        source: Some(edge.source.clone()),
-                        target: Some(edge.target.clone()),
-                        fix: Some(format!(
-                            "{} is a symlink to {resolved} \u{2014} consider linking to the actual file directly in {}",
-                            edge.target, edge.source
-                        )),
-                        ..Default::default()
-                    })
-                } else {
-                    None
+                // Check if the target node is a symlink
+                let target_node = graph.nodes.get(&edge.target)?;
+                if target_node.node_type != Some(crate::graph::NodeType::Symlink) {
+                    return None;
                 }
+
+                // Find the filesystem edge from this node to get the symlink target
+                let symlink_target = graph.forward.get(&edge.target)
+                    .and_then(|indices| indices.iter()
+                        .find_map(|&idx| {
+                            let fs_edge = &graph.edges[idx];
+                            if fs_edge.parser == "filesystem" { Some(fs_edge.target.clone()) } else { None }
+                        }));
+
+                let resolved = symlink_target.as_deref().unwrap_or("unknown");
+                Some(Diagnostic {
+                    rule: "symlink-edge".into(),
+                    message: format!("target is a symlink to {resolved}"),
+                    source: Some(edge.source.clone()),
+                    target: Some(edge.target.clone()),
+                    fix: Some(format!(
+                        "{} is a symlink to {resolved} \u{2014} consider linking to the actual file directly in {}",
+                        edge.target, edge.source
+                    )),
+                    ..Default::default()
+                })
             })
             .collect()
     }
@@ -49,25 +55,39 @@ impl Rule for SymlinkEdgeRule {
 mod tests {
     use super::*;
     use crate::graph::test_helpers::{make_enriched, make_node};
-    use crate::graph::{Edge, Graph, Location, TargetKind, TargetProperties};
+    use crate::graph::{Edge, Graph, Node, NodeType};
     use crate::rules::RuleContext;
+    use std::collections::HashMap;
 
     #[test]
     fn detects_symlink_target() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
-        graph.target_properties.insert(
-            "setup.md".into(),
-            TargetProperties {
-                is_symlink: true,
-                is_directory: false,
-                symlink_target: Some("/shared/setup.md".into()),
-            },
-        );
+        graph.add_node(Node {
+            path: "setup.md".into(),
+            node_type: Some(NodeType::Symlink),
+            included: true,
+            hash: None,
+            metadata: HashMap::new(),
+        });
+        graph.add_node(Node {
+            path: "/shared/setup.md".into(),
+            node_type: Some(NodeType::File),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
+        // Filesystem edge from symlink to its target
+        graph.add_edge(Edge {
+            source: "setup.md".into(),
+            target: "/shared/setup.md".into(),
+            link: None,
+            parser: "filesystem".into(),
+        });
+        // Content edge from index.md to the symlink
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            target_kind: TargetKind::External(Location::Local),
             link: None,
             parser: "markdown".into(),
         });
@@ -87,10 +107,16 @@ mod tests {
     fn no_diagnostic_for_regular_file() {
         let mut graph = Graph::new();
         graph.add_node(make_node("index.md"));
+        graph.add_node(Node {
+            path: "setup.md".into(),
+            node_type: Some(NodeType::File),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "index.md".into(),
             target: "setup.md".into(),
-            target_kind: TargetKind::External(Location::Local),
             link: None,
             parser: "markdown".into(),
         });

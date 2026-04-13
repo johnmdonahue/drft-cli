@@ -27,9 +27,8 @@ impl Analysis for Degree {
         // A file linking to a URL or a non-included file has out_degree > 0.
         // This differs from connectivity analyses which scope to internal edges.
         let mut nodes: Vec<NodeDegree> = graph
-            .nodes
-            .keys()
-            .map(|path| {
+            .included_nodes()
+            .map(|(path, _)| {
                 let in_degree = graph
                     .reverse
                     .get(path.as_str())
@@ -62,7 +61,8 @@ mod tests {
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Edge, Graph, Location, TargetKind};
+    use crate::graph::{Edge, Graph, Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -136,16 +136,23 @@ mod tests {
     fn counts_edges_to_external_targets() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
+        graph.add_node(Node {
+            path: "https://example.com".into(),
+            node_type: Some(NodeType::Uri),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "a.md".into(),
             target: "https://example.com".into(),
-            target_kind: TargetKind::External(Location::Remote),
             link: None,
             parser: "markdown".into(),
         });
 
         let config = Config::defaults();
         let result = Degree.run(&make_ctx(&graph, &config));
+        // Only included nodes appear in results; the URI is referenced, not included
         assert_eq!(result.nodes.len(), 1);
         assert_eq!(result.nodes[0].node, "a.md");
         assert_eq!(result.nodes[0].out_degree, 1);

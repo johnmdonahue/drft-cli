@@ -58,7 +58,7 @@ JSON output:
 }
 ```
 
-Components are sorted by size (largest first). Members within each component are sorted alphabetically. The analysis operates on all nodes and internal edges.
+Components are sorted by size (largest first). Members within each component are sorted alphabetically. Connectivity considers edges between included nodes only (`graph.is_internal_edge()` checks whether the target is an included node).
 
 ### As a rule (`drft check`)
 

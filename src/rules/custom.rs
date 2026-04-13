@@ -144,19 +144,22 @@ fn build_enriched_json(enriched: &EnrichedGraph, options: Option<&toml::Value>) 
     let mut nodes = serde_json::Map::new();
     for (path, node) in &graph.nodes {
         let mut meta = serde_json::Map::new();
+        if let Some(nt) = &node.node_type {
+            meta.insert("type".into(), serde_json::json!(nt));
+        }
+        meta.insert("included".into(), serde_json::json!(node.included));
         if let Some(h) = &node.hash {
             meta.insert("hash".into(), serde_json::json!(h));
         }
-        if !node.metadata.is_empty() {
-            meta.insert("metadata".into(), serde_json::json!(node.metadata));
+        for (key, value) in &node.metadata {
+            meta.insert(key.clone(), value.clone());
         }
-        nodes.insert(path.clone(), serde_json::json!(meta));
+        nodes.insert(path.clone(), serde_json::json!({ "metadata": meta }));
     }
 
     let edges: Vec<serde_json::Value> = graph
         .edges
         .iter()
-        .filter(|e| graph.nodes.contains_key(&e.target))
         .map(|e| {
             let mut edge = serde_json::json!({
                 "source": e.source,
@@ -202,7 +205,7 @@ mod tests {
     use super::*;
     use crate::analyses::enrich_graph;
     use crate::graph::test_helpers::make_edge;
-    use crate::graph::{Graph, Node};
+    use crate::graph::{Graph, Node, NodeType};
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
@@ -211,11 +214,15 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
+            node_type: Some(NodeType::File),
+            included: true,
             hash: Some("b3:aaa".into()),
             metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
+            node_type: Some(NodeType::File),
+            included: true,
             hash: Some("b3:bbb".into()),
             metadata: HashMap::new(),
         });

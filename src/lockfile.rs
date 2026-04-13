@@ -25,6 +25,9 @@ impl Lockfile {
     pub fn from_graph(graph: &Graph) -> Self {
         let mut nodes = BTreeMap::new();
         for (path, node) in &graph.nodes {
+            if !node.included {
+                continue;
+            }
             nodes.insert(
                 path.clone(),
                 LockfileNode {
@@ -96,11 +99,15 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node {
             path: "index.md".into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: Some("b3:aaa".into()),
             metadata: HashMap::new(),
         });
         g.add_node(Node {
             path: "setup.md".into(),
+            node_type: Some(crate::graph::NodeType::File),
+            included: true,
             hash: Some("b3:bbb".into()),
             metadata: HashMap::new(),
         });

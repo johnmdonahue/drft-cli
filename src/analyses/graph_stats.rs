@@ -22,7 +22,7 @@ impl Analysis for GraphStats {
 
     fn run(&self, ctx: &AnalysisContext) -> GraphStatsResult {
         let graph = ctx.graph;
-        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let real_nodes: Vec<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
 
         let node_count = real_nodes.len();
 

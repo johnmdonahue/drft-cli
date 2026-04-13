@@ -30,6 +30,11 @@ pub fn is_uri(target: &str) -> bool {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Node {
     pub path: String,
+    /// What kind of entity: file, directory, symlink, uri. None when stat failed (broken link).
+    #[serde(rename = "type")]
+    pub node_type: Option<NodeType>,
+    /// Whether this node matched include patterns — drft reads, hashes, and manages included nodes.
+    pub included: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
     /// Structured metadata from parsers, keyed by parser name.
@@ -37,48 +42,25 @@ pub struct Node {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-/// Classification of an edge's target, computed during graph building.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
-pub enum TargetKind {
-    Internal(Resolution),
-    External(Location),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
-pub enum Resolution {
-    Found,
-    Missing,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
-pub enum Location {
-    Local,
-    Remote,
+/// What kind of filesystem entity this node represents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NodeType {
+    File,
+    Directory,
+    Symlink,
+    Uri,
 }
 
 #[derive(Debug, Clone)]
 pub struct Edge {
     pub source: String,
-    /// Node identity — for internal edges this matches a key in `graph.nodes`
-    /// when `target_kind` is `Internal(Found)`. Fragment-stripped.
+    /// Node identity — always matches a key in `graph.nodes`. Fragment-stripped.
     pub target: String,
-    /// Classification of the target into the four-variant TargetKind.
-    pub target_kind: TargetKind,
     /// Original link when it differs from target (e.g., `bar.md#heading`).
-    /// Absent when the link resolved to exactly the node ID.
     pub link: Option<String>,
     /// Which parser discovered this edge (provenance).
     pub parser: String,
-}
-
-/// Filesystem properties of an edge target, probed during graph building.
-/// Stored per-target on the Graph, not per-edge.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct TargetProperties {
-    pub is_symlink: bool,
-    pub is_directory: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub symlink_target: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -87,8 +69,6 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     pub forward: HashMap<String, Vec<usize>>,
     pub reverse: HashMap<String, Vec<usize>>,
-    /// Filesystem properties of edge targets, keyed by node identity (fragment-stripped).
-    pub target_properties: HashMap<String, TargetProperties>,
 }
 
 impl Graph {
@@ -100,11 +80,9 @@ impl Graph {
         self.nodes.insert(node.path.clone(), node);
     }
 
-    /// Returns true when the edge target resolves to a node in the graph.
-    /// Analyses that reason about density, reachability, and similar
-    /// on-graph properties use this to scope to the in-graph subgraph.
+    /// Returns true when the edge target is an included node in the graph.
     pub fn is_internal_edge(&self, edge: &Edge) -> bool {
-        matches!(edge.target_kind, TargetKind::Internal(Resolution::Found))
+        self.nodes.get(&edge.target).is_some_and(|n| n.included)
     }
 
     pub fn add_edge(&mut self, edge: Edge) {
@@ -120,9 +98,9 @@ impl Graph {
         self.edges.push(edge);
     }
 
-    /// Get filesystem properties for an edge target.
-    pub fn target_props(&self, target: &str) -> Option<&TargetProperties> {
-        self.target_properties.get(target)
+    /// Iterate over nodes that match include patterns.
+    pub fn included_nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
+        self.nodes.iter().filter(|(_, n)| n.included)
     }
 
     /// Create a new graph containing only edges from the specified parsers.
@@ -130,7 +108,6 @@ impl Graph {
     pub fn filter_by_parsers(&self, parsers: &[String]) -> Graph {
         let mut filtered = Graph {
             nodes: self.nodes.clone(),
-            target_properties: self.target_properties.clone(),
             ..Default::default()
         };
 
@@ -149,15 +126,6 @@ pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
 }
 
-/// Returns true if `target_path` resolves to a location within `canonical_root`.
-/// Uses canonicalization to resolve symlinks and normalize paths.
-/// Returns false if the path doesn't exist or escapes the root.
-fn is_within_root(target_path: &Path, canonical_root: &Path) -> bool {
-    target_path
-        .canonicalize()
-        .is_ok_and(|canonical| canonical.starts_with(canonical_root))
-}
-
 /// Intermediate edge representation used before classification.
 struct PendingEdge {
     source: String,
@@ -168,13 +136,15 @@ struct PendingEdge {
 
 /// Build a graph from files in `root`.
 ///
-/// 1. Discover nodes via `include`/`exclude` — hash raw bytes.
+/// 1. Discover included nodes via `include`/`exclude` — hash raw bytes.
 /// 2. Run parsers to extract links.
-/// 3. Classify each edge target into a `TargetKind`.
+/// 3. Create referenced nodes for all edge targets not already in the graph.
+/// 4. Create filesystem edges for symlinks.
 pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
     let canonical_root = root.canonicalize()?;
     let included_files = discover(root, &config.include, &config.exclude)?;
     let include_globs = crate::config::compile_globs(&config.include)?;
+    let exclude_globs = crate::config::compile_globs(&config.exclude)?;
     let mut graph = Graph::new();
     let mut pending_edges: Vec<PendingEdge> = Vec::new();
 
@@ -198,10 +168,10 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                 Ok(canonical) => {
                     let should_hash = canonical.starts_with(&canonical_root)
                         && canonical.strip_prefix(&canonical_root).is_ok_and(|rel| {
-                            let rel_str = rel.to_string_lossy();
+                            let rel_str = rel.to_string_lossy().replace('\\', "/");
                             include_globs
                                 .as_ref()
-                                .is_some_and(|set| set.is_match(rel_str.as_ref()))
+                                .is_some_and(|set| set.is_match(rel_str.as_str()))
                         });
 
                     if should_hash {
@@ -209,6 +179,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                         let hash = hash_bytes(&raw);
                         graph.add_node(Node {
                             path: file.clone(),
+                            node_type: Some(NodeType::Symlink),
+                            included: true,
                             hash: Some(hash),
                             metadata: HashMap::new(),
                         });
@@ -218,6 +190,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
                     } else {
                         graph.add_node(Node {
                             path: file.clone(),
+                            node_type: Some(NodeType::Symlink),
+                            included: true,
                             hash: None,
                             metadata: HashMap::new(),
                         });
@@ -232,6 +206,8 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
 
         graph.add_node(Node {
             path: file.clone(),
+            node_type: Some(NodeType::File),
+            included: true,
             hash: Some(hash),
             metadata: HashMap::new(),
         });
@@ -299,61 +275,110 @@ pub fn build_graph(root: &Path, config: &Config) -> Result<Graph> {
         }
     }
 
-    // 4. Classify each edge target into a TargetKind.
-    //    String ops + hashmap lookups. No filesystem probing.
-    let target_kinds: Vec<TargetKind> = pending_edges
-        .iter()
-        .map(|p| {
-            if is_uri(&p.target) {
-                TargetKind::External(Location::Remote)
-            } else if !include_globs
-                .as_ref()
-                .is_some_and(|set| set.is_match(&p.target))
-            {
-                TargetKind::External(Location::Local)
-            } else if graph.nodes.contains_key(&p.target) {
-                TargetKind::Internal(Resolution::Found)
-            } else {
-                TargetKind::Internal(Resolution::Missing)
-            }
-        })
-        .collect();
-
-    // 5. Probe target properties for non-URI edge targets within root.
-    //    Needed by the symlink-edge rule; orthogonal to TargetKind.
+    // 4. Create referenced nodes for edge targets not already in the graph.
+    //    Stat non-URI targets within root to determine their type.
     for pending in &pending_edges {
-        if is_uri(&pending.target) || graph.target_properties.contains_key(&pending.target) {
+        if graph.nodes.contains_key(&pending.target) {
             continue;
         }
+        if is_uri(&pending.target) {
+            graph.add_node(Node {
+                path: pending.target.clone(),
+                node_type: Some(NodeType::Uri),
+                included: false,
+                hash: None,
+                metadata: HashMap::new(),
+            });
+            continue;
+        }
+        // Stat non-URI targets to determine type. Stat is cheap metadata —
+        // no content access, no security concern.
         let target_path = root.join(&pending.target);
-        if !is_within_root(&target_path, &canonical_root) {
-            continue;
-        }
-        let is_symlink = target_path.is_symlink();
-        let is_directory = target_path.is_dir();
-        let symlink_target = if is_symlink {
-            std::fs::read_link(&target_path)
-                .ok()
-                .map(|p| p.to_string_lossy().to_string())
-        } else {
-            None
-        };
-        graph.target_properties.insert(
-            pending.target.clone(),
-            TargetProperties {
-                is_symlink,
-                is_directory,
-                symlink_target,
-            },
-        );
+        let node_type = target_path.symlink_metadata().ok().map(|m| {
+            if m.file_type().is_symlink() {
+                NodeType::Symlink
+            } else if m.is_dir() {
+                NodeType::Directory
+            } else {
+                NodeType::File
+            }
+        });
+        // A target that matches include && !exclude is included even if it
+        // doesn't exist on disk — that's a broken link in scope.
+        // Paths escaping the root (leading ..) are never included.
+        let escapes_root = pending.target.starts_with("..");
+        let matches_include = !escapes_root
+            && include_globs
+                .as_ref()
+                .is_some_and(|set| set.is_match(&pending.target));
+        let matches_exclude = exclude_globs
+            .as_ref()
+            .is_some_and(|set| set.is_match(&pending.target));
+        let included = matches_include && !matches_exclude;
+        graph.add_node(Node {
+            path: pending.target.clone(),
+            node_type,
+            included,
+            hash: None,
+            metadata: HashMap::new(),
+        });
     }
 
-    // 6. Attach each pending edge with its classified target_kind.
-    for (pending, target_kind) in pending_edges.into_iter().zip(target_kinds) {
+    // 5. Create filesystem edges for symlinks in include.
+    //    A symlink is a link — model it as an edge with "filesystem" provenance.
+    for file in &included_files {
+        let file_path = root.join(file);
+        if !file_path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+            continue;
+        }
+        if let Ok(link_target) = std::fs::read_link(&file_path) {
+            // If the symlink target is absolute, resolve it relative to root.
+            // If it's outside root, canonicalize and make relative if possible.
+            let resolved = if link_target.is_absolute() {
+                match link_target.canonicalize() {
+                    Ok(canonical) => match canonical.strip_prefix(&canonical_root) {
+                        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+                        Err(_) => continue, // symlink escapes root — skip filesystem edge
+                    },
+                    Err(_) => continue, // broken absolute symlink — skip
+                }
+            } else {
+                resolve_link(file, &link_target.to_string_lossy())
+            };
+            // Ensure the resolved target is a node
+            if !graph.nodes.contains_key(&resolved) {
+                let resolved_path = root.join(&resolved);
+                let node_type = resolved_path.symlink_metadata().ok().map(|m| {
+                    if m.file_type().is_symlink() {
+                        NodeType::Symlink
+                    } else if m.is_dir() {
+                        NodeType::Directory
+                    } else {
+                        NodeType::File
+                    }
+                });
+                graph.add_node(Node {
+                    path: resolved.clone(),
+                    node_type,
+                    included: false,
+                    hash: None,
+                    metadata: HashMap::new(),
+                });
+            }
+            graph.add_edge(Edge {
+                source: file.clone(),
+                target: resolved,
+                link: None,
+                parser: "filesystem".into(),
+            });
+        }
+    }
+
+    // 6. Attach pending edges.
+    for pending in pending_edges {
         graph.add_edge(Edge {
             source: pending.source,
             target: pending.target,
-            target_kind,
             link: pending.link,
             parser: pending.parser,
         });
@@ -440,6 +465,8 @@ pub mod test_helpers {
     pub fn make_node(path: &str) -> Node {
         Node {
             path: path.into(),
+            node_type: Some(NodeType::File),
+            included: true,
             hash: None,
             metadata: HashMap::new(),
         }
@@ -449,7 +476,6 @@ pub mod test_helpers {
         Edge {
             source: source.into(),
             target: target.into(),
-            target_kind: TargetKind::Internal(Resolution::Found),
             link: None,
             parser: "markdown".into(),
         }
@@ -547,7 +573,6 @@ mod tests {
         g.add_edge(Edge {
             source: "a.md".into(),
             target: "b.md".into(),
-            target_kind: TargetKind::Internal(Resolution::Found),
             link: Some("b.md#heading".into()),
             parser: "markdown".into(),
         });
@@ -627,7 +652,6 @@ mod tests {
         Edge {
             source: source.into(),
             target: target.into(),
-            target_kind: TargetKind::Internal(Resolution::Found),
             link: None,
             parser: parser.into(),
         }

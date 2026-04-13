@@ -30,9 +30,8 @@ impl Analysis for ImpactRadius {
         let graph = ctx.graph;
 
         let mut nodes: Vec<ImpactRadiusNode> = graph
-            .nodes
-            .keys()
-            .map(|path| {
+            .included_nodes()
+            .map(|(path, _)| {
                 let mut visited = HashSet::new();
                 let mut queue = VecDeque::new();
                 visited.insert(path.as_str());
@@ -82,7 +81,8 @@ mod tests {
     use crate::analyses::AnalysisContext;
     use crate::config::Config;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Edge, Graph, Location, TargetKind};
+    use crate::graph::{Edge, Graph, Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -209,17 +209,25 @@ mod tests {
     fn external_edges_dont_create_nodes() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
+        graph.add_node(Node {
+            path: "https://example.com".into(),
+            node_type: Some(NodeType::Uri),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "a.md".into(),
             target: "https://example.com".into(),
-            target_kind: TargetKind::External(Location::Remote),
             link: None,
             parser: "markdown".into(),
         });
 
         let config = Config::defaults();
         let result = ImpactRadius.run(&make_ctx(&graph, &config));
+        // Only included nodes appear in results — the URI is referenced, not included
         assert_eq!(result.nodes.len(), 1);
+        assert_eq!(result.nodes[0].node, "a.md");
         assert_eq!(result.nodes[0].radius, 0);
     }
 }

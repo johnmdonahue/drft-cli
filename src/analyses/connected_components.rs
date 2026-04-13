@@ -25,7 +25,7 @@ impl Analysis for ConnectedComponents {
     fn run(&self, ctx: &AnalysisContext) -> ConnectedComponentsResult {
         let graph = ctx.graph;
         // Build undirected adjacency among real nodes
-        let real_nodes: Vec<&str> = graph.nodes.keys().map(|s| s.as_str()).collect();
+        let real_nodes: Vec<&str> = graph.included_nodes().map(|(s, _)| s.as_str()).collect();
 
         let mut adj: HashMap<&str, HashSet<&str>> = HashMap::new();
         for node in &real_nodes {
@@ -102,7 +102,8 @@ mod tests {
     use crate::config::Config;
     use crate::graph::Graph;
     use crate::graph::test_helpers::{make_edge, make_node};
-    use crate::graph::{Edge, Location, TargetKind};
+    use crate::graph::{Edge, Node, NodeType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     fn make_ctx<'a>(graph: &'a Graph, config: &'a Config) -> AnalysisContext<'a> {
@@ -165,16 +166,23 @@ mod tests {
     fn external_edges_excluded() {
         let mut graph = Graph::new();
         graph.add_node(make_node("a.md"));
+        graph.add_node(Node {
+            path: "https://example.com".into(),
+            node_type: Some(NodeType::Uri),
+            included: false,
+            hash: None,
+            metadata: HashMap::new(),
+        });
         graph.add_edge(Edge {
             source: "a.md".into(),
             target: "https://example.com".into(),
-            target_kind: TargetKind::External(Location::Remote),
             link: None,
             parser: "markdown".into(),
         });
 
         let config = Config::defaults();
         let result = ConnectedComponents.run(&make_ctx(&graph, &config));
+        // Only included nodes appear in components — the URI is referenced, not included
         assert_eq!(result.component_count, 1);
         assert_eq!(result.components[0].members, vec!["a.md"]);
     }

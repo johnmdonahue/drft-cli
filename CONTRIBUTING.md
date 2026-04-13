@@ -71,4 +71,4 @@ Add the metric extraction to [`src/metrics.rs`](src/metrics.rs) inside `compute_
 - **Parsers emit, the graph normalizes.** Parsers return raw strings. The graph builder handles URI detection, fragment stripping, path resolution, node classification. Parser authors don't bake in assumptions.
 - **No new dependencies for algorithms.** All graph algorithms (Tarjan's SCC, Brandes' betweenness, PageRank, BFS) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
 - **Deterministic output.** All results are sorted. No timestamps in lockfiles. Same input always produces same output.
-- **Explicit scope filtering.** Structural analyses operate on all nodes and internal edges (`target_kind` is `Internal(Found)`). Edges to external or missing targets don't participate. Each analysis uses `is_internal_edge` to scope to the in-graph subgraph.
+- **Explicit scope filtering.** Structural analyses operate on included nodes and internal edges (`graph.is_internal_edge()` checks whether the target is an included node). Edges to non-included nodes don't participate in structural analysis.
