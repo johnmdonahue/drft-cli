@@ -4,8 +4,8 @@ use drft::analyses;
 use drft::compose;
 use drft::config;
 use drft::discovery;
-use drft::graph;
 use drft::graphs;
+use drft::impact;
 use drft::lock;
 use drft::lockfile;
 use drft::metrics;
@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::Path;
 
-use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
+use cli::{Cli, ColorChoice, Commands, ConfigAction, Direction, OutputFormat};
 use config::{Config, RuleSeverity};
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
@@ -68,11 +68,13 @@ fn try_main() -> Result<i32> {
         Commands::Config { action } => match action {
             ConfigAction::Show => run_config_show(&root, cli.format),
         },
-        Commands::Lock => run_lock(&root),
+        Commands::Lock { path } => run_lock(&root, path.as_deref()),
         Commands::Report { names } => run_report(&root, cli.format, names),
-        Commands::Impact { files, parser } => {
-            run_impact(&root, cli.format, files, parser.as_deref())
-        }
+        Commands::Impact {
+            paths,
+            depth,
+            direction,
+        } => run_impact(&root, cli.format, paths, *depth, *direction),
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
         Commands::Graph { raw } => run_graph(&root, *raw),
         Commands::Check => run_check(&root, cli.format, cli.color),
@@ -126,14 +128,43 @@ fn run_config_show(root: &Path, format: OutputFormat) -> Result<i32> {
 }
 
 /// Snapshot the composed graph into `drft.lock`: node content hashes and each
-/// node's outbound edge target hashes.
-fn run_lock(root: &Path) -> Result<i32> {
+/// node's outbound edge target hashes. With a path, lock only that node (its
+/// bytes and its outbound edge targets), merging into the existing lockfile.
+fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
-    lock::write(&graph_root, &lock::Lock::from_composed(&composed))?;
+    let snapshot = lock::Lock::from_composed(&composed);
+
+    match path {
+        None => lock::write(&graph_root, &snapshot)?,
+        Some(path) => {
+            let node = resolve_node(&composed, path)?;
+            let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+            let entry = snapshot
+                .nodes
+                .get(&node)
+                .expect("resolved node is in the snapshot")
+                .clone();
+            existing.nodes.insert(node, entry);
+            lock::write(&graph_root, &existing)?;
+        }
+    }
     Ok(0)
+}
+
+/// Resolve a user-supplied path to a node in the composed graph, trying a
+/// `.md` suffix as a fallback. Errors if no matching node exists.
+fn resolve_node(composed: &drft::model::Graph, path: &str) -> Result<String> {
+    if composed.nodes.contains_key(path) {
+        return Ok(path.to_string());
+    }
+    let with_ext = format!("{path}.md");
+    if composed.nodes.contains_key(&with_ext) {
+        return Ok(with_ext);
+    }
+    anyhow::bail!("node not found: \"{path}\"")
 }
 
 fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i32> {
@@ -431,143 +462,82 @@ fn run_graph(root: &Path, raw: bool) -> Result<i32> {
     Ok(0)
 }
 
+/// List nodes transitively impacted by a change to `paths`. With no paths,
+/// seeds are the stale source nodes derived from the lockfile.
 fn run_impact(
     root: &Path,
     format: OutputFormat,
-    files: &[String],
-    parser: Option<&str>,
+    paths: &[String],
+    depth: Option<usize>,
+    direction: Direction,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
-    let lockfile = lockfile::read_lockfile(&graph_root)?;
-    let graph = graph::build_graph(&graph_root, &config)?;
-    let graph = if let Some(name) = parser {
-        if !config.parsers.contains_key(name) {
-            let mut available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
-            available.sort();
-            anyhow::bail!(
-                "unknown parser \"{name}\" (available: {})",
-                available.join(", ")
-            );
-        }
-        graph.filter_by_parsers(&[name.to_string()])
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+
+    let seeds: Vec<String> = if paths.is_empty() {
+        stale_sources(&graph_root, &composed)?
     } else {
-        graph
+        paths
+            .iter()
+            .map(|p| resolve_node(&composed, p))
+            .collect::<Result<_>>()?
     };
-    let enriched = analyses::enrich_graph(graph, &graph_root, &config, lockfile.as_ref());
-    let graph = &enriched.graph;
 
-    // Resolve file args (try with .md extension if not found)
-    let mut seeds: Vec<String> = Vec::new();
-    for file in files {
-        if graph.nodes.get(file.as_str()).is_some_and(|n| n.included) {
-            seeds.push(file.clone());
-        } else {
-            let with_ext = format!("{file}.md");
-            if graph
-                .nodes
-                .get(with_ext.as_str())
-                .is_some_and(|n| n.included)
-            {
-                seeds.push(with_ext);
-            } else {
-                anyhow::bail!("node not found: \"{file}\"");
-            }
-        }
-    }
-
-    // BFS: walk reverse edges to find all transitive dependents, tracking depth
-    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
-
-    for seed in &seeds {
-        visited.insert(seed.clone());
-        queue.push_back((seed.clone(), 0));
-    }
-
-    // (node, via, depth)
-    let mut impacted: Vec<(String, String, usize)> = Vec::new();
-
-    while let Some((node, depth)) = queue.pop_front() {
-        if let Some(edge_indices) = graph.reverse.get(node.as_str()) {
-            for &idx in edge_indices {
-                let dependent = &graph.edges[idx].source;
-                if !visited.contains(dependent.as_str()) {
-                    visited.insert(dependent.clone());
-                    let next_depth = depth + 1;
-                    impacted.push((dependent.clone(), node.clone(), next_depth));
-                    queue.push_back((dependent.clone(), next_depth));
-                }
-            }
-        }
-    }
-
-    // Build lookup maps for enrichment data
-    let radius_map: std::collections::HashMap<
-        &str,
-        &drft::analyses::impact_radius::ImpactRadiusNode,
-    > = enriched
-        .impact_radius
-        .nodes
-        .iter()
-        .map(|n| (n.node.as_str(), n))
-        .collect();
-    let betweenness_map: std::collections::HashMap<&str, f64> = enriched
-        .betweenness
-        .nodes
-        .iter()
-        .map(|n| (n.node.as_str(), n.score))
-        .collect();
-
-    // Sort by review priority: high-radius nodes at shallow depth first
-    impacted.sort_by(|a, b| {
-        let a_radius = radius_map.get(a.0.as_str()).map(|n| n.radius).unwrap_or(0);
-        let b_radius = radius_map.get(b.0.as_str()).map(|n| n.radius).unwrap_or(0);
-        let a_betweenness = betweenness_map.get(a.0.as_str()).copied().unwrap_or(0.0);
-        let b_betweenness = betweenness_map.get(b.0.as_str()).copied().unwrap_or(0.0);
-
-        // Priority: impact_radius / depth + betweenness (higher = more important = sorts first)
-        let a_priority = (a_radius as f64) / (a.2 as f64) + a_betweenness;
-        let b_priority = (b_radius as f64) / (b.2 as f64) + b_betweenness;
-        b_priority
-            .partial_cmp(&a_priority)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(a.0.cmp(&b.0))
-    });
+    let dir = match direction {
+        Direction::Inbound => impact::Direction::Inbound,
+        Direction::Outbound => impact::Direction::Outbound,
+        Direction::Both => impact::Direction::Both,
+    };
+    let impacted = impact::compute(&composed, &seeds, dir, depth);
 
     match format {
         OutputFormat::Json => {
             let output = serde_json::json!({
-                "files": seeds,
+                "seeds": seeds,
                 "total": impacted.len(),
-                "impacted": impacted.iter().map(|(node, via, depth)| {
-                    let radius = radius_map.get(node.as_str()).map(|n| n.radius).unwrap_or(0);
-                    let betweenness = betweenness_map.get(node.as_str()).copied().unwrap_or(0.0);
-                    serde_json::json!({
-                        "node": node,
-                        "via": via,
-                        "depth": depth,
-                        "impact_radius": radius,
-                        "betweenness": betweenness,
-                        "fix": format!("{via} may change — review {node} to ensure it still accurately reflects {via}")
-                    })
-                }).collect::<Vec<_>>()
+                "impacted": impacted,
             });
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
-        _ => {
+        OutputFormat::Text => {
             if impacted.is_empty() {
                 println!("no dependents found");
             } else {
-                for (node, via, depth) in &impacted {
-                    let radius = radius_map.get(node.as_str()).map(|n| n.radius).unwrap_or(0);
-                    println!("{node} (via {via}, depth {depth}, radius {radius})");
+                for i in &impacted {
+                    println!(
+                        "{} (via {}, depth {}, radius {})",
+                        i.node, i.via, i.depth, i.impact_radius
+                    );
                 }
             }
         }
     }
 
     Ok(0)
+}
+
+/// Stale source nodes: nodes whose current hash differs from the locked hash.
+/// Requires a lockfile.
+fn stale_sources(graph_root: &Path, composed: &drft::model::Graph) -> Result<Vec<String>> {
+    let lock = lock::read(graph_root)?.ok_or_else(|| {
+        anyhow::anyhow!("no paths given and no drft.lock to derive stale sources from")
+    })?;
+    let mut seeds = Vec::new();
+    for (path, node) in &composed.nodes {
+        let current = node
+            .metadata
+            .get("@fs")
+            .and_then(|m| m.get("hash"))
+            .and_then(|h| h.as_str());
+        let locked = lock.nodes.get(path).and_then(|n| n.hash.as_deref());
+        if let (Some(current), Some(locked)) = (current, locked)
+            && current != locked
+        {
+            seeds.push(path.clone());
+        }
+    }
+    Ok(seeds)
 }
 
 /// Check the composed graph against the lockfile, reporting drift and structural

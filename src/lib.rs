@@ -9,6 +9,7 @@ pub mod diagnostic;
 pub mod discovery;
 pub mod graph;
 pub mod graphs;
+pub mod impact;
 pub mod lock;
 pub mod lockfile;
 pub mod metrics;
