@@ -49,7 +49,7 @@ fn symlink_target(root: &Path, path: &str) -> Option<String> {
             .to_string_lossy()
             .replace('\\', "/")
     } else {
-        crate::graph::resolve_link(path, &link.to_string_lossy())
+        crate::util::resolve_link(path, &link.to_string_lossy())
     };
 
     let escapes_root = Path::new(&resolved)

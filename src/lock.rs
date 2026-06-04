@@ -116,13 +116,18 @@ fn fs_hash<'a>(graph: &'a Graph, path: &str) -> Option<&'a str> {
         .as_str()
 }
 
+// `deny_unknown_fields` rejects foreign shapes (e.g. an older lockfile format)
+// so they surface as a parse failure that points at `drft lock`, rather than
+// silently deserializing into an empty lock.
 #[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct LockToml {
     #[serde(rename = "node", default)]
     node: Vec<NodeToml>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct NodeToml {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,6 +137,7 @@ struct NodeToml {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct EdgeToml {
     target: String,
     #[serde(skip_serializing_if = "Option::is_none")]

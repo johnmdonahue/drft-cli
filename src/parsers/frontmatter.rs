@@ -3,7 +3,7 @@ use super::{ParseResult, Parser};
 /// Check whether a frontmatter value looks like a link target (file path or URI).
 fn is_link_candidate(value: &str) -> bool {
     // URIs are always candidates — graph builder classifies them as External(Remote)
-    if crate::graph::is_uri(value) {
+    if crate::util::is_uri(value) {
         return true;
     }
     // Explicit path prefixes are always candidates.

@@ -35,13 +35,6 @@ pub enum Commands {
         path: Option<String>,
     },
 
-    /// Show raw parser output (edges and metadata)
-    Parse {
-        /// Run only a specific parser
-        #[arg(long)]
-        parser: Option<String>,
-    },
-
     /// Export the dependency graph as composed JGF
     Graph {
         /// Emit the raw set of per-graph fragments instead of the composed graph
@@ -63,26 +56,8 @@ pub enum Commands {
         direction: Direction,
     },
 
-    /// [unstable] Run graph analyses and health metrics
-    Report {
-        /// Analyses or metrics to include (defaults to all)
-        names: Vec<String>,
-    },
-
-    /// Show resolved configuration
-    Config {
-        #[command(subcommand)]
-        action: ConfigAction,
-    },
-
     /// Check the composed graph against the lockfile for drift and structural findings
     Check,
-}
-
-#[derive(Subcommand)]
-pub enum ConfigAction {
-    /// Print the resolved configuration (defaults filled in)
-    Show,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

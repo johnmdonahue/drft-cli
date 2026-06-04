@@ -7,9 +7,9 @@
 use std::collections::HashSet;
 
 use crate::diagnostic::Finding;
-use crate::graph::is_uri;
 use crate::model::Graph;
 use crate::rules::{edge_provenance, is_resolved, provenance};
+use crate::util::is_uri;
 
 /// Evaluate structural findings for `graph`.
 pub fn evaluate(graph: &Graph) -> Vec<Finding> {

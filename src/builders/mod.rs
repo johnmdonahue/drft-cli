@@ -8,8 +8,8 @@ pub mod markdown;
 
 use serde_json::Value;
 
-use crate::graph::{is_uri, resolve_link};
 use crate::model::{Edge, Metadata};
+use crate::util::{is_uri, resolve_link};
 
 /// Turn a raw link string discovered by a text builder into an edge from
 /// `source` to its resolved target.

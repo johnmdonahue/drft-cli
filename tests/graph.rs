@@ -187,11 +187,7 @@ fn graph_frontmatter_metadata_and_edge_dedup() {
 #[test]
 fn graph_raw_emits_the_set() {
     let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("drft.toml"),
-        "[parsers.markdown]\n[parsers.frontmatter]\n",
-    )
-    .unwrap();
+    fs::write(dir.path().join("drft.toml"), "").unwrap();
     fs::write(
         dir.path().join("doc.md"),
         "---\ntitle: Doc\n---\n\n[t](target.md)",
@@ -201,18 +197,21 @@ fn graph_raw_emits_the_set() {
 
     let v = graph_json_args(dir.path(), &["--raw"]);
     let graphs = v["graphs"].as_array().expect("raw set has 'graphs' array");
+    // fs is built first; the configured text graphs follow in name order.
     let labels: Vec<&str> = graphs
         .iter()
         .map(|g| g["label"].as_str().unwrap())
         .collect();
-    assert_eq!(labels, vec!["fs", "markdown", "frontmatter"]);
+    assert_eq!(labels, vec!["fs", "frontmatter", "markdown"]);
 
     // Bare paths, no @ namespacing in the raw view.
     let fs_graph = &graphs[0];
     assert!(fs_graph["nodes"]["doc.md"]["metadata"]["type"] == "file");
     assert!(fs_graph["nodes"]["doc.md"]["metadata"].get("@fs").is_none());
 
-    // markdown is edge-only; frontmatter carries the bare metadata block.
-    assert!(graphs[1]["nodes"].as_object().unwrap().is_empty());
-    assert_eq!(graphs[2]["nodes"]["doc.md"]["metadata"]["title"], "Doc");
+    // frontmatter carries the bare metadata block; markdown is edge-only.
+    let frontmatter = graphs.iter().find(|g| g["label"] == "frontmatter").unwrap();
+    let markdown = graphs.iter().find(|g| g["label"] == "markdown").unwrap();
+    assert_eq!(frontmatter["nodes"]["doc.md"]["metadata"]["title"], "Doc");
+    assert!(markdown["nodes"].as_object().unwrap().is_empty());
 }

@@ -9,13 +9,14 @@ use crate::model::Graph;
 use crate::parsers::Parser;
 use crate::parsers::markdown::MarkdownParser;
 
-/// Build the `markdown` graph fragment from text files. `filter` scopes which
-/// paths the builder reads (`None` reads all). The fragment carries only edges.
-pub fn build(texts: &[(String, String)], filter: Option<GlobSet>) -> Graph {
+/// Build the `markdown` graph fragment from text files, labeled `label`.
+/// `filter` scopes which paths the builder reads (`None` reads all). The
+/// fragment carries only edges.
+pub fn build(label: &str, texts: &[(String, String)], filter: Option<GlobSet>) -> Graph {
     let parser = MarkdownParser {
         file_filter: filter,
     };
-    let mut graph = Graph::labeled("markdown");
+    let mut graph = Graph::labeled(label);
 
     for (path, content) in texts {
         if !parser.matches(path) {
@@ -50,7 +51,7 @@ mod tests {
     #[test]
     fn emits_resolved_edges() {
         let t = texts(&[("docs/index.md", "[setup](setup.md) and [faq](../faq.md)")]);
-        let graph = build(&t, None);
+        let graph = build("markdown", &t, None);
         assert_eq!(graph.label.as_deref(), Some("markdown"));
         assert!(graph.nodes.is_empty(), "markdown contributes no nodes");
         let targets: Vec<&str> = graph.edges.iter().map(|e| e.target.as_str()).collect();
@@ -64,7 +65,7 @@ mod tests {
         let filter = builder.build().unwrap();
 
         let t = texts(&[("a.md", "[x](x.md)"), ("notes.txt", "[y](y.md)")]);
-        let graph = build(&t, Some(filter));
+        let graph = build("markdown", &t, Some(filter));
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].source, "a.md");
     }

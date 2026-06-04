@@ -1,30 +1,28 @@
 # drft.toml — drft dogfooding itself
 
-include = [
-  "CLAUDE.md",
-  "CONTRIBUTING.md",
-  "README.md",
-  "RELEASING.md",
-  "docs/**/*.md",
-  "examples/README.md",
-  "examples/*/README.md",
-  "src/**/*.rs",
-  ".claude/settings.json",
+# The graph root is this directory. fs walks every file under it, except
+# .gitignore matches (target/, etc.) and these globs.
+ignore = [
+  "Cargo.lock",
 ]
-exclude = ["src/lib.rs"]
 
-[parsers.markdown]
-files = ["**/*.md"]
+[graphs.markdown]
+source = "fs"
+filter = ["**/*.md"]
+builder = "markdown"
 
-[parsers.frontmatter]
-files = ["**/*.md"]
+[graphs.frontmatter]
+source = "fs"
+filter = ["**/*.md"]
+builder = "frontmatter"
 
-[rules]
-stale = "error"
+# Drift is the value prop — promote staleness to error for CI.
+[rules.stale-node]
+severity = "error"
 
-[rules.schema-violation]
-files = ["docs/**"]
-ignore = ["docs/README.md"]
+[rules.stale-edge]
+severity = "error"
 
-[rules.schema-violation.options.schemas."docs/**"]
-required = ["sources"]
+# A source repo has many legitimately unlinked files (Cargo.toml, most .rs).
+[rules.detached-node]
+severity = "off"
