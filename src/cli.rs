@@ -43,16 +43,8 @@ pub enum Commands {
         parser: Option<String>,
     },
 
-    /// Export the dependency graph
-    Graph {
-        /// Output as GraphViz DOT
-        #[arg(long)]
-        dot: bool,
-
-        /// Only include edges from this parser
-        #[arg(long)]
-        parser: Option<String>,
-    },
+    /// Export the dependency graph as composed JGF
+    Graph,
 
     /// Show what depends on the given files (transitively)
     Impact {

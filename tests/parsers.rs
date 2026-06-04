@@ -145,12 +145,14 @@ command = "{}"
     fs::write(dir.path().join("b.txt"), "Another [link](shared.md) here.").unwrap();
     fs::write(dir.path().join("shared.md"), "# Shared").unwrap();
 
-    // Run drft graph --format json and verify edges from both files
+    // Run drft parse --format json and verify links from both files. (The
+    // parser pipeline is exercised through `parse`; `graph` emits only the fs
+    // graph until the markdown/frontmatter builders land.)
     let output = drft_bin()
         .args([
             "-C",
             dir.path().to_str().unwrap(),
-            "graph",
+            "parse",
             "--format",
             "json",
         ])
@@ -160,35 +162,32 @@ command = "{}"
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
-        "drft graph failed: {}",
+        "drft parse failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Parse the JGF output and check for edges from both files
     let json: serde_json::Value =
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("invalid JSON: {e}\n{stdout}"));
 
-    let edges = json["graph"]["edges"]
-        .as_array()
-        .expect("edges should be an array");
+    let edges = json["edges"].as_array().expect("edges should be an array");
 
     let a_edges: Vec<_> = edges
         .iter()
-        .filter(|e| e["source"].as_str() == Some("a.txt"))
+        .filter(|e| e["file"].as_str() == Some("a.txt"))
         .collect();
     let b_edges: Vec<_> = edges
         .iter()
-        .filter(|e| e["source"].as_str() == Some("b.txt"))
+        .filter(|e| e["file"].as_str() == Some("b.txt"))
         .collect();
 
     assert!(
         !a_edges.is_empty(),
-        "expected edges from a.txt, got none in: {edges:?}"
+        "expected links from a.txt, got none in: {edges:?}"
     );
     assert!(
         !b_edges.is_empty(),
-        "expected edges from b.txt, got none in: {edges:?}"
+        "expected links from b.txt, got none in: {edges:?}"
     );
-    assert_eq!(a_edges[0]["target"].as_str(), Some("shared.md"));
-    assert_eq!(b_edges[0]["target"].as_str(), Some("shared.md"));
+    assert_eq!(a_edges[0]["link"].as_str(), Some("shared.md"));
+    assert_eq!(b_edges[0]["link"].as_str(), Some("shared.md"));
 }

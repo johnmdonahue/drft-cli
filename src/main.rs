@@ -1,10 +1,12 @@
 mod cli;
 
 use drft::analyses;
+use drft::compose;
 use drft::config;
 use drft::diagnostic;
 use drft::discovery;
 use drft::graph;
+use drft::graphs;
 use drft::lockfile;
 use drft::metrics;
 use drft::parsers;
@@ -12,7 +14,6 @@ use drft::rules;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use std::collections::HashMap;
 use std::path::Path;
 
 use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
@@ -77,7 +78,7 @@ fn try_main() -> Result<i32> {
             run_impact(&root, cli.format, files, parser.as_deref())
         }
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
-        Commands::Graph { dot, parser } => run_graph(&root, cli.format, *dot, parser.as_deref()),
+        Commands::Graph => run_graph(&root),
         Commands::Check {
             rules: rule_filter,
             watch,
@@ -443,148 +444,19 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
     Ok(0)
 }
 
-fn run_graph(root: &Path, _format: OutputFormat, dot: bool, parser: Option<&str>) -> Result<i32> {
+/// Emit the composed graph as JGF (`{"graph": {...}}`). The composed view is the
+/// merge of the raw per-graph set by path, with each graph's metadata nested
+/// under its `@<graph>` namespace and `_graphs` provenance stamped.
+fn run_graph(root: &Path) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let export = collect_jgf_graph(&graph_root, parser)?;
-
-    if dot {
-        println!("digraph {{");
-        let mut all_nodes: Vec<&str> = export.nodes.iter().map(|n| n.path.as_str()).collect();
-        all_nodes.sort();
-        all_nodes.dedup();
-        for path in &all_nodes {
-            println!("  \"{path}\"");
-        }
-        let mut all_edges: Vec<(&str, &str)> = export
-            .edges
-            .iter()
-            .map(|e| (e.source.as_str(), e.target.as_str()))
-            .collect();
-        all_edges.sort();
-        all_edges.dedup();
-        for (source, target) in &all_edges {
-            println!("  \"{source}\" -> \"{target}\"");
-        }
-        println!("}}");
-    } else {
-        // JSON Graph Format (JGF)
-        let mut nodes = serde_json::Map::new();
-        let mut sorted: Vec<&NodeExport> = export.nodes.iter().collect();
-        sorted.sort_by(|a, b| a.path.cmp(&b.path));
-        for n in &*sorted {
-            let mut meta = serde_json::Map::new();
-            if let Some(nt) = &n.node_type {
-                meta.insert("type".into(), serde_json::json!(nt));
-            }
-            meta.insert("included".into(), serde_json::json!(n.included));
-            if let Some(h) = &n.hash {
-                meta.insert("hash".into(), serde_json::json!(h));
-            }
-            let mut metadata_keys: Vec<&String> = n.metadata.keys().collect();
-            metadata_keys.sort();
-            for key in metadata_keys {
-                meta.insert(key.clone(), n.metadata[key].clone());
-            }
-            nodes.insert(n.path.clone(), serde_json::json!({ "metadata": meta }));
-        }
-
-        let mut edges: Vec<serde_json::Value> = export
-            .edges
-            .iter()
-            .map(|e| {
-                let mut meta = serde_json::Map::new();
-                meta.insert("parser".into(), serde_json::json!(e.parser));
-                if let Some(ref r) = e.link {
-                    meta.insert("link".into(), serde_json::json!(r));
-                }
-                serde_json::json!({
-                    "source": e.source,
-                    "target": e.target,
-                    "metadata": meta,
-                })
-            })
-            .collect();
-        edges.sort_by(|a, b| {
-            a["source"]
-                .as_str()
-                .cmp(&b["source"].as_str())
-                .then_with(|| a["target"].as_str().cmp(&b["target"].as_str()))
-        });
-
-        let mut graph_obj = serde_json::Map::new();
-        graph_obj.insert("directed".into(), serde_json::json!(true));
-        graph_obj.insert("nodes".into(), serde_json::json!(nodes));
-        graph_obj.insert("edges".into(), serde_json::json!(edges));
-
-        let output = serde_json::json!({ "graph": serde_json::Value::Object(graph_obj) });
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    }
-
+    let config = Config::load(&graph_root)?;
+    let set = graphs::build_set(&graph_root, &config)?;
+    let composed = compose::compose(&set);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&composed.into_document())?
+    );
     Ok(0)
-}
-
-struct NodeExport {
-    path: String,
-    node_type: Option<graph::NodeType>,
-    included: bool,
-    hash: Option<String>,
-    metadata: HashMap<String, serde_json::Value>,
-}
-
-struct EdgeExport {
-    source: String,
-    target: String,
-    link: Option<String>,
-    parser: String,
-}
-
-struct GraphExport {
-    nodes: Vec<NodeExport>,
-    edges: Vec<EdgeExport>,
-}
-
-/// Collect a JGF export for a single graph root.
-fn collect_jgf_graph(root: &Path, parser: Option<&str>) -> Result<GraphExport> {
-    let config = Config::load(root)?;
-    let g = build_graph(root, &config)?;
-    let g = if let Some(name) = parser {
-        if !config.parsers.contains_key(name) {
-            let mut available: Vec<&str> = config.parsers.keys().map(|s| s.as_str()).collect();
-            available.sort();
-            anyhow::bail!(
-                "unknown parser \"{name}\" (available: {})",
-                available.join(", ")
-            );
-        }
-        g.filter_by_parsers(&[name.to_string()])
-    } else {
-        g
-    };
-
-    let nodes: Vec<NodeExport> = g
-        .nodes
-        .iter()
-        .map(|(path, node)| NodeExport {
-            path: path.clone(),
-            node_type: node.node_type,
-            included: node.included,
-            hash: node.hash.clone(),
-            metadata: node.metadata.clone(),
-        })
-        .collect();
-
-    let edges: Vec<EdgeExport> = g
-        .edges
-        .iter()
-        .map(|e| EdgeExport {
-            source: e.source.clone(),
-            target: e.target.clone(),
-            link: e.link.clone(),
-            parser: e.parser.clone(),
-        })
-        .collect();
-
-    Ok(GraphExport { nodes, edges })
 }
 
 fn run_impact(

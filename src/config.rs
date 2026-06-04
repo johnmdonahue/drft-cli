@@ -469,6 +469,13 @@ impl Config {
         candidate.exists().then_some(candidate)
     }
 
+    /// Glob patterns the `fs` walk removes from the graph. (In v0.8's config
+    /// reshape this becomes a first-class `ignore` field; until then it reads
+    /// the `exclude`/`ignore` list.)
+    pub fn ignore_patterns(&self) -> &[String] {
+        &self.exclude
+    }
+
     pub fn rule_severity(&self, name: &str) -> RuleSeverity {
         self.rules
             .get(name)
