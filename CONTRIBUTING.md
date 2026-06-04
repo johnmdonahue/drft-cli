@@ -30,45 +30,41 @@ cargo test scenario_5         # specific test
 
 ## Examples
 
-See the [examples](examples/README.md) for sample projects used in manual testing.
+See the `examples/` directory for sample projects used in manual testing. Each is its own graph with a `drft.toml`.
 
 ## Codebase structure
 
 ### Pipeline
 
 ```
-Parsers          → raw link strings + metadata
-Graph builder    → normalized edges, classified targets, filesystem properties
-Enrichment       → structural analyses (degree, SCC, bridges, pagerank, etc.)
-Rules            → diagnostics
+sources/   → (path, bytes)
+builders/  → per-graph nodes + edges (fs types; markdown/frontmatter parse)
+graphs/    → per-graph build + auto-hash → the raw set
+compose.rs → merge the set by path → the composed graph
+rules/     → findings (drft check)
 ```
 
-Each layer's output feeds the next. Custom parsers and rules receive the same data as built-in implementations.
+The substrate is a **set of independent graphs**; composition is a projection over it. Each layer's output feeds the next.
 
-- **`src/parsers/`** — link extraction and metadata. Each parser implements the `Parser` trait, receives File nodes, and returns link strings + optional metadata. Built-in (markdown, frontmatter) and custom parsers share the same interface.
-- **[`src/graph.rs`](src/graph.rs)** — normalization, path resolution, edge classification, filesystem probing. See [docs/graph.md](docs/graph.md) for the full contract.
-- **`src/analyses/`** — pure computation. Each analysis implements the `Analysis` trait and returns a typed result. No judgments, no formatting.
-- **[`src/metrics.rs`](src/metrics.rs)** — scalar extraction from analysis results. Named `Metric` values with a `MetricKind` (`Ratio`, `Count`, or `Score`).
-- **`src/rules/`** — diagnostic mapping. Each rule implements the `Rule` trait, receives the enriched graph, and emits `Diagnostic` structs. Rules are pure functions — no filesystem access, no config.
+- **[`src/sources/`](src/sources/fs.rs)** — deliver `(path, bytes)`. v0.8 ships `fs`, the gitignore-aware walk.
+- **[`src/builders/`](src/builders/mod.rs)** — turn bytes into a per-graph JGF fragment. `fs` types each file and emits symlink edges; `markdown`/`frontmatter` are text builders that wrap the parsers in [`src/parsers/`](src/parsers/mod.rs).
+- **[`src/graphs/`](src/graphs/mod.rs)** — wire each graph and auto-hash. Hashing is drft's job, done once per node at this seam — sources and builders never hash.
+- **[`src/compose.rs`](src/compose.rs)** — merge the set by path, nest metadata under `@<graph>`, stamp `_graphs` provenance, dedup edges. The only module that knows about more than one graph.
+- **[`src/rules/`](src/rules/check.rs)** — findings over the composed graph. `staleness.rs` joins the lockfile; `structural.rs` reads shape; `check.rs` applies config and severity.
 
-## Adding a new analysis
+Core types live in [`src/model.rs`](src/model.rs); path/URI/hash helpers in [`src/util.rs`](src/util.rs); the lockfile in [`src/lock.rs`](src/lock.rs).
 
-1. Create `src/analyses/<name>.rs` with a struct implementing `Analysis`. Define the output type and implement `run()` taking `&AnalysisContext`.
-2. Add `pub mod <name>` to [`src/analyses/mod.rs`](src/analyses/mod.rs). Add the name to `all_analysis_names()`, add a field to `EnrichedGraph`, and wire it in `enrich_graph()`.
-3. Register in the report command's `all_analyses` list in [`src/main.rs`](src/main.rs).
-4. If it powers a rule: create `src/rules/<name>.rs`, register in `all_rules()`, add default severity in [`src/config.rs`](src/config.rs), add to the `drft init` template.
-5. Add unit tests in the analysis module, integration tests in `tests/`.
-6. Document in `docs/analyses/<name>.md` and update [`docs/analyses/README.md`](docs/analyses/README.md).
+## Adding a rule
 
-## Adding a new metric
-
-Add the metric extraction to [`src/metrics.rs`](src/metrics.rs) inside `compute_metrics()`. The metric reads from analysis results and returns a `Metric` with name, value, and kind. It automatically appears in `drft report` output. Add the metric name to `all_metric_names()`.
+1. Add the finding to `src/rules/staleness.rs` (lock-derived) or `src/rules/structural.rs` (shape-derived); return `Finding`s.
+2. Add the rule name to `BUILTIN_RULES` in [`src/config.rs`](src/config.rs) so configured severities don't warn as unknown.
+3. Add unit tests in the rule module and an integration test in `tests/`.
+4. Document it in the [rules reference](docs/rules/README.md).
 
 ## Design principles
 
-- **Analyses describe shape, rules judge correctness.** An analysis says "this edge is transitively redundant." A rule says "that's a warning."
-- **Three directories, three concerns.** `parsers/` extracts links, `analyses/` computes properties, `rules/` emits diagnostics. No layer reaches into another's concern.
-- **Parsers emit, the graph normalizes.** Parsers return raw strings. The graph builder handles URI detection, fragment stripping, path resolution, node classification. Parser authors don't bake in assumptions.
-- **No new dependencies for algorithms.** All graph algorithms (Tarjan's SCC, Brandes' betweenness, PageRank, BFS) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
-- **Deterministic output.** All results are sorted. No timestamps in lockfiles. Same input always produces same output.
-- **Explicit scope filtering.** Structural analyses operate on included nodes and internal edges (`graph.is_internal_edge()` checks whether the target is an included node). Edges to non-included nodes don't participate in structural analysis.
+- **The substrate is the set of graphs; composition is a projection.** `drft graph --raw` is the honest source of truth; the composed view is derived. Never bake the merge into the substrate.
+- **Auto-hashing is drft's job.** Sources and builders don't compute hashes — drft does, once per node, at the adoption seam (`graphs/`).
+- **Lock is infrastructure, not a graph.** The graph carries current observations only; the lockfile is joined at check to derive staleness.
+- **No new dependencies for algorithms.** Graph algorithms (BFS, Brandes' betweenness) are implemented in `std` only. File graphs are small enough that O(V*E) is fine.
+- **Deterministic output.** Results are sorted. No timestamps or version fields in the lockfile. Same input always produces the same output.

@@ -1,18 +1,6 @@
 # drft.toml
 
-# Glob patterns to exclude from the graph
-exclude = []
-
-[parsers]
-markdown = true
-
-# Rules: "error", "warn", or "off"
-[rules]
-dangling-edge = "warn"
-boundary-violation = "warn"
-directed-cycle = "warn"
-encapsulation-violation = "warn"
-symlink-edge = "off"
-orphan-node = "off"
-stale = "warn"
-untrackable-target = "warn"
+[graphs.markdown]
+source = "fs"
+filter = ["**/*.md"]
+builder = "markdown"

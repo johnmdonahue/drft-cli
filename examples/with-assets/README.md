@@ -1,6 +1,6 @@
 ---
 sources:
-  - ../../docs/graph.md
+  - ../../docs/README.md
 ---
 
 # With Assets

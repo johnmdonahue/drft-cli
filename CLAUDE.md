@@ -59,16 +59,14 @@ cargo run -- check     # runs as `drft check`
 - Error handling: `anyhow` for application errors, `thiserror` for typed library errors (add when needed)
 - All output: diagnostics to stdout, progress/errors to stderr
 - Exit codes: 0 (clean), 1 (violations), 2 (usage/config error)
-- Lockfile (`drft.lock`): TOML v2 format, nodes + hashes only (no edges), fully deterministic, no timestamps
-- Config (`drft.toml`): TOML with `include`/`exclude`, `[parsers]`, and `[rules]` sections. Each config declares exactly one graph; nested `drft.toml` files found while walking are ordinary files.
+- Lockfile (`drft.lock`): deterministic TOML, path-keyed nodes with a hash and nested per-edge target hashes, no version field, no timestamps. Lock is infrastructure, joined at check — not a graph.
+- Config (`drft.toml`): TOML with `ignore`, `[graphs.*]`, and `[rules.*]` sections. Each config declares exactly one graph root; nested `drft.toml` files found while walking are ordinary files.
 - Hashes use BLAKE3 with `b3:` prefix
-- Every edge target exists as a node in the graph. Included nodes (`included: true`) are files drft reads and hashes. Referenced nodes (`included: false`) are edge targets drft knows about but doesn't manage.
-- Node type comes from stat: `file`, `directory`, `symlink`, `uri`, or `null` (broken link)
-- Edge scope: `graph.is_internal_edge(&edge)` returns true when the target node is included
-- Parsers are configurable via `[parsers]` — built-in (markdown, frontmatter) or custom (`command` field)
+- The substrate is a set of independent graphs, each a JGF graph of bare-path nodes. `fs` is the base graph: it walks every file, types it (`file`/`symlink`), and is the only graph drft auto-hashes. Cross-graph linkage is path coincidence, resolved at compose.
+- Compose merges the set by path: each graph's metadata nests under `@<graph>`, with a `_graphs` provenance list. Resolution is namespace presence — a path with no `@fs` block is unresolved. `@` and `_` are compose-only reserved sigils; graph names are bare.
 - Tests go in `tests/` (integration) and inline `#[cfg(test)]` modules (unit)
-- Keep modules focused: one file per concern (discovery, parsers, graph, analyses, metrics, rules, lockfile, config, cli)
-- Pipeline: `src/parsers/` (parse links) → [`src/graph.rs`](src/graph.rs) (build graph) → `src/analyses/` (compute properties) → [`src/metrics.rs`](src/metrics.rs) (extract scalars) → `src/rules/` (emit diagnostics)
+- Keep modules focused: one file per concern (sources, builders, graphs, compose, lock, rules, model, config, cli, util)
+- Pipeline: `src/sources/` (bytes) → `src/builders/` (nodes + edges) → `src/graphs/` (per-graph build + auto-hash) → [`src/compose.rs`](src/compose.rs) (merge by path) → `src/rules/` (emit findings)
 
 ## Git workflow
 

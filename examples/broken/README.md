@@ -1,12 +1,11 @@
 ---
 sources:
-  - ../../docs/rules/unresolved-edge.md
-  - ../../docs/rules/orphan-node.md
+  - ../../docs/rules/README.md
 ---
 
 # Broken
 
-A project with intentional violations: broken links to missing files, a directory link, and an orphan file that nothing references.
+A project with intentional findings: broken links to missing files, a directory link, and a detached file that nothing references.
 
 ```bash
 drft check -C examples/broken

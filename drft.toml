@@ -1,9 +1,12 @@
 # drft.toml — drft dogfooding itself
 
 # The graph root is this directory. fs walks every file under it, except
-# .gitignore matches (target/, etc.) and these globs.
+# .gitignore matches (target/, etc.) and these globs. The examples/ projects
+# are self-contained graphs with their own drft.toml, so they stay out of this
+# graph.
 ignore = [
   "Cargo.lock",
+  "examples/**",
 ]
 
 [graphs.markdown]

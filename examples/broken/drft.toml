@@ -1,6 +1,9 @@
-[parsers]
-markdown = true
+# drft.toml
+
+[graphs.markdown]
+source = "fs"
+filter = ["**/*.md"]
+builder = "markdown"
 
 [rules]
-dangling-edge = "error"
-orphan-node = "warn"
+unresolved-edge = "error"

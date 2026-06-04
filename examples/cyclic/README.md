@@ -1,6 +1,6 @@
 ---
 sources:
-  - ../../docs/rules/directed-cycle.md
+  - ../../docs/rules/README.md
 ---
 
 # Cyclic
