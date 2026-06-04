@@ -78,7 +78,7 @@ fn try_main() -> Result<i32> {
             run_impact(&root, cli.format, files, parser.as_deref())
         }
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
-        Commands::Graph => run_graph(&root),
+        Commands::Graph { raw } => run_graph(&root, *raw),
         Commands::Check {
             rules: rule_filter,
             watch,
@@ -444,18 +444,21 @@ fn run_parse(root: &Path, format: OutputFormat, parser_filter: Option<&str>) -> 
     Ok(0)
 }
 
-/// Emit the composed graph as JGF (`{"graph": {...}}`). The composed view is the
-/// merge of the raw per-graph set by path, with each graph's metadata nested
-/// under its `@<graph>` namespace and `_graphs` provenance stamped.
-fn run_graph(root: &Path) -> Result<i32> {
+/// Emit the graph as JGF. The default composed view (`{"graph": {...}}`) merges
+/// the raw per-graph set by path, nesting each graph's metadata under its
+/// `@<graph>` namespace with `_graphs` provenance. `--raw` emits the unmerged
+/// set (`{"graphs": [...]}`), JGF's multi-graph form.
+fn run_graph(root: &Path, raw: bool) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
-    let composed = compose::compose(&set);
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&composed.into_document())?
-    );
+
+    let json = if raw {
+        serde_json::to_string_pretty(&set)?
+    } else {
+        serde_json::to_string_pretty(&compose::compose(&set).into_document())?
+    };
+    println!("{json}");
     Ok(0)
 }
 

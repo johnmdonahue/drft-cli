@@ -4,10 +4,13 @@ use std::fs;
 use tempfile::TempDir;
 
 fn graph_json(dir: &std::path::Path) -> serde_json::Value {
-    let output = drft_bin()
-        .args(["-C", dir.to_str().unwrap(), "graph"])
-        .output()
-        .unwrap();
+    graph_json_args(dir, &[])
+}
+
+fn graph_json_args(dir: &std::path::Path, extra: &[&str]) -> serde_json::Value {
+    let mut args = vec!["-C", dir.to_str().unwrap(), "graph"];
+    args.extend_from_slice(extra);
+    let output = drft_bin().args(&args).output().unwrap();
     assert!(
         output.status.success(),
         "drft graph failed: {}",
@@ -115,4 +118,101 @@ fn graph_symlink_escaping_root_is_not_hashed() {
         trap.get("hash").is_none(),
         "escaping symlink must not be hashed"
     );
+}
+
+/// Markdown body links become composed edges to their resolved targets.
+#[test]
+fn graph_markdown_links_become_edges() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), "[parsers.markdown]\n").unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    let v = graph_json(dir.path());
+    let edges = v["graph"]["edges"].as_array().unwrap();
+    let edge = edges
+        .iter()
+        .find(|e| e["source"] == "index.md" && e["target"] == "setup.md")
+        .expect("markdown edge index.md -> setup.md");
+    assert_eq!(
+        edge["metadata"]["_graphs"],
+        serde_json::json!(["@markdown"])
+    );
+}
+
+/// Frontmatter contributes node metadata under `@frontmatter` and link edges;
+/// an edge declared by both markdown and frontmatter is deduped with merged
+/// provenance.
+#[test]
+fn graph_frontmatter_metadata_and_edge_dedup() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\ntitle: Doc\nsources:\n  - target.md\n---\n\n[t](target.md)",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target").unwrap();
+
+    let v = graph_json(dir.path());
+
+    // @frontmatter metadata nests on the node, with merged _graphs provenance.
+    let meta = &v["graph"]["nodes"]["doc.md"]["metadata"];
+    assert_eq!(meta["@frontmatter"]["title"], "Doc");
+    assert_eq!(meta["_graphs"], serde_json::json!(["@frontmatter", "@fs"]));
+
+    // The shared edge is deduped: one edge, both graphs in _graphs.
+    let edges = v["graph"]["edges"].as_array().unwrap();
+    let shared: Vec<_> = edges
+        .iter()
+        .filter(|e| e["source"] == "doc.md" && e["target"] == "target.md")
+        .collect();
+    assert_eq!(
+        shared.len(),
+        1,
+        "edge should be deduped by (source, target)"
+    );
+    assert_eq!(
+        shared[0]["metadata"]["_graphs"],
+        serde_json::json!(["@frontmatter", "@markdown"])
+    );
+}
+
+/// `--raw` emits the unmerged set: one labeled fragment per graph, bare paths,
+/// no `@` namespacing.
+#[test]
+fn graph_raw_emits_the_set() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[parsers.markdown]\n[parsers.frontmatter]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\ntitle: Doc\n---\n\n[t](target.md)",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target").unwrap();
+
+    let v = graph_json_args(dir.path(), &["--raw"]);
+    let graphs = v["graphs"].as_array().expect("raw set has 'graphs' array");
+    let labels: Vec<&str> = graphs
+        .iter()
+        .map(|g| g["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels, vec!["fs", "markdown", "frontmatter"]);
+
+    // Bare paths, no @ namespacing in the raw view.
+    let fs_graph = &graphs[0];
+    assert!(fs_graph["nodes"]["doc.md"]["metadata"]["type"] == "file");
+    assert!(fs_graph["nodes"]["doc.md"]["metadata"].get("@fs").is_none());
+
+    // markdown is edge-only; frontmatter carries the bare metadata block.
+    assert!(graphs[1]["nodes"].as_object().unwrap().is_empty());
+    assert_eq!(graphs[2]["nodes"]["doc.md"]["metadata"]["title"], "Doc");
 }

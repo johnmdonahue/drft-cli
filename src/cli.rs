@@ -44,7 +44,11 @@ pub enum Commands {
     },
 
     /// Export the dependency graph as composed JGF
-    Graph,
+    Graph {
+        /// Emit the raw set of per-graph fragments instead of the composed graph
+        #[arg(long)]
+        raw: bool,
+    },
 
     /// Show what depends on the given files (transitively)
     Impact {
