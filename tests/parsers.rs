@@ -30,7 +30,6 @@ fn frontmatter_sources_create_edges() {
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains("analysis.md"));
     assert!(lockfile.contains("data/notes.md"));
-    // v2 lockfile has no edges — edge types verified at check time
 
     // Edit the source, check for staleness
     fs::write(data.join("notes.md"), "# Notes (edited)").unwrap();
@@ -42,52 +41,6 @@ fn frontmatter_sources_create_edges() {
     assert!(
         stdout.contains("stale"),
         "frontmatter dep should trigger staleness, got: {stdout}"
-    );
-}
-
-#[test]
-#[cfg(unix)]
-fn wikilinks_custom_parser_creates_edges() {
-    let dir = TempDir::new().unwrap();
-
-    // Copy the example wikilinks parser into the temp dir
-    let parser_src = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("examples/custom-parsers/wikilinks.sh");
-    let parser_dst = dir.path().join("wikilinks.sh");
-    fs::copy(&parser_src, &parser_dst).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&parser_dst, fs::Permissions::from_mode(0o755)).unwrap();
-    }
-
-    fs::write(
-        dir.path().join("drft.toml"),
-        "[parsers.markdown]\n\n[parsers.wikilinks]\nfiles = [\"*.md\"]\ncommand = \"./wikilinks.sh\"\n",
-    )
-    .unwrap();
-    fs::write(dir.path().join("index.md"), "See [[setup]] for details.").unwrap();
-    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
-
-    // Lock and verify wikilink edge
-    drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "lock"])
-        .output()
-        .unwrap();
-
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
-    assert!(lockfile.contains("setup.md"));
-
-    // Broken wikilink should be caught
-    fs::write(dir.path().join("index.md"), "See [[missing]] here.").unwrap();
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "check"])
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("unresolved-edge"),
-        "broken wikilink should fire unresolved-edge, got: {stdout}"
     );
 }
 

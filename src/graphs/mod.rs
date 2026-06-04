@@ -24,6 +24,11 @@ use crate::sources::{self, fs::SourceFile};
 /// must scope themselves to markdown.
 const DEFAULT_TEXT_FILTER: &str = "**/*.md";
 
+/// drft's own lockfile is never graph content — hashing it would be circular
+/// (its bytes change every time it's written). The wiring layer always excludes
+/// it from the `fs` walk.
+const LOCKFILE_IGNORE: &str = "drft.lock";
+
 /// Build the raw set of per-graph fragments for the graph rooted at `root`.
 ///
 /// `fs` always builds first — it owns the identity space. The `markdown` and
@@ -31,7 +36,9 @@ const DEFAULT_TEXT_FILTER: &str = "**/*.md";
 /// (until the config reshape, this reads the `[parsers.*]` blocks). The `fs`
 /// source walks the tree once; its content feeds the text builders.
 pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
-    let files = sources::fs::walk(root, config.ignore_patterns())?;
+    let mut ignore = config.ignore_patterns().to_vec();
+    ignore.push(LOCKFILE_IGNORE.to_string());
+    let files = sources::fs::walk(root, &ignore)?;
 
     let mut fs_graph = builders::fs::build(root, &files);
     auto_hash(&mut fs_graph, &files);

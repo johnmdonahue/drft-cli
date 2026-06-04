@@ -305,13 +305,21 @@ struct RawConfig {
 
 /// Names of all built-in rules (for unknown-rule warnings).
 const BUILTIN_RULES: &[&str] = &[
+    // v0.8 rules.
+    "stale-node",
+    "stale-edge",
+    "new-edge",
+    "removed-edge",
+    "removed-node",
+    "unresolved-edge",
+    "detached-node",
+    // v0.7 rules (still recognized while the old pipeline lingers).
     "directed-cycle",
     "fragmentation",
     "orphan-node",
     "schema-violation",
     "stale",
     "symlink-edge",
-    "unresolved-edge",
 ];
 
 impl Config {

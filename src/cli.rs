@@ -30,11 +30,7 @@ pub enum Commands {
     Init,
 
     /// Snapshot the current state to drft.lock
-    Lock {
-        /// Verify lockfile is up to date without writing
-        #[arg(long)]
-        check: bool,
-    },
+    Lock,
 
     /// Show raw parser output (edges and metadata)
     Parse {
@@ -73,16 +69,8 @@ pub enum Commands {
         action: ConfigAction,
     },
 
-    /// Check structure for rule violations
-    Check {
-        /// Run only specific rules (can be repeated)
-        #[arg(long = "rule")]
-        rules: Vec<String>,
-
-        /// Watch for changes and re-check
-        #[arg(long, short = 'w')]
-        watch: bool,
-    },
+    /// Check the composed graph against the lockfile for drift and structural findings
+    Check,
 }
 
 #[derive(Subcommand)]

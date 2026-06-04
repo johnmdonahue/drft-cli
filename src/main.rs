@@ -3,10 +3,10 @@ mod cli;
 use drft::analyses;
 use drft::compose;
 use drft::config;
-use drft::diagnostic;
 use drft::discovery;
 use drft::graph;
 use drft::graphs;
+use drft::lock;
 use drft::lockfile;
 use drft::metrics;
 use drft::parsers;
@@ -18,10 +18,6 @@ use std::path::Path;
 
 use cli::{Cli, ColorChoice, Commands, ConfigAction, OutputFormat};
 use config::{Config, RuleSeverity};
-use diagnostic::Diagnostic;
-use graph::build_graph;
-use lockfile::{Lockfile, write_lockfile};
-use rules::all_rules;
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
     // Never colorize JSON output
@@ -72,23 +68,14 @@ fn try_main() -> Result<i32> {
         Commands::Config { action } => match action {
             ConfigAction::Show => run_config_show(&root, cli.format),
         },
-        Commands::Lock { check } => run_lock(&root, *check),
+        Commands::Lock => run_lock(&root),
         Commands::Report { names } => run_report(&root, cli.format, names),
         Commands::Impact { files, parser } => {
             run_impact(&root, cli.format, files, parser.as_deref())
         }
         Commands::Parse { parser } => run_parse(&root, cli.format, parser.as_deref()),
         Commands::Graph { raw } => run_graph(&root, *raw),
-        Commands::Check {
-            rules: rule_filter,
-            watch,
-        } => {
-            if *watch {
-                run_check_watch(&root, cli.format, cli.color, rule_filter)
-            } else {
-                run_check(&root, cli.format, cli.color, rule_filter)
-            }
-        }
+        Commands::Check => run_check(&root, cli.format, cli.color),
     }
 }
 
@@ -138,33 +125,15 @@ fn run_config_show(root: &Path, format: OutputFormat) -> Result<i32> {
     Ok(0)
 }
 
-fn run_lock(root: &Path, check_mode: bool) -> Result<i32> {
-    let config = Config::load(root)?;
-    let graph = build_graph(root, &config)?;
-
-    let lockfile = Lockfile::from_graph(&graph);
-
-    if check_mode {
-        let lock_path = root.join("drft.lock");
-        if !lock_path.exists() {
-            eprintln!("drft.lock not found");
-            return Ok(1);
-        }
-
-        let new_content = lockfile.to_toml()?;
-        let existing_content = std::fs::read_to_string(&lock_path)
-            .with_context(|| format!("failed to read {}", lock_path.display()))?;
-
-        if new_content == existing_content {
-            Ok(0)
-        } else {
-            eprintln!("drft.lock is out of date");
-            Ok(1)
-        }
-    } else {
-        write_lockfile(root, &lockfile)?;
-        Ok(0)
-    }
+/// Snapshot the composed graph into `drft.lock`: node content hashes and each
+/// node's outbound edge target hashes.
+fn run_lock(root: &Path) -> Result<i32> {
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+    let set = graphs::build_set(&graph_root, &config)?;
+    let composed = compose::compose(&set);
+    lock::write(&graph_root, &lock::Lock::from_composed(&composed))?;
+    Ok(0)
 }
 
 fn run_report(root: &Path, format: OutputFormat, filter: &[String]) -> Result<i32> {
@@ -601,139 +570,47 @@ fn run_impact(
     Ok(0)
 }
 
-fn run_check(
-    root: &Path,
-    format: OutputFormat,
-    color: ColorChoice,
-    rule_filter: &[String],
-) -> Result<i32> {
-    // Validate rule names (built-in + custom rules from config)
+/// Check the composed graph against the lockfile, reporting drift and structural
+/// findings. Errors exit 1, warnings exit 0.
+fn run_check(root: &Path, format: OutputFormat, color: ColorChoice) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let root_config = Config::load(&graph_root)?;
-    let available_rules = all_rules();
-    let mut known_names: Vec<&str> = available_rules.iter().map(|r| r.name()).collect();
-    let custom_names: Vec<String> = root_config
-        .custom_rules()
-        .map(|(name, _)| name.to_string())
-        .collect();
-    known_names.extend(custom_names.iter().map(|s| s.as_str()));
-    for name in rule_filter {
-        if !known_names.contains(&name.as_str()) {
-            anyhow::bail!("unknown rule: \"{name}\"");
-        }
-    }
+    let config = Config::load(&graph_root)?;
+    let set = graphs::build_set(&graph_root, &config)?;
+    let composed = compose::compose(&set);
+    let lock = lock::read(&graph_root)?;
 
-    let mut diagnostics = check_graph(&graph_root, rule_filter)?;
-
-    diagnostics.sort_by(|a, b| {
-        a.rule
-            .cmp(&b.rule)
-            .then_with(|| a.source.cmp(&b.source))
-            .then_with(|| a.target.cmp(&b.target))
-            .then_with(|| a.node.cmp(&b.node))
-    });
+    let findings = rules::check::run(&composed, lock.as_ref(), &config);
 
     let colorize = use_color(color, format);
-    for d in &diagnostics {
-        match format {
-            OutputFormat::Text => {
+    match format {
+        OutputFormat::Text => {
+            for f in &findings {
                 if colorize {
-                    println!("{}", d.format_text_color());
+                    println!("{}", f.format_text_color());
                 } else {
-                    println!("{}", d.format_text());
+                    println!("{}", f.format_text());
                 }
             }
-            OutputFormat::Json => {} // handled below as envelope
+        }
+        OutputFormat::Json => {
+            let errors = findings
+                .iter()
+                .filter(|f| f.severity == RuleSeverity::Error)
+                .count();
+            let warnings = findings
+                .iter()
+                .filter(|f| f.severity == RuleSeverity::Warn)
+                .count();
+            let output = serde_json::json!({
+                "diagnostics": findings,
+                "summary": { "errors": errors, "warnings": warnings },
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
     }
 
-    let has_errors = diagnostics
-        .iter()
-        .any(|d| d.severity == RuleSeverity::Error);
-    let has_warnings = diagnostics.iter().any(|d| d.severity == RuleSeverity::Warn);
-
-    if matches!(format, OutputFormat::Json) {
-        let status = if has_errors {
-            "error"
-        } else if has_warnings {
-            "warn"
-        } else {
-            "clean"
-        };
-        let error_count = diagnostics
-            .iter()
-            .filter(|d| d.severity == RuleSeverity::Error)
-            .count();
-        let warn_count = diagnostics
-            .iter()
-            .filter(|d| d.severity == RuleSeverity::Warn)
-            .count();
-        let output = serde_json::json!({
-            "status": status,
-            "total": diagnostics.len(),
-            "errors": error_count,
-            "warnings": warn_count,
-            "diagnostics": diagnostics,
-        });
-        println!("{}", serde_json::to_string_pretty(&output)?);
-    }
-
+    let has_errors = findings.iter().any(|f| f.severity == RuleSeverity::Error);
     Ok(if has_errors { 1 } else { 0 })
-}
-
-fn run_check_watch(
-    root: &Path,
-    format: OutputFormat,
-    color: ColorChoice,
-    rule_filter: &[String],
-) -> Result<i32> {
-    use notify_debouncer_mini::{DebouncedEventKind, new_debouncer};
-    use std::sync::mpsc;
-    use std::time::Duration;
-
-    let graph_root = find_graph_root(root);
-
-    // Initial run
-    print!("\x1b[2J\x1b[H"); // clear screen
-    let _ = run_check(root, format, color, rule_filter);
-    eprintln!("\n\x1b[2m--- watching for changes (ctrl-c to stop) ---\x1b[0m");
-
-    let (tx, rx) = mpsc::channel();
-    let mut debouncer = new_debouncer(Duration::from_millis(500), tx)?;
-
-    notify::Watcher::watch(
-        debouncer.watcher(),
-        &graph_root,
-        notify::RecursiveMode::Recursive,
-    )?;
-
-    loop {
-        match rx.recv() {
-            Ok(Ok(events)) => {
-                // Only re-run if relevant files changed (md, toml, lock)
-                let relevant = events.iter().any(|e| {
-                    if e.kind != DebouncedEventKind::Any {
-                        return false;
-                    }
-                    let path = e.path.to_string_lossy();
-                    path.ends_with(".md") || path.ends_with(".toml") || path.ends_with(".lock")
-                });
-                if !relevant {
-                    continue;
-                }
-
-                print!("\x1b[2J\x1b[H"); // clear screen
-                let _ = run_check(root, format, color, rule_filter);
-                eprintln!("\n\x1b[2m--- watching for changes (ctrl-c to stop) ---\x1b[0m");
-            }
-            Ok(Err(e)) => {
-                eprintln!("watch error: {e}");
-            }
-            Err(_) => break, // channel closed
-        }
-    }
-
-    Ok(0)
 }
 
 /// Walk up from `start` to find the nearest ancestor directory with `drft.toml`.
@@ -748,149 +625,4 @@ fn find_graph_root(start: &Path) -> std::path::PathBuf {
             return start.to_path_buf();
         }
     }
-}
-
-/// Check a single graph.
-fn check_graph(root: &Path, rule_filter: &[String]) -> Result<Vec<Diagnostic>> {
-    let config = Config::load(root)?;
-    let lockfile = lockfile::read_lockfile(root)?;
-    let base_graph = graph::build_graph(root, &config)?;
-
-    // Collect distinct parser filter sets needed by rules that will actually run
-    // (respects both --rule filter and severity=off).
-    let mut parser_sets: Vec<Vec<String>> = Vec::new();
-    for rule in all_rules() {
-        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == rule.name()) {
-            continue;
-        }
-        if rule_filter.is_empty() && config.rule_severity(rule.name()) == RuleSeverity::Off {
-            continue;
-        }
-        let parsers = config.rule_parsers(rule.name()).to_vec();
-        if !parsers.is_empty() && !parser_sets.contains(&parsers) {
-            parser_sets.push(parsers);
-        }
-    }
-    // Also collect from custom rules
-    for (name, rule_config) in config.custom_rules() {
-        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == name) {
-            continue;
-        }
-        if rule_filter.is_empty() && rule_config.severity == RuleSeverity::Off {
-            continue;
-        }
-        let parsers = rule_config.parsers.clone();
-        if !parsers.is_empty() && !parser_sets.contains(&parsers) {
-            parser_sets.push(parsers);
-        }
-    }
-
-    // Build filtered enriched graphs BEFORE consuming the base graph.
-    let mut filtered_cache: std::collections::HashMap<Vec<String>, analyses::EnrichedGraph> =
-        std::collections::HashMap::new();
-    for parser_set in &parser_sets {
-        let filtered = base_graph.filter_by_parsers(parser_set);
-        let enriched = analyses::enrich_graph(filtered, root, &config, lockfile.as_ref());
-        filtered_cache.insert(parser_set.clone(), enriched);
-    }
-
-    // Now consume the base graph for the unfiltered enriched graph.
-    let base_enriched = analyses::enrich_graph(base_graph, root, &config, lockfile.as_ref());
-
-    let mut diagnostics = Vec::new();
-
-    for rule in all_rules() {
-        let severity = if !rule_filter.is_empty() {
-            if !rule_filter.iter().any(|f| f == rule.name()) {
-                continue;
-            }
-            let configured = config.rule_severity(rule.name());
-            if configured == RuleSeverity::Off {
-                RuleSeverity::Warn
-            } else {
-                configured
-            }
-        } else {
-            let severity = config.rule_severity(rule.name());
-            if severity == RuleSeverity::Off {
-                continue;
-            }
-            severity
-        };
-
-        let rule_parsers = config.rule_parsers(rule.name());
-        let enriched = if rule_parsers.is_empty() {
-            &base_enriched
-        } else {
-            filtered_cache.get(rule_parsers).unwrap()
-        };
-
-        let rule_ctx = rules::RuleContext {
-            graph: enriched,
-            options: config.rule_options(rule.name()),
-        };
-        let mut findings = rule.evaluate(&rule_ctx);
-        findings.retain(|d| {
-            let paths: Vec<&str> = [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
-                .into_iter()
-                .flatten()
-                .collect();
-            // files: scope which nodes the rule evaluates (all paths must be in scope)
-            let in_scope = paths.is_empty()
-                || paths
-                    .iter()
-                    .any(|p| config.is_rule_in_scope(rule.name(), p));
-            // ignore: exclude specific nodes from diagnostics
-            let ignored = paths.iter().any(|p| config.is_rule_ignored(rule.name(), p));
-            in_scope && !ignored
-        });
-        for d in &mut findings {
-            d.severity = severity;
-        }
-        diagnostics.extend(findings);
-    }
-
-    // Run custom rules individually (respecting --rule filter and per-rule parser scoping)
-    let config_dir = config.config_dir.as_deref().unwrap_or(root);
-    for (rule_name, rule_config) in config.custom_rules() {
-        if !rule_filter.is_empty() && !rule_filter.iter().any(|f| f == rule_name) {
-            continue;
-        }
-        let enriched = if rule_config.parsers.is_empty() {
-            &base_enriched
-        } else {
-            filtered_cache.get(&rule_config.parsers).unwrap()
-        };
-        match rules::custom::run_one(rule_name, rule_config, enriched, root, config_dir) {
-            Ok(mut findings) => {
-                // Apply per-rule files/ignore filtering
-                findings.retain(|d| {
-                    let paths: Vec<&str> =
-                        [d.source.as_deref(), d.target.as_deref(), d.node.as_deref()]
-                            .into_iter()
-                            .flatten()
-                            .collect();
-                    let in_scope = paths.is_empty()
-                        || paths.iter().any(|p| config.is_rule_in_scope(rule_name, p));
-                    let ignored = paths.iter().any(|p| config.is_rule_ignored(rule_name, p));
-                    in_scope && !ignored
-                });
-                diagnostics.extend(findings);
-            }
-            Err(e) => {
-                eprintln!("warn: custom rule \"{rule_name}\" failed: {e}");
-                diagnostics.push(Diagnostic {
-                    rule: rule_name.to_string(),
-                    severity: rule_config.severity,
-                    message: format!("custom rule failed: {e}"),
-                    fix: Some(format!(
-                        "custom rule \"{rule_name}\" failed to execute — check the command path and script"
-                    )),
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    Ok(diagnostics)
 }
