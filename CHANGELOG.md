@@ -2,6 +2,25 @@
 
 All notable changes to drft are documented here.
 
+## 0.9.0 (2026-06-05)
+
+Directories and symlinks get a proper place in the graph, link edges learn where they live, and the `impact`/`check`/rules surface gets sharper.
+
+### Breaking changes
+
+- **`drft impact` requires a path.** Running `impact` with no argument is now a usage error (exit 2). It previously defaulted to the impact of all currently-stale sources, which conflated a structural query with a lock-derived one. The drift blast-radius use case is deferred, not abandoned.
+- **Symlinks are untrackable indirection.** The `fs` walk no longer follows symlinks: a symlink is a leaf node with an edge to its target, and is never hashed — staleness propagates through the edge to the target. Lockfiles that recorded symlink hashes regenerate with `drft lock`. This also closes a leak where a symlink to a directory outside the graph root pulled outside files into the graph as nodes.
+
+### New
+
+- **Directory nodes.** The `fs` walk emits a node per directory (typed `directory`, hash-less). A link to an existing directory now resolves instead of flagging `unresolved-edge`; a link to a missing one still flags. Directories are never hashed, locked, or flagged `detached-node`.
+- **Link line numbers.** Markdown and frontmatter link edges record the 1-based source line(s) where the link appears as `lines` metadata — surfaced in `drft graph`, in `drft impact` fix instructions (`review guide.md:3,5 …`), and on `drft check` edge findings (`README.md:50 → src/lib.rs`, including `unresolved-edge`). Line numbers are graph-only and never locked, so a link moving lines is not drift.
+- **Global `[rules].ignore`.** An `ignore` set directly under `[rules]` applies to every rule, unioned with each rule's own. Unlike the top-level `ignore`, matched paths stay in the graph — links to them resolve and they keep drift hashes — so you can stop validating a group you depend on but don't own while keeping the transitive-staleness signal on your own files.
+
+### Changed
+
+- **Frontmatter YAML engine** switched from `serde_yml` (a continuation of the unmaintained `serde_yaml`) to `saphyr` (maintained, pure-safe Rust, with source spans — the source of frontmatter line numbers). Metadata output is unchanged. Malformed frontmatter is now skipped silently instead of printing a YAML warning — drft checks link drift, not YAML validity.
+
 ## 0.8.0 (2026-06-04)
 
 Rebuilt on a set-of-graphs substrate with an explicit composition step. drft now models a directory as a set of independent JGF graphs of bare-path nodes — `fs` (a node per file, typed and hashed), `markdown` (link edges), and `frontmatter` (edges plus metadata) — that a `compose` step merges by path. The `impact → edit → check → lock` loop is unchanged.
