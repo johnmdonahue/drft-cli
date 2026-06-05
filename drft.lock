@@ -276,7 +276,7 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:8da77cc0d2271570f97e874797d051595fc0d927c21f4ca8060ac7625c62991c"
+hash = "b3:e160d305be0c1a34d8de3a0e46f31f51d1f17a53ce5538c62cae573fea92555c"
 
 [[node]]
 path = "src/model.rs"
@@ -336,7 +336,7 @@ hash = "b3:317ec95915031ee51e9bcd86da06b439d120fd13ef29509e02fe668fd4fbb2f5"
 
 [[node]]
 path = "tests/impact.rs"
-hash = "b3:d94d0061695fbd10b57373435202c2a497fba9c2d7f69e780bb1dacb3035a48e"
+hash = "b3:47c2c6763725ac81b966d0aee0a3b1e8c453d0077bfcfd38cbe022a623deb3b1"
 
 [[node]]
 path = "tests/init.rs"
