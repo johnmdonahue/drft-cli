@@ -42,9 +42,10 @@ pub enum Commands {
         raw: bool,
     },
 
-    /// List nodes transitively impacted by a change (default: stale sources)
+    /// List the nodes that transitively depend on the given files
     Impact {
-        /// Paths to analyze (default: stale sources derived from the lockfile)
+        /// Files to compute the impact of (at least one required)
+        #[arg(required = true)]
         paths: Vec<String>,
 
         /// Limit traversal to this many hops

@@ -47,7 +47,7 @@ rules/     → findings (drft check)
 The substrate is a **set of independent graphs**; composition is a projection over it. Each layer's output feeds the next.
 
 - **[`src/sources/`](src/sources/fs.rs)** — deliver `(path, bytes)`. v0.8 ships `fs`, the gitignore-aware walk.
-- **[`src/builders/`](src/builders/mod.rs)** — turn bytes into a per-graph JGF fragment. `fs` types each file and emits symlink edges; `markdown`/`frontmatter` are text builders that wrap the parsers in [`src/parsers/`](src/parsers/mod.rs).
+- **[`src/builders/`](src/builders/mod.rs)** — turn bytes into a per-graph JGF fragment. `fs` types each entry — file, symlink, or directory — and emits symlink edges; `markdown`/`frontmatter` are text builders that wrap the parsers in [`src/parsers/`](src/parsers/mod.rs).
 - **[`src/graphs/`](src/graphs/mod.rs)** — wire each graph and auto-hash. Hashing is drft's job, done once per node at this seam — sources and builders never hash.
 - **[`src/compose.rs`](src/compose.rs)** — merge the set by path, nest metadata under `@<graph>`, stamp `_graphs` provenance, dedup edges. The only module that knows about more than one graph.
 - **[`src/rules/`](src/rules/check.rs)** — findings over the composed graph. `staleness.rs` joins the lockfile; `structural.rs` reads shape; `check.rs` applies config and severity.

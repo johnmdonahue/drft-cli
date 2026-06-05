@@ -121,4 +121,34 @@ mod tests {
             "escaping symlink must not be hashed"
         );
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn inroot_symlink_node_is_not_hashed() {
+        // A symlink is untrackable even when its target is in-graph: it carries no
+        // hash. Staleness reaches it through the edge to the (hashed) target.
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), "").unwrap();
+        fs::write(dir.path().join("real.md"), "content").unwrap();
+        std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
+            .unwrap();
+
+        let set = build_set(dir.path(), &Config::defaults()).unwrap();
+        let nodes = &set.graphs[0].nodes;
+        assert_eq!(
+            nodes["alias.md"].metadata["type"],
+            Value::String("symlink".into())
+        );
+        assert!(
+            nodes["alias.md"].metadata.get("hash").is_none(),
+            "in-root symlink must not be hashed"
+        );
+        assert!(
+            nodes["real.md"].metadata["hash"]
+                .as_str()
+                .unwrap()
+                .starts_with("b3:"),
+            "the real target is still hashed"
+        );
+    }
 }

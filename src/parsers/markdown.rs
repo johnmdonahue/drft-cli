@@ -1,4 +1,4 @@
-use super::{ParseResult, Parser};
+use super::{Link, ParseResult, Parser};
 use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks and images.
@@ -23,15 +23,17 @@ impl Parser for MarkdownParser {
     }
 }
 
-fn extract_markdown_links(content: &str) -> Vec<String> {
+fn extract_markdown_links(content: &str) -> Vec<Link> {
+    let newlines = newline_offsets(content);
     let mut links = Vec::new();
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    let parser = CmarkParser::new_ext(content, options);
+    // The offset iterator yields each event's byte range so we can locate links.
+    let parser = CmarkParser::new_ext(content, options).into_offset_iter();
 
     let mut in_code_block = false;
 
-    for event in parser {
+    for (event, range) in parser {
         match event {
             Event::Start(Tag::CodeBlock(_)) => in_code_block = true,
             Event::End(TagEnd::CodeBlock) => in_code_block = false,
@@ -45,13 +47,19 @@ fn extract_markdown_links(content: &str) -> Vec<String> {
                 }
                 let link = dest_url.trim();
                 if !link.is_empty() {
-                    links.push(link.to_string());
+                    links.push(Link {
+                        target: link.to_string(),
+                        line: Some(line_at(range.start, &newlines)),
+                    });
                 }
             }
             Event::Start(Tag::Image { dest_url, .. }) if !in_code_block => {
                 let link = dest_url.trim();
                 if !link.is_empty() {
-                    links.push(link.to_string());
+                    links.push(Link {
+                        target: link.to_string(),
+                        line: Some(line_at(range.start, &newlines)),
+                    });
                 }
             }
             _ => {}
@@ -61,13 +69,45 @@ fn extract_markdown_links(content: &str) -> Vec<String> {
     links
 }
 
+/// Byte offsets of every `\n` in `content`, ascending — a reusable index for
+/// turning a byte offset into a line number.
+fn newline_offsets(content: &str) -> Vec<usize> {
+    content
+        .bytes()
+        .enumerate()
+        .filter(|(_, b)| *b == b'\n')
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// 1-based line containing byte `offset`, via the precomputed newline index.
+fn line_at(offset: usize, newlines: &[usize]) -> usize {
+    newlines.partition_point(|&nl| nl < offset) + 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn parse(content: &str) -> Vec<String> {
         let parser = MarkdownParser { file_filter: None };
-        parser.parse("test.md", content).links
+        parser
+            .parse("test.md", content)
+            .links
+            .into_iter()
+            .map(|l| l.target)
+            .collect()
+    }
+
+    #[test]
+    fn records_link_line_numbers() {
+        let parser = MarkdownParser { file_filter: None };
+        let content = "# Title\n\nSee [setup](setup.md).\n\nThen [faq](faq.md).\n";
+        let links = parser.parse("t.md", content).links;
+        assert_eq!(links[0].target, "setup.md");
+        assert_eq!(links[0].line, Some(3));
+        assert_eq!(links[1].target, "faq.md");
+        assert_eq!(links[1].line, Some(5));
     }
 
     #[test]

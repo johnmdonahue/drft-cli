@@ -60,6 +60,12 @@ impl Lock {
             );
         }
 
+        // Lock only what can drift. A node with no hash and no outbound edges —
+        // a directory, or an unreferenced escaping symlink — carries nothing to
+        // check, so it stays out of the lockfile. A directory that *is* an edge
+        // target still appears as a (null) target hash under the linking node.
+        nodes.retain(|_, node| node.hash.is_some() || !node.edges.is_empty());
+
         Lock { nodes }
     }
 
@@ -211,6 +217,30 @@ mod tests {
             Some("b3:setup")
         );
         assert!(lock.nodes["setup.md"].edges.is_empty());
+    }
+
+    #[test]
+    fn directory_nodes_are_omitted_but_resolve_edges() {
+        // A directory node carries no hash and no outbound edges. A file links to
+        // it. The directory must not appear as its own lock entry, but the link
+        // must still resolve — recorded as a null target hash under the file.
+        let mut fs = fs_fragment(&[("index.md", "b3:idx")]);
+        fs.set_node(
+            "guides",
+            Node::new(json!({ "type": "directory" }).as_object().unwrap().clone()),
+        );
+        fs.add_edge(Edge::new("index.md", "guides"));
+        let lock = Lock::from_composed(&compose(&GraphSet::new(vec![fs])));
+
+        assert!(
+            !lock.nodes.contains_key("guides"),
+            "hash-less, edge-less directory node must not be locked"
+        );
+        assert!(
+            lock.nodes["index.md"].edges.contains_key("guides"),
+            "the link to the directory must still be recorded"
+        );
+        assert_eq!(lock.nodes["index.md"].edges["guides"], None);
     }
 
     #[test]

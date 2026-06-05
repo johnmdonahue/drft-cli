@@ -5,12 +5,20 @@
 pub mod frontmatter;
 pub mod markdown;
 
+/// One link discovered by a parser: its raw target string as it appears in the
+/// source, plus the 1-based source line where it occurs (`None` when the parser
+/// cannot locate it). The builder handles normalization (fragment stripping,
+/// anchor filtering, URI detection) and aggregates lines onto the edge.
+#[derive(Debug, Clone)]
+pub struct Link {
+    pub target: String,
+    pub line: Option<usize>,
+}
+
 /// Combined output from parsing a single file: links + optional metadata.
-/// Links are raw strings as they appear in the source — the builder handles
-/// normalization (fragment stripping, anchor filtering, URI detection).
 #[derive(Debug, Clone, Default)]
 pub struct ParseResult {
-    pub links: Vec<String>,
+    pub links: Vec<Link>,
     /// Structured metadata extracted from the file.
     pub metadata: Option<serde_json::Value>,
 }

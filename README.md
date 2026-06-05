@@ -32,7 +32,7 @@ drft check                # now detects staleness too
 
 drft builds a **set of independent graphs** and merges them by path:
 
-- **`fs`** — walks every file under the root (minus `ignore` and `.gitignore`), typing and hashing each as a node. This is the identity space.
+- **`fs`** — walks the tree under the root (minus `ignore` and `.gitignore`), typing each file, symlink, and directory as a node and hashing the ones with content. This is the identity space.
 - **`markdown`** — link edges from `[text](path)` body links.
 - **`frontmatter`** — edges from frontmatter link-target values, plus the parsed frontmatter block as node metadata.
 

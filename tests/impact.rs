@@ -52,35 +52,9 @@ fn impact_json_format() {
     assert!(output.status.success());
 }
 
-/// No-arg impact seeds from the lockfile's stale sources.
+/// `drft impact` requires a subject; with no path it is a usage error (exit 2).
 #[test]
-fn impact_no_args_uses_stale_sources() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
-    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
-    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
-
-    drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "lock"])
-        .output()
-        .unwrap();
-    fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
-
-    let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "impact"])
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("index.md"),
-        "stale setup.md should surface index.md as impacted, got: {stdout}"
-    );
-    assert!(output.status.success());
-}
-
-/// No-arg impact without a lockfile is a usage error (exit 2).
-#[test]
-fn impact_no_args_without_lockfile_errors() {
+fn impact_requires_a_subject() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();

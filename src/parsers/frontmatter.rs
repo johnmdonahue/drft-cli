@@ -1,4 +1,6 @@
-use super::{ParseResult, Parser};
+use saphyr::{LoadableYamlNode, MarkedYaml, Scalar, YamlData};
+
+use super::{Link, ParseResult, Parser};
 
 /// Check whether a frontmatter value looks like a link target (file path or URI).
 fn is_link_candidate(value: &str) -> bool {
@@ -118,97 +120,110 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        let Some(yaml) = parse_frontmatter_yaml(content) else {
+        // `stripped` is owned and outlives the borrowed marked AST below.
+        let stripped = strip_code(content);
+        let Some(yaml_str) = frontmatter_block(&stripped) else {
+            return ParseResult::default();
+        };
+        // Malformed YAML contributes nothing — drft is not a YAML linter.
+        let Ok(docs) = MarkedYaml::load_from_str(yaml_str) else {
+            return ParseResult::default();
+        };
+        let Some(root) = docs.first() else {
             return ParseResult::default();
         };
 
-        let mut links = Vec::new();
-        collect_string_leaves(&yaml, &mut links);
-        links.retain(|v| is_link_candidate(v));
+        let mut candidates = Vec::new();
+        collect_links(root, &mut candidates);
+        let links = candidates
+            .into_iter()
+            .filter(|(value, _)| is_link_candidate(value))
+            .map(|(target, line)| Link {
+                target,
+                line: Some(line),
+            })
+            .collect();
 
         ParseResult {
             links,
-            metadata: Some(yaml_to_json(yaml)),
+            metadata: Some(to_json(root)),
         }
     }
 }
 
-/// Parse a file's YAML frontmatter block into a value, or `None` when there is
-/// no well-formed block. Operates on code-block-stripped content so frontmatter
-/// inside fenced code examples is ignored.
-fn parse_frontmatter_yaml(content: &str) -> Option<serde_yml::Value> {
-    let content = strip_code(content);
-
-    let rest = content.strip_prefix("---")?;
+/// Extract the YAML frontmatter block from code-stripped content — the text
+/// between the opening `---` and the next `\n---`, or `None` when there is no
+/// well-formed block. The slice keeps the newline that follows the opening
+/// fence, so a node's line within the block equals its line within the file.
+fn frontmatter_block(stripped: &str) -> Option<&str> {
+    let rest = stripped.strip_prefix("---")?;
     let end = rest.find("\n---")?;
     let yaml_str = &rest[..end];
     if yaml_str.trim().is_empty() {
         return None;
     }
-
-    match serde_yml::from_str(yaml_str) {
-        Ok(value) => Some(value),
-        Err(e) => {
-            eprintln!("warn: frontmatter parser: invalid YAML: {e}");
-            None
-        }
-    }
+    Some(yaml_str)
 }
 
-/// Recursively collect all string leaf values from a YAML structure.
-/// Skips keys (only visits values) and non-string types (numbers, bools, null).
-fn collect_string_leaves(value: &serde_yml::Value, out: &mut Vec<String>) {
-    match value {
-        serde_yml::Value::String(s) => out.push(s.clone()),
-        serde_yml::Value::Sequence(seq) => {
-            for item in seq {
-                collect_string_leaves(item, out);
+/// Collect string leaf *values* (not keys) with their 1-based source line — the
+/// frontmatter link candidates. Mirrors the metadata walk but keeps only strings.
+fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize)>) {
+    match &node.data {
+        YamlData::Value(Scalar::String(s)) => out.push((s.to_string(), node.span.start.line())),
+        YamlData::Sequence(items) => {
+            for item in items {
+                collect_links(item, out);
             }
         }
-        serde_yml::Value::Mapping(map) => {
-            for (_key, val) in map {
-                collect_string_leaves(val, out);
+        YamlData::Mapping(map) => {
+            for (_key, value) in map {
+                collect_links(value, out);
             }
         }
-        serde_yml::Value::Tagged(tagged) => collect_string_leaves(&tagged.value, out),
+        YamlData::Tagged(_, inner) => collect_links(inner, out),
         _ => {}
     }
 }
 
-/// Convert serde_yml::Value to serde_json::Value.
-fn yaml_to_json(yaml: serde_yml::Value) -> serde_json::Value {
-    match yaml {
-        serde_yml::Value::Null => serde_json::Value::Null,
-        serde_yml::Value::Bool(b) => serde_json::Value::Bool(b),
-        serde_yml::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                serde_json::Value::Number(i.into())
-            } else if let Some(f) = n.as_f64() {
-                serde_json::Number::from_f64(f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            } else {
-                serde_json::Value::Null
-            }
-        }
-        serde_yml::Value::String(s) => serde_json::Value::String(s),
-        serde_yml::Value::Sequence(seq) => {
-            serde_json::Value::Array(seq.into_iter().map(yaml_to_json).collect())
-        }
-        serde_yml::Value::Mapping(map) => {
-            let obj: serde_json::Map<String, serde_json::Value> = map
-                .into_iter()
-                .filter_map(|(k, v)| {
-                    let key = match k {
-                        serde_yml::Value::String(s) => s,
-                        other => serde_json::to_string(&yaml_to_json(other)).ok()?,
-                    };
-                    Some((key, yaml_to_json(v)))
-                })
+/// Convert a marked YAML node to `serde_json::Value` for the `@frontmatter`
+/// metadata namespace.
+fn to_json(node: &MarkedYaml) -> serde_json::Value {
+    use serde_json::Value as J;
+    match &node.data {
+        YamlData::Value(scalar) => scalar_to_json(scalar),
+        YamlData::Representation(raw, _, _) => J::String(raw.to_string()),
+        YamlData::Sequence(items) => J::Array(items.iter().map(to_json).collect()),
+        YamlData::Mapping(map) => {
+            let obj: serde_json::Map<String, J> = map
+                .iter()
+                .filter_map(|(k, v)| Some((json_key(k)?, to_json(v))))
                 .collect();
-            serde_json::Value::Object(obj)
+            J::Object(obj)
         }
-        serde_yml::Value::Tagged(tagged) => yaml_to_json(tagged.value),
+        YamlData::Tagged(_, inner) => to_json(inner),
+        YamlData::Alias(_) | YamlData::BadValue => J::Null,
+    }
+}
+
+/// Render a mapping key as a JSON object key: a string scalar verbatim, anything
+/// else as its JSON serialization (matching the prior behavior).
+fn json_key(node: &MarkedYaml) -> Option<String> {
+    match &node.data {
+        YamlData::Value(Scalar::String(s)) => Some(s.to_string()),
+        _ => serde_json::to_string(&to_json(node)).ok(),
+    }
+}
+
+fn scalar_to_json(scalar: &Scalar) -> serde_json::Value {
+    use serde_json::Value as J;
+    match scalar {
+        Scalar::Null => J::Null,
+        Scalar::Boolean(b) => J::Bool(*b),
+        Scalar::Integer(i) => J::Number((*i).into()),
+        Scalar::FloatingPoint(f) => serde_json::Number::from_f64(f.0)
+            .map(J::Number)
+            .unwrap_or(J::Null),
+        Scalar::String(s) => J::String(s.to_string()),
     }
 }
 
@@ -227,8 +242,8 @@ mod tests {
             "---\nsources:\n  - ../shared/glossary.md\n  - ./prior-art.md\n---\n\n# Hello\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "../shared/glossary.md");
-        assert_eq!(result.links[1], "./prior-art.md");
+        assert_eq!(result.links[0].target, "../shared/glossary.md");
+        assert_eq!(result.links[1].target, "./prior-art.md");
     }
 
     #[test]
@@ -236,8 +251,36 @@ mod tests {
         let content = "---\nsources:\n  - setup.md\n  - config.rs\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "setup.md");
-        assert_eq!(result.links[1], "config.rs");
+        assert_eq!(result.links[0].target, "setup.md");
+        assert_eq!(result.links[1].target, "config.rs");
+    }
+
+    #[test]
+    fn records_link_line_numbers() {
+        // Lines are 1-based and file-accurate: the opening `---` is line 1.
+        let content = "---\ntitle: Doc\nsources:\n  - setup.md\n  - other.md\n---\n";
+        let result = parse(content);
+        let setup = result
+            .links
+            .iter()
+            .find(|l| l.target == "setup.md")
+            .unwrap();
+        assert_eq!(setup.line, Some(4));
+        let other = result
+            .links
+            .iter()
+            .find(|l| l.target == "other.md")
+            .unwrap();
+        assert_eq!(other.line, Some(5));
+    }
+
+    #[test]
+    fn malformed_yaml_contributes_nothing() {
+        // Invalid YAML yields no links and no metadata — drft is not a linter,
+        // and there is no stderr warning (the `eprintln` is gone).
+        let result = parse("---\nsources: [a, b\n---\n");
+        assert!(result.links.is_empty());
+        assert!(result.metadata.is_none());
     }
 
     #[test]
@@ -307,8 +350,8 @@ mod tests {
         let content = "---\nsources:\n  - https://example.com\n  - ./local.md\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "https://example.com");
-        assert_eq!(result.links[1], "./local.md");
+        assert_eq!(result.links[0].target, "https://example.com");
+        assert_eq!(result.links[1].target, "./local.md");
     }
 
     #[test]
@@ -330,8 +373,8 @@ mod tests {
         let content = "---\nsources:\n  - config.rs\n  - docs/setup.md\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "config.rs");
-        assert_eq!(result.links[1], "docs/setup.md");
+        assert_eq!(result.links[0].target, "config.rs");
+        assert_eq!(result.links[1].target, "docs/setup.md");
     }
 
     #[test]
@@ -339,7 +382,7 @@ mod tests {
         let content = "---\nsource: /usr/local/config.toml\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 1);
-        assert_eq!(result.links[0], "/usr/local/config.toml");
+        assert_eq!(result.links[0].target, "/usr/local/config.toml");
     }
 
     #[test]

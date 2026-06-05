@@ -11,7 +11,7 @@ The frontmatter parser extracts YAML frontmatter from files. It serves two purpo
 
 ## Link types
 
-The parser extracts one type of link. Each becomes an edge with parser provenance `frontmatter` in the graph.
+The parser extracts one type of link. Each becomes an edge with parser provenance `frontmatter` in the graph. Every edge records the 1-based source line(s) where the value appears as `lines` in its `frontmatter` metadata, exposed in `drft graph` and used by `drft impact` to point a review at the exact reference.
 
 ### link
 
@@ -27,9 +27,11 @@ template: docs/templates/page.md
 ---
 ```
 
-The parser uses `serde_yml` to parse the YAML structure, then collects all string leaf values and filters them through a heuristic: a value is treated as a link if it has an explicit path prefix (`./`, `../`, `/`), is a valid URI, or has a plausible file extension (1-6 alphanumeric characters after the last dot, not all digits). Non-string types (numbers, booleans, null) are skipped by the YAML parser. Strings with spaces are rejected as prose.
+The parser parses the YAML frontmatter block, then collects all string leaf values and filters them through a heuristic: a value is treated as a link if it has an explicit path prefix (`./`, `../`, `/`), is a valid URI, or has a plausible file extension (1-6 alphanumeric characters after the last dot, not all digits). Non-string types (numbers, booleans, null) are skipped. Strings with spaces are rejected as prose.
 
 This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
+
+Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
 
 ## Metadata
 

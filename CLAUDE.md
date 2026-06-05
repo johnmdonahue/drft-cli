@@ -38,7 +38,7 @@ Naming rule: "drift" spelled out refers only to the concept of structural drift.
 - `serde_json` for JSON output
 - `blake3` for content hashing (prefix: `b3:`)
 - `pulldown-cmark` for markdown parsing (built-in parser)
-- `serde_yml` for YAML frontmatter metadata extraction
+- `saphyr` for YAML frontmatter parsing (marked AST → link line numbers + metadata)
 - `ignore` for directory traversal (.gitignore-aware)
 - `globset` for ignore/glob patterns
 - `notify` for watch mode

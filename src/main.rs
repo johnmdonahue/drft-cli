@@ -173,8 +173,8 @@ fn run_graph(root: &Path, raw: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// List nodes transitively impacted by a change to `paths`. With no paths,
-/// seeds are the stale source nodes derived from the lockfile.
+/// List nodes that transitively depend on `paths` (a structural query; `paths`
+/// is required by the CLI).
 fn run_impact(
     root: &Path,
     format: OutputFormat,
@@ -186,14 +186,10 @@ fn run_impact(
     let config = Config::load(&graph_root)?;
     let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
 
-    let seeds: Vec<String> = if paths.is_empty() {
-        stale_sources(&graph_root, &composed)?
-    } else {
-        paths
-            .iter()
-            .map(|p| resolve_node(&composed, p))
-            .collect::<Result<_>>()?
-    };
+    let seeds: Vec<String> = paths
+        .iter()
+        .map(|p| resolve_node(&composed, p))
+        .collect::<Result<_>>()?;
 
     let dir = match direction {
         Direction::Inbound => impact::Direction::Inbound,
@@ -218,7 +214,10 @@ fn run_impact(
                 for i in &impacted {
                     println!(
                         "{} (via {}, depth {}, radius {})",
-                        i.node, i.via, i.depth, i.impact_radius
+                        i.location(),
+                        i.via,
+                        i.depth,
+                        i.impact_radius
                     );
                 }
             }
@@ -226,21 +225,6 @@ fn run_impact(
     }
 
     Ok(0)
-}
-
-/// Stale source nodes: the subjects of the `stale-node` findings the staleness
-/// rule derives against the lockfile — so impact's seeds and `drft check` share
-/// one definition of "stale." Requires a lockfile.
-fn stale_sources(graph_root: &Path, composed: &drft::model::Graph) -> Result<Vec<String>> {
-    let lock = lock::read(graph_root)?.ok_or_else(|| {
-        anyhow::anyhow!("no paths given and no drft.lock to derive stale sources from")
-    })?;
-    let seeds = rules::staleness::evaluate(composed, &lock)
-        .into_iter()
-        .filter(|f| f.name == "stale-node")
-        .map(|f| f.subject)
-        .collect();
-    Ok(seeds)
 }
 
 /// Check the composed graph against the lockfile, reporting drift and structural

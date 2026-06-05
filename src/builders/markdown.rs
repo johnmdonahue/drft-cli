@@ -4,7 +4,7 @@
 
 use globset::GlobSet;
 
-use crate::builders::link_edge;
+use crate::builders::link_edges;
 use crate::model::Graph;
 use crate::parsers::Parser;
 use crate::parsers::markdown::MarkdownParser;
@@ -22,10 +22,8 @@ pub fn build(label: &str, texts: &[(String, String)], filter: Option<GlobSet>) -
         if !parser.matches(path) {
             continue;
         }
-        for raw in parser.parse(path, content).links {
-            if let Some(edge) = link_edge(path, &raw) {
-                graph.add_edge(edge);
-            }
+        for edge in link_edges(path, &parser.parse(path, content).links) {
+            graph.add_edge(edge);
         }
     }
 

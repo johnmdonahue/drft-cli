@@ -29,18 +29,24 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
                     edge_provenance(edge),
                     "no defining node",
                 )
-                .with_target(&edge.target),
+                .with_target(&edge.target)
+                .with_lines(edge.lines()),
             );
         }
     }
 
-    // detached-node: a node touched by no edge in either direction.
+    // detached-node: a file touched by no edge in either direction. Directories
+    // are structural scaffolding — links point at the files inside them, not at
+    // the directory — so a link-less directory is normal, not orphaned content.
     let mut connected: HashSet<&str> = HashSet::new();
     for edge in &graph.edges {
         connected.insert(edge.source.as_str());
         connected.insert(edge.target.as_str());
     }
     for (path, node) in &graph.nodes {
+        if node.fs_type() == Some("directory") {
+            continue;
+        }
         if !connected.contains(path.as_str()) {
             findings.push(Finding::warn(
                 "detached-node",
@@ -58,7 +64,7 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::compose::compose;
-    use crate::model::{Edge, GraphSet, Node};
+    use crate::model::{Edge, GraphSet, Metadata, Node};
     use serde_json::json;
 
     fn fs_node() -> Node {
@@ -86,6 +92,30 @@ mod tests {
 
         let findings = evaluate(&composed);
         assert!(names(&findings).contains(&("unresolved-edge", "index.md")));
+    }
+
+    #[test]
+    fn unresolved_edge_carries_link_lines() {
+        // A markdown link to a missing target on line 3 — the finding points there.
+        let mut markdown = Graph::labeled("markdown");
+        let mut meta = Metadata::new();
+        meta.insert("lines".into(), json!([3]));
+        markdown.add_edge(Edge::with_metadata("index.md", "gone.md", meta));
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("index.md", fs_node());
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
+
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .unwrap();
+        assert_eq!(f.lines, vec![3]);
+        assert!(
+            f.format_text().contains("index.md:3 → gone.md"),
+            "got: {}",
+            f.format_text()
+        );
     }
 
     #[test]
@@ -117,5 +147,26 @@ mod tests {
         assert!(n.contains(&("detached-node", "lonely.md")), "got {n:?}");
         assert!(!n.contains(&("detached-node", "a.md")));
         assert!(!n.contains(&("detached-node", "b.md")));
+    }
+
+    #[test]
+    fn directory_node_is_not_detached() {
+        // A link-less directory is scaffolding, not orphaned content.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node(
+            "guides",
+            Node::new(json!({ "type": "directory" }).as_object().unwrap().clone()),
+        );
+        fs.set_node("lonely.md", fs_node());
+        let composed = compose(&GraphSet::new(vec![fs]));
+
+        let findings = evaluate(&composed);
+        let n = names(&findings);
+        assert!(
+            !n.contains(&("detached-node", "guides")),
+            "directory should not be flagged detached, got {n:?}"
+        );
+        // A genuinely orphaned file is still flagged.
+        assert!(n.contains(&("detached-node", "lonely.md")));
     }
 }
