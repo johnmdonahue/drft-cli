@@ -1,6 +1,6 @@
 //! Path, URI, and hashing utilities shared by the sources, builders, and rules.
 
-use std::path::Path;
+use std::path::{Component, Path};
 
 /// Hash content with BLAKE3, returning `b3:<hex>`.
 pub fn hash_bytes(content: &[u8]) -> String {
@@ -30,25 +30,28 @@ pub fn is_uri(target: &str) -> bool {
 
 /// Normalize a relative path by resolving `.` and `..` components using path
 /// APIs. Does not touch the filesystem. Always returns forward-slash separated
-/// paths. Preserves leading `..` that escape above the root — these indicate
-/// graph escape.
+/// paths. Preserves leading `..` that escape above the root, and preserves an
+/// absolute root/prefix (`/foo`, `C:\foo`) verbatim — both indicate graph
+/// escape and must not be silently rewritten into in-graph relative paths.
 pub fn normalize_relative_path(path: &str) -> String {
+    let mut prefix = String::new();
     let mut parts: Vec<String> = Vec::new();
     for component in Path::new(path).components() {
         match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
+            Component::Prefix(p) => prefix.push_str(&p.as_os_str().to_string_lossy()),
+            Component::RootDir => prefix.push('/'),
+            Component::CurDir => {}
+            Component::ParentDir => {
                 if parts.last().is_some_and(|p| p != "..") {
                     parts.pop();
                 } else {
                     parts.push("..".to_string());
                 }
             }
-            std::path::Component::Normal(c) => parts.push(c.to_string_lossy().to_string()),
-            _ => {}
+            Component::Normal(c) => parts.push(c.to_string_lossy().to_string()),
         }
     }
-    parts.join("/")
+    format!("{prefix}{}", parts.join("/"))
 }
 
 /// Resolve a link target relative to a source file, producing a path relative to
@@ -83,6 +86,14 @@ mod tests {
             normalize_relative_path("guides/../../README.md"),
             "../README.md"
         );
+    }
+
+    #[test]
+    fn normalize_preserves_absolute_root() {
+        // An absolute target must stay absolute, not collapse into an in-graph
+        // relative path that could falsely resolve against the fs graph.
+        assert_eq!(normalize_relative_path("/docs/x.md"), "/docs/x.md");
+        assert_eq!(normalize_relative_path("/a/../b"), "/b");
     }
 
     #[test]

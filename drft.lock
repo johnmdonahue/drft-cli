@@ -66,7 +66,7 @@ target_hash = "b3:6aa799324bf2957dd41bf701adba599d3b22b739397cd58708fab2cb6753cc
 
 [[node.edge]]
 target = "src/util.rs"
-target_hash = "b3:6ba15cbe120323cea04b34745bc9e781a26f3ab241a877038cc9f4d323cbcb9a"
+target_hash = "b3:fa42d587b5cd0a2a0253c7a8b7bbe54823632af99fd07791e54761411617c1d6"
 
 [[node]]
 path = "Cargo.toml"
@@ -320,7 +320,7 @@ hash = "b3:51304c236b62afa173e08da13dd8601ca9a469ebc07310aa64ebe1c555347bbf"
 
 [[node]]
 path = "src/util.rs"
-hash = "b3:6ba15cbe120323cea04b34745bc9e781a26f3ab241a877038cc9f4d323cbcb9a"
+hash = "b3:fa42d587b5cd0a2a0253c7a8b7bbe54823632af99fd07791e54761411617c1d6"
 
 [[node]]
 path = "tests/check.rs"
