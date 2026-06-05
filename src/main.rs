@@ -132,7 +132,7 @@ fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
     match path {
         None => lock::write(&graph_root, &snapshot)?,
         Some(path) => {
-            let node = resolve_node(&composed, path)?;
+            let node = resolve_node(&composed, root, &graph_root, path)?;
             let mut existing = lock::read(&graph_root)?.unwrap_or_default();
             let entry = snapshot
                 .nodes
@@ -146,17 +146,66 @@ fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
     Ok(0)
 }
 
-/// Resolve a user-supplied path to a node in the composed graph, trying a
-/// `.md` suffix as a fallback. Errors if no matching node exists.
-fn resolve_node(composed: &drft::model::Graph, path: &str) -> Result<String> {
-    if composed.nodes.contains_key(path) {
-        return Ok(path.to_string());
+/// Resolve a user-supplied path to a node key in the composed graph.
+///
+/// Nodes are keyed by graph-root-relative path, but the argument is relative to
+/// the current directory (`root`) like any other CLI path — so it is resolved
+/// against `root`, normalized, and made relative to `graph_root` before lookup.
+/// This makes the command cwd-agnostic: the same file resolves whether given
+/// project-relative from a subdirectory or root-relative from the top. A `.md`
+/// suffix is tried as a fallback, and the raw argument is tried last for back
+/// compatibility. On a miss, a node whose key ends with the argument is
+/// suggested.
+fn resolve_node(
+    composed: &drft::model::Graph,
+    root: &Path,
+    graph_root: &Path,
+    path: &str,
+) -> Result<String> {
+    let mut candidates = Vec::new();
+    if let Some(key) = graph_key(root, graph_root, path) {
+        candidates.push(format!("{key}.md"));
+        candidates.push(key);
     }
-    let with_ext = format!("{path}.md");
-    if composed.nodes.contains_key(&with_ext) {
-        return Ok(with_ext);
+    candidates.push(format!("{path}.md"));
+    candidates.push(path.to_string());
+
+    for candidate in &candidates {
+        if composed.nodes.contains_key(candidate) {
+            return Ok(candidate.clone());
+        }
     }
-    anyhow::bail!("node not found: \"{path}\"")
+
+    // Suggest a node whose key ends with the given path (e.g. a bare filename or
+    // a project-relative suffix) — the common "right file, wrong prefix" miss.
+    let needle = path.trim_start_matches("./");
+    let suffix = format!("/{needle}");
+    match composed
+        .nodes
+        .keys()
+        .find(|k| k.as_str() == needle || k.ends_with(&suffix))
+    {
+        Some(hit) => anyhow::bail!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        None => anyhow::bail!("node not found: \"{path}\""),
+    }
+}
+
+/// Resolve `arg` (relative to the current directory `root`, or absolute) to a
+/// graph-root-relative node key. Normalization is lexical — `.`/`..` are
+/// resolved without touching the filesystem, so symlink node identities are
+/// preserved. Returns `None` when the path resolves outside `graph_root`.
+fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
+    let candidate = Path::new(arg);
+    let abs = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        root.join(candidate)
+    };
+    let abs = drft::util::normalize_relative_path(&abs.to_string_lossy());
+    let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
+    let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
+    let key = rel.to_string_lossy().replace('\\', "/");
+    (!key.is_empty()).then_some(key)
 }
 
 fn run_graph(root: &Path, raw: bool) -> Result<i32> {
@@ -188,7 +237,7 @@ fn run_impact(
 
     let seeds: Vec<String> = paths
         .iter()
-        .map(|p| resolve_node(&composed, p))
+        .map(|p| resolve_node(&composed, root, &graph_root, p))
         .collect::<Result<_>>()?;
 
     let dir = match direction {
