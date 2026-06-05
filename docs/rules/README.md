@@ -1,54 +1,57 @@
 ---
 sources:
-  - ../../src/rules/mod.rs
+  - ../../src/rules/staleness.rs
+  - ../../src/rules/structural.rs
   - ../../src/config.rs
 ---
 
 # Rules
 
-Rules are predicates over the dependency graph that emit diagnostics. Each rule inspects the graph (or the output of an analysis) and reports violations as warnings or errors.
+A rule is a function over the composed graph: graph in, findings out. `drft check`
+runs every rule, joins the lockfile for the staleness rules, and emits findings as
+warnings or errors.
 
-Configure rules in `drft.toml` under `[rules]`. Every rule has a severity: `"warn"`, `"error"`, or `"off"`. drft skips rules set to `"off"`. All rules default to `warn` for immediate discoverability — override to `error` for CI enforcement or `off` to suppress. [`src/config.rs`](../../src/config.rs) defines the defaults.
+Configure rules in `drft.toml` under `[rules]`. Every rule has a severity:
+`"warn"`, `"error"`, or `"off"`. All rules default to `warn`; override to
+`error` for CI enforcement or `off` to suppress. A finding's `subject` is the
+implicated path (the source node for edge-level findings).
 
 ```toml
 [rules]
-stale = "error" # escalate for CI
-orphan-node = "off" # suppress if expected
+stale-node = "error"
+stale-edge = "error"
 ```
 
 ## Built-in rules
 
-| Rule                                    | What it checks                                           | Analysis                                                    |
-| --------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------- |
-| [directed-cycle](directed-cycle.md)     | Circular dependencies between files                      | [scc](../analyses/scc.md)                                   |
-| [fragmentation](fragmentation.md)       | Disconnected components in the graph                     | [connected-components](../analyses/connected-components.md) |
-| [orphan-node](orphan-node.md)           | Nodes with no connections (no inbound or outbound edges) | [degree](../analyses/degree.md)                             |
-| [schema-violation](schema-violation.md) | Node metadata violates required fields or allowed values | graph (metadata)                                            |
-| [stale](stale.md)                       | Files whose content has changed since the last lock      | [change-propagation](../analyses/change-propagation.md)     |
-| [symlink-edge](symlink-edge.md)         | Edges whose target is a symlink                          | graph (direct)                                              |
-| [unresolved-edge](unresolved-edge.md)   | Edges to included targets that don't exist               | graph (direct)                                              |
+The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/staleness.rs)
+derives the drift findings by joining the graph to the lockfile;
+[`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-## Custom rules
+| Rule              | When                                                   |
+| ----------------- | ------------------------------------------------------ |
+| `stale-node`      | A node's current hash differs from its locked hash     |
+| `stale-edge`      | An edge's locked target hash differs from the target's |
+| `new-edge`        | A current edge has no locked target hash               |
+| `removed-edge`    | The lockfile has an edge absent from the graph         |
+| `removed-node`    | The lockfile has a node absent from the graph          |
+| `unresolved-edge` | An edge target has no defining node (URIs excepted)    |
+| `detached-node`   | A node has no inbound or outbound edges                |
 
-You can define custom rules that run an external command. See [custom](custom.md).
+Staleness is computed locally — per node and per edge, with no recursive
+propagation — so dependency cycles can't loop or produce ambiguous staleness. A
+stale node subsumes its outbound `stale-edge` findings; a removed node subsumes
+its `removed-edge` findings.
 
 ## Per-rule configuration
 
-Every rule supports `files`, `ignore`, and `parsers`, applied at the runner level:
-
 ```toml
-[rules.orphan-node]
-severity = "warn"
-ignore = ["CHANGELOG.md"]
+[rules.detached-node]
+severity = "off"
 
-[rules.schema-violation]
-severity = "warn"
-files = ["docs/**"] # only evaluate this rule against docs
-
-[rules.directed-cycle]
-parsers = ["frontmatter"] # only detect cycles through frontmatter edges
+[rules.unresolved-edge]
+ignore = ["CHANGELOG.md", "LICENSE"]
 ```
 
-- `files`: scope which nodes the rule evaluates (default: all)
-- `ignore`: exclude nodes from diagnostics (default: none)
-- `parsers`: scope which parser edges the rule evaluates (default: all). When set, the rule runs against a filtered graph containing only edges from the named parsers. This lets you distinguish structural dependencies from navigation links.
+- `severity`: `"error"`, `"warn"`, or `"off"`
+- `ignore`: globs matched against the finding's subject path

@@ -31,74 +31,46 @@ pub enum Commands {
 
     /// Snapshot the current state to drft.lock
     Lock {
-        /// Verify lockfile is up to date without writing
-        #[arg(long)]
-        check: bool,
+        /// Lock only this path and its outbound edges (default: lock the whole graph)
+        path: Option<String>,
     },
 
-    /// Show raw parser output (edges and metadata)
-    Parse {
-        /// Run only a specific parser
-        #[arg(long)]
-        parser: Option<String>,
-    },
-
-    /// Export the dependency graph
+    /// Export the dependency graph as composed JGF
     Graph {
-        /// Output as GraphViz DOT
+        /// Emit the raw set of per-graph fragments instead of the composed graph
         #[arg(long)]
-        dot: bool,
-
-        /// Only include edges from this parser
-        #[arg(long)]
-        parser: Option<String>,
+        raw: bool,
     },
 
-    /// Show what depends on the given files (transitively)
+    /// List nodes transitively impacted by a change (default: stale sources)
     Impact {
-        /// Files to analyze (relative paths)
-        #[arg(required = true)]
-        files: Vec<String>,
+        /// Paths to analyze (default: stale sources derived from the lockfile)
+        paths: Vec<String>,
 
-        /// Only include edges from this parser
+        /// Limit traversal to this many hops
         #[arg(long)]
-        parser: Option<String>,
+        depth: Option<usize>,
+
+        /// Traversal direction
+        #[arg(long, default_value = "inbound")]
+        direction: Direction,
     },
 
-    /// [unstable] Run graph analyses and health metrics
-    Report {
-        /// Analyses or metrics to include (defaults to all)
-        names: Vec<String>,
-    },
-
-    /// Show resolved configuration
-    Config {
-        #[command(subcommand)]
-        action: ConfigAction,
-    },
-
-    /// Check structure for rule violations
-    Check {
-        /// Run only specific rules (can be repeated)
-        #[arg(long = "rule")]
-        rules: Vec<String>,
-
-        /// Watch for changes and re-check
-        #[arg(long, short = 'w')]
-        watch: bool,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum ConfigAction {
-    /// Print the resolved configuration (defaults filled in)
-    Show,
+    /// Check the composed graph against the lockfile for drift and structural findings
+    Check,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
     Text,
     Json,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum Direction {
+    Inbound,
+    Outbound,
+    Both,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

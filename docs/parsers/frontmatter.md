@@ -7,7 +7,7 @@ sources:
 
 ## The concept
 
-The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: detecting file path references as edges, and extracting structured metadata for rules like schema-violation.
+The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: detecting file path references as edges, and attaching the parsed frontmatter as node metadata.
 
 ## Link types
 
@@ -33,40 +33,16 @@ This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected
 
 ## Metadata
 
-The parser always extracts the full YAML frontmatter as structured metadata, attached to the node as `node.metadata["frontmatter"]`. This makes frontmatter fields available to rules like schema-violation.
+The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
 
 ## Configuration
 
-### Minimal
+Declare a graph that uses the frontmatter parser:
 
 ```toml
-[parsers.frontmatter]
-```
-
-With no `files` field, the parser receives all File nodes in the graph.
-
-### File routing
-
-Restrict which File nodes the parser receives:
-
-```toml
-[parsers.frontmatter]
+[graphs.frontmatter]
+parser = "frontmatter"
 files = ["**/*.md"]
 ```
 
-### With schema validation
-
-```toml
-[parsers.frontmatter]
-files = ["**/*.md"]
-
-[rules.schema-violation]
-severity = "warn"
-
-[rules.schema-violation.options]
-required = ["title"]
-
-[rules.schema-violation.options.schemas."observations/*.md"]
-required = ["title", "date", "status"]
-allowed.status = ["draft", "review", "final"]
-```
+`files` scopes which files the parser reads (default `["**/*.md"]`). See [configuration](../config.md) for the full graph schema.

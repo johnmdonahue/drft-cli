@@ -35,12 +35,7 @@ toml = "0.8"
 url = "2.5.8"
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
-
-[[bench]]
-name = "pipeline"
-harness = false
 
 # The profile that 'dist' will build with
 [profile.dist]

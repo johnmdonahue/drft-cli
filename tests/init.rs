@@ -15,6 +15,10 @@ fn init_creates_config() {
     let config = fs::read_to_string(dir.path().join("drft.toml")).unwrap();
     assert!(config.contains("[rules]"));
     assert!(config.contains("stale"));
+    // Template scaffolds graphs explicitly with the current field vocabulary.
+    assert!(config.contains("[graphs.markdown]"));
+    assert!(config.contains("parser ="));
+    assert!(config.contains("files ="));
     // v0.7: no interface section in the template
     assert!(
         !config.contains("[interface]"),

@@ -5,12 +5,11 @@ sources:
 
 # Parsers
 
-Parsers extract edges and metadata from files. Each parser receives File nodes (optionally filtered by `files` globs), parses their content, and emits links that become edges in the graph. Parsers can also emit structured metadata that is attached to nodes.
+A parser interprets the files a graph's `files` globs select, emitting links that
+become edges. The frontmatter parser also emits the parsed frontmatter block as
+metadata on the file's node. A graph names its parser with `parser = "..."`.
 
-drft ships built-in parsers. Additional parsers can be added via [custom parsers](custom.md).
-
-| Parser                        | Link types                         | Built-in? |
-| ----------------------------- | ---------------------------------- | --------- |
-| [frontmatter](frontmatter.md) | link                               | Yes       |
-| [markdown](markdown.md)       | inline, reference, autolink, image | Yes       |
-| [custom](custom.md)           | (user-defined)                     | No        |
+| Parser                        | Emits                                      |
+| ----------------------------- | ------------------------------------------ |
+| [markdown](markdown.md)       | edges (inline, reference, autolink, image) |
+| [frontmatter](frontmatter.md) | edges (link-target values) + node metadata |

@@ -7,7 +7,7 @@ sources:
 
 ## The concept
 
-The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md). For wikilinks (`[[page]]`), see the [example custom parser](../../examples/custom-parsers/wikilinks.sh).
+The markdown parser is drft's built-in parser for standard markdown link syntax. It scans markdown files and extracts the links that form edges in the dependency graph. For YAML frontmatter links and metadata, see the [frontmatter parser](frontmatter.md).
 
 ## Link types
 
@@ -58,32 +58,18 @@ Images follow the same resolution rules as inline links -- the graph builder str
 
 ## Configuration
 
-### Minimal
+Declare a graph that uses the markdown parser:
 
 ```toml
-[parsers.markdown]
-```
-
-With no `files` field, the parser receives all File nodes in the graph.
-
-### File routing
-
-Restrict which File nodes the parser receives:
-
-```toml
-[parsers.markdown]
+[graphs.markdown]
+parser = "markdown"
 files = ["**/*.md", "**/*.mdx"]
 ```
 
-This is routing only — it does not affect which paths become nodes (that's `include`/`exclude`).
-
-### Disable
-
-```toml
-[parsers]
-markdown = false
-```
+`files` scopes which files the parser reads (default `["**/*.md"]`). There are no
+default graphs — the markdown parser runs only where you declare it. See
+[configuration](../config.md) for the full graph schema.
 
 ## External URLs
 
-External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw targets by the parser. The graph builder creates referenced nodes with `type: "uri"` for them. Anchor-only links (`#heading`) are filtered by the graph builder. Fragment stripping (`file.md#section` → `file.md`) is also handled by the graph builder, not the parser.
+External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw edge targets. A URI target has no defining node, so the `unresolved-edge` rule treats it as an intentional external reference and does not flag it. Anchor-only links (`#heading`) are dropped, and fragments are stripped from targets (`file.md#section` → `file.md`) — both handled when the edge is built, not by the parser.

@@ -1,9 +1,10 @@
-exclude = ["drafts/*"]
+# drft.toml
 
-[parsers]
-markdown = true
+ignore = ["drafts/**"]
+
+[graphs.markdown]
+parser = "markdown"
+files = ["**/*.md"]
 
 [rules]
-dangling-edge = "error"
-directed-cycle = "error"
-orphan-node = "warn"
+unresolved-edge = "error"

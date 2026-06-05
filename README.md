@@ -4,7 +4,7 @@ A structural integrity checker for linked file systems.
 
 Files link to other files. When a target changes, the files that depend on it may no longer be accurate. drft tracks these dependencies and flags what needs review.
 
-It treats your directory as a graph — files are nodes, links are edges — and validates the structure. `drft check` catches broken links, cycles, and staleness. `drft lock` snapshots hashes so it can detect when a dependency changes and flag everything downstream. `drft impact <file>` tells you what to review when you touch a file.
+It treats your directory as a graph — files are nodes, links are edges — and checks the structure for drift. `drft check` catches broken links and staleness. `drft lock` snapshots hashes so it can detect when a dependency changes and flag everything downstream. `drft impact <file>` tells you what to review when you touch a file.
 
 Each `drft.toml` declares exactly one graph. Run drft from anywhere inside the directory tree and it walks up to the nearest config. That's the model — everything else is configuration.
 
@@ -30,62 +30,62 @@ drft check                # now detects staleness too
 
 ## How it works
 
-drft discovers files matching your `include` patterns, runs parsers to extract links, and builds a dependency graph. It then validates the graph against rules:
+drft builds a **set of independent graphs** and merges them by path:
 
-- **Broken links** — edges to files that don't exist (`unresolved-edge`)
-- **Cycles** — circular dependencies (`directed-cycle`)
-- **Staleness** — files changed since last lock, including transitive dependents (`stale`)
-- **Isolation** — nodes with no connections or disconnected components (`orphan-node`, `fragmentation`)
+- **`fs`** — walks every file under the root (minus `ignore` and `.gitignore`), typing and hashing each as a node. This is the identity space.
+- **`markdown`** — link edges from `[text](path)` body links.
+- **`frontmatter`** — edges from frontmatter link-target values, plus the parsed frontmatter block as node metadata.
 
-drft ships with [built-in rules](docs/rules/README.md) covering structural integrity, plus support for [custom rules](docs/rules/custom.md) via external commands. All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress.
+Composition merges the set into one graph, and `drft check` reads it to emit drift findings:
 
-Underneath the rules, drft computes [structural analyses](docs/analyses/README.md) — degree, centrality, connected components, depth, and more. Rules consume these analyses; you can also query them directly with `drft report`.
+- **Broken links** — edges to a target with no defining node (`unresolved-edge`)
+- **Staleness** — a node's content, or a dependency's, changed since the last lock (`stale-node`, `stale-edge`)
+- **Structure** — edges added or removed since lock, or a node with no connections (`new-edge`, `removed-edge`, `removed-node`, `detached-node`)
+
+All rules default to `warn`. Override to `error` for CI enforcement or `off` to suppress. Dependency cycles are permitted — staleness is computed locally, and `drft impact` is cycle-safe.
 
 ## Commands
 
-| Command            | What it does                                                |
-| ------------------ | ----------------------------------------------------------- |
-| `drft check`       | Validate the graph against enabled rules                    |
-| `drft lock`        | Snapshot file hashes to `drft.lock` for staleness tracking  |
-| `drft impact`      | Show what depends on given files, sorted by review priority |
-| `drft graph`       | Export the dependency graph (JSON Graph Format or DOT)      |
-| `drft report`      | Query structural analyses directly                          |
-| `drft parse`       | Show raw parser output before graph construction            |
-| `drft config show` | Display resolved configuration                              |
-| `drft init`        | Create a default `drft.toml`                                |
+| Command       | What it does                                                |
+| ------------- | ----------------------------------------------------------- |
+| `drft init`   | Create a default `drft.toml`                                |
+| `drft graph`  | Export the composed graph as JGF (`--raw` for the set)      |
+| `drft impact` | Show what depends on given files, sorted by review priority |
+| `drft check`  | Compare the graph against the lockfile for drift            |
+| `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking       |
 
-Most commands support `--format json` and `drft check` supports `--watch`. Run `drft --help` for the full flag reference.
+All commands support `--format json`. Run `drft --help` for the full flag reference.
 
 ## Configuration
 
 `drft.toml` in the directory root:
 
 ```toml
-include = ["**/*.md"] # which files become nodes (default)
-exclude = ["drafts/*"] # also respects .gitignore
+ignore = ["target/**"] # remove from the walk (also respects .gitignore)
 
-[parsers.markdown] # built-in parser, no config needed
+[graphs.markdown] # fs is implicit; declare the graphs you want
+parser = "markdown"
+files = ["**/*.md"]
 
 [rules]
-stale = "error" # escalate for CI
-orphan-node = "off" # suppress if expected
+stale-node = "error" # escalate for CI
+stale-edge = "error"
 
-[rules.orphan-node] # or use table form for options
-severity = "warn"
-ignore = ["README.md"]
+[rules.detached-node] # table form for ignore globs
+severity = "off"
 ```
 
-Parsers extract links from files. drft includes markdown and YAML frontmatter parsers; you can add [custom parsers](docs/parsers/custom.md) for any format. See the [configuration reference](docs/config.md) for all options.
+See the [configuration reference](docs/config.md) for all options.
 
 ## LLM integration
 
 All commands support `--format json` with actionable `fix` fields in every diagnostic. `drft impact` is designed for agent workflows — it shows which files to review after an edit, sorted by priority.
 
-This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and [`.claude/settings.json`](.claude/settings.json) for the hook configuration.
+This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and `.claude/settings.json` for the hook configuration.
 
 ## Docs
 
-The [full documentation](docs/README.md) covers parsers, graph construction, structural analyses, rules, and configuration.
+The [full documentation](docs/README.md) covers the graph substrate, parsers, rules, and configuration.
 
 ## License
 

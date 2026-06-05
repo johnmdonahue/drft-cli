@@ -1,6 +1,8 @@
-[parsers]
-markdown = true
+# drft.toml
+
+[graphs.markdown]
+parser = "markdown"
+files = ["**/*.md"]
 
 [rules]
-dangling-edge = "error"
-orphan-node = "warn"
+unresolved-edge = "error"

@@ -6,7 +6,7 @@ use tempfile::TempDir;
 #[test]
 fn impact_shows_transitive_dependents() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
@@ -28,7 +28,7 @@ fn impact_shows_transitive_dependents() {
 #[test]
 fn impact_json_format() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -52,40 +52,83 @@ fn impact_json_format() {
     assert!(output.status.success());
 }
 
+/// No-arg impact seeds from the lockfile's stale sources.
 #[test]
-fn impact_parser_filter() {
+fn impact_no_args_uses_stale_sources() {
     let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("drft.toml"),
-        "[parsers.markdown]\n[parsers.frontmatter]\n",
-    )
-    .unwrap();
-    // index.md links to setup.md via markdown only
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    // Without filter: index.md depends on setup.md
-    let all = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "impact", "setup.md"])
+    drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock"])
         .output()
         .unwrap();
-    let stdout = String::from_utf8_lossy(&all.stdout);
-    assert!(stdout.contains("index.md"));
+    fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
 
-    // With frontmatter filter: no dependents (link is markdown, not frontmatter)
-    let filtered = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "impact",
-            "setup.md",
-            "--parser",
-            "frontmatter",
-        ])
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact"])
         .output()
         .unwrap();
-    let stdout = String::from_utf8_lossy(&filtered.stdout);
-    assert!(stdout.contains("no dependents"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("index.md"),
+        "stale setup.md should surface index.md as impacted, got: {stdout}"
+    );
+    assert!(output.status.success());
+}
+
+/// No-arg impact without a lockfile is a usage error (exit 2).
+#[test]
+fn impact_no_args_without_lockfile_errors() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "# Hello").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// A scoped `drft lock <path>` refreshes only that node, leaving the rest of the
+/// lockfile intact.
+#[test]
+fn scoped_lock_refreshes_only_one_node() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock"])
+        .output()
+        .unwrap();
+
+    // Edit both files, then scope-lock only setup.md.
+    fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md) edited").unwrap();
+    drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "setup.md"])
+        .output()
+        .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // setup.md was re-locked, so it is no longer a stale node.
+    assert!(
+        !stdout.contains("stale-node]: setup.md"),
+        "setup.md should be re-locked, got: {stdout}"
+    );
+    // index.md was edited but not re-locked, so it is still stale.
+    assert!(
+        stdout.contains("stale-node]: index.md"),
+        "index.md should remain stale, got: {stdout}"
+    );
 }
 
 /// v0.7 regression: a file inside a subdirectory containing a stray
@@ -95,12 +138,12 @@ fn impact_parser_filter() {
 #[test]
 fn impact_resolves_file_under_nested_drft_toml() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "include = [\"**/*.md\"]\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[inner](nested/inner.md)").unwrap();
 
     let nested = dir.path().join("nested");
     fs::create_dir(&nested).unwrap();
-    fs::write(nested.join("drft.toml"), "").unwrap();
+    fs::write(nested.join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(nested.join("inner.md"), "# Inner").unwrap();
 
     let output = drft_bin()
@@ -128,7 +171,7 @@ fn impact_resolves_file_under_nested_drft_toml() {
 #[test]
 fn impact_md_extension_fallback() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
