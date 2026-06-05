@@ -1,4 +1,4 @@
-//! The `fs` builder: the base graph. Emits a node per file, typed by stat, plus
+//! The `fs` builder: the base graph. Emits a node per entry, typed by stat, plus
 //! a symlink edge per symlink. It does not hash — drft auto-hashes at the wiring
 //! seam (see [`crate::graphs`]).
 
@@ -7,21 +7,27 @@ use std::path::{Component, Path};
 use serde_json::Value;
 
 use crate::model::{Edge, Graph, Metadata, Node};
-use crate::sources::fs::SourceFile;
+use crate::sources::fs::{NodeKind, SourceFile};
 
-/// Build the `fs` graph fragment from walked source files. Each file becomes a
-/// bare-path node carrying its `type`; each symlink also contributes an edge to
-/// its resolved target within the graph root.
+/// Build the `fs` graph fragment from walked source entries. Each entry becomes
+/// a bare-path node carrying its `type` (`file`, `symlink`, or `directory`);
+/// each symlink also contributes an edge to its resolved target within the graph
+/// root. Directory nodes carry no edge — containment is implicit in path
+/// structure.
 pub fn build(root: &Path, files: &[SourceFile]) -> Graph {
     let mut graph = Graph::labeled("fs");
 
     for file in files {
-        let node_type = if file.is_symlink { "symlink" } else { "file" };
+        let node_type = match file.kind {
+            NodeKind::Symlink => "symlink",
+            NodeKind::Dir => "directory",
+            NodeKind::File => "file",
+        };
         let mut meta = Metadata::new();
         meta.insert("type".into(), Value::String(node_type.into()));
         graph.set_node(file.path.clone(), Node::new(meta));
 
-        if file.is_symlink
+        if file.kind == NodeKind::Symlink
             && let Some(target) = symlink_target(root, &file.path)
         {
             graph.add_edge(Edge::new(file.path.clone(), target));
@@ -69,7 +75,7 @@ mod tests {
     fn source(path: &str, bytes: &str) -> SourceFile {
         SourceFile {
             path: path.into(),
-            is_symlink: false,
+            kind: NodeKind::File,
             bytes: Some(bytes.as_bytes().to_vec()),
         }
     }
@@ -87,6 +93,22 @@ mod tests {
         assert!(graph.edges.is_empty());
     }
 
+    #[test]
+    fn types_directories() {
+        let dir = TempDir::new().unwrap();
+        let entry = SourceFile {
+            path: "guides".into(),
+            kind: NodeKind::Dir,
+            bytes: None,
+        };
+        let graph = build(dir.path(), &[entry]);
+        let node = &graph.nodes["guides"];
+        assert_eq!(node.metadata["type"], Value::String("directory".into()));
+        // Directories are never hashed and contribute no edge.
+        assert!(node.metadata.get("hash").is_none());
+        assert!(graph.edges.is_empty());
+    }
+
     #[cfg(unix)]
     #[test]
     fn symlink_within_root_emits_edge() {
@@ -96,7 +118,7 @@ mod tests {
             .unwrap();
 
         let alias = SourceFile {
-            is_symlink: true,
+            kind: NodeKind::Symlink,
             ..source("alias.md", "r")
         };
         let files = vec![alias, source("real.md", "r")];
