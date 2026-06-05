@@ -159,3 +159,103 @@ fn impact_md_extension_fallback() {
     assert!(stdout.contains("index.md"));
     assert!(output.status.success());
 }
+
+/// Regression (#66): a path argument resolves relative to the current directory,
+/// not as a literal graph key — so running from a subdirectory with a
+/// project-relative path finds the node, matching `git log <path>` behavior.
+#[test]
+fn impact_resolves_path_relative_to_cwd() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[model](projects/api/domain-model.md)",
+    )
+    .unwrap();
+    let sub = dir.path().join("projects/api");
+    fs::create_dir_all(&sub).unwrap();
+    fs::write(sub.join("domain-model.md"), "# Domain model").unwrap();
+
+    // Run from inside the project subdir with a project-relative path (no -C).
+    let output = drft_bin()
+        .current_dir(&sub)
+        .args(["impact", "domain-model.md"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "expected cwd-relative path to resolve, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("index.md"),
+        "expected index.md as a dependent, got: {stdout}"
+    );
+}
+
+/// A genuinely absent path errors (exit 2) and suggests a node whose key ends
+/// with the given argument.
+#[test]
+fn impact_missing_path_suggests_suffix_match() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[model](projects/api/domain-model.md)",
+    )
+    .unwrap();
+    let sub = dir.path().join("projects/api");
+    fs::create_dir_all(&sub).unwrap();
+    fs::write(sub.join("domain-model.md"), "# Domain model").unwrap();
+
+    // Bare filename from the root: can't resolve, but should suggest the match.
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "domain-model.md",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("did you mean") && stderr.contains("projects/api/domain-model.md"),
+        "expected a single suffix suggestion, got: {stderr}"
+    );
+}
+
+/// An ambiguous bare filename (same name under multiple dirs) lists the matches
+/// rather than confidently suggesting an arbitrary one.
+#[test]
+fn impact_ambiguous_suffix_lists_matches() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[a](a/README.md) [b](b/README.md)",
+    )
+    .unwrap();
+    for d in ["a", "b"] {
+        fs::create_dir_all(dir.path().join(d)).unwrap();
+        fs::write(dir.path().join(d).join("README.md"), "# Readme").unwrap();
+    }
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact", "README.md"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("multiple matches")
+            && stderr.contains("a/README.md")
+            && stderr.contains("b/README.md"),
+        "expected both matches listed, not a single guess, got: {stderr}"
+    );
+}
