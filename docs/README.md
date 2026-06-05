@@ -9,5 +9,5 @@ graph to emit findings.
 ## Reference
 
 - [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`
-- [Parsers](parsers/README.md) — how the text builders extract links and metadata
+- [Parsers](parsers/README.md) — how parsers extract links and metadata
 - [Rules](rules/README.md) — the drift and structural findings `drft check` emits

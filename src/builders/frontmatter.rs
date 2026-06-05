@@ -37,11 +37,7 @@ pub fn build(label: &str, texts: &[(String, String)], filter: Option<GlobSet>) -
         }
     }
 
-    graph.edges.sort_by(|a, b| {
-        a.source
-            .cmp(&b.source)
-            .then_with(|| a.target.cmp(&b.target))
-    });
+    graph.sort_edges();
     graph
 }
 

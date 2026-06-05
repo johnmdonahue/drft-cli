@@ -16,9 +16,11 @@
 //! - In the **composed** graph, keys are *namespaced*: an `@<graph>` object per
 //!   contributing graph, plus the reserved `_graphs` provenance list.
 //!
-//! `@` and `_` are reserved, compose-only sigils. Graph labels are bare (no
-//! `@`, no `_`). [`validate_label`], [`validate_raw_metadata`], and
-//! [`validate_composed_metadata`] enforce these invariants.
+//! `@` and `_` are reserved, compose-only sigils. A graph label must not contain
+//! `@` (it builds the `@<label>` namespace) or start with `_` (reserved for keys
+//! like `_graphs`); interior `_` is fine. [`validate_label`],
+//! [`validate_raw_metadata`], and [`validate_composed_metadata`] enforce these
+//! invariants.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -26,6 +28,17 @@ use std::collections::BTreeMap;
 
 /// The reserved provenance key stamped on composed nodes and edges.
 pub const PROVENANCE_KEY: &str = "_graphs";
+
+/// The `fs` namespace key on a composed node — the base graph that carries
+/// content type and hash. The single place the `@fs` literal lives.
+pub const FS_NAMESPACE: &str = "@fs";
+
+/// The `@<label>` namespace key under which a graph's contribution nests in a
+/// composed node or edge. The single place the `@` prefix rule lives;
+/// [`FS_NAMESPACE`] is `namespace("fs")`.
+pub fn namespace(label: &str) -> String {
+    format!("@{label}")
+}
 
 /// A JSON object of metadata attached to a node or edge.
 ///
@@ -46,6 +59,17 @@ impl Node {
     /// A node with the given metadata object.
     pub fn new(metadata: Metadata) -> Self {
         Self { metadata }
+    }
+
+    /// This composed node's current `fs` content hash, if it has one.
+    pub fn fs_hash(&self) -> Option<&str> {
+        self.metadata.get(FS_NAMESPACE)?.get("hash")?.as_str()
+    }
+
+    /// Whether this composed node is resolved — present with an `@fs` block.
+    /// Resolution is namespace presence.
+    pub fn is_resolved(&self) -> bool {
+        self.metadata.contains_key(FS_NAMESPACE)
     }
 }
 
@@ -129,6 +153,15 @@ impl Graph {
         self.edges.push(edge);
     }
 
+    /// Sort edges by `(source, target)` for deterministic output.
+    pub fn sort_edges(&mut self) {
+        self.edges.sort_by(|a, b| {
+            a.source
+                .cmp(&b.source)
+                .then_with(|| a.target.cmp(&b.target))
+        });
+    }
+
     /// Wrap this graph as a composed JGF document (`{"graph": {...}}`).
     pub fn into_document(self) -> GraphDocument {
         GraphDocument { graph: self }
@@ -161,7 +194,7 @@ impl GraphSet {
 pub enum ValidationError {
     #[error("graph label must not be empty")]
     EmptyLabel,
-    #[error("graph label '{0}' must be bare (no '@' or '_')")]
+    #[error("graph label '{0}' must not contain '@' or start with '_'")]
     SigilInLabel(String),
     #[error("raw metadata key '{0}' must be bare (no leading '@' or '_')")]
     SigilInRawKey(String),
@@ -173,13 +206,14 @@ pub enum ValidationError {
     InvalidNamespace(String),
 }
 
-/// Validate that a graph label is bare: non-empty and free of the reserved
-/// `@` and `_` sigils.
+/// Validate that a graph label is non-empty and free of the reserved sigils: no
+/// `@` anywhere (it builds the `@<label>` namespace) and no leading `_`
+/// (reserved for keys like `_graphs`). Interior `_` is allowed.
 pub fn validate_label(label: &str) -> Result<(), ValidationError> {
     if label.is_empty() {
         return Err(ValidationError::EmptyLabel);
     }
-    if label.contains('@') || label.contains('_') {
+    if label.contains('@') || label.starts_with('_') {
         return Err(ValidationError::SigilInLabel(label.to_string()));
     }
     Ok(())
@@ -320,9 +354,11 @@ mod tests {
             Err(ValidationError::SigilInLabel(_))
         ));
         assert!(matches!(
-            validate_label("front_matter"),
+            validate_label("_internal"),
             Err(ValidationError::SigilInLabel(_))
         ));
+        // Interior underscore is allowed.
+        assert!(validate_label("design_docs").is_ok());
     }
 
     #[test]
@@ -356,7 +392,7 @@ mod tests {
             Err(ValidationError::InvalidComposedKey(_))
         ));
         assert!(matches!(
-            validate_composed_metadata(&meta(json!({ "@front_matter": {} }))),
+            validate_composed_metadata(&meta(json!({ "@_internal": {} }))),
             Err(ValidationError::InvalidNamespace(_))
         ));
     }

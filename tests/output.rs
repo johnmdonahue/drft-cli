@@ -11,10 +11,13 @@ fn check_json_envelope_clean() {
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "[index](index.md)").unwrap();
     // Silence detached-node so we exercise the clean envelope shape; index and
-    // setup link each other, so they are connected.
+    // setup link each other via markdown, so their edges resolve cleanly.
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\ndetached-node = \"off\"\n",
+        format!(
+            "{}[rules]\ndetached-node = \"off\"\n",
+            common::DEFAULT_CONFIG
+        ),
     )
     .unwrap();
 

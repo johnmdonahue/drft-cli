@@ -24,7 +24,7 @@ fn graph_json_args(dir: &std::path::Path, extra: &[&str]) -> serde_json::Value {
 #[test]
 fn graph_emits_composed_jgf() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -62,7 +62,7 @@ fn graph_emits_composed_jgf() {
 #[test]
 fn graph_nodes_are_sorted() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("z.md"), "z").unwrap();
     fs::write(dir.path().join("a.md"), "a").unwrap();
 
@@ -82,7 +82,7 @@ fn graph_nodes_are_sorted() {
 #[test]
 fn graph_symlink_within_root_emits_edge() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("real.md"), "real").unwrap();
     std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md")).unwrap();
 
@@ -107,7 +107,7 @@ fn graph_symlink_escaping_root_is_not_hashed() {
     let outer = TempDir::new().unwrap();
     let root = outer.path().join("project");
     fs::create_dir(&root).unwrap();
-    fs::write(root.join("drft.toml"), "").unwrap();
+    fs::write(root.join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(outer.path().join("secret.md"), "secret").unwrap();
     std::os::unix::fs::symlink(outer.path().join("secret.md"), root.join("trap.md")).unwrap();
 
@@ -124,7 +124,7 @@ fn graph_symlink_escaping_root_is_not_hashed() {
 #[test]
 fn graph_markdown_links_become_edges() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "[parsers.markdown]\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -146,11 +146,7 @@ fn graph_markdown_links_become_edges() {
 #[test]
 fn graph_frontmatter_metadata_and_edge_dedup() {
     let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("drft.toml"),
-        "[parsers.markdown]\n[parsers.frontmatter]\n",
-    )
-    .unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("doc.md"),
         "---\ntitle: Doc\nsources:\n  - target.md\n---\n\n[t](target.md)",
@@ -187,7 +183,7 @@ fn graph_frontmatter_metadata_and_edge_dedup() {
 #[test]
 fn graph_raw_emits_the_set() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("doc.md"),
         "---\ntitle: Doc\n---\n\n[t](target.md)",

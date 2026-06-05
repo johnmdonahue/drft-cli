@@ -3,9 +3,8 @@
 ignore = ["drafts/**"]
 
 [graphs.markdown]
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+parser = "markdown"
+files = ["**/*.md"]
 
 [rules]
 unresolved-edge = "error"

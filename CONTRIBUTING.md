@@ -61,6 +61,15 @@ Core types live in [`src/model.rs`](src/model.rs); path/URI/hash helpers in [`sr
 3. Add unit tests in the rule module and an integration test in `tests/`.
 4. Document it in the [rules reference](docs/rules/README.md).
 
+## Adding a parser
+
+Parsers are built in — there's no plugin mechanism.
+
+1. Add the parser in `src/parsers/<name>.rs` (a content interpreter) and a builder in `src/builders/<name>.rs` that turns its output into a graph fragment.
+2. Add the name to `KNOWN_PARSERS` in [`src/config.rs`](src/config.rs) and a dispatch arm in [`src/graphs/mod.rs`](src/graphs/mod.rs).
+3. Add unit tests in the parser and builder modules and an integration test in `tests/`.
+4. Document it in the [parsers reference](docs/parsers/README.md).
+
 ## Design principles
 
 - **The substrate is the set of graphs; composition is a projection.** `drft graph --raw` is the honest source of truth; the composed view is derived. Never bake the merge into the substrate.

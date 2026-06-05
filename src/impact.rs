@@ -196,7 +196,9 @@ fn betweenness(graph: &Graph) -> HashMap<&str, f64> {
 
         let mut delta: HashMap<&str, f64> = nodes.iter().map(|&n| (n, 0.0)).collect();
         while let Some(w) = stack.pop() {
-            let preds = predecessors[w].clone();
+            // Each w is popped once, so its predecessor list is read once — take
+            // it instead of cloning.
+            let preds = std::mem::take(predecessors.get_mut(w).unwrap());
             for v in preds {
                 let contribution = (sigma[v] / sigma[w]) * (1.0 + delta[w]);
                 *delta.get_mut(v).unwrap() += contribution;

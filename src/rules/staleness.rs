@@ -11,8 +11,8 @@ use std::collections::HashSet;
 
 use crate::diagnostic::Finding;
 use crate::lock::Lock;
-use crate::model::Graph;
-use crate::rules::{edge_provenance, fs_hash, provenance};
+use crate::model::{Graph, Node};
+use crate::rules::{edge_provenance, provenance, short_hash};
 
 /// Evaluate staleness findings for `graph` against `lock`.
 pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
@@ -22,7 +22,7 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
     // stale-node: a node's current hash differs from its locked hash.
     for (path, node) in &graph.nodes {
         if let (Some(current), Some(locked)) = (
-            fs_hash(node),
+            node.fs_hash(),
             lock.nodes.get(path).and_then(|n| n.hash.as_deref()),
         ) && current != locked
         {
@@ -31,7 +31,11 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                 "stale-node",
                 path,
                 provenance(&node.metadata),
-                format!("current hash {current} differs from locked {locked}"),
+                format!(
+                    "hash {} ≠ locked {}",
+                    short_hash(current),
+                    short_hash(locked)
+                ),
             ));
         }
     }
@@ -53,29 +57,36 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                 if stale_nodes.contains(edge.source.as_str()) {
                     continue;
                 }
-                let current_target_hash = graph.nodes.get(&edge.target).and_then(fs_hash);
+                let current_target_hash = graph.nodes.get(&edge.target).and_then(Node::fs_hash);
                 if let (Some(locked_hash), Some(current)) =
                     (locked_hash.as_deref(), current_target_hash)
                     && locked_hash != current
                 {
-                    findings.push(Finding::warn(
-                        "stale-edge",
-                        &edge.source,
-                        edge_provenance(edge),
-                        format!(
-                            "target {} hash {current} differs from locked {locked_hash}",
-                            edge.target
-                        ),
-                    ));
+                    findings.push(
+                        Finding::warn(
+                            "stale-edge",
+                            &edge.source,
+                            edge_provenance(edge),
+                            format!(
+                                "hash {} ≠ locked {}",
+                                short_hash(current),
+                                short_hash(locked_hash)
+                            ),
+                        )
+                        .with_target(&edge.target),
+                    );
                 }
             }
             // new-edge: a current edge has no locked target hash.
-            None => findings.push(Finding::warn(
-                "new-edge",
-                &edge.source,
-                edge_provenance(edge),
-                format!("edge to {} is not locked", edge.target),
-            )),
+            None => findings.push(
+                Finding::warn(
+                    "new-edge",
+                    &edge.source,
+                    edge_provenance(edge),
+                    "not locked",
+                )
+                .with_target(&edge.target),
+            ),
         }
     }
 
@@ -94,12 +105,15 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
             Some(node) => {
                 for target in locked_node.edges.keys() {
                     if !current_pairs.contains(&(path.as_str(), target.as_str())) {
-                        findings.push(Finding::warn(
-                            "removed-edge",
-                            path,
-                            provenance(&node.metadata),
-                            format!("locked edge to {target} is no longer present"),
-                        ));
+                        findings.push(
+                            Finding::warn(
+                                "removed-edge",
+                                path,
+                                provenance(&node.metadata),
+                                "edge no longer present",
+                            )
+                            .with_target(target),
+                        );
                     }
                 }
             }

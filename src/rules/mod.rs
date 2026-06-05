@@ -5,17 +5,12 @@ pub mod check;
 pub mod staleness;
 pub mod structural;
 
-use crate::model::{Edge, Metadata, Node, PROVENANCE_KEY};
+use crate::model::{Edge, Metadata, PROVENANCE_KEY};
 
-/// A composed node's current `fs` content hash, if it has one.
-pub(crate) fn fs_hash(node: &Node) -> Option<&str> {
-    node.metadata.get("@fs")?.get("hash")?.as_str()
-}
-
-/// Whether a composed node is resolved — present with an `@fs` block. Resolution
-/// is namespace presence.
-pub(crate) fn is_resolved(node: &Node) -> bool {
-    node.metadata.contains_key("@fs")
+/// A hash truncated for display in findings: the `b3:` prefix plus the first 10
+/// hex chars. Comparisons always use the full hash; this is cosmetic.
+pub(crate) fn short_hash(hash: &str) -> &str {
+    &hash[..hash.len().min(13)]
 }
 
 /// The `_graphs` provenance list from a node's or edge's metadata.

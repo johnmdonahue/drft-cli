@@ -28,20 +28,19 @@ pub enum RuleSeverity {
 
 // ── Graph config ───────────────────────────────────────────────
 
-/// A configured graph: a source, a file filter, and a builder. v0.8 ships the
-/// `fs` source and the `fs`/`markdown`/`frontmatter` builders.
+/// A configured graph: a file scope and the parser that interprets it. v0.8
+/// ships the `markdown` and `frontmatter` parsers. `fs` is the implicit base
+/// graph (a provider, not a parser) and is not configured here.
 #[derive(Debug, Clone)]
 pub struct GraphConfig {
-    pub source: String,
-    pub filter: Vec<String>,
-    pub builder: String,
+    pub files: Vec<String>,
+    pub parser: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct RawGraph {
-    source: Option<String>,
-    filter: Option<Vec<String>>,
-    builder: String,
+    files: Option<Vec<String>>,
+    parser: String,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -51,7 +50,6 @@ struct RawGraph {
 #[derive(Debug, Clone)]
 pub struct RuleConfig {
     pub severity: RuleSeverity,
-    pub ignore: Vec<String>,
     ignore_compiled: Option<GlobSet>,
 }
 
@@ -60,7 +58,6 @@ impl RuleConfig {
         let ignore_compiled = compile_globs(&ignore).context("failed to compile ignore globs")?;
         Ok(Self {
             severity,
-            ignore,
             ignore_compiled,
         })
     }
@@ -123,26 +120,24 @@ const BUILTIN_RULES: &[&str] = &[
     "detached-node",
 ];
 
-const DEFAULT_FILTER: &str = "**/*.md";
+/// Parsers a graph may declare. `fs` is the implicit base graph (a provider, not
+/// a parser) and is intentionally absent — `parser = "fs"` is rejected.
+const KNOWN_PARSERS: &[&str] = &["markdown", "frontmatter"];
+
+/// Graph names reserved for drft's implicit graphs. Declaring one would collide
+/// with the core `@fs` namespace at compose and overwrite its `type`/`hash`.
+const RESERVED_GRAPH_NAMES: &[&str] = &["fs"];
+
+/// A graph's `files` scope defaults to markdown when omitted.
+const DEFAULT_FILES: &str = "**/*.md";
 
 impl Config {
-    /// Defaults when no `drft.toml` overrides them: the `markdown` and
-    /// `frontmatter` text graphs over markdown files, every rule at `warn`.
+    /// The base config: no graphs (the `drft.toml` declares the full set), no
+    /// ignores, every rule at `warn`. `fs` is always built regardless.
     pub fn defaults() -> Self {
-        let mut graphs = BTreeMap::new();
-        for builder in ["markdown", "frontmatter"] {
-            graphs.insert(
-                builder.to_string(),
-                GraphConfig {
-                    source: "fs".to_string(),
-                    filter: vec![DEFAULT_FILTER.to_string()],
-                    builder: builder.to_string(),
-                },
-            );
-        }
         Config {
             ignore: Vec::new(),
-            graphs,
+            graphs: BTreeMap::new(),
             rules: HashMap::new(),
             config_dir: None,
         }
@@ -166,18 +161,26 @@ impl Config {
             config.ignore = ignore;
         }
 
-        // Declaring any graph replaces the defaults.
+        // The drft.toml declares the full graph set — there are no defaults.
         if let Some(raw_graphs) = raw.graphs {
-            config.graphs.clear();
             for (name, raw) in raw_graphs {
+                crate::model::validate_label(&name)
+                    .map_err(|e| anyhow::anyhow!("invalid graph name in drft.toml: {e}"))?;
+                if RESERVED_GRAPH_NAMES.contains(&name.as_str()) {
+                    anyhow::bail!("graph name \"{name}\" is reserved (the implicit base graph)");
+                }
+                if !KNOWN_PARSERS.contains(&raw.parser.as_str()) {
+                    anyhow::bail!(
+                        "unknown parser \"{}\" for graph \"{name}\" (known: {})",
+                        raw.parser,
+                        KNOWN_PARSERS.join(", ")
+                    );
+                }
                 config.graphs.insert(
                     name,
                     GraphConfig {
-                        source: raw.source.unwrap_or_else(|| "fs".to_string()),
-                        filter: raw
-                            .filter
-                            .unwrap_or_else(|| vec![DEFAULT_FILTER.to_string()]),
-                        builder: raw.builder,
+                        files: raw.files.unwrap_or_else(|| vec![DEFAULT_FILES.to_string()]),
+                        parser: raw.parser,
                     },
                 );
             }
@@ -242,10 +245,9 @@ mod tests {
     }
 
     #[test]
-    fn defaults_enable_text_graphs() {
-        let config = Config::defaults();
-        assert_eq!(config.graphs["markdown"].builder, "markdown");
-        assert_eq!(config.graphs["frontmatter"].builder, "frontmatter");
+    fn defaults_have_no_graphs() {
+        // No runtime defaults — the drft.toml declares the full set.
+        assert!(Config::defaults().graphs.is_empty());
     }
 
     #[test]
@@ -257,17 +259,78 @@ mod tests {
     }
 
     #[test]
-    fn declaring_graphs_replaces_defaults() {
+    fn declares_graphs() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[graphs.markdown]\nsource = \"fs\"\nfilter = [\"docs/**/*.md\"]\nbuilder = \"markdown\"\n",
+            "[graphs.docs]\nparser = \"markdown\"\nfiles = [\"docs/**/*.md\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.graphs.len(), 1);
-        assert_eq!(config.graphs["markdown"].filter, vec!["docs/**/*.md"]);
-        assert!(!config.graphs.contains_key("frontmatter"));
+        assert_eq!(config.graphs["docs"].parser, "markdown");
+        assert_eq!(config.graphs["docs"].files, vec!["docs/**/*.md"]);
+    }
+
+    #[test]
+    fn files_defaults_to_markdown_when_omitted() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.markdown]\nparser = \"markdown\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.graphs["markdown"].files, vec!["**/*.md"]);
+    }
+
+    #[test]
+    fn unknown_parser_errors() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.x]\nparser = \"markdwn\"\n",
+        )
+        .unwrap();
+        let err = Config::load(dir.path()).unwrap_err().to_string();
+        assert!(err.contains("unknown parser"), "got: {err}");
+    }
+
+    #[test]
+    fn parser_fs_value_errors() {
+        // `fs` is a provider, not a parser, so it's not a valid parser value.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.x]\nparser = \"fs\"\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).is_err());
+    }
+
+    #[test]
+    fn reserved_graph_name_fs_errors() {
+        // Naming a graph `fs` would clobber the implicit base graph's @fs block.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fs]\nparser = \"markdown\"\n",
+        )
+        .unwrap();
+        let err = Config::load(dir.path()).unwrap_err().to_string();
+        assert!(err.contains("reserved"), "got: {err}");
+    }
+
+    #[test]
+    fn invalid_graph_name_errors() {
+        // Leading underscore is reserved.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs._internal]\nparser = \"markdown\"\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).is_err());
     }
 
     #[test]

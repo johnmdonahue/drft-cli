@@ -63,10 +63,9 @@ All commands support `--format json`. Run `drft --help` for the full flag refere
 ```toml
 ignore = ["target/**"] # remove from the walk (also respects .gitignore)
 
-[graphs.markdown] # fs is implicit; declare the text graphs
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+[graphs.markdown] # fs is implicit; declare the graphs you want
+parser = "markdown"
+files = ["**/*.md"]
 
 [rules]
 stale-node = "error" # escalate for CI

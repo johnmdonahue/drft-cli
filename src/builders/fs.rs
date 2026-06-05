@@ -16,17 +16,14 @@ pub fn build(root: &Path, files: &[SourceFile]) -> Graph {
     let mut graph = Graph::labeled("fs");
 
     for file in files {
-        let abs = root.join(&file.path);
-        let is_symlink = abs
-            .symlink_metadata()
-            .is_ok_and(|m| m.file_type().is_symlink());
-
-        let node_type = if is_symlink { "symlink" } else { "file" };
+        let node_type = if file.is_symlink { "symlink" } else { "file" };
         let mut meta = Metadata::new();
         meta.insert("type".into(), Value::String(node_type.into()));
         graph.set_node(file.path.clone(), Node::new(meta));
 
-        if is_symlink && let Some(target) = symlink_target(root, &file.path) {
+        if file.is_symlink
+            && let Some(target) = symlink_target(root, &file.path)
+        {
             graph.add_edge(Edge::new(file.path.clone(), target));
         }
     }
@@ -72,6 +69,7 @@ mod tests {
     fn source(path: &str, bytes: &str) -> SourceFile {
         SourceFile {
             path: path.into(),
+            is_symlink: false,
             bytes: Some(bytes.as_bytes().to_vec()),
         }
     }
@@ -97,7 +95,11 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
             .unwrap();
 
-        let files = vec![source("alias.md", "r"), source("real.md", "r")];
+        let alias = SourceFile {
+            is_symlink: true,
+            ..source("alias.md", "r")
+        };
+        let files = vec![alias, source("real.md", "r")];
         let graph = build(dir.path(), &files);
         assert_eq!(
             graph.nodes["alias.md"].metadata["type"],

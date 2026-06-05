@@ -8,8 +8,8 @@ use tempfile::TempDir;
 #[test]
 fn frontmatter_sources_create_edges() {
     let dir = TempDir::new().unwrap();
-    // Defaults enable the markdown and frontmatter graphs.
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    // Declare the markdown and frontmatter graphs.
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("analysis.md"),
         "---\nsources:\n  - ./data/notes.md\n---\n\n# Analysis\n",

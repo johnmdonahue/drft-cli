@@ -45,19 +45,19 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
         .filter_map(|f| {
             f.bytes
                 .as_ref()
-                .and_then(|b| String::from_utf8(b.clone()).ok())
-                .map(|text| (f.path.clone(), text))
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .map(|text| (f.path.clone(), text.to_string()))
         })
         .collect();
 
     for (name, graph) in &config.graphs {
-        let filter = compile_globs(&graph.filter)?;
-        match graph.builder.as_str() {
-            "markdown" => graphs.push(builders::markdown::build(name, &texts, filter)),
-            "frontmatter" => graphs.push(builders::frontmatter::build(name, &texts, filter)),
-            // `fs` is the implicit base graph, already built above.
-            "fs" => {}
-            other => eprintln!("warn: unknown builder \"{other}\" for graph \"{name}\""),
+        let files = compile_globs(&graph.files)?;
+        match graph.parser.as_str() {
+            "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
+            "frontmatter" => graphs.push(builders::frontmatter::build(name, &texts, files)),
+            // Parser names are validated at config load (`KNOWN_PARSERS`); an
+            // unknown parser cannot reach here.
+            other => unreachable!("unvalidated parser \"{other}\""),
         }
     }
 
@@ -91,7 +91,7 @@ mod tests {
         let config = Config::defaults();
 
         let set = build_set(dir.path(), &config).unwrap();
-        // fs is always the base graph (built first); defaults also enable markdown.
+        // fs is always the base graph, built first regardless of config.
         let fs_graph = &set.graphs[0];
         assert_eq!(fs_graph.label.as_deref(), Some("fs"));
 

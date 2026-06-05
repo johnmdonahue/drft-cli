@@ -1,6 +1,5 @@
 # drft.toml
 
 [graphs.markdown]
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+parser = "markdown"
+files = ["**/*.md"]

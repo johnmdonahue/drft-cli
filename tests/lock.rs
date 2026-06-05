@@ -25,7 +25,7 @@ fn lock(dir: &std::path::Path) {
 #[test]
 fn first_lock_then_clean_check() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -59,7 +59,7 @@ fn first_lock_then_clean_check() {
 #[test]
 fn edit_dependency_reports_stale_node_and_stale_edge() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -81,7 +81,7 @@ fn edit_dependency_reports_stale_node_and_stale_edge() {
 #[test]
 fn relock_clears_staleness() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -101,7 +101,7 @@ fn relock_clears_staleness() {
 #[test]
 fn deleted_file_reports_unresolved_and_removed_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 

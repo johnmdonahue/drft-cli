@@ -18,7 +18,7 @@
 
 use serde_json::Value;
 
-use crate::model::{Edge, Graph, GraphSet, Metadata, PROVENANCE_KEY};
+use crate::model::{Edge, Graph, GraphSet, Metadata, PROVENANCE_KEY, namespace};
 
 /// Merge a raw set of per-graph fragments into one composed graph.
 pub fn compose(set: &GraphSet) -> Graph {
@@ -62,11 +62,7 @@ pub fn compose(set: &GraphSet) -> Graph {
         }
     }
 
-    composed.edges.sort_by(|a, b| {
-        a.source
-            .cmp(&b.source)
-            .then_with(|| a.target.cmp(&b.target))
-    });
+    composed.sort_edges();
 
     composed
 }
@@ -75,7 +71,7 @@ pub fn compose(set: &GraphSet) -> Graph {
 /// fall back to `@graph` defensively if one is missing.
 fn namespace_of(fragment: &Graph) -> String {
     match &fragment.label {
-        Some(label) => format!("@{label}"),
+        Some(label) => namespace(label),
         None => "@graph".to_string(),
     }
 }

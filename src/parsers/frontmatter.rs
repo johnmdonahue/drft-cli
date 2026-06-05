@@ -110,10 +110,6 @@ pub struct FrontmatterParser {
 }
 
 impl Parser for FrontmatterParser {
-    fn name(&self) -> &str {
-        "frontmatter"
-    }
-
     fn matches(&self, path: &str) -> bool {
         match &self.file_filter {
             Some(set) => set.is_match(path),
@@ -122,46 +118,41 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        let links = extract_frontmatter_links(content);
-        let metadata = extract_frontmatter_metadata(content);
+        let Some(yaml) = parse_frontmatter_yaml(content) else {
+            return ParseResult::default();
+        };
 
-        ParseResult { links, metadata }
+        let mut links = Vec::new();
+        collect_string_leaves(&yaml, &mut links);
+        links.retain(|v| is_link_candidate(v));
+
+        ParseResult {
+            links,
+            metadata: Some(yaml_to_json(yaml)),
+        }
     }
 }
 
-/// Extract file path references from YAML frontmatter.
-/// Operates on code-block-stripped content to avoid parsing frontmatter
-/// inside fenced code block examples.
-fn extract_frontmatter_links(content: &str) -> Vec<String> {
-    let content = &strip_code(content);
+/// Parse a file's YAML frontmatter block into a value, or `None` when there is
+/// no well-formed block. Operates on code-block-stripped content so frontmatter
+/// inside fenced code examples is ignored.
+fn parse_frontmatter_yaml(content: &str) -> Option<serde_yml::Value> {
+    let content = strip_code(content);
 
-    if !content.starts_with("---") {
-        return Vec::new();
-    }
-
-    let rest = &content[3..];
-    let end = match rest.find("\n---") {
-        Some(idx) => idx,
-        None => return Vec::new(),
-    };
-
+    let rest = content.strip_prefix("---")?;
+    let end = rest.find("\n---")?;
     let yaml_str = &rest[..end];
     if yaml_str.trim().is_empty() {
-        return Vec::new();
+        return None;
     }
 
-    let yaml: serde_yml::Value = match serde_yml::from_str(yaml_str) {
-        Ok(v) => v,
+    match serde_yml::from_str(yaml_str) {
+        Ok(value) => Some(value),
         Err(e) => {
             eprintln!("warn: frontmatter parser: invalid YAML: {e}");
-            return Vec::new();
+            None
         }
-    };
-
-    let mut links = Vec::new();
-    collect_string_leaves(&yaml, &mut links);
-    links.retain(|v| is_link_candidate(v));
-    links
+    }
 }
 
 /// Recursively collect all string leaf values from a YAML structure.
@@ -181,32 +172,6 @@ fn collect_string_leaves(value: &serde_yml::Value, out: &mut Vec<String>) {
         }
         serde_yml::Value::Tagged(tagged) => collect_string_leaves(&tagged.value, out),
         _ => {}
-    }
-}
-
-/// Parse YAML frontmatter into a JSON value for node metadata.
-/// Returns None if no valid frontmatter is found.
-fn extract_frontmatter_metadata(content: &str) -> Option<serde_json::Value> {
-    let content = &strip_code(content);
-
-    if !content.starts_with("---") {
-        return None;
-    }
-
-    let rest = &content[3..];
-    let end = rest.find("\n---")?;
-    let yaml_str = &rest[..end];
-
-    if yaml_str.trim().is_empty() {
-        return None;
-    }
-
-    match serde_yml::from_str::<serde_yml::Value>(yaml_str) {
-        Ok(yaml_val) => Some(yaml_to_json(yaml_val)),
-        Err(e) => {
-            eprintln!("warn: frontmatter parser: invalid YAML: {e}");
-            None
-        }
     }
 }
 
@@ -254,12 +219,6 @@ mod tests {
     fn parse(content: &str) -> ParseResult {
         let parser = FrontmatterParser { file_filter: None };
         parser.parse("test.md", content)
-    }
-
-    #[test]
-    fn parser_name() {
-        let parser = FrontmatterParser { file_filter: None };
-        assert_eq!(parser.name(), "frontmatter");
     }
 
     #[test]

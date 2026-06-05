@@ -6,7 +6,7 @@ use tempfile::TempDir;
 #[test]
 fn impact_shows_transitive_dependents() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
@@ -28,7 +28,7 @@ fn impact_shows_transitive_dependents() {
 #[test]
 fn impact_json_format() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -56,7 +56,7 @@ fn impact_json_format() {
 #[test]
 fn impact_no_args_uses_stale_sources() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -82,7 +82,7 @@ fn impact_no_args_uses_stale_sources() {
 #[test]
 fn impact_no_args_without_lockfile_errors() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
 
     let output = drft_bin()
@@ -97,7 +97,7 @@ fn impact_no_args_without_lockfile_errors() {
 #[test]
 fn scoped_lock_refreshes_only_one_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -138,12 +138,12 @@ fn scoped_lock_refreshes_only_one_node() {
 #[test]
 fn impact_resolves_file_under_nested_drft_toml() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "include = [\"**/*.md\"]\n").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[inner](nested/inner.md)").unwrap();
 
     let nested = dir.path().join("nested");
     fs::create_dir(&nested).unwrap();
-    fs::write(nested.join("drft.toml"), "").unwrap();
+    fs::write(nested.join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(nested.join("inner.md"), "# Inner").unwrap();
 
     let output = drft_bin()
@@ -171,7 +171,7 @@ fn impact_resolves_file_under_nested_drft_toml() {
 #[test]
 fn impact_md_extension_fallback() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 

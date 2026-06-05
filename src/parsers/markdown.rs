@@ -8,10 +8,6 @@ pub struct MarkdownParser {
 }
 
 impl Parser for MarkdownParser {
-    fn name(&self) -> &str {
-        "markdown"
-    }
-
     fn matches(&self, path: &str) -> bool {
         match &self.file_filter {
             Some(set) => set.is_match(path),

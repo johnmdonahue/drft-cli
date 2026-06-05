@@ -3,11 +3,15 @@ use common::drft_bin;
 use std::fs;
 use tempfile::TempDir;
 
+/// Declares the markdown graph — there are no default graphs, so tests that
+/// exercise link edges must declare it.
+const MD_CONFIG: &str = "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n";
+
 /// A graph with all links resolved fires no unresolved-edge and no errors.
 #[test]
 fn clean_graph_has_no_unresolved_or_errors() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [faq](faq.md)",
@@ -38,7 +42,7 @@ fn clean_graph_has_no_unresolved_or_errors() {
 #[test]
 fn broken_link_warns() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [missing](gone.md)",
@@ -71,7 +75,7 @@ fn broken_link_warns() {
 #[test]
 fn broken_link_json_shape() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
 
     let output = drft_bin()
@@ -97,11 +101,11 @@ fn broken_link_json_shape() {
         .expect("expected unresolved-edge diagnostic");
     assert_eq!(broken["severity"], "warn");
     assert_eq!(broken["subject"], "index.md");
-    assert_eq!(broken["_graphs"], serde_json::json!(["@markdown"]));
-    assert!(
-        broken["message"].as_str().unwrap().contains("gone.md"),
-        "message should name the missing target"
+    assert_eq!(
+        broken["target"], "gone.md",
+        "target should name the missing node"
     );
+    assert_eq!(broken["_graphs"], serde_json::json!(["@markdown"]));
     assert!(output.status.success());
 }
 
@@ -111,7 +115,7 @@ fn broken_link_error_severity_exits_1() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[rules]\nunresolved-edge = \"error\"\n",
+        format!("{MD_CONFIG}[rules]\nunresolved-edge = \"error\"\n"),
     )
     .unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
@@ -133,7 +137,7 @@ fn broken_link_error_severity_exits_1() {
 #[test]
 fn detached_node_warns_by_default() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "").unwrap();
+    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();

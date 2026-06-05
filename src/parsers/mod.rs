@@ -17,8 +17,6 @@ pub struct ParseResult {
 
 /// Trait implemented by the built-in text parsers.
 pub trait Parser {
-    /// Parser name.
-    fn name(&self) -> &str;
     /// Check whether this parser should run on a given file path.
     fn matches(&self, path: &str) -> bool;
     /// Parse a file's content and return discovered links + optional metadata.

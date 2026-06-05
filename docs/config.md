@@ -23,32 +23,32 @@ no `include` — the graph is everything under the root minus what `ignore` and
 
 ## graphs
 
-A graph wires a source, a file filter, and a builder. The `fs` graph is implicit
-and always built — it owns the identity space (paths) and contributes each file's
-`type` and `hash`. The text graphs are declared under `[graphs.<name>]`:
+A graph pairs a file scope (`files`) with a parser that interprets the matched
+files. The `fs` graph is implicit and always built — it owns the identity space
+(paths) and contributes each file's `type` and `hash`. There are no default
+graphs: declare each one you want under `[graphs.<name>]`, and that set is the
+whole set.
 
 ```toml
 [graphs.markdown]
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+parser = "markdown"
+files = ["**/*.md"]
 
 [graphs.frontmatter]
-source = "fs"
-filter = ["**/*.md"]
-builder = "frontmatter"
+parser = "frontmatter"
+files = ["**/*.md"]
 ```
 
-| Field     | Required | Default       | Description                                 |
-| --------- | -------- | ------------- | ------------------------------------------- |
-| `source`  | no       | `"fs"`        | Where bytes come from                       |
-| `filter`  | no       | `["**/*.md"]` | Globs scoping which files the builder reads |
-| `builder` | yes      | —             | `markdown` or `frontmatter`                 |
+| Field    | Required | Default       | Description                                                   |
+| -------- | -------- | ------------- | ------------------------------------------------------------- |
+| `parser` | yes      | —             | How to interpret the files (see [parsers](parsers/README.md)) |
+| `files`  | no       | `["**/*.md"]` | Globs scoping which files the parser reads                    |
 
-The graph's name is its compose-time namespace: its facts nest under `@<name>` in
-the composed graph. When you declare any `[graphs.*]`, your declarations replace
-the defaults; with no `[graphs.*]`, drft enables `markdown` and `frontmatter`
-over `**/*.md`.
+The graph's name is its compose-time namespace: its facts nest under `@<name>`
+in the composed graph. A name must not contain `@`, start with `_`, or be `fs` —
+all reserved. `fs` is always built without being declared, and is a provider
+rather than a parser, so `parser = "fs"` is rejected too. With no `[graphs.*]`,
+only the `fs` graph is built.
 
 ## rules
 

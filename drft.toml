@@ -10,14 +10,12 @@ ignore = [
 ]
 
 [graphs.markdown]
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+parser = "markdown"
+files = ["**/*.md"]
 
 [graphs.frontmatter]
-source = "fs"
-filter = ["**/*.md"]
-builder = "frontmatter"
+parser = "frontmatter"
+files = ["**/*.md"]
 
 # Drift is the value prop — promote staleness to error for CI.
 [rules.stale-node]

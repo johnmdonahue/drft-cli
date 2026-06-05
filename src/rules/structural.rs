@@ -7,8 +7,8 @@
 use std::collections::HashSet;
 
 use crate::diagnostic::Finding;
-use crate::model::Graph;
-use crate::rules::{edge_provenance, is_resolved, provenance};
+use crate::model::{Graph, Node};
+use crate::rules::{edge_provenance, provenance};
 use crate::util::is_uri;
 
 /// Evaluate structural findings for `graph`.
@@ -20,14 +20,17 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
         if is_uri(&edge.target) {
             continue;
         }
-        let resolved = graph.nodes.get(&edge.target).is_some_and(is_resolved);
+        let resolved = graph.nodes.get(&edge.target).is_some_and(Node::is_resolved);
         if !resolved {
-            findings.push(Finding::warn(
-                "unresolved-edge",
-                &edge.source,
-                edge_provenance(edge),
-                format!("target {} has no defining node", edge.target),
-            ));
+            findings.push(
+                Finding::warn(
+                    "unresolved-edge",
+                    &edge.source,
+                    edge_provenance(edge),
+                    "no defining node",
+                )
+                .with_target(&edge.target),
+            );
         }
     }
 

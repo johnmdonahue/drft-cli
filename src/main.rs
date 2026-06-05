@@ -27,14 +27,12 @@ fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
 }
 
 fn main() {
-    // Pre-check if JSON format was requested (for structured error output)
-    let wants_json =
-        std::env::args().any(|a| a == "json") && std::env::args().any(|a| a == "--format");
-
     let code = match try_main() {
         Ok(code) => code,
         Err(e) => {
-            if wants_json {
+            // A parse/usage error happens before clap resolves `--format`, so
+            // scan the raw args to decide whether to emit a JSON error envelope.
+            if wants_json_output() {
                 let err = serde_json::json!({
                     "error": format!("{e:#}"),
                     "exit_code": 2,
@@ -47,6 +45,22 @@ fn main() {
         }
     };
     std::process::exit(code);
+}
+
+/// Detect `--format json` (or `--format=json`) from the raw args, before clap
+/// parses. Only the value of `--format` counts — a bare `json` elsewhere (e.g. a
+/// directory named `json`) does not.
+fn wants_json_output() -> bool {
+    let mut args = std::env::args();
+    while let Some(arg) = args.next() {
+        if let Some(value) = arg.strip_prefix("--format=") {
+            return value == "json";
+        }
+        if arg == "--format" {
+            return args.next().as_deref() == Some("json");
+        }
+    }
+    false
 }
 
 fn try_main() -> Result<i32> {
@@ -83,16 +97,15 @@ fn run_init(root: &Path) -> Result<i32> {
 # .gitignore matches and these globs.
 ignore = ["target/**", "node_modules/**"]
 
-# Text graphs. fs is implicit and always built.
+# Graphs. fs is implicit and always built. Declare the parsers you want — there
+# are no defaults, so this file is the complete set.
 [graphs.markdown]
-source = "fs"
-filter = ["**/*.md"]
-builder = "markdown"
+parser = "markdown"
+files = ["**/*.md"]
 
-# [graphs.frontmatter]
-# source = "fs"
-# filter = ["**/*.md"]
-# builder = "frontmatter"
+[graphs.frontmatter]
+parser = "frontmatter"
+files = ["**/*.md"]
 
 [rules]
 # Built-in rules default to warn. Promote for CI:
@@ -215,26 +228,18 @@ fn run_impact(
     Ok(0)
 }
 
-/// Stale source nodes: nodes whose current hash differs from the locked hash.
-/// Requires a lockfile.
+/// Stale source nodes: the subjects of the `stale-node` findings the staleness
+/// rule derives against the lockfile — so impact's seeds and `drft check` share
+/// one definition of "stale." Requires a lockfile.
 fn stale_sources(graph_root: &Path, composed: &drft::model::Graph) -> Result<Vec<String>> {
     let lock = lock::read(graph_root)?.ok_or_else(|| {
         anyhow::anyhow!("no paths given and no drft.lock to derive stale sources from")
     })?;
-    let mut seeds = Vec::new();
-    for (path, node) in &composed.nodes {
-        let current = node
-            .metadata
-            .get("@fs")
-            .and_then(|m| m.get("hash"))
-            .and_then(|h| h.as_str());
-        let locked = lock.nodes.get(path).and_then(|n| n.hash.as_deref());
-        if let (Some(current), Some(locked)) = (current, locked)
-            && current != locked
-        {
-            seeds.push(path.clone());
-        }
-    }
+    let seeds = rules::staleness::evaluate(composed, &lock)
+        .into_iter()
+        .filter(|f| f.name == "stale-node")
+        .map(|f| f.subject)
+        .collect();
     Ok(seeds)
 }
 

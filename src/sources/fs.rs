@@ -12,6 +12,8 @@ use crate::config::compile_globs;
 pub struct SourceFile {
     /// Path relative to the graph root, with forward slashes.
     pub path: String,
+    /// Whether this entry is a symlink (stat'd once during the walk).
+    pub is_symlink: bool,
     /// Raw content. `None` when the file exists but its content is intentionally
     /// not read — a symlink whose target resolves outside the graph root, or a
     /// file that could not be read.
@@ -30,10 +32,7 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
 
     let mut files = Vec::new();
 
-    let walker = WalkBuilder::new(root)
-        .follow_links(true)
-        .sort_by_file_name(|a, b| a.cmp(b))
-        .build();
+    let walker = WalkBuilder::new(root).follow_links(true).build();
 
     for entry in walker {
         let entry = entry?;
@@ -72,6 +71,7 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
 
         files.push(SourceFile {
             path: relative,
+            is_symlink,
             bytes,
         });
     }

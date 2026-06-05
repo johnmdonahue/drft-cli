@@ -5,9 +5,9 @@ sources:
 
 # Parsers
 
-Parsers are the text builders. Each reads the files a graph's `filter` selects,
-parses their content, and emits links that become edges. The frontmatter parser
-also emits the parsed frontmatter block as metadata on the file's node.
+A parser interprets the files a graph's `files` globs select, emitting links that
+become edges. The frontmatter parser also emits the parsed frontmatter block as
+metadata on the file's node. A graph names its parser with `parser = "..."`.
 
 | Parser                        | Emits                                      |
 | ----------------------------- | ------------------------------------------ |
