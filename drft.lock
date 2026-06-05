@@ -133,7 +133,7 @@ target_hash = "b3:ef017b6464b6a05e7a762d4b6ccf4b391399e75a9d564aa84208681993ccb0
 
 [[node.edge]]
 target = "src/cli.rs"
-target_hash = "b3:a7fe215608db3509fc4241f5f91c5118fff0ff93fe6bafd1044e2edfff253161"
+target_hash = "b3:db5461193c01bd415b648451637b71a62ba28d41aeb456d90ae95744851c1783"
 
 [[node.edge]]
 target = "src/config.rs"
@@ -244,7 +244,7 @@ hash = "b3:047dd43a1fc67586928b89dd4ea2a8ea37710008f9dff03c98dc78116240f4d8"
 
 [[node]]
 path = "src/cli.rs"
-hash = "b3:a7fe215608db3509fc4241f5f91c5118fff0ff93fe6bafd1044e2edfff253161"
+hash = "b3:db5461193c01bd415b648451637b71a62ba28d41aeb456d90ae95744851c1783"
 
 [[node]]
 path = "src/compose.rs"
@@ -276,7 +276,7 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:f99e319487a1c1b69839faf090ff00910c7fb16b3d470d48b926cbe1fba7bbe5"
+hash = "b3:8da77cc0d2271570f97e874797d051595fc0d927c21f4ca8060ac7625c62991c"
 
 [[node]]
 path = "src/model.rs"
@@ -336,7 +336,7 @@ hash = "b3:317ec95915031ee51e9bcd86da06b439d120fd13ef29509e02fe668fd4fbb2f5"
 
 [[node]]
 path = "tests/impact.rs"
-hash = "b3:04c2b570dac9b0b08d423dc1481e12987ee407b8c9d9cfe1d2b207d8949db022"
+hash = "b3:d94d0061695fbd10b57373435202c2a497fba9c2d7f69e780bb1dacb3035a48e"
 
 [[node]]
 path = "tests/init.rs"
