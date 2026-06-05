@@ -25,9 +25,8 @@ pub struct SourceFile {
     pub path: String,
     /// The kind of entry, from `lstat`.
     pub kind: NodeKind,
-    /// Raw content. `None` for directories (no content), for a symlink whose
-    /// target resolves outside the graph root, and for a file that could not be
-    /// read.
+    /// Raw content. `Some` only for files (and `None` for one that could not be
+    /// read). Symlinks and directories are untrackable and always carry `None`.
     pub bytes: Option<Vec<u8>>,
 }
 
@@ -35,23 +34,27 @@ pub struct SourceFile {
 /// yielding one [`SourceFile`] per file, symlink, and directory. Paths are
 /// relative to `root`, sorted.
 ///
-/// A symlink is yielded at its own path; its content is read only when the link
-/// resolves within `root`, so a symlink escaping the graph carries no bytes
-/// (and therefore no hash). Directories carry no bytes either: they resolve link
-/// targets but are never hashed or locked.
+/// The walk does not follow symlinks: a symlink is a leaf node at its own path,
+/// never traversed through. Its relationship to its target is carried by the
+/// edge the builder emits, not by re-walking the target. So a symlink to a
+/// directory does not duplicate that directory's subtree, and a symlink to a
+/// path outside the root never pulls outside content into the graph.
+///
+/// Only files carry bytes (and therefore a hash). Symlinks and directories are
+/// untrackable: they resolve link targets but are never hashed or locked.
 pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
     let ignore_set = compile_globs(ignore)?;
-    let canonical_root = root.canonicalize()?;
 
     let mut files = Vec::new();
 
-    let walker = WalkBuilder::new(root).follow_links(true).build();
+    let walker = WalkBuilder::new(root).follow_links(false).build();
 
     for entry in walker {
         let entry = entry?;
         let ft = entry.file_type();
-        // Yield files and directories; skip fifos, sockets, and other entries.
-        if !ft.is_some_and(|t| t.is_file() || t.is_dir()) {
+        // Yield files, symlinks, and directories; skip fifos, sockets, and other
+        // entries. With symlinks unfollowed, a symlink reports its own type here.
+        if !ft.is_some_and(|t| t.is_file() || t.is_dir() || t.is_symlink()) {
             continue;
         }
 
@@ -67,8 +70,8 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
             continue;
         }
 
-        // Type from `lstat` (no link-follow), symlink first: a symlink-to-dir is
-        // a symlink, and `Dir` always means a real directory.
+        // Type from `lstat`, symlink first: a symlink-to-dir is a symlink, and
+        // `Dir` always means a real directory.
         let kind = match abs_lstat(root, &relative) {
             Some(m) if m.file_type().is_symlink() => NodeKind::Symlink,
             Some(m) if m.is_dir() => NodeKind::Dir,
@@ -79,19 +82,11 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
             continue;
         }
 
-        let abs = root.join(&relative);
+        // Only files carry content. A symlink's content is its target's, reached
+        // through the edge — the symlink node itself stays untrackable.
         let bytes = match kind {
-            NodeKind::Dir => None,
-            NodeKind::Symlink => {
-                // Read content only when the link resolves within the graph root.
-                match abs.canonicalize() {
-                    Ok(canonical) if canonical.starts_with(&canonical_root) => {
-                        std::fs::read(&abs).ok()
-                    }
-                    _ => None,
-                }
-            }
-            NodeKind::File => std::fs::read(&abs).ok(),
+            NodeKind::File => std::fs::read(root.join(&relative)).ok(),
+            NodeKind::Symlink | NodeKind::Dir => None,
         };
 
         files.push(SourceFile {
@@ -244,5 +239,64 @@ mod tests {
         assert_eq!(alias.kind, NodeKind::Symlink);
         let real = files.iter().find(|f| f.path == "real").unwrap();
         assert_eq!(real.kind, NodeKind::Dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_to_file_carries_no_bytes() {
+        // A symlink is pure indirection: its node is never hashed. Content lives
+        // at the real path; the builder's edge carries the relationship.
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("real.md"), "content").unwrap();
+        std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
+            .unwrap();
+
+        let files = walk(dir.path(), &[]).unwrap();
+        let alias = files.iter().find(|f| f.path == "alias.md").unwrap();
+        assert_eq!(alias.kind, NodeKind::Symlink);
+        assert!(alias.bytes.is_none(), "symlink node must carry no bytes");
+        let real = files.iter().find(|f| f.path == "real.md").unwrap();
+        assert_eq!(real.bytes.as_deref(), Some(&b"content"[..]));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_descend_into_symlinked_directory() {
+        // A symlinked directory is a leaf node, not a second copy of the subtree.
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("real")).unwrap();
+        fs::write(dir.path().join("real/child.md"), "c").unwrap();
+        std::os::unix::fs::symlink(dir.path().join("real"), dir.path().join("alias")).unwrap();
+
+        let files = walk(dir.path(), &[]).unwrap();
+        let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"alias"), "the symlink itself is a node");
+        assert!(
+            paths.contains(&"real/child.md"),
+            "real content appears once"
+        );
+        assert!(
+            !paths.contains(&"alias/child.md"),
+            "must not re-walk the target subtree through the symlink, got: {paths:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_leak_content_through_escaping_directory_symlink() {
+        // A symlink to a directory outside the root must not pull outside files
+        // into the graph as readable nodes.
+        let outer = TempDir::new().unwrap();
+        let root = outer.path().join("project");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(outer.path().join("secrets")).unwrap();
+        fs::write(outer.path().join("secrets/passwd.md"), "TOP SECRET").unwrap();
+        std::os::unix::fs::symlink(outer.path().join("secrets"), root.join("alias")).unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(
+            !files.iter().any(|f| f.path.contains("passwd")),
+            "outside content must not be walked through a symlink"
+        );
     }
 }
