@@ -35,13 +35,18 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
         }
     }
 
-    // detached-node: a node touched by no edge in either direction.
+    // detached-node: a file touched by no edge in either direction. Directories
+    // are structural scaffolding — links point at the files inside them, not at
+    // the directory — so a link-less directory is normal, not orphaned content.
     let mut connected: HashSet<&str> = HashSet::new();
     for edge in &graph.edges {
         connected.insert(edge.source.as_str());
         connected.insert(edge.target.as_str());
     }
     for (path, node) in &graph.nodes {
+        if node.fs_type() == Some("directory") {
+            continue;
+        }
         if !connected.contains(path.as_str()) {
             findings.push(Finding::warn(
                 "detached-node",
@@ -142,5 +147,26 @@ mod tests {
         assert!(n.contains(&("detached-node", "lonely.md")), "got {n:?}");
         assert!(!n.contains(&("detached-node", "a.md")));
         assert!(!n.contains(&("detached-node", "b.md")));
+    }
+
+    #[test]
+    fn directory_node_is_not_detached() {
+        // A link-less directory is scaffolding, not orphaned content.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node(
+            "guides",
+            Node::new(json!({ "type": "directory" }).as_object().unwrap().clone()),
+        );
+        fs.set_node("lonely.md", fs_node());
+        let composed = compose(&GraphSet::new(vec![fs]));
+
+        let findings = evaluate(&composed);
+        let n = names(&findings);
+        assert!(
+            !n.contains(&("detached-node", "guides")),
+            "directory should not be flagged detached, got {n:?}"
+        );
+        // A genuinely orphaned file is still flagged.
+        assert!(n.contains(&("detached-node", "lonely.md")));
     }
 }

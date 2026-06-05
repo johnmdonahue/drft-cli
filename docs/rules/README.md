@@ -30,15 +30,15 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule              | When                                                   |
-| ----------------- | ------------------------------------------------------ |
-| `stale-node`      | A node's current hash differs from its locked hash     |
-| `stale-edge`      | An edge's locked target hash differs from the target's |
-| `new-edge`        | A current edge has no locked target hash               |
-| `removed-edge`    | The lockfile has an edge absent from the graph         |
-| `removed-node`    | The lockfile has a node absent from the graph          |
-| `unresolved-edge` | An edge target has no defining node (URIs excepted)    |
-| `detached-node`   | A node has no inbound or outbound edges                |
+| Rule              | When                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| `stale-node`      | A node's current hash differs from its locked hash             |
+| `stale-edge`      | An edge's locked target hash differs from the target's         |
+| `new-edge`        | A current edge has no locked target hash                       |
+| `removed-edge`    | The lockfile has an edge absent from the graph                 |
+| `removed-node`    | The lockfile has a node absent from the graph                  |
+| `unresolved-edge` | An edge target has no defining node (URIs excepted)            |
+| `detached-node`   | A node has no inbound or outbound edges (directories excepted) |
 
 Staleness is computed locally — per node and per edge, with no recursive
 propagation — so dependency cycles can't loop or produce ambiguous staleness. A

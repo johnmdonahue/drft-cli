@@ -66,6 +66,11 @@ impl Node {
         self.metadata.get(FS_NAMESPACE)?.get("hash")?.as_str()
     }
 
+    /// This composed node's `fs` type (`file`, `symlink`, `directory`), if any.
+    pub fn fs_type(&self) -> Option<&str> {
+        self.metadata.get(FS_NAMESPACE)?.get("type")?.as_str()
+    }
+
     /// Whether this composed node is resolved — present with an `@fs` block.
     /// Resolution is namespace presence.
     pub fn is_resolved(&self) -> bool {
