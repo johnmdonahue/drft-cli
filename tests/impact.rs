@@ -224,7 +224,38 @@ fn impact_missing_path_suggests_suffix_match() {
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("projects/api/domain-model.md"),
-        "expected a suffix suggestion, got: {stderr}"
+        stderr.contains("did you mean") && stderr.contains("projects/api/domain-model.md"),
+        "expected a single suffix suggestion, got: {stderr}"
+    );
+}
+
+/// An ambiguous bare filename (same name under multiple dirs) lists the matches
+/// rather than confidently suggesting an arbitrary one.
+#[test]
+fn impact_ambiguous_suffix_lists_matches() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[a](a/README.md) [b](b/README.md)",
+    )
+    .unwrap();
+    for d in ["a", "b"] {
+        fs::create_dir_all(dir.path().join(d)).unwrap();
+        fs::write(dir.path().join(d).join("README.md"), "# Readme").unwrap();
+    }
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact", "README.md"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("multiple matches")
+            && stderr.contains("a/README.md")
+            && stderr.contains("b/README.md"),
+        "expected both matches listed, not a single guess, got: {stderr}"
     );
 }

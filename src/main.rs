@@ -155,7 +155,8 @@ fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
 /// project-relative from a subdirectory or root-relative from the top. A `.md`
 /// suffix is tried as a fallback, and the raw argument is tried last for back
 /// compatibility. On a miss, a node whose key ends with the argument is
-/// suggested.
+/// suggested — but only when the suffix match is unambiguous (otherwise the
+/// candidates are listed, so an arbitrary pick is never presented as "the" one).
 fn resolve_node(
     composed: &drft::model::Graph,
     root: &Path,
@@ -176,17 +177,36 @@ fn resolve_node(
         }
     }
 
-    // Suggest a node whose key ends with the given path (e.g. a bare filename or
+    // Suggest nodes whose key ends with the given path (e.g. a bare filename or
     // a project-relative suffix) — the common "right file, wrong prefix" miss.
-    let needle = path.trim_start_matches("./");
+    // Normalize the needle so it matches the graph's forward-slash keys, and only
+    // present a single suggestion when it's unambiguous.
+    let needle = drft::util::normalize_relative_path(path);
     let suffix = format!("/{needle}");
-    match composed
+    let matches: Vec<&String> = composed
         .nodes
         .keys()
-        .find(|k| k.as_str() == needle || k.ends_with(&suffix))
-    {
-        Some(hit) => anyhow::bail!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
-        None => anyhow::bail!("node not found: \"{path}\""),
+        .filter(|k| k.as_str() == needle || k.ends_with(&suffix))
+        .collect();
+    match matches.as_slice() {
+        [] => anyhow::bail!("node not found: \"{path}\""),
+        [hit] => anyhow::bail!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        many => {
+            let shown = many
+                .iter()
+                .take(5)
+                .map(|k| format!("\"{k}\""))
+                .collect::<Vec<_>>();
+            let more = if many.len() > shown.len() {
+                format!(", and {} more", many.len() - shown.len())
+            } else {
+                String::new()
+            };
+            anyhow::bail!(
+                "node not found: \"{path}\" — multiple matches: {}{more}",
+                shown.join(", ")
+            )
+        }
     }
 }
 
