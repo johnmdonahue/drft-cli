@@ -26,7 +26,7 @@ target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f0
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:ef017b6464b6a05e7a762d4b6ccf4b391399e75a9d564aa84208681993ccb0e4"
+target_hash = "b3:951c94920bd8893eb50a5ab766db7140ac3ce141637fe334908e5e0d95e12de1"
 
 [[node.edge]]
 target = "src/builders/mod.rs"
@@ -38,7 +38,7 @@ target_hash = "b3:a17c2ccd39a5ad225be9a761fee623523702f0d3ca50e951d3e27fa30d68ae
 
 [[node.edge]]
 target = "src/config.rs"
-target_hash = "b3:05a71746943b0dc8c086fc5d0ed56af7fc5056198b01aa7234caa11e919a19fb"
+target_hash = "b3:3255fd315b712b68926674b605962e26f5808aeb5ea903bebf5121105fdee141"
 
 [[node.edge]]
 target = "src/graphs/mod.rs"
@@ -50,7 +50,7 @@ target_hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b05
 
 [[node.edge]]
 target = "src/model.rs"
-target_hash = "b3:2a65b81bc2ca698b502c7d791efc2f514be6f7185bc026d988988cae4babdd91"
+target_hash = "b3:6b4ff10f601531b61b3b656f386f378f3544880e584fca46361a88c2a12e832e"
 
 [[node.edge]]
 target = "src/parsers/mod.rs"
@@ -58,7 +58,7 @@ target_hash = "b3:d17d93b9838e4703720bafd4150e1dee5653416cb080218716ae21a5c615c3
 
 [[node.edge]]
 target = "src/rules/check.rs"
-target_hash = "b3:dbfd7ada90f80ffa0b5d9caa424237bdafe31dad616ff05e1fdfe0af7fcdc472"
+target_hash = "b3:eb2f3748fa8b147fa1823efbe6bc77a2cf63369b0c180d7ca366f9bd2ceb9847"
 
 [[node.edge]]
 target = "src/sources/fs.rs"
@@ -90,7 +90,7 @@ target_hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:0ce91ca0d02a0fcf205a3e50f28e66b05bdd7c0313378c7af2ddac172a51a053"
+target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
 
 [[node.edge]]
 target = "https://github.com/johnmdonahue/drft-cli/releases"
@@ -109,7 +109,7 @@ hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2e1"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:0ce91ca0d02a0fcf205a3e50f28e66b05bdd7c0313378c7af2ddac172a51a053"
+target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
 
 [[node.edge]]
 target = "docs/parsers/README.md"
@@ -117,11 +117,11 @@ target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f0
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:ef017b6464b6a05e7a762d4b6ccf4b391399e75a9d564aa84208681993ccb0e4"
+target_hash = "b3:951c94920bd8893eb50a5ab766db7140ac3ce141637fe334908e5e0d95e12de1"
 
 [[node]]
 path = "docs/config.md"
-hash = "b3:0ce91ca0d02a0fcf205a3e50f28e66b05bdd7c0313378c7af2ddac172a51a053"
+hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
 
 [[node.edge]]
 target = "docs/parsers/README.md"
@@ -129,7 +129,7 @@ target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f0
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:ef017b6464b6a05e7a762d4b6ccf4b391399e75a9d564aa84208681993ccb0e4"
+target_hash = "b3:951c94920bd8893eb50a5ab766db7140ac3ce141637fe334908e5e0d95e12de1"
 
 [[node.edge]]
 target = "src/cli.rs"
@@ -137,7 +137,7 @@ target_hash = "b3:db5461193c01bd415b648451637b71a62ba28d41aeb456d90ae95744851c17
 
 [[node.edge]]
 target = "src/config.rs"
-target_hash = "b3:05a71746943b0dc8c086fc5d0ed56af7fc5056198b01aa7234caa11e919a19fb"
+target_hash = "b3:3255fd315b712b68926674b605962e26f5808aeb5ea903bebf5121105fdee141"
 
 [[node]]
 path = "docs/parsers/README.md"
@@ -161,7 +161,7 @@ hash = "b3:23258bd291ed24012764c7420bacc2a54433e5e9adc9b79f674253f946117531"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:0ce91ca0d02a0fcf205a3e50f28e66b05bdd7c0313378c7af2ddac172a51a053"
+target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
 
 [[node.edge]]
 target = "src/parsers/frontmatter.rs"
@@ -173,7 +173,7 @@ hash = "b3:291302e9f0e404a834790daae6aa7c7b0dff465e9ca0c336c5732030e5bb5383"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:0ce91ca0d02a0fcf205a3e50f28e66b05bdd7c0313378c7af2ddac172a51a053"
+target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
@@ -185,11 +185,11 @@ target_hash = "b3:952fafe8eb3a776168da8ec935438fbd39de4599375f1c0e82334d3dd8d361
 
 [[node]]
 path = "docs/rules/README.md"
-hash = "b3:ef017b6464b6a05e7a762d4b6ccf4b391399e75a9d564aa84208681993ccb0e4"
+hash = "b3:951c94920bd8893eb50a5ab766db7140ac3ce141637fe334908e5e0d95e12de1"
 
 [[node.edge]]
 target = "src/config.rs"
-target_hash = "b3:05a71746943b0dc8c086fc5d0ed56af7fc5056198b01aa7234caa11e919a19fb"
+target_hash = "b3:3255fd315b712b68926674b605962e26f5808aeb5ea903bebf5121105fdee141"
 
 [[node.edge]]
 target = "src/rules/staleness.rs"
@@ -197,7 +197,7 @@ target_hash = "b3:f592a8dd3264b1975fbfc2da5958b0a5999efa513b2ca51b2a9df5fa602e38
 
 [[node.edge]]
 target = "src/rules/structural.rs"
-target_hash = "b3:09c87a43cdf2e3385c5736a5e54b35d1ad6ba77eb4575525b981ac7f0dd208c8"
+target_hash = "b3:9d41bb2e0217011f0994b694a78b94388280a41721706bc13292d5f4ede2f438"
 
 [[node]]
 path = "dprint.json"
@@ -252,7 +252,7 @@ hash = "b3:a17c2ccd39a5ad225be9a761fee623523702f0d3ca50e951d3e27fa30d68ae07"
 
 [[node]]
 path = "src/config.rs"
-hash = "b3:05a71746943b0dc8c086fc5d0ed56af7fc5056198b01aa7234caa11e919a19fb"
+hash = "b3:3255fd315b712b68926674b605962e26f5808aeb5ea903bebf5121105fdee141"
 
 [[node]]
 path = "src/diagnostic.rs"
@@ -280,7 +280,7 @@ hash = "b3:8da77cc0d2271570f97e874797d051595fc0d927c21f4ca8060ac7625c62991c"
 
 [[node]]
 path = "src/model.rs"
-hash = "b3:2a65b81bc2ca698b502c7d791efc2f514be6f7185bc026d988988cae4babdd91"
+hash = "b3:6b4ff10f601531b61b3b656f386f378f3544880e584fca46361a88c2a12e832e"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
@@ -296,7 +296,7 @@ hash = "b3:d17d93b9838e4703720bafd4150e1dee5653416cb080218716ae21a5c615c3c7"
 
 [[node]]
 path = "src/rules/check.rs"
-hash = "b3:dbfd7ada90f80ffa0b5d9caa424237bdafe31dad616ff05e1fdfe0af7fcdc472"
+hash = "b3:eb2f3748fa8b147fa1823efbe6bc77a2cf63369b0c180d7ca366f9bd2ceb9847"
 
 [[node]]
 path = "src/rules/mod.rs"
@@ -308,7 +308,7 @@ hash = "b3:f592a8dd3264b1975fbfc2da5958b0a5999efa513b2ca51b2a9df5fa602e388d"
 
 [[node]]
 path = "src/rules/structural.rs"
-hash = "b3:09c87a43cdf2e3385c5736a5e54b35d1ad6ba77eb4575525b981ac7f0dd208c8"
+hash = "b3:9d41bb2e0217011f0994b694a78b94388280a41721706bc13292d5f4ede2f438"
 
 [[node]]
 path = "src/sources/fs.rs"
