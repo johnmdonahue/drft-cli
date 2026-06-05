@@ -2,7 +2,7 @@
 
 [[node]]
 path = "CHANGELOG.md"
-hash = "b3:efaea353be70e7a259560fe7e13ddf19037d80f78e6cd77586d3968176f0cb38"
+hash = "b3:c09988b18009a12ee24285787eb733aab4fbc8f9063f3aa0ec7c845d25b8ad67"
 
 [[node]]
 path = "CLAUDE.md"
@@ -70,7 +70,7 @@ target_hash = "b3:fa42d587b5cd0a2a0253c7a8b7bbe54823632af99fd07791e54761411617c1
 
 [[node]]
 path = "Cargo.toml"
-hash = "b3:9f4ba29cddf43201b0864996f8c43f36d6e648bb36cbb15011c3307855ec0258"
+hash = "b3:e1e4834f9e84aa57bc3d73d281dbe71c0d58f8d4a59524d89bf933981408415a"
 
 [[node]]
 path = "LICENSE"
