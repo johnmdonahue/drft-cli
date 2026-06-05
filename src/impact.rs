@@ -6,12 +6,49 @@
 //! Traversal is cycle-safe (a visited set), so a dependency cycle resolves
 //! without looping.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
-use crate::model::Graph;
+use crate::model::{Edge, Graph};
 
-/// Adjacency: a path mapped to the paths it connects to.
-type Adjacency<'a> = HashMap<&'a str, Vec<&'a str>>;
+/// A neighbor reached across an edge, carrying that edge's source line numbers
+/// (the `lines` metadata, unioned across parsers) when present.
+struct Neighbor<'a> {
+    node: &'a str,
+    lines: Vec<usize>,
+}
+
+/// Adjacency: a path mapped to the neighbors it connects to.
+type Adjacency<'a> = HashMap<&'a str, Vec<Neighbor<'a>>>;
+
+/// Union of an edge's `lines` metadata across parser namespaces (`@markdown`,
+/// `@frontmatter`, …), sorted and deduped. Empty when the edge carries none.
+fn edge_lines(edge: &Edge) -> Vec<usize> {
+    let mut lines = BTreeSet::new();
+    for (key, value) in &edge.metadata {
+        if !key.starts_with('@') {
+            continue;
+        }
+        if let Some(arr) = value.get("lines").and_then(|l| l.as_array()) {
+            for n in arr.iter().filter_map(serde_json::Value::as_u64) {
+                lines.insert(n as usize);
+            }
+        }
+    }
+    lines.into_iter().collect()
+}
+
+/// Render line numbers as a `:n,m` suffix, or empty when there are none.
+fn lines_suffix(lines: &[usize]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let joined = lines
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(":{joined}")
+}
 
 /// Which way to walk from the seed. Inbound (the default) finds dependents —
 /// what must be reviewed when the seed changes.
@@ -33,7 +70,18 @@ pub struct Impacted {
     pub impact_radius: usize,
     /// Betweenness centrality of this node in the whole graph.
     pub betweenness: f64,
+    /// Source line(s) in `node` where it links `via`. Populated for inbound
+    /// (review) results — the line(s) most likely to need updating. Empty for
+    /// outbound, where the link lives in `via`, not in `node`.
+    pub lines: Vec<usize>,
     pub fix: String,
+}
+
+impl Impacted {
+    /// The node path annotated with its link line(s), e.g. `README.md:42`.
+    pub fn location(&self) -> String {
+        format!("{}{}", self.node, lines_suffix(&self.lines))
+    }
 }
 
 /// Compute the impacted set for `seeds`. Seeds must be node paths present in
@@ -59,23 +107,30 @@ pub fn compute(
         }
     }
 
-    // (node, via, depth)
-    let mut reached: Vec<(&str, &str, usize)> = Vec::new();
+    // (node, via, depth, lines-in-node)
+    let mut reached: Vec<(&str, &str, usize, Vec<usize>)> = Vec::new();
 
     while let Some((node, depth)) = queue.pop_front() {
         if max_depth.is_some_and(|max| depth >= max) {
             continue;
         }
-        let mut neighbors: Vec<&str> = Vec::new();
+        // Reverse neighbors are dependents: the reached node holds the link, so
+        // its lines are actionable. Forward neighbors are dependencies: the link
+        // lives in `node`, not in the reached node, so no lines attach.
+        let mut neighbors: Vec<(&str, Vec<usize>)> = Vec::new();
         if matches!(direction, Direction::Inbound | Direction::Both) {
-            neighbors.extend(reverse.get(node).into_iter().flatten().copied());
+            for n in reverse.get(node).into_iter().flatten() {
+                neighbors.push((n.node, n.lines.clone()));
+            }
         }
         if matches!(direction, Direction::Outbound | Direction::Both) {
-            neighbors.extend(forward.get(node).into_iter().flatten().copied());
+            for n in forward.get(node).into_iter().flatten() {
+                neighbors.push((n.node, Vec::new()));
+            }
         }
-        for next in neighbors {
+        for (next, lines) in neighbors {
             if visited.insert(next) {
-                reached.push((next, node, depth + 1));
+                reached.push((next, node, depth + 1, lines));
                 queue.push_back((next, depth + 1));
             }
         }
@@ -83,15 +138,19 @@ pub fn compute(
 
     let mut impacted: Vec<Impacted> = reached
         .into_iter()
-        .map(|(node, via, depth)| Impacted {
-            node: node.to_string(),
-            via: via.to_string(),
-            depth,
-            impact_radius: reverse_reach_count(&reverse, node),
-            betweenness: betweenness.get(node).copied().unwrap_or(0.0),
-            fix: format!(
-                "{via} may change — review {node} to ensure it still accurately reflects {via}"
-            ),
+        .map(|(node, via, depth, lines)| {
+            let locator = lines_suffix(&lines);
+            Impacted {
+                node: node.to_string(),
+                via: via.to_string(),
+                depth,
+                impact_radius: reverse_reach_count(&reverse, node),
+                betweenness: betweenness.get(node).copied().unwrap_or(0.0),
+                lines,
+                fix: format!(
+                    "{via} may change — review {node}{locator} to ensure it still accurately reflects {via}"
+                ),
+            }
         })
         .collect();
 
@@ -112,14 +171,21 @@ fn adjacency(graph: &Graph) -> (Adjacency<'_>, Adjacency<'_>) {
     let mut forward: Adjacency = HashMap::new();
     let mut reverse: Adjacency = HashMap::new();
     for edge in &graph.edges {
+        let lines = edge_lines(edge);
         forward
             .entry(edge.source.as_str())
             .or_default()
-            .push(edge.target.as_str());
+            .push(Neighbor {
+                node: edge.target.as_str(),
+                lines: lines.clone(),
+            });
         reverse
             .entry(edge.target.as_str())
             .or_default()
-            .push(edge.source.as_str());
+            .push(Neighbor {
+                node: edge.source.as_str(),
+                lines,
+            });
     }
     (forward, reverse)
 }
@@ -133,7 +199,8 @@ fn reverse_reach_count(reverse: &Adjacency, node: &str) -> usize {
     queue.push_back(node);
     let mut count = 0;
     while let Some(current) = queue.pop_front() {
-        for &dependent in reverse.get(current).into_iter().flatten() {
+        for neighbor in reverse.get(current).into_iter().flatten() {
+            let dependent = neighbor.node;
             if visited.insert(dependent) {
                 count += 1;
                 queue.push_back(dependent);
@@ -220,7 +287,7 @@ fn betweenness(graph: &Graph) -> HashMap<&str, f64> {
 mod tests {
     use super::*;
     use crate::compose::compose;
-    use crate::model::{Edge, GraphSet, Node};
+    use crate::model::{Edge, GraphSet, Metadata, Node};
     use serde_json::json;
 
     fn fs_node() -> Node {
@@ -261,6 +328,34 @@ mod tests {
         assert_eq!(b.via, "c.md");
         let a = impacted.iter().find(|i| i.node == "a.md").unwrap();
         assert_eq!(a.depth, 2);
+    }
+
+    #[test]
+    fn inbound_surfaces_link_lines() {
+        // A dependent links its target on lines 12 and 49. Inbound impact carries
+        // those lines on the dependent and into its fix instruction.
+        let mut g = Graph::labeled("composed");
+        g.set_node("dependent.md", fs_node());
+        g.set_node("dep.md", fs_node());
+        let mut meta = Metadata::new();
+        meta.insert("@markdown".into(), json!({ "lines": [49, 12] }));
+        g.add_edge(Edge::with_metadata("dependent.md", "dep.md", meta));
+
+        let inbound = compute(&g, &["dep.md".into()], Direction::Inbound, None);
+        let d = inbound.iter().find(|i| i.node == "dependent.md").unwrap();
+        assert_eq!(d.lines, vec![12, 49], "sorted, deduped");
+        assert_eq!(d.location(), "dependent.md:12,49");
+        assert!(
+            d.fix.contains("review dependent.md:12,49"),
+            "got: {}",
+            d.fix
+        );
+
+        // Outbound lists the dependency; the link lives in the seed, not here, so
+        // no lines attach.
+        let outbound = compute(&g, &["dependent.md".into()], Direction::Outbound, None);
+        let dep = outbound.iter().find(|i| i.node == "dep.md").unwrap();
+        assert!(dep.lines.is_empty());
     }
 
     #[test]

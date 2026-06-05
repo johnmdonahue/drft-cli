@@ -218,7 +218,10 @@ fn run_impact(
                 for i in &impacted {
                     println!(
                         "{} (via {}, depth {}, radius {})",
-                        i.node, i.via, i.depth, i.impact_radius
+                        i.location(),
+                        i.via,
+                        i.depth,
+                        i.impact_radius
                     );
                 }
             }
