@@ -1,4 +1,4 @@
-use super::{ParseResult, Parser};
+use super::{Link, ParseResult, Parser};
 
 /// Check whether a frontmatter value looks like a link target (file path or URI).
 fn is_link_candidate(value: &str) -> bool {
@@ -122,9 +122,16 @@ impl Parser for FrontmatterParser {
             return ParseResult::default();
         };
 
-        let mut links = Vec::new();
-        collect_string_leaves(&yaml, &mut links);
-        links.retain(|v| is_link_candidate(v));
+        let mut candidates = Vec::new();
+        collect_string_leaves(&yaml, &mut candidates);
+        candidates.retain(|v| is_link_candidate(v));
+        // Line numbers are not yet recovered for frontmatter (the YAML value
+        // carries no source position); `line` stays `None` until the engine
+        // swap to a marked parser.
+        let links = candidates
+            .into_iter()
+            .map(|target| Link { target, line: None })
+            .collect();
 
         ParseResult {
             links,
@@ -227,8 +234,8 @@ mod tests {
             "---\nsources:\n  - ../shared/glossary.md\n  - ./prior-art.md\n---\n\n# Hello\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "../shared/glossary.md");
-        assert_eq!(result.links[1], "./prior-art.md");
+        assert_eq!(result.links[0].target, "../shared/glossary.md");
+        assert_eq!(result.links[1].target, "./prior-art.md");
     }
 
     #[test]
@@ -236,8 +243,8 @@ mod tests {
         let content = "---\nsources:\n  - setup.md\n  - config.rs\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "setup.md");
-        assert_eq!(result.links[1], "config.rs");
+        assert_eq!(result.links[0].target, "setup.md");
+        assert_eq!(result.links[1].target, "config.rs");
     }
 
     #[test]
@@ -307,8 +314,8 @@ mod tests {
         let content = "---\nsources:\n  - https://example.com\n  - ./local.md\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "https://example.com");
-        assert_eq!(result.links[1], "./local.md");
+        assert_eq!(result.links[0].target, "https://example.com");
+        assert_eq!(result.links[1].target, "./local.md");
     }
 
     #[test]
@@ -330,8 +337,8 @@ mod tests {
         let content = "---\nsources:\n  - config.rs\n  - docs/setup.md\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 2);
-        assert_eq!(result.links[0], "config.rs");
-        assert_eq!(result.links[1], "docs/setup.md");
+        assert_eq!(result.links[0].target, "config.rs");
+        assert_eq!(result.links[1].target, "docs/setup.md");
     }
 
     #[test]
@@ -339,7 +346,7 @@ mod tests {
         let content = "---\nsource: /usr/local/config.toml\n---\n";
         let result = parse(content);
         assert_eq!(result.links.len(), 1);
-        assert_eq!(result.links[0], "/usr/local/config.toml");
+        assert_eq!(result.links[0].target, "/usr/local/config.toml");
     }
 
     #[test]

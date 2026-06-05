@@ -12,6 +12,9 @@ The markdown parser is drft's built-in parser for standard markdown link syntax.
 ## Link types
 
 Each link type becomes an edge with parser provenance `markdown` in the graph.
+Every edge records the 1-based source line(s) where the link appears as `lines`
+in its `markdown` metadata, exposed in `drft graph`; a target linked from more
+than one line carries each.
 
 ### inline
 
