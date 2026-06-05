@@ -2,11 +2,12 @@ use crate::config::RuleSeverity;
 use serde::Serialize;
 
 /// A v0.8 check finding over the composed graph. Serializes to the diagnostic
-/// shape `{name, severity, subject, target?, _graphs, message}`: `subject` is the
-/// implicated path (the source node for edge-level findings), `target` is the
-/// edge's destination on edge-level findings (absent on node-level ones), and
-/// `_graphs` carries the same provenance key the node or edge does, so a consumer
-/// never has to parse anything.
+/// shape `{name, severity, subject, target?, lines?, _graphs, message}`: `subject`
+/// is the implicated path (the source node for edge-level findings), `target` is
+/// the edge's destination on edge-level findings (absent on node-level ones),
+/// `lines` is the source line(s) where an edge finding's link appears (absent
+/// otherwise), and `_graphs` carries the same provenance key the node or edge
+/// does, so a consumer never has to parse anything.
 #[derive(Debug, Clone, Serialize)]
 pub struct Finding {
     pub name: String,
@@ -14,6 +15,8 @@ pub struct Finding {
     pub subject: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub lines: Vec<usize>,
     #[serde(rename = "_graphs")]
     pub graphs: Vec<String>,
     pub message: String,
@@ -33,6 +36,7 @@ impl Finding {
             severity: RuleSeverity::Warn,
             subject: subject.into(),
             target: None,
+            lines: Vec::new(),
             graphs,
             message: message.into(),
         }
@@ -45,12 +49,32 @@ impl Finding {
         self
     }
 
-    /// The locus as rendered in text: `subject → target` for edge findings,
-    /// just `subject` otherwise.
+    /// Attach the source line(s) where an edge finding's link appears. They
+    /// annotate the subject (`subject:line → target`) and serialize as `lines`.
+    /// The `subject` path itself is unchanged, so `ignore` globs still match it.
+    pub fn with_lines(mut self, lines: Vec<usize>) -> Self {
+        self.lines = lines;
+        self
+    }
+
+    /// The locus as rendered in text: `subject:lines → target` for an edge
+    /// finding with known lines, `subject → target` for one without, and just
+    /// `subject` for a node finding.
     fn subject_display(&self) -> String {
+        let subject = if self.lines.is_empty() {
+            self.subject.clone()
+        } else {
+            let joined = self
+                .lines
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{}:{joined}", self.subject)
+        };
         match &self.target {
-            Some(target) => format!("{} → {target}", self.subject),
-            None => self.subject.clone(),
+            Some(target) => format!("{subject} → {target}"),
+            None => subject,
         }
     }
 
@@ -119,6 +143,22 @@ mod tests {
             f.format_text(),
             "warn[detached-node]: orphan.md (no connections)"
         );
+    }
+
+    #[test]
+    fn edge_finding_with_lines_annotates_subject() {
+        let f = Finding::warn("stale-edge", "README.md", vec![], "hash a ≠ locked b")
+            .with_target("src/lib.rs")
+            .with_lines(vec![12, 49]);
+        assert_eq!(
+            f.format_text(),
+            "warn[stale-edge]: README.md:12,49 → src/lib.rs (hash a ≠ locked b)"
+        );
+        let json = serde_json::to_value(&f).unwrap();
+        // The subject path stays bare so `ignore` globs still match it; lines are
+        // a separate field.
+        assert_eq!(json["subject"], "README.md");
+        assert_eq!(json["lines"], serde_json::json!([12, 49]));
     }
 
     #[test]

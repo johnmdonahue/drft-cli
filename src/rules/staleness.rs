@@ -73,7 +73,8 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                                 short_hash(locked_hash)
                             ),
                         )
-                        .with_target(&edge.target),
+                        .with_target(&edge.target)
+                        .with_lines(edge.lines()),
                     );
                 }
             }
@@ -85,7 +86,8 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                     edge_provenance(edge),
                     "not locked",
                 )
-                .with_target(&edge.target),
+                .with_target(&edge.target)
+                .with_lines(edge.lines()),
             ),
         }
     }

@@ -29,7 +29,8 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
                     edge_provenance(edge),
                     "no defining node",
                 )
-                .with_target(&edge.target),
+                .with_target(&edge.target)
+                .with_lines(edge.lines()),
             );
         }
     }
@@ -58,7 +59,7 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
 mod tests {
     use super::*;
     use crate::compose::compose;
-    use crate::model::{Edge, GraphSet, Node};
+    use crate::model::{Edge, GraphSet, Metadata, Node};
     use serde_json::json;
 
     fn fs_node() -> Node {
@@ -86,6 +87,30 @@ mod tests {
 
         let findings = evaluate(&composed);
         assert!(names(&findings).contains(&("unresolved-edge", "index.md")));
+    }
+
+    #[test]
+    fn unresolved_edge_carries_link_lines() {
+        // A markdown link to a missing target on line 3 — the finding points there.
+        let mut markdown = Graph::labeled("markdown");
+        let mut meta = Metadata::new();
+        meta.insert("lines".into(), json!([3]));
+        markdown.add_edge(Edge::with_metadata("index.md", "gone.md", meta));
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("index.md", fs_node());
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
+
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .unwrap();
+        assert_eq!(f.lines, vec![3]);
+        assert!(
+            f.format_text().contains("index.md:3 → gone.md"),
+            "got: {}",
+            f.format_text()
+        );
     }
 
     #[test]

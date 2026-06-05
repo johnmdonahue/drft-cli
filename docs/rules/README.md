@@ -14,7 +14,9 @@ warnings or errors.
 Configure rules in `drft.toml` under `[rules]`. Every rule has a severity:
 `"warn"`, `"error"`, or `"off"`. All rules default to `warn`; override to
 `error` for CI enforcement or `off` to suppress. A finding's `subject` is the
-implicated path (the source node for edge-level findings).
+implicated path (the source node for edge-level findings). Edge-level findings
+also report the source `lines` where the link appears, annotating the subject in
+text output as `subject:line → target`.
 
 ```toml
 [rules]

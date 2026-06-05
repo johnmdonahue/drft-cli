@@ -6,9 +6,9 @@
 //! Traversal is cycle-safe (a visited set), so a dependency cycle resolves
 //! without looping.
 
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::model::{Edge, Graph};
+use crate::model::Graph;
 
 /// A neighbor reached across an edge, carrying that edge's source line numbers
 /// (the `lines` metadata, unioned across parsers) when present.
@@ -19,23 +19,6 @@ struct Neighbor<'a> {
 
 /// Adjacency: a path mapped to the neighbors it connects to.
 type Adjacency<'a> = HashMap<&'a str, Vec<Neighbor<'a>>>;
-
-/// Union of an edge's `lines` metadata across parser namespaces (`@markdown`,
-/// `@frontmatter`, …), sorted and deduped. Empty when the edge carries none.
-fn edge_lines(edge: &Edge) -> Vec<usize> {
-    let mut lines = BTreeSet::new();
-    for (key, value) in &edge.metadata {
-        if !key.starts_with('@') {
-            continue;
-        }
-        if let Some(arr) = value.get("lines").and_then(|l| l.as_array()) {
-            for n in arr.iter().filter_map(serde_json::Value::as_u64) {
-                lines.insert(n as usize);
-            }
-        }
-    }
-    lines.into_iter().collect()
-}
 
 /// Render line numbers as a `:n,m` suffix, or empty when there are none.
 fn lines_suffix(lines: &[usize]) -> String {
@@ -171,7 +154,7 @@ fn adjacency(graph: &Graph) -> (Adjacency<'_>, Adjacency<'_>) {
     let mut forward: Adjacency = HashMap::new();
     let mut reverse: Adjacency = HashMap::new();
     for edge in &graph.edges {
-        let lines = edge_lines(edge);
+        let lines = edge.lines();
         forward
             .entry(edge.source.as_str())
             .or_default()

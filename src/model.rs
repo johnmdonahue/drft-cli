@@ -24,7 +24,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The reserved provenance key stamped on composed nodes and edges.
 pub const PROVENANCE_KEY: &str = "_graphs";
@@ -103,6 +103,25 @@ impl Edge {
             target: target.into(),
             metadata,
         }
+    }
+
+    /// The source line(s) where this edge's link appears, unioned across parser
+    /// namespaces (`@markdown`, `@frontmatter`, …) and sorted/deduped. Empty when
+    /// no parser recorded a line. The link lives in `source`, so these are
+    /// positions within `source`.
+    pub fn lines(&self) -> Vec<usize> {
+        let mut lines = BTreeSet::new();
+        for (key, value) in &self.metadata {
+            if !key.starts_with('@') {
+                continue;
+            }
+            if let Some(arr) = value.get("lines").and_then(Value::as_array) {
+                for n in arr.iter().filter_map(Value::as_u64) {
+                    lines.insert(n as usize);
+                }
+            }
+        }
+        lines.into_iter().collect()
     }
 }
 
@@ -254,6 +273,17 @@ mod tests {
 
     fn meta(value: Value) -> Metadata {
         value.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn edge_lines_unions_namespaces_sorted() {
+        let mut m = Metadata::new();
+        m.insert("@markdown".into(), json!({ "lines": [5, 2] }));
+        m.insert("@frontmatter".into(), json!({ "lines": [2, 9] }));
+        m.insert("_graphs".into(), json!(["@markdown", "@frontmatter"]));
+        let edge = Edge::with_metadata("a.md", "b.md", m);
+        assert_eq!(edge.lines(), vec![2, 5, 9], "unioned, sorted, deduped");
+        assert!(Edge::new("a.md", "b.md").lines().is_empty());
     }
 
     #[test]
