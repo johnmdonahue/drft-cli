@@ -87,6 +87,17 @@ fn default_warn() -> RuleSeverity {
     RuleSeverity::Warn
 }
 
+/// Serde helper for the `[rules]` table: a global `ignore` applied to every rule,
+/// plus the per-rule entries (`stale-node = "error"`, `[rules.detached-node]`, …)
+/// captured by flatten. `ignore` is therefore a reserved key under `[rules]`.
+#[derive(Debug, Deserialize, Default)]
+struct RawRules {
+    #[serde(default)]
+    ignore: Vec<String>,
+    #[serde(flatten)]
+    rules: HashMap<String, RawRuleValue>,
+}
+
 // ── Config ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -97,6 +108,10 @@ pub struct Config {
     /// Configured graphs, keyed by name. `fs` is implicit and always built.
     pub graphs: BTreeMap<String, GraphConfig>,
     pub rules: HashMap<String, RuleConfig>,
+    /// Globs from `[rules].ignore` — subjects suppressed across *every* rule
+    /// (configured or not), unioned with each rule's own `ignore`. Unlike the
+    /// top-level `ignore`, the paths stay in the graph; only findings are dropped.
+    rule_ignore: Option<GlobSet>,
     /// Directory containing the `drft.toml` this config was loaded from.
     pub config_dir: Option<std::path::PathBuf>,
 }
@@ -106,7 +121,7 @@ pub struct Config {
 struct RawConfig {
     ignore: Option<Vec<String>>,
     graphs: Option<HashMap<String, RawGraph>>,
-    rules: Option<HashMap<String, RawRuleValue>>,
+    rules: Option<RawRules>,
 }
 
 /// Names of all built-in rules (for unknown-rule warnings).
@@ -139,6 +154,7 @@ impl Config {
             ignore: Vec::new(),
             graphs: BTreeMap::new(),
             rules: HashMap::new(),
+            rule_ignore: None,
             config_dir: None,
         }
     }
@@ -187,7 +203,11 @@ impl Config {
         }
 
         if let Some(raw_rules) = raw.rules {
-            for (name, value) in raw_rules {
+            // The global rule-ignore applies to every rule, including ones with
+            // no explicit entry below.
+            config.rule_ignore = compile_globs(&raw_rules.ignore)
+                .context("failed to compile [rules].ignore globs")?;
+            for (name, value) in raw_rules.rules {
                 let rule_config = match value {
                     RawRuleValue::Severity(severity) => RuleConfig::new(severity, Vec::new())?,
                     RawRuleValue::Table { severity, ignore } => {
@@ -219,9 +239,13 @@ impl Config {
 
     /// Whether `path` is ignored for `rule`.
     pub fn is_rule_ignored(&self, rule: &str, path: &str) -> bool {
-        self.rules
-            .get(rule)
-            .is_some_and(|r| r.is_path_ignored(path))
+        self.rule_ignore
+            .as_ref()
+            .is_some_and(|set| set.is_match(path))
+            || self
+                .rules
+                .get(rule)
+                .is_some_and(|r| r.is_path_ignored(path))
     }
 }
 
@@ -345,6 +369,24 @@ mod tests {
         assert_eq!(config.rules["stale-node"].severity, RuleSeverity::Error);
         assert!(config.is_rule_ignored("detached-node", "README.md"));
         assert!(!config.is_rule_ignored("detached-node", "other.md"));
+    }
+
+    #[test]
+    fn global_rule_ignore_applies_to_every_rule() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\nignore = [\"vendor/**\"]\n\n[rules.stale-node]\nseverity = \"error\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        // The flattened per-rule entry still parses alongside the global ignore.
+        assert_eq!(config.rules["stale-node"].severity, RuleSeverity::Error);
+        // Global ignore hits a configured rule and an unconfigured one alike.
+        assert!(config.is_rule_ignored("stale-node", "vendor/x.md"));
+        assert!(config.is_rule_ignored("unresolved-edge", "vendor/x.md"));
+        // It does not touch paths outside the group.
+        assert!(!config.is_rule_ignored("stale-node", "yours.md"));
     }
 
     #[test]

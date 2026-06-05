@@ -55,8 +55,12 @@ mod tests {
     use serde_json::json;
 
     fn fs_node() -> Node {
+        node("b3:x")
+    }
+
+    fn node(hash: &str) -> Node {
         Node::new(
-            json!({ "type": "file", "hash": "b3:x" })
+            json!({ "type": "file", "hash": hash })
                 .as_object()
                 .unwrap()
                 .clone(),
@@ -109,6 +113,49 @@ mod tests {
         let config = Config::load(dir.path()).unwrap();
         let findings = run(&composed_unresolved(), None, &config);
         assert!(!findings.iter().any(|f| f.name == "unresolved-edge"));
+    }
+
+    #[test]
+    fn global_rule_ignore_suppresses_group_but_keeps_transitive_signal() {
+        use crate::lock::Lock;
+        // Locked state: yours.md links vendor/x.md, whose hash is then changed.
+        let mut locked = Graph::labeled("fs");
+        locked.set_node("yours.md", node("b3:yours"));
+        locked.set_node("vendor/x.md", node("b3:old"));
+        locked.add_edge(Edge::new("yours.md", "vendor/x.md"));
+        let lock = Lock::from_composed(&compose(&GraphSet::new(vec![locked])));
+
+        // Current state: vendor/x.md changed; yours.md unchanged.
+        let mut current = Graph::labeled("fs");
+        current.set_node("yours.md", node("b3:yours"));
+        current.set_node("vendor/x.md", node("b3:new"));
+        current.add_edge(Edge::new("yours.md", "vendor/x.md"));
+        let composed = compose(&GraphSet::new(vec![current]));
+
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\nignore = [\"vendor/**\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+
+        let findings = run(&composed, Some(&lock), &config);
+        // The group file's own staleness is suppressed (subject is in the group).
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.name == "stale-node" && f.subject == "vendor/x.md"),
+            "vendor stale-node should be suppressed, got: {findings:?}"
+        );
+        // But your file's transitive staleness survives — its subject is yours.md,
+        // which the group ignore does not match.
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.name == "stale-edge" && f.subject == "yours.md"),
+            "your transitive stale-edge should remain, got: {findings:?}"
+        );
     }
 
     #[test]

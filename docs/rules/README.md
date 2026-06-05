@@ -57,3 +57,18 @@ ignore = ["CHANGELOG.md", "LICENSE"]
 
 - `severity`: `"error"`, `"warn"`, or `"off"`
 - `ignore`: globs matched against the finding's subject path
+
+An `ignore` set directly under `[rules]` (rather than `[rules.<name>]`) applies to
+every rule, unioned with each rule's own `ignore`:
+
+```toml
+[rules]
+ignore = ["vendor/**"] # don't validate these files under any rule
+```
+
+This suppresses findings _about_ the matched files (their staleness, broken
+internal links, detachment) but not findings about your files that depend on them
+— a `stale-edge` whose subject is your file survives, since its subject isn't
+matched. The files stay in the graph, so your links to them still resolve. This
+is distinct from the top-level `ignore`, which removes paths from the graph
+entirely.

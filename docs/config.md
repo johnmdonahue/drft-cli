@@ -21,6 +21,12 @@ from that walk by glob; drft also respects `.gitignore` automatically. There is
 no `include` — the graph is everything under the root minus what `ignore` and
 `.gitignore` remove. drft excludes its own `drft.lock` from the graph.
 
+This top-level `ignore` is a **discovery** filter: matching paths never become
+nodes, so nothing links to them and nothing is validated against them. To keep
+files in the graph (so your links to them resolve and stay drift-tracked) but
+skip _validating_ them, use the rule-level `ignore` instead — see
+[rules](rules/README.md).
+
 ## graphs
 
 A graph pairs a file scope (`files`) with a parser that interprets the matched
@@ -57,6 +63,7 @@ Every built-in rule is on at `warn`. Configure severity and ignore globs under
 
 ```toml
 [rules]
+ignore = ["vendor/**"] # global: suppress every rule for these subjects
 stale-node = "error" # shorthand: severity only
 stale-edge = "error"
 
@@ -66,6 +73,14 @@ severity = "off"
 [rules.unresolved-edge]
 ignore = ["CHANGELOG.md"] # globs matched against the finding's subject
 ```
+
+The `ignore` key directly under `[rules]` is a **diagnostic** filter applied to
+_every_ rule, unioned with each rule's own `ignore`. Unlike the top-level
+`ignore`, matching paths stay in the graph — they still resolve links and carry
+drift hashes — so a file of yours that links a suppressed one is still flagged
+when that target changes (the finding's subject is your file, not the suppressed
+one). Use it for whole groups you depend on but don't own: "validate my files,
+not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
 
 | Field      | Required | Default | Description                                     |
 | ---------- | -------- | ------- | ----------------------------------------------- |
