@@ -2,6 +2,29 @@
 
 All notable changes to drft are documented here.
 
+## 0.8.0 (2026-06-04)
+
+Rebuilt on a set-of-graphs substrate with an explicit composition step. drft now models a directory as a set of independent JGF graphs of bare-path nodes — `fs` (a node per file, typed and hashed), `markdown` (link edges), and `frontmatter` (edges plus metadata) — that a `compose` step merges by path. The `impact → edit → check → lock` loop is unchanged.
+
+### Breaking changes
+
+- **Config schema reshaped.** `drft.toml` is now `ignore` + `[graphs.*]` (each with a `parser` and `files` globs) + `[rules.*]` (severity, ignore). `include`, `exclude`, and `[parsers.*]` are removed. The graph root is the directory containing `drft.toml`.
+- **Lockfile format changed.** `drft.lock` is path-keyed with a node hash and nested per-edge target hashes, no version field. Old lockfiles report as unparseable and point at `drft lock` to regenerate.
+- **Command surface rebuilt.** The surface is `init`, `graph` (composed by default, `--raw` for the raw graph set), `impact` (with `--depth` and `--direction`), `check`, and `lock` (bulk and scoped). The `parse`, `report`, and `config` commands are removed.
+- **Rule set is drift-focused.** Rules are `stale-node`, `stale-edge`, `new-edge`, `removed-edge`, `removed-node`, `unresolved-edge`, and `detached-node`. The structural-hygiene rules (`directed-cycle`, `fragmentation`, `schema-violation`, `symlink-edge`) are removed; cycles are now permitted.
+- **No migration path.** Pre-v1, this is a clean break — old `drft.toml`/`drft.lock` formats are not migrated.
+
+### New
+
+- **Set-of-graphs substrate** — `fs` is the base graph that walks every file, types it (`file`/`symlink`), and is the only graph drft auto-hashes. `markdown` and `frontmatter` add edges and metadata over the same paths.
+- **Composition by path** — `compose` merges the graph set: each graph's facts nest under `@<graph>` with a `_graphs` provenance list. Resolution is namespace presence — a path with no `@fs` block is unresolved.
+- **`drft graph --raw`** — emit the uncomposed graph set as JGF `{"graphs": [...]}` alongside the composed default.
+- **`drft init`** — scaffold a `drft.toml` for a new graph root.
+
+### Removed
+
+- The analyses and metrics subsystem, custom subprocess parsers and rules, the criterion benchmark harness, and the v0.7 docs and examples for those features.
+
 ## 0.7.0 (2026-04-12)
 
 Included vs referenced nodes — every edge target is a node. `include` controls what drft reads and hashes, not what exists in the graph.
