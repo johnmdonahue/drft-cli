@@ -8,9 +8,9 @@ Rebuilt on a set-of-graphs substrate with an explicit composition step. drft now
 
 ### Breaking changes
 
-- **Config schema reshaped.** `drft.toml` is now `ignore` + `[graphs.*]` (source, filter, builder) + `[rules.*]` (severity, ignore). `include`, `exclude`, and `[parsers.*]` are removed. Each config declares exactly one graph root.
+- **Config schema reshaped.** `drft.toml` is now `ignore` + `[graphs.*]` (each with a `parser` and `files` globs) + `[rules.*]` (severity, ignore). `include`, `exclude`, and `[parsers.*]` are removed. The graph root is the directory containing `drft.toml`.
 - **Lockfile format changed.** `drft.lock` is path-keyed with a node hash and nested per-edge target hashes, no version field. Old lockfiles report as unparseable and point at `drft lock` to regenerate.
-- **Command surface rebuilt.** The surface is `init`, `graph` (composed by default, `--raw` for the graph set, `--depth`/`--direction` on impact), `impact`, `check`, and `lock` (bulk and scoped). The `parse`, `report`, and `config` commands are removed.
+- **Command surface rebuilt.** The surface is `init`, `graph` (composed by default, `--raw` for the raw graph set), `impact` (with `--depth` and `--direction`), `check`, and `lock` (bulk and scoped). The `parse`, `report`, and `config` commands are removed.
 - **Rule set is drift-focused.** Rules are `stale-node`, `stale-edge`, `new-edge`, `removed-edge`, `removed-node`, `unresolved-edge`, and `detached-node`. The structural-hygiene rules (`directed-cycle`, `fragmentation`, `schema-violation`, `symlink-edge`) are removed; cycles are now permitted.
 - **No migration path.** Pre-v1, this is a clean break — old `drft.toml`/`drft.lock` formats are not migrated.
 
