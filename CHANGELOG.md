@@ -2,6 +2,12 @@
 
 All notable changes to drft are documented here.
 
+## 0.9.1 (2026-06-05)
+
+### Fixed
+
+- **`drft impact` / `drft lock` path arguments resolve relative to the current directory** (#66). A project-relative path given from inside a subdirectory is now resolved against the current directory and converted to the graph-root-relative node key, instead of being matched verbatim — so the same file resolves whether given project-relative from a subdir or root-relative from the top, matching `git log <path>` behavior. On a miss, the error suggests the node whose key matches the given suffix (or lists candidates when the suffix is ambiguous).
+
 ## 0.9.0 (2026-06-05)
 
 Directories and symlinks get a proper place in the graph, link edges learn where they live, and the `impact`/`check`/rules surface gets sharper.
