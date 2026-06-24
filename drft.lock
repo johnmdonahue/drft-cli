@@ -62,7 +62,7 @@ target_hash = "b3:eb2f3748fa8b147fa1823efbe6bc77a2cf63369b0c180d7ca366f9bd2ceb98
 
 [[node.edge]]
 target = "src/sources/fs.rs"
-target_hash = "b3:661a31231e1c7efbe03d1b3c72c35885b2eefae1064f900bd9203ff32127316c"
+target_hash = "b3:5ceb21d8479e3b8c67955283a834bf020a96c4af6e52358239cf048e419aad2b"
 
 [[node.edge]]
 target = "src/util.rs"
@@ -90,7 +90,7 @@ target_hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
+target_hash = "b3:669806620d36f5b4c84c96aba4f2970813fb8cf9912f4f93a6e0725541517dc0"
 
 [[node.edge]]
 target = "https://github.com/johnmdonahue/drft-cli/releases"
@@ -109,7 +109,7 @@ hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2e1"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
+target_hash = "b3:669806620d36f5b4c84c96aba4f2970813fb8cf9912f4f93a6e0725541517dc0"
 
 [[node.edge]]
 target = "docs/parsers/README.md"
@@ -121,7 +121,7 @@ target_hash = "b3:951c94920bd8893eb50a5ab766db7140ac3ce141637fe334908e5e0d95e12d
 
 [[node]]
 path = "docs/config.md"
-hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
+hash = "b3:669806620d36f5b4c84c96aba4f2970813fb8cf9912f4f93a6e0725541517dc0"
 
 [[node.edge]]
 target = "docs/parsers/README.md"
@@ -161,7 +161,7 @@ hash = "b3:23258bd291ed24012764c7420bacc2a54433e5e9adc9b79f674253f946117531"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
+target_hash = "b3:669806620d36f5b4c84c96aba4f2970813fb8cf9912f4f93a6e0725541517dc0"
 
 [[node.edge]]
 target = "src/parsers/frontmatter.rs"
@@ -173,7 +173,7 @@ hash = "b3:291302e9f0e404a834790daae6aa7c7b0dff465e9ca0c336c5732030e5bb5383"
 
 [[node.edge]]
 target = "docs/config.md"
-target_hash = "b3:8ccc5c992603bfdd5ddee149716432c6023ab4c0a6335835292d3555b5aacbcf"
+target_hash = "b3:669806620d36f5b4c84c96aba4f2970813fb8cf9912f4f93a6e0725541517dc0"
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
@@ -312,7 +312,7 @@ hash = "b3:9d41bb2e0217011f0994b694a78b94388280a41721706bc13292d5f4ede2f438"
 
 [[node]]
 path = "src/sources/fs.rs"
-hash = "b3:661a31231e1c7efbe03d1b3c72c35885b2eefae1064f900bd9203ff32127316c"
+hash = "b3:5ceb21d8479e3b8c67955283a834bf020a96c4af6e52358239cf048e419aad2b"
 
 [[node]]
 path = "src/sources/mod.rs"

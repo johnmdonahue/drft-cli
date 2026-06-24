@@ -8,6 +8,13 @@ use std::path::Path;
 
 use crate::config::compile_globs;
 
+/// VCS metadata entries pruned from the walk. The hidden filter is off so that
+/// ordinary dot-directories (`.github/`, `.config/`) join the graph, but a
+/// version-control store is internal bookkeeping, never graph content — so it
+/// is excluded by name. ripgrep skips these via its hidden filter; drft keeps
+/// dot-dirs and names the exclusions instead.
+const VCS_DIRS: [&str; 4] = [".git", ".hg", ".svn", ".jj"];
+
 /// What kind of filesystem entry a [`SourceFile`] is. Derived from `lstat`, so a
 /// symlink-to-directory is [`Symlink`](NodeKind::Symlink) (indirection wins over
 /// target kind), and [`Dir`](NodeKind::Dir) always means a real directory.
@@ -34,6 +41,14 @@ pub struct SourceFile {
 /// yielding one [`SourceFile`] per file, symlink, and directory. Paths are
 /// relative to `root`, sorted.
 ///
+/// Hidden entries are *not* skipped: a dot-directory like `.github/` is part of
+/// the graph. The lone exception is VCS metadata ([`VCS_DIRS`]), pruned from
+/// traversal — `.git/` would otherwise flood the graph with internal state.
+///
+/// Only committed `.gitignore` rules prune the walk. The user's global
+/// gitignore, the per-clone `.git/info/exclude`, and ignore files above `root`
+/// are all ignored, so the graph depends only on what is committed at the root.
+///
 /// The walk does not follow symlinks: a symlink is a leaf node at its own path,
 /// never traversed through. Its relationship to its target is carried by the
 /// edge the builder emits, not by re-walking the target. So a symlink to a
@@ -47,7 +62,28 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
 
     let mut files = Vec::new();
 
-    let walker = WalkBuilder::new(root).follow_links(false).build();
+    // Reproducibility over convenience: the graph must depend only on what is
+    // committed at the root, never on machine-local or above-root state. So,
+    // unlike ripgrep's defaults, drft honors committed `.gitignore` but not the
+    // user's global gitignore, the per-clone `.git/info/exclude`, or ignore
+    // files in directories above the declared root.
+    let walker = WalkBuilder::new(root)
+        .follow_links(false)
+        .hidden(false)
+        .parents(false)
+        .git_global(false)
+        .git_exclude(false)
+        .filter_entry(|entry| {
+            // With the hidden filter off, dot-directories are walked. Prune VCS
+            // metadata explicitly so it never enters the graph. `.git` can be a
+            // file (submodules, linked worktrees) as well as a directory, so
+            // match by name regardless of kind.
+            entry
+                .file_name()
+                .to_str()
+                .is_none_or(|name| !VCS_DIRS.contains(&name))
+        })
+        .build();
 
     for entry in walker {
         let entry = entry?;
@@ -204,6 +240,48 @@ mod tests {
         let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
         assert!(paths.contains(&"index.md"));
         assert!(!paths.iter().any(|p| p.contains("vendor")));
+    }
+
+    #[test]
+    fn ignore_files_above_root_do_not_prune_the_walk() {
+        // A git repo whose root sits *above* the graph root, with a gitignore
+        // that would exclude `keep.md`. Because `parents` is off, the rule above
+        // the declared root has no effect — the graph is self-contained.
+        let outer = TempDir::new().unwrap();
+        fs::create_dir(outer.path().join(".git")).unwrap();
+        fs::write(outer.path().join(".gitignore"), "keep.md\n").unwrap();
+        let root = outer.path().join("project");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("keep.md"), "k").unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(
+            files.iter().any(|f| f.path == "keep.md"),
+            "an ignore rule above the root must not prune the walk"
+        );
+    }
+
+    #[test]
+    fn dot_dirs_are_walked_but_vcs_dirs_are_pruned() {
+        let dir = TempDir::new().unwrap();
+        // A real version-control store: pruned, contents and all.
+        fs::create_dir(dir.path().join(".git")).unwrap();
+        fs::write(dir.path().join(".git").join("HEAD"), "ref: x").unwrap();
+        // An ordinary dot-directory: part of the graph.
+        fs::create_dir(dir.path().join(".github")).unwrap();
+        fs::write(dir.path().join(".github").join("ci.yml"), "y").unwrap();
+
+        let files = walk(dir.path(), &[]).unwrap();
+        let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+
+        assert!(
+            !paths.iter().any(|p| p.starts_with(".git/") || *p == ".git"),
+            "VCS metadata must be pruned, got: {paths:?}"
+        );
+        assert!(
+            paths.contains(&".github") && paths.contains(&".github/ci.yml"),
+            "ordinary dot-directories must be walked, got: {paths:?}"
+        );
     }
 
     #[cfg(unix)]
