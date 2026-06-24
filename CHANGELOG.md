@@ -2,6 +2,13 @@
 
 All notable changes to drft are documented here.
 
+## 0.10.0 (2026-06-24)
+
+### Breaking changes
+
+- **Dot-directories are now part of the graph.** The `fs` walk no longer skips hidden entries, so directories like `.github/` and `.claude/` and files like `.gitignore` become nodes. Only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are pruned, by name — `.git` matches whether it is a directory or a file (submodules and linked worktrees). Lockfiles regenerate with `drft lock` to capture the newly-visible nodes (#69).
+- **Only committed ignore sources prune the walk.** drft previously inherited the `ignore` crate's defaults, applying your global gitignore, the per-clone `.git/info/exclude`, and `.gitignore` files in directories above the graph root. These are now disabled: only the in-root `.gitignore` plus the configured `ignore` globs affect traversal, so the graph depends solely on what is committed at the root and is reproducible across clones (#69).
+
 ## 0.9.1 (2026-06-05)
 
 ### Fixed
