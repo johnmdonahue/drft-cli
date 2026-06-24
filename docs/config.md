@@ -16,10 +16,17 @@ found while walking are ordinary files on disk, not graph boundaries.
 ignore = ["target/**", "drafts/**"]
 ```
 
-The `fs` graph walks every file under the graph root. `ignore` removes paths
-from that walk by glob; drft also respects `.gitignore` automatically. There is
-no `include` — the graph is everything under the root minus what `ignore` and
-`.gitignore` remove. drft excludes its own `drft.lock` from the graph.
+The `fs` graph walks every file under the graph root, including dot-directories
+like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are
+pruned. `ignore` removes paths from that walk by glob; drft also respects
+`.gitignore` automatically. There is no `include` — the graph is everything
+under the root minus what `ignore` and `.gitignore` remove. drft excludes its
+own `drft.lock` from the graph.
+
+Only committed `.gitignore` rules count. For reproducibility, the graph never
+depends on machine-local or above-root state: your global gitignore, the
+per-clone `.git/info/exclude`, and ignore files in directories above the root
+are all disregarded.
 
 This top-level `ignore` is a **discovery** filter: matching paths never become
 nodes, so nothing links to them and nothing is validated against them. To keep
