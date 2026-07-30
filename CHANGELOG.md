@@ -2,6 +2,12 @@
 
 All notable changes to drft are documented here.
 
+## Unreleased
+
+### Breaking changes
+
+- **Unknown keys in `drft.toml` are now config errors** (#71). Extra keys in a `[graphs.*]` table, at the top level, or in a `[rules.*]` table previously parsed and were discarded, so a speculative option like `keys = ["sources"]` exited 0 having done nothing. All three now fail with exit 2, naming the key and the accepted set. A config carrying a typo'd or aspirational key was already not doing what it said; it now says so. Unknown rule _names_ still only warn — that path is unchanged.
+
 ## 0.10.0 (2026-06-24)
 
 ### Breaking changes

@@ -37,7 +37,11 @@ pub struct GraphConfig {
     pub parser: String,
 }
 
+/// `deny_unknown_fields` so a key the parser does not support is a hard error
+/// rather than a silent discard. A graph table that parses is read as a graph
+/// that works — a speculative `keys = [...]` must not exit 0 doing nothing.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawGraph {
     files: Option<Vec<String>>,
     parser: String,
@@ -71,6 +75,11 @@ impl RuleConfig {
 
 /// Serde helper: a rule is either a bare severity (`stale-node = "error"`) or a
 /// table (`[rules.stale-node]` with `severity` and `ignore`).
+///
+/// The table variant cannot use `deny_unknown_fields` — an untagged enum reports
+/// a rejected variant as "data did not match any variant", which names neither
+/// the bad key nor the known set. Capturing the leftovers instead lets `load`
+/// raise the same precise error the graph tables give.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RawRuleValue {
@@ -80,8 +89,13 @@ enum RawRuleValue {
         severity: RuleSeverity,
         #[serde(default)]
         ignore: Vec<String>,
+        #[serde(flatten)]
+        unknown: BTreeMap<String, toml::Value>,
     },
 }
+
+/// Fields a `[rules.*]` table accepts, for the unknown-key error.
+const RULE_TABLE_FIELDS: &str = "`severity` or `ignore`";
 
 fn default_warn() -> RuleSeverity {
     RuleSeverity::Warn
@@ -117,7 +131,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct RawConfig {
     ignore: Option<Vec<String>>,
     graphs: Option<HashMap<String, RawGraph>>,
@@ -210,7 +224,16 @@ impl Config {
             for (name, value) in raw_rules.rules {
                 let rule_config = match value {
                     RawRuleValue::Severity(severity) => RuleConfig::new(severity, Vec::new())?,
-                    RawRuleValue::Table { severity, ignore } => {
+                    RawRuleValue::Table {
+                        severity,
+                        ignore,
+                        unknown,
+                    } => {
+                        if let Some(key) = unknown.keys().next() {
+                            anyhow::bail!(
+                                "unknown field `{key}` in rules.{name}, expected {RULE_TABLE_FIELDS}"
+                            );
+                        }
                         RuleConfig::new(severity, ignore)
                             .with_context(|| format!("invalid globs in rules.{name}"))?
                     }
@@ -387,6 +410,60 @@ mod tests {
         assert!(config.is_rule_ignored("unresolved-edge", "vendor/x.md"));
         // It does not touch paths outside the group.
         assert!(!config.is_rule_ignored("stale-node", "yours.md"));
+    }
+
+    #[test]
+    fn unknown_graph_key_errors() {
+        // A key the parser does not support must not parse and do nothing — the
+        // near-miss spellings (`keys`, `fields`, `include_keys`) are the likely
+        // case, so the error names the key and the accepted set.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.x]\nparser = \"frontmatter\"\nkeys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `keys`"), "got: {err}");
+        assert!(err.contains("files"), "expected set not named: {err}");
+    }
+
+    #[test]
+    fn unknown_top_level_key_errors() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), "ignores = [\"target/**\"]\n").unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `ignores`"), "got: {err}");
+    }
+
+    #[test]
+    fn unknown_rule_table_key_errors() {
+        // The untagged enum accepts any table (both fields default), so a typo'd
+        // key silently parsed as an all-defaults rule before the leftovers were
+        // captured. Distinct from an unknown *rule name*, which only warns.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules.stale-node]\nseverty = \"error\"\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `severty`"), "got: {err}");
+        assert!(err.contains("rules.stale-node"), "got: {err}");
+    }
+
+    #[test]
+    fn known_rule_table_keys_still_parse() {
+        // Guard against the flatten capture swallowing the real fields.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules.detached-node]\nseverity = \"error\"\nignore = [\"README.md\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.rules["detached-node"].severity, RuleSeverity::Error);
+        assert!(config.is_rule_ignored("detached-node", "README.md"));
     }
 
     #[test]

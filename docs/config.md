@@ -57,6 +57,10 @@ files = ["**/*.md"]
 | `parser` | yes      | —             | How to interpret the files (see [parsers](parsers/README.md)) |
 | `files`  | no       | `["**/*.md"]` | Globs scoping which files the parser reads                    |
 
+These are the only accepted keys. Any other key is a config error naming the key
+and the accepted set — a graph table that parses is a graph that works, so a
+parser option drft does not have fails loudly instead of being discarded.
+
 The graph's name is its compose-time namespace: its facts nest under `@<name>`
 in the composed graph. A name must not contain `@`, start with `_`, or be `fs` —
 all reserved. `fs` is always built without being declared, and is a provider
@@ -93,5 +97,9 @@ not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
 | ---------- | -------- | ------- | ----------------------------------------------- |
 | `severity` | no       | `warn`  | `"error"`, `"warn"`, or `"off"`                 |
 | `ignore`   | no       | none    | Globs — suppress findings whose subject matches |
+
+Any other key in a `[rules.<name>]` table is a config error. An unknown rule
+_name_ only warns, since both fields default and a misspelled rule would
+otherwise configure nothing in silence.
 
 See [rules](rules/README.md) for the full set.
