@@ -46,7 +46,7 @@ target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f0
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:4f5a8674c50acec2e9478309e1b770aef880c99adec628e967ebce5153ebcbb3"
+target_hash = "b3:001783ea083536a80cc88600bce3816cc6c90106685e825fe3e23e29936d8232"
 
 [[node.edge]]
 target = "src/builders/mod.rs"
@@ -137,7 +137,7 @@ target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f0
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:4f5a8674c50acec2e9478309e1b770aef880c99adec628e967ebce5153ebcbb3"
+target_hash = "b3:001783ea083536a80cc88600bce3816cc6c90106685e825fe3e23e29936d8232"
 
 [[node]]
 path = "docs/config.md"
@@ -153,7 +153,7 @@ target_hash = "b3:ef2ebd19dbc6c8b7d88f9561c2afceed6c8db753fcd8f2c49e20194150986d
 
 [[node.edge]]
 target = "docs/rules/README.md"
-target_hash = "b3:4f5a8674c50acec2e9478309e1b770aef880c99adec628e967ebce5153ebcbb3"
+target_hash = "b3:001783ea083536a80cc88600bce3816cc6c90106685e825fe3e23e29936d8232"
 
 [[node.edge]]
 target = "src/cli.rs"
@@ -173,7 +173,7 @@ target_hash = "b3:ef2ebd19dbc6c8b7d88f9561c2afceed6c8db753fcd8f2c49e20194150986d
 
 [[node.edge]]
 target = "docs/parsers/markdown.md"
-target_hash = "b3:291302e9f0e404a834790daae6aa7c7b0dff465e9ca0c336c5732030e5bb5383"
+target_hash = "b3:71f1ce453d7db6746e4a8b9cc1e2bedd608589beb0340e697bc0ce931b9a7d1f"
 
 [[node.edge]]
 target = "src/parsers/mod.rs"
@@ -193,7 +193,7 @@ target_hash = "b3:5170b0ce6856f4583e22ca7cbdaf32520426f321305a0c3f63cc4e20e35ecb
 
 [[node]]
 path = "docs/parsers/markdown.md"
-hash = "b3:291302e9f0e404a834790daae6aa7c7b0dff465e9ca0c336c5732030e5bb5383"
+hash = "b3:71f1ce453d7db6746e4a8b9cc1e2bedd608589beb0340e697bc0ce931b9a7d1f"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -209,7 +209,7 @@ target_hash = "b3:952fafe8eb3a776168da8ec935438fbd39de4599375f1c0e82334d3dd8d361
 
 [[node]]
 path = "docs/rules/README.md"
-hash = "b3:4f5a8674c50acec2e9478309e1b770aef880c99adec628e967ebce5153ebcbb3"
+hash = "b3:001783ea083536a80cc88600bce3816cc6c90106685e825fe3e23e29936d8232"
 
 [[node.edge]]
 target = "src/config.rs"
