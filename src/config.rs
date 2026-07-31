@@ -35,6 +35,9 @@ pub enum RuleSeverity {
 pub struct GraphConfig {
     pub files: Vec<String>,
     pub parser: String,
+    /// `frontmatter` only: the keys whose values yield edges. `None` keeps
+    /// shape detection over the whole block.
+    pub keys: Option<Vec<String>>,
 }
 
 /// `deny_unknown_fields` so a key the parser does not support is a hard error
@@ -45,6 +48,7 @@ pub struct GraphConfig {
 struct RawGraph {
     files: Option<Vec<String>>,
     parser: String,
+    keys: Option<Vec<String>>,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -153,6 +157,9 @@ const BUILTIN_RULES: &[&str] = &[
 /// a parser) and is intentionally absent — `parser = "fs"` is rejected.
 const KNOWN_PARSERS: &[&str] = &["markdown", "frontmatter"];
 
+/// Parsers that accept `keys`. Markdown has no keyed structure to scope.
+const PARSERS_WITH_KEYS: &[&str] = &["frontmatter"];
+
 /// Graph names reserved for drft's implicit graphs. Declaring one would collide
 /// with the core `@fs` namespace at compose and overwrite its `type`/`hash`.
 const RESERVED_GRAPH_NAMES: &[&str] = &["fs"];
@@ -206,11 +213,27 @@ impl Config {
                         KNOWN_PARSERS.join(", ")
                     );
                 }
+                // `keys` scopes a keyed structure; only the frontmatter parser has
+                // one. Accepting it elsewhere would reintroduce exactly the silent
+                // no-op that made it unfindable in the first place (#71).
+                if raw.keys.is_some() && !PARSERS_WITH_KEYS.contains(&raw.parser.as_str()) {
+                    anyhow::bail!(
+                        "`keys` is not supported by the \"{}\" parser in graph \"{name}\" (supported: {})",
+                        raw.parser,
+                        PARSERS_WITH_KEYS.join(", ")
+                    );
+                }
+                if raw.keys.as_ref().is_some_and(Vec::is_empty) {
+                    anyhow::bail!(
+                        "`keys` is empty in graph \"{name}\" — the graph would track nothing (omit it for shape detection)"
+                    );
+                }
                 config.graphs.insert(
                     name,
                     GraphConfig {
                         files: raw.files.unwrap_or_else(|| vec![DEFAULT_FILES.to_string()]),
                         parser: raw.parser,
+                        keys: raw.keys,
                     },
                 );
             }
@@ -418,17 +441,77 @@ mod tests {
     #[test]
     fn unknown_graph_key_errors() {
         // A key the parser does not support must not parse and do nothing — the
-        // near-miss spellings (`keys`, `fields`, `include_keys`) are the likely
-        // case, so the error names the key and the accepted set.
+        // near-miss spellings (`fields`, `include_keys`) are the likely case, so
+        // the error names the key and the accepted set.
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[graphs.x]\nparser = \"frontmatter\"\nkeys = [\"sources\"]\n",
+            "[graphs.x]\nparser = \"frontmatter\"\ninclude_keys = [\"sources\"]\n",
         )
         .unwrap();
         let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
-        assert!(err.contains("unknown field `keys`"), "got: {err}");
+        assert!(err.contains("unknown field `include_keys`"), "got: {err}");
         assert!(err.contains("files"), "expected set not named: {err}");
+    }
+
+    #[test]
+    fn frontmatter_graph_accepts_keys() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(
+            config.graphs["fm"].keys.as_deref(),
+            Some(&["sources".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn keys_omitted_is_shape_detection() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\n",
+        )
+        .unwrap();
+        assert!(
+            Config::load(dir.path()).unwrap().graphs["fm"]
+                .keys
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn keys_on_markdown_parser_errors() {
+        // Markdown has no keyed structure — accepting `keys` there would be the
+        // silent no-op this option exists to remove.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.md]\nparser = \"markdown\"\nkeys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(
+            err.contains("not supported by the \"markdown\" parser"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_keys_errors() {
+        // `keys = []` would scope the graph to nothing — always a mistake.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = []\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("track nothing"), "got: {err}");
     }
 
     #[test]

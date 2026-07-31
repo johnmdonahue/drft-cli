@@ -40,3 +40,39 @@ fn frontmatter_sources_create_edges() {
         "frontmatter dependency should trigger staleness, got: {stdout}"
     );
 }
+
+/// `keys` scoping drops path-shaped values under other keys while keeping the
+/// finding that reports a typo'd source. That combination is the point: the
+/// rule-level `ignore` workaround silences both, so it cannot express this.
+#[test]
+fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("real.md"), "# Real").unwrap();
+    // `route` is an API route, not a file — a false edge under shape detection.
+    // `sources` points at a file that does not exist — a genuine broken source.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nroute: /customers\nsources:\n  - ./missing.md\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        !stdout.contains("/customers"),
+        "`route` is outside `keys` and must not yield an edge, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("unresolved-edge") && stdout.contains("missing.md"),
+        "a broken `sources` path must still be reported, got: {stdout}"
+    );
+}

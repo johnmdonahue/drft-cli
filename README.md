@@ -34,7 +34,7 @@ drft builds a **set of independent graphs** and merges them by path:
 
 - **`fs`** — walks the tree under the root (minus `ignore` and `.gitignore`), typing each file, symlink, and directory as a node and hashing the ones with content. This is the identity space.
 - **`markdown`** — link edges from `[text](path)` body links.
-- **`frontmatter`** — edges from frontmatter link-target values, plus the parsed frontmatter block as node metadata.
+- **`frontmatter`** — edges from frontmatter link-target values, plus the parsed frontmatter block as node metadata. Set `keys = ["sources"]` to scope edges to named keys instead of every path-shaped value.
 
 Composition merges the set into one graph, and `drft check` reads it to emit drift findings:
 

@@ -33,6 +33,23 @@ This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected
 
 Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
 
+### Scoping to keys
+
+Shape detection classifies by value, so any path-shaped value becomes an edge whatever key it sits under. An API route (`route: /customers`) and a glob naming the files a rule governs (`paths: ["api/**"]`) both look like paths and neither is a derivation. Declare `keys` to name the keys that yield edges:
+
+```toml
+[graphs.frontmatter]
+parser = "frontmatter"
+files = ["**/*.md"]
+keys = ["sources"]
+```
+
+Only values reachable through one of those keys become edges. A matched key hands over its whole subtree, so lists and nested maps under `sources:` still yield every path beneath them, and the key is matched at any depth — `meta.sources` is found too. Values under every other key are left alone.
+
+Scoping picks the key; the shape heuristic above still applies within it, so prose under `sources:` is still rejected. `keys` scopes edges only — [metadata](#metadata) always captures the whole block.
+
+Omitting `keys` keeps shape detection over the entire block. Prefer `keys` where the frontmatter carries anything besides derivations: it fixes the false edges without suppressing `unresolved-edge`, which is the only finding that reports a typo'd source. A rule-level `ignore` would silence both.
+
 ## Metadata
 
 The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
@@ -45,6 +62,7 @@ Declare a graph that uses the frontmatter parser:
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
+keys = ["sources"] # optional
 ```
 
-`files` scopes which files the parser reads (default `["**/*.md"]`). See [configuration](../config.md) for the full graph schema.
+`files` scopes which files the parser reads (default `["**/*.md"]`); `keys` scopes which frontmatter keys yield edges (see [scoping to keys](#scoping-to-keys)). See [configuration](../config.md) for the full graph schema.

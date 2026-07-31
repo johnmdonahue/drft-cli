@@ -6,7 +6,11 @@ All notable changes to drft are documented here.
 
 ### Breaking changes
 
-- **Unknown keys in `drft.toml` are now config errors** (#71). Extra keys in a `[graphs.*]` table, at the top level, or in a `[rules.*]` table were previously parsed and discarded, so a speculative option like `keys = ["sources"]` exited 0 having done nothing. All three now fail with exit 2, naming the key and the accepted set. A config carrying a typo'd or aspirational key was already not doing what it said; it now says so. Unknown rule _names_ still only warn — that path is unchanged.
+- **Unknown keys in `drft.toml` are now config errors** (#71). Extra keys in a `[graphs.*]` table, at the top level, or in a `[rules.*]` table were previously parsed and discarded, so a speculative option like `include_keys = ["sources"]` exited 0 having done nothing. All three now fail with exit 2, naming the key and the accepted set. A config carrying a typo'd or aspirational key was already not doing what it said; it now says so. Unknown rule _names_ still only warn — that path is unchanged.
+
+### New
+
+- **`keys` scopes the frontmatter graph to named keys** (#73). The parser classified by value shape, so any path-shaped frontmatter value became an edge whatever key it sat under — an API route (`route: /customers`) or a glob naming the files a rule governs both read as derivations. `keys = ["sources"]` on a `[graphs.*]` table using the `frontmatter` parser restricts edges to values reachable through those keys; a matched key contributes its whole subtree, and the key matches at any depth. Omitting `keys` keeps shape detection, so existing configs are unaffected. This replaces the two workarounds that were available: a `files` allowlist only works when the collision is tree-separable, and a rule-level `ignore` on `unresolved-edge` suppresses genuinely broken `sources:` paths along with the false ones. `keys` scopes edges only — metadata still captures the whole block.
 
 ## 0.10.0 (2026-06-24)
 
