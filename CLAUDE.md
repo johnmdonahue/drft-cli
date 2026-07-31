@@ -26,6 +26,12 @@ Do not suppress warnings by removing links, ignoring paths, or disabling rules �
 - **Never run bare `drft lock`.** It clears staleness across the whole graph, including files you never opened and work someone else has in flight. That launders an unreviewed state into a reviewed one, and the record that it was never read is gone.
 - **Never lock staleness you did not cause.** If `drft check` reports findings you cannot account for, stop and say so — those are the user's to inspect.
 
+The one bare lock that is correct is **regenerating a baseline**: no `drft.lock` exists, or a release requires every lockfile to be rewritten (0.8.0, 0.9.0, and 0.10.0 each did). There is no prior baseline to preserve, so nothing is being laundered. Ask first, and say that is what you are doing — it is the call the rule otherwise forbids.
+
+**A `stale-edge` clears from the declaring side.** An edge's recorded target hash lives on the file that wrote the link, so locking a changed source clears its own `stale-node` and leaves every inbound `stale-edge` standing. Those clear when you lock the dependent — the file whose promise you actually checked. Scoped locking therefore cannot wave off the review it exists to record.
+
+A file with **no dependents** has no promise to check. Its staleness is bookkeeping — lock it and move on.
+
 The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → `drft lock <the files you touched>` → commit.
 
 ## Architecture

@@ -26,7 +26,7 @@ hash = "b3:e618e0bd862d56006bd5eadd1ee0f7b1d3c91edd70a7e02b3cb6c21f7d2f1cbb"
 
 [[node]]
 path = "CLAUDE.md"
-hash = "b3:7283050e7e63d10a05532abc97b0dbba0cdbfcb1deaed9c2dd651ffc8e8c4a69"
+hash = "b3:0608a5e5ab70aa73b528d4a3402b712df92ca9913231a76046aa2e815474e8b7"
 
 [[node.edge]]
 target = "RELEASING.md"
@@ -102,7 +102,7 @@ hash = "b3:ca38d7ba3882ce9e2aee9678932862967cf9a3497b0ee1d79ec0aea6ef3def22"
 
 [[node.edge]]
 target = "CLAUDE.md"
-target_hash = "b3:7283050e7e63d10a05532abc97b0dbba0cdbfcb1deaed9c2dd651ffc8e8c4a69"
+target_hash = "b3:0608a5e5ab70aa73b528d4a3402b712df92ca9913231a76046aa2e815474e8b7"
 
 [[node.edge]]
 target = "docs/README.md"
