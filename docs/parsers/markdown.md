@@ -74,6 +74,12 @@ files = ["**/*.md", "**/*.mdx"]
 default graphs — the markdown parser runs only where you declare it. See
 [configuration](../config.md) for the full graph schema.
 
+## Directory targets
+
+A link whose target is a directory (`[services](edge/)`) creates an edge to the directory node. Directories are nodes, so the link resolves — but they carry no hash, so nothing inside is tracked: editing `edge/src/main.rs` leaves the linking file clean, and `drft impact` on that file does not report it.
+
+This matters most where it reads like coverage. A layout table citing `` `edge/` ``, `` `tenant/` ``, `` `console/api/` `` looks to a reader like an inventory of those trees and tracks none of them. Point each link at the file carrying what the prose claims — `edge/src/main.rs` — and the promise becomes one drft can check.
+
 ## External URLs
 
 External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw edge targets. A URI target has no defining node, so the `unresolved-edge` rule treats it as an intentional external reference and does not flag it. Anchor-only links (`#heading`) are dropped, and fragments are stripped from targets (`file.md#section` → `file.md`) — both handled when the edge is built, not by the parser.

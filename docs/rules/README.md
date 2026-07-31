@@ -40,6 +40,13 @@ derives the drift findings by joining the graph to the lockfile;
 | `unresolved-edge` | An edge target has no defining node (URIs excepted)            |
 | `detached-node`   | A node has no inbound or outbound edges (directories excepted) |
 
+**A link to a directory tracks the directory, not its contents.** Directories are
+nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories
+carry no hash, so nothing inside one is tracked and no descendant's change makes
+the linking file stale. A doc citing `` `src/` `` reads as an inventory of that
+tree and is not one. Link the file that carries what the prose claims —
+`src/lib.rs` over `src/` — when you want the promise tracked.
+
 `unresolved-edge` carries a `hint` when the link text would resolve from the
 graph root but not from the declaring file. Links resolve relative to the file
 that declares them, so a root-relative path fails against a target nobody wrote
