@@ -58,8 +58,8 @@ files = ["**/*.md"]
 | `files`  | no       | `["**/*.md"]` | Globs scoping which files the parser reads                    |
 
 These are the only accepted keys. Any other key is a config error naming the key
-and the accepted set — a graph table that parses is a graph that works, so a
-parser option drft does not have fails loudly instead of being discarded.
+and the accepted set. A graph table that parses is read as a graph that works, so
+an option drft does not support fails loudly rather than being silently discarded.
 
 The graph's name is its compose-time namespace: its facts nest under `@<name>`
 in the composed graph. A name must not contain `@`, start with `_`, or be `fs` —

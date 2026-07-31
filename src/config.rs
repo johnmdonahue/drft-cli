@@ -229,9 +229,12 @@ impl Config {
                         ignore,
                         unknown,
                     } => {
+                        // Raised after parsing, so it carries the config path the
+                        // serde-level errors get from the `failed to parse` context.
                         if let Some(key) = unknown.keys().next() {
                             anyhow::bail!(
-                                "unknown field `{key}` in rules.{name}, expected {RULE_TABLE_FIELDS}"
+                                "failed to parse {}: unknown field `{key}` in rules.{name}, expected {RULE_TABLE_FIELDS}",
+                                config_path.display()
                             );
                         }
                         RuleConfig::new(severity, ignore)
