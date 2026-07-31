@@ -2,7 +2,9 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.13.0 (2026-07-30)
+
+Makes the honest form of `drft lock` the convenient one, so agent guidance can scope the lock rather than ban it.
 
 ### New
 
