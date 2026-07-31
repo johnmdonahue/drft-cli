@@ -11,8 +11,16 @@ fn impact_shows_transitive_dependents() {
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
 
+    // Transitive reach is `--depth all` now that the default is one hop.
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "impact", "config.md"])
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "config.md",
+            "--depth",
+            "all",
+        ])
         .output()
         .unwrap();
 
@@ -23,6 +31,59 @@ fn impact_shows_transitive_dependents() {
         "index.md transitively depends on config.md"
     );
     assert!(output.status.success());
+}
+
+#[test]
+fn impact_defaults_to_one_hop() {
+    // The question asked at an edit is "what names this file directly" — each hit
+    // a promise someone wrote down. `index.md` sits a hop further back and is
+    // reported only by its radius, not enumerated.
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
+    fs::write(dir.path().join("config.md"), "# Config").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "impact", "config.md"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("setup.md"),
+        "direct dependent, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("index.md"),
+        "depth-2 node should not be enumerated by default, got: {stdout}"
+    );
+    // The wider set is still signalled rather than hidden.
+    assert!(stdout.contains("radius"), "got: {stdout}");
+    assert!(output.status.success());
+}
+
+#[test]
+fn impact_depth_zero_is_a_usage_error() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "index.md",
+            "--depth",
+            "0",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2), "usage errors exit 2");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--depth all"), "got: {stderr}");
 }
 
 #[test]

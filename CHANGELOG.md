@@ -2,6 +2,13 @@
 
 All notable changes to drft are documented here.
 
+## Unreleased
+
+### Breaking changes
+
+- **`drft impact` reports one hop by default** (#75). It previously traversed unbounded, which on a repo where docs cross-reference normally returns most of the graph — 21 of 29 nodes for one seed in the reported case. That is not a review list, and an oversized one trains its consumer to skip the output entirely, taking the real finding with it. The default is now `--depth 1`: the files that name the seed directly, each a promise someone wrote down. Every result still carries `radius`, so a wider set is reported without being enumerated. **This is a quiet change** — scripts calling `drft impact` keep working and silently return less. Pass `--depth all` to restore the previous behavior.
+- **`--depth all` spells the full reachable set.** `--depth <n>` still bounds traversal to n hops. `--depth 0` is now a usage error pointing at `all`, rather than being given the maximal meaning — "0" reads as "traverse nothing", and a flag that silently means the opposite of what it says is worse than one that errors.
+
 ## 0.11.0 (2026-07-30)
 
 Closes the ways drft could report success while tracking nothing: a config that parsed but did nothing, a frontmatter graph that turned any path-shaped value into an edge, and a broken link that named a path nobody wrote.

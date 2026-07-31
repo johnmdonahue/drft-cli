@@ -22,11 +22,11 @@ hash = "b3:2a96e992de334b67fe25ad9bfd611a83ee491da2a51160d1ed6344a02b764042"
 
 [[node]]
 path = "CHANGELOG.md"
-hash = "b3:eca2113b1320125cdbe4a1a15238a24816e3d4f27b926b29f283278e8a2081de"
+hash = "b3:7c1881669b52e88ee5583a8d8b76fbd992bb34bd5ffdfbc1e5853555a2834d33"
 
 [[node]]
 path = "CLAUDE.md"
-hash = "b3:4d61d069733ee001dad21c0427b392341ad9a95dc635fec331bebf1b14a2cf0e"
+hash = "b3:6d90954b99b54d30c16cad82217ea66432d7f6bf4f97b40920eb42cb8729e019"
 
 [[node.edge]]
 target = "RELEASING.md"
@@ -98,11 +98,11 @@ hash = "b3:871c2fd5cdfe89fa6ff01664a1420bf40d0ab18c0e250e59a3ab27225f31bb0e"
 
 [[node]]
 path = "README.md"
-hash = "b3:4d8528858aa9912b675205e0a0cbae24f7f0a8434e2efd0b3b37797a9b27596e"
+hash = "b3:772bc46594c3b43393bf5857e2c3579ff6e3cd5d6f56da0f840f7d4708eb6630"
 
 [[node.edge]]
 target = "CLAUDE.md"
-target_hash = "b3:4d61d069733ee001dad21c0427b392341ad9a95dc635fec331bebf1b14a2cf0e"
+target_hash = "b3:6d90954b99b54d30c16cad82217ea66432d7f6bf4f97b40920eb42cb8729e019"
 
 [[node.edge]]
 target = "docs/README.md"
@@ -157,7 +157,7 @@ target_hash = "b3:4f5a8674c50acec2e9478309e1b770aef880c99adec628e967ebce5153ebcb
 
 [[node.edge]]
 target = "src/cli.rs"
-target_hash = "b3:db5461193c01bd415b648451637b71a62ba28d41aeb456d90ae95744851c1783"
+target_hash = "b3:04799134c71b1faaa9201f84e59119d5cab9d265225cf2d0fc3e369bd0c324c6"
 
 [[node.edge]]
 target = "src/config.rs"
@@ -268,7 +268,7 @@ hash = "b3:f56fdcddee36a2cc7c9c55b619b80c0571ca85e89334e06741b157d4315d84d4"
 
 [[node]]
 path = "src/cli.rs"
-hash = "b3:db5461193c01bd415b648451637b71a62ba28d41aeb456d90ae95744851c1783"
+hash = "b3:04799134c71b1faaa9201f84e59119d5cab9d265225cf2d0fc3e369bd0c324c6"
 
 [[node]]
 path = "src/compose.rs"
@@ -300,7 +300,7 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:ecb649d5a89b41cc981d4deab0717c0cf902891bd3675b9d6ce2de8b25d6d524"
+hash = "b3:e78c039e5a3203783434034630d66bae9c3aa6f19519390a7b6989cbe68362b8"
 
 [[node]]
 path = "src/model.rs"
@@ -360,7 +360,7 @@ hash = "b3:317ec95915031ee51e9bcd86da06b439d120fd13ef29509e02fe668fd4fbb2f5"
 
 [[node]]
 path = "tests/impact.rs"
-hash = "b3:e7d14f79bc3263af193d7744bbfb1bd65017788e97f764586ef5f4a3c3bd3408"
+hash = "b3:243dec1ecf1ac18d8ae70c074dc272fbc9ad2b60714807a0c7bd0f8dc2801e2d"
 
 [[node]]
 path = "tests/init.rs"

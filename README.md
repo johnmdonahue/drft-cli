@@ -56,6 +56,13 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 
+`drft impact` reports the files that name the seed **directly** — one hop. That is
+the question an edit asks: each hit is a promise someone wrote down, so it lands
+a specific thing to check. Every result also carries a `radius`, the count of
+nodes reachable behind it, so a wider set is reported without being enumerated.
+Widen with `--depth <n>` when a hit turns out to restate the change, or
+`--depth all` for the full reachable set — what a rename sweep wants.
+
 ## Configuration
 
 `drft.toml` in the directory root:

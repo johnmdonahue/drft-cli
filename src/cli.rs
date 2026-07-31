@@ -48,9 +48,9 @@ pub enum Commands {
         #[arg(required = true)]
         paths: Vec<String>,
 
-        /// Limit traversal to this many hops
-        #[arg(long)]
-        depth: Option<usize>,
+        /// How many hops to traverse, or `all` for the full reachable set
+        #[arg(long, default_value = "1")]
+        depth: Depth,
 
         /// Traversal direction
         #[arg(long, default_value = "inbound")]
@@ -79,4 +79,79 @@ pub enum ColorChoice {
     Auto,
     Always,
     Never,
+}
+
+/// How far `impact` walks. Defaults to one hop: the files that name the seed
+/// directly, each of which is a promise someone wrote down. The full reachable
+/// set answers a graph-theory question rather than the one asked at an edit, so
+/// it has to be requested by name.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Depth {
+    All,
+    Hops(usize),
+}
+
+impl Depth {
+    /// The traversal bound: `None` is unbounded.
+    pub fn max_hops(self) -> Option<usize> {
+        match self {
+            Depth::All => None,
+            Depth::Hops(n) => Some(n),
+        }
+    }
+}
+
+impl std::str::FromStr for Depth {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("all") {
+            return Ok(Depth::All);
+        }
+        match s.parse::<usize>() {
+            // `0` reads as "no traversal", so it must not quietly mean the
+            // opposite. Point at the spelling that does mean everything.
+            Ok(0) => Err(
+                "depth 0 would traverse nothing; use `--depth all` for the full reachable set"
+                    .into(),
+            ),
+            Ok(n) => Ok(Depth::Hops(n)),
+            Err(_) => Err(format!(
+                "invalid depth `{s}` (expected a positive number or `all`)"
+            )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn depth_parses_hops_and_all() {
+        assert_eq!(Depth::from_str("1").unwrap(), Depth::Hops(1));
+        assert_eq!(Depth::from_str("3").unwrap(), Depth::Hops(3));
+        assert_eq!(Depth::from_str("all").unwrap(), Depth::All);
+        assert_eq!(Depth::from_str("ALL").unwrap(), Depth::All);
+    }
+
+    #[test]
+    fn depth_zero_is_rejected_with_a_pointer_to_all() {
+        // `0` reads as "no traversal"; it must not silently mean the opposite.
+        let err = Depth::from_str("0").unwrap_err();
+        assert!(err.contains("--depth all"), "got: {err}");
+    }
+
+    #[test]
+    fn depth_rejects_nonsense() {
+        assert!(Depth::from_str("banana").is_err());
+        assert!(Depth::from_str("-1").is_err());
+    }
+
+    #[test]
+    fn max_hops_maps_all_to_unbounded() {
+        assert_eq!(Depth::All.max_hops(), None);
+        assert_eq!(Depth::Hops(2).max_hops(), Some(2));
+    }
 }

@@ -8,7 +8,9 @@ This repo runs drft on itself (`drft.toml` at root). A PreToolUse hook runs `drf
 
 ### Before you start: map the blast radius
 
-**Run `drft impact <files> --format json` on the files you plan to change before writing any code.** This is navigation, not verification. The output shows every file that transitively depends on the files you're about to touch — docs, examples, READMEs that reference the module, configs that name a rule. Use this to build the task list: impacted files are tasks, not afterthoughts. On wide changes (core types, rule renames, config schema), this step prevents a cleanup pass at the end.
+**Run `drft impact <files> --format json` on the files you plan to change before writing any code.** This is navigation, not verification. The output shows the files that name the ones you're about to touch — docs, examples, READMEs that reference the module, configs that name a rule. Use this to build the task list: impacted files are tasks, not afterthoughts. On wide changes (core types, rule renames, config schema), this step prevents a cleanup pass at the end.
+
+`impact` reports one hop by default. Each result carries a `radius` — the count of nodes behind it — so when a hit turns out to restate your change, widen with `--depth <n>`, or `--depth all` for the full reachable set on a rename sweep.
 
 ### During editing: respond to the hook
 
