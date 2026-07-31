@@ -20,9 +20,13 @@ This repo runs drft on itself (`drft.toml` at root). A PreToolUse hook runs `drf
 
 Do not suppress warnings by removing links, ignoring paths, or disabling rules — fix the root cause (create missing files, fix broken references, restructure links).
 
-**Never run `drft lock` unless the user explicitly asks.** Locking acknowledges that the current state has been reviewed — it is the user's decision, not the agent's. Running lock unprompted clears staleness signals the user may want to inspect. If you believe a lock is warranted, say so and let the user decide.
+**Lock only what you reviewed, by name.** A lock asserts the locked state was read and is correct, so the assertion has to stay narrow enough to be true:
 
-The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → user runs `drft lock` when satisfied → commit.
+- **You may** run `drft lock <path>...` for paths you edited this session, once you have reviewed their impacted dependents. Name every path.
+- **Never run bare `drft lock`.** It clears staleness across the whole graph, including files you never opened and work someone else has in flight. That launders an unreviewed state into a reviewed one, and the record that it was never read is gone.
+- **Never lock staleness you did not cause.** If `drft check` reports findings you cannot account for, stop and say so — those are the user's to inspect.
+
+The workflow: impact upfront → plan includes dependents → edit → hook fires → review impacts inline → `drft lock <the files you touched>` → commit.
 
 ## Architecture
 

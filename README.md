@@ -54,6 +54,14 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft check`  | Compare the graph against the lockfile for drift            |
 | `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking       |
 
+`drft lock` with no argument snapshots the whole graph. Given paths — `drft lock
+src/lib.rs docs/guide.md` — it locks only those nodes and their outbound edges,
+merging into the existing lockfile. A lock asserts the locked state was reviewed,
+so scope it to what you actually read: a bulk lock also clears staleness you
+never looked at, including someone else's unfinished work. Paths all resolve
+before anything is written, so a typo fails the command rather than leaving a
+partial lock behind.
+
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 
 `drft impact` reports the files that name the seed **directly** — one hop. That is

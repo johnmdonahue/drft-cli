@@ -118,3 +118,67 @@ fn deleted_file_reports_unresolved_and_removed_node() {
         "expected removed-node, got: {stdout}"
     );
 }
+
+/// Several paths lock in one invocation, leaving everything else stale. The
+/// scoped form exists so the assertion "this was reviewed" stays narrow enough
+/// to be true, and one-path-per-invocation pushed callers toward the bulk form.
+#[test]
+fn scoped_lock_accepts_several_paths() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    for name in ["a", "b", "c"] {
+        fs::write(dir.path().join(format!("{name}.md")), format!("# {name}")).unwrap();
+    }
+    lock(dir.path());
+
+    for name in ["a", "b", "c"] {
+        fs::write(
+            dir.path().join(format!("{name}.md")),
+            format!("# {name} edited"),
+        )
+        .unwrap();
+    }
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md", "b.md"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = check(dir.path());
+    assert!(!stdout.contains("stale-node]: a.md"), "got: {stdout}");
+    assert!(!stdout.contains("stale-node]: b.md"), "got: {stdout}");
+    assert!(
+        stdout.contains("stale-node]: c.md"),
+        "c.md was not named and must stay stale, got: {stdout}"
+    );
+}
+
+/// Every path resolves before any is written. A partial lock would claim some
+/// files were reviewed and drop the rest without saying so.
+#[test]
+fn scoped_lock_writes_nothing_when_a_path_is_unresolvable() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+    lock(dir.path());
+    fs::write(dir.path().join("a.md"), "# a edited").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "lock",
+            "a.md",
+            "typo.md",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2), "unresolvable path exits 2");
+    let stdout = check(dir.path());
+    assert!(
+        stdout.contains("stale-node]: a.md"),
+        "a.md must not be locked when a later path fails, got: {stdout}"
+    );
+}
