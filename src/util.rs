@@ -54,6 +54,34 @@ pub fn normalize_relative_path(path: &str) -> String {
     format!("{prefix}{}", parts.join("/"))
 }
 
+/// Rewrite a root-relative `target` as a link relative to `source_file` — the
+/// inverse of [`resolve_link`], for suggesting the path an author meant to
+/// write. `resolve_link(source, relative_from(source, target)) == target`.
+pub fn relative_from(source_file: &str, target: &str) -> String {
+    let source_dir: Vec<&str> = source_file
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .split_last()
+        .map(|(_, dir)| dir.to_vec())
+        .unwrap_or_default();
+    let target_parts: Vec<&str> = target.split('/').filter(|s| !s.is_empty()).collect();
+
+    let shared = source_dir
+        .iter()
+        .zip(&target_parts)
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    let mut parts: Vec<String> = vec!["..".to_string(); source_dir.len() - shared];
+    parts.extend(target_parts[shared..].iter().map(|s| s.to_string()));
+    // A target inside the source's own directory needs `./` to stay a path.
+    if parts.first().is_some_and(|p| p != "..") {
+        return format!("./{}", parts.join("/"));
+    }
+    parts.join("/")
+}
+
 /// Resolve a link target relative to a source file, producing a path relative to
 /// the graph root.
 pub fn resolve_link(source_file: &str, raw_target: &str) -> String {
@@ -76,6 +104,42 @@ mod tests {
     fn normalize_dot_and_dotdot() {
         assert_eq!(normalize_relative_path("./a/./b"), "a/b");
         assert_eq!(normalize_relative_path("a/b/../c"), "a/c");
+    }
+
+    #[test]
+    fn relative_from_walks_up_to_shared_root() {
+        assert_eq!(
+            relative_from("docs/taxonomy.md", "predicated/artifact/src/lib.rs"),
+            "../predicated/artifact/src/lib.rs"
+        );
+        assert_eq!(relative_from("a/b/c.md", "a/d.md"), "../d.md");
+        assert_eq!(relative_from("a/b/c.md", "x.md"), "../../x.md");
+    }
+
+    #[test]
+    fn relative_from_same_directory_keeps_dot_prefix() {
+        assert_eq!(relative_from("docs/a.md", "docs/b.md"), "./b.md");
+        assert_eq!(relative_from("a.md", "b.md"), "./b.md");
+        assert_eq!(relative_from("docs/a.md", "docs/sub/b.md"), "./sub/b.md");
+    }
+
+    #[test]
+    fn relative_from_round_trips_through_resolve_link() {
+        // The suggestion must actually resolve to the target it names.
+        for (source, target) in [
+            ("docs/taxonomy.md", "predicated/artifact/src/lib.rs"),
+            ("docs/a.md", "docs/b.md"),
+            ("a/b/c.md", "x.md"),
+            ("README.md", "src/lib.rs"),
+            ("a/b/c.md", "a/b/d/e.md"),
+        ] {
+            let suggestion = relative_from(source, target);
+            assert_eq!(
+                resolve_link(source, &suggestion),
+                target,
+                "{source} + {suggestion} should resolve to {target}"
+            );
+        }
     }
 
     #[test]

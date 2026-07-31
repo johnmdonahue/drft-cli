@@ -103,6 +103,10 @@ ignore = ["target/**", "node_modules/**"]
 parser = "markdown"
 files = ["**/*.md"]
 
+# Frontmatter link values resolve relative to the declaring file, the same way
+# that file's markdown links do — from docs/guide.md, write ../src/lib.rs, not
+# src/lib.rs. Add keys = ["sources"] to limit edges to named keys instead of
+# every path-shaped value.
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]

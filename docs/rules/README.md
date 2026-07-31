@@ -40,6 +40,14 @@ derives the drift findings by joining the graph to the lockfile;
 | `unresolved-edge` | An edge target has no defining node (URIs excepted)            |
 | `detached-node`   | A node has no inbound or outbound edges (directories excepted) |
 
+`unresolved-edge` carries a `hint` when the link text would resolve from the
+graph root but not from the declaring file. Links resolve relative to the file
+that declares them, so a root-relative path fails against a target nobody wrote
+and reads as a typo; the hint names the base as the cause and suggests the
+rewrite. It is withheld for paths written `./`, `../`, or `/`, which are relative
+by intent. The hint renders as an indented line under the finding in text output
+and as a `hint` field in JSON.
+
 Staleness is computed locally — per node and per edge, with no recursive
 propagation — so dependency cycles can't loop or produce ambiguous staleness. A
 stale node subsumes its outbound `stale-edge` findings; a removed node subsumes

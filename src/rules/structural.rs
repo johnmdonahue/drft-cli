@@ -22,16 +22,18 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
         }
         let resolved = graph.nodes.get(&edge.target).is_some_and(Node::is_resolved);
         if !resolved {
-            findings.push(
-                Finding::warn(
-                    "unresolved-edge",
-                    &edge.source,
-                    edge_provenance(edge),
-                    "no defining node",
-                )
-                .with_target(&edge.target)
-                .with_lines(edge.lines()),
-            );
+            let mut finding = Finding::warn(
+                "unresolved-edge",
+                &edge.source,
+                edge_provenance(edge),
+                "no defining node",
+            )
+            .with_target(&edge.target)
+            .with_lines(edge.lines());
+            if let Some(hint) = wrong_base_hint(graph, edge) {
+                finding = finding.with_hint(hint);
+            }
+            findings.push(finding);
         }
     }
 
@@ -58,6 +60,25 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
     }
 
     findings
+}
+
+/// A path written against the graph root when links resolve against the
+/// declaring file reads as a typo — the reported target is a path the author
+/// never wrote. Name the cause when the literal text resolves from the root.
+///
+/// Gated on the raw text carrying no explicit `./`, `../` or `/` prefix: those
+/// are unambiguously relative by intent, so a root file of the same name is a
+/// coincidence rather than the mistake. That leaves the bare-path case, where a
+/// hit is all but certainly a wrong base.
+fn wrong_base_hint(graph: &Graph, edge: &crate::model::Edge) -> Option<String> {
+    let raw = edge.raw_links().into_iter().find(|raw| {
+        !(raw.starts_with("./") || raw.starts_with("../") || raw.starts_with('/'))
+            && graph.nodes.get(*raw).is_some_and(Node::is_resolved)
+    })?;
+    let suggestion = crate::util::relative_from(&edge.source, raw);
+    Some(format!(
+        "`{raw}` resolves from the graph root, but paths resolve relative to the declaring file (did you mean `{suggestion}`?)"
+    ))
 }
 
 #[cfg(test)]
@@ -92,6 +113,77 @@ mod tests {
 
         let findings = evaluate(&composed);
         assert!(names(&findings).contains(&("unresolved-edge", "index.md")));
+    }
+
+    /// Compose an fs graph holding `files`, plus one edge carrying `raw`.
+    fn graph_with_raw_edge(files: &[&str], source: &str, target: &str, raw: &str) -> Graph {
+        let mut fs = Graph::labeled("fs");
+        for f in files {
+            fs.set_node(*f, fs_node());
+        }
+        let mut meta = Metadata::new();
+        meta.insert("raw".into(), json!(raw));
+        fs.add_edge(Edge::with_metadata(source, target, meta));
+        compose(&GraphSet::new(vec![fs]))
+    }
+
+    #[test]
+    fn wrong_base_hint_names_the_cause() {
+        // The #72 case: a repo-relative path in a doc one level down. The target
+        // reported is a path nobody wrote, so the finding reads as a typo.
+        let composed = graph_with_raw_edge(
+            &["docs/taxonomy.md", "predicated/artifact/src/lib.rs"],
+            "docs/taxonomy.md",
+            "docs/predicated/artifact/src/lib.rs",
+            "predicated/artifact/src/lib.rs",
+        );
+        let findings = evaluate(&composed);
+        let hint = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .and_then(|f| f.hint.as_deref())
+            .expect("expected a hint");
+        assert!(hint.contains("resolves from the graph root"), "got: {hint}");
+        assert!(
+            hint.contains("../predicated/artifact/src/lib.rs"),
+            "suggestion missing: {hint}"
+        );
+    }
+
+    #[test]
+    fn no_hint_when_root_path_also_missing() {
+        // An ordinary typo: nothing resolves either way, so there is no cause to
+        // name and the finding stands on its own.
+        let composed = graph_with_raw_edge(
+            &["docs/taxonomy.md"],
+            "docs/taxonomy.md",
+            "docs/typo.rs",
+            "typo.rs",
+        );
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .unwrap();
+        assert!(f.hint.is_none(), "got: {:?}", f.hint);
+    }
+
+    #[test]
+    fn no_hint_for_explicitly_relative_paths() {
+        // `./x.md` is relative by intent. A root `x.md` of the same name is a
+        // coincidence, not a wrong base — hinting here would be noise.
+        let composed = graph_with_raw_edge(
+            &["docs/taxonomy.md", "x.md"],
+            "docs/taxonomy.md",
+            "docs/x.md",
+            "./x.md",
+        );
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .unwrap();
+        assert!(f.hint.is_none(), "got: {:?}", f.hint);
     }
 
     #[test]

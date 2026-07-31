@@ -31,6 +31,27 @@ The parser parses the YAML frontmatter block, then collects all string leaf valu
 
 This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
 
+### Path resolution
+
+Paths resolve relative to the **declaring file**, the same way that file's markdown links do. From a doc at `docs/taxonomy.md`:
+
+```yaml
+sources:
+  - ../src/lib.rs # → src/lib.rs
+  - ./notes.md # → docs/notes.md
+  - api/openapi.yaml # → docs/api/openapi.yaml
+```
+
+The last one catches people out: a path written against the graph root resolves under `docs/` and fails. Because the reported target is a path nobody wrote, the finding reads as a typo rather than a wrong base, so `unresolved-edge` names the cause when the literal text would resolve from the root:
+
+```
+warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.rs (no defining node)
+  hint: `predicated/artifact/src/lib.rs` resolves from the graph root, but paths resolve
+        relative to the declaring file (did you mean `../predicated/artifact/src/lib.rs`?)
+```
+
+The hint is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
+
 Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
 
 ### Scoping to keys

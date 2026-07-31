@@ -20,6 +20,11 @@ pub struct Finding {
     #[serde(rename = "_graphs")]
     pub graphs: Vec<String>,
     pub message: String,
+    /// An optional second line naming the likely cause. Reserved for cases where
+    /// the finding is correct but reads as the wrong problem — a path that fails
+    /// to resolve looks like a typo when the base is what's wrong.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 impl Finding {
@@ -39,7 +44,14 @@ impl Finding {
             lines: Vec::new(),
             graphs,
             message: message.into(),
+            hint: None,
         }
+    }
+
+    /// Attach a cause line rendered beneath the finding.
+    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
     }
 
     /// Attach the destination path for an edge-level finding; renders as
@@ -87,13 +99,17 @@ impl Finding {
     }
 
     pub fn format_text(&self) -> String {
-        format!(
+        let head = format!(
             "{}[{}]: {} ({})",
             self.severity_label(),
             self.name,
             self.subject_display(),
             self.message
-        )
+        );
+        match &self.hint {
+            Some(hint) => format!("{head}\n  hint: {hint}"),
+            None => head,
+        }
     }
 
     pub fn format_text_color(&self) -> String {
@@ -105,13 +121,17 @@ impl Finding {
         let reset = "\x1b[0m";
         let bold = "\x1b[1m";
         let cyan = "\x1b[36m";
-        format!(
+        let head = format!(
             "{color}{}{reset}[{bold}{}{reset}]: {cyan}{}{reset} ({})",
             self.severity_label(),
             self.name,
             self.subject_display(),
             self.message
-        )
+        );
+        match &self.hint {
+            Some(hint) => format!("{head}\n  {bold}hint{reset}: {hint}"),
+            None => head,
+        }
     }
 }
 
