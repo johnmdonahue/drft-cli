@@ -1,6 +1,6 @@
 [package]
 name = "drft-cli"
-version = "0.10.0"
+version = "0.11.0"
 categories = ["command-line-utilities", "development-tools"]
 edition = "2024"
 homepage = "https://github.com/johnmdonahue/drft-cli"
