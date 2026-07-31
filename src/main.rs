@@ -74,7 +74,7 @@ fn try_main() -> Result<i32> {
 
     match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { path } => run_lock(&root, path.as_deref()),
+        Commands::Lock { paths } => run_lock(&root, paths),
         Commands::Impact {
             paths,
             depth,
@@ -124,29 +124,42 @@ files = ["**/*.md"]
 }
 
 /// Snapshot the composed graph into `drft.lock`: node content hashes and each
-/// node's outbound edge target hashes. With a path, lock only that node (its
-/// bytes and its outbound edge targets), merging into the existing lockfile.
-fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
+/// node's outbound edge target hashes. With paths, lock only those nodes (their
+/// bytes and their outbound edge targets), merging into the existing lockfile.
+///
+/// A lock is an assertion that the locked state was reviewed, so the scoped form
+/// exists to make that assertion narrow enough to be true — lock what you read,
+/// not whatever happens to be stale.
+fn run_lock(root: &Path, paths: &[String]) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
 
-    match path {
-        None => lock::write(&graph_root, &snapshot)?,
-        Some(path) => {
-            let node = resolve_node(&composed, root, &graph_root, path)?;
-            let mut existing = lock::read(&graph_root)?.unwrap_or_default();
-            let entry = snapshot
-                .nodes
-                .get(&node)
-                .expect("resolved node is in the snapshot")
-                .clone();
-            existing.nodes.insert(node, entry);
-            lock::write(&graph_root, &existing)?;
-        }
+    if paths.is_empty() {
+        lock::write(&graph_root, &snapshot)?;
+        return Ok(0);
     }
+
+    // Resolve every path before writing any of them. A typo in the third of five
+    // must not leave the first two locked: a partial lock claims some files were
+    // reviewed and drops the rest without saying so, which is worse than failing.
+    let nodes = paths
+        .iter()
+        .map(|p| resolve_node(&composed, root, &graph_root, p))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+    for node in nodes {
+        let entry = snapshot
+            .nodes
+            .get(&node)
+            .expect("resolved node is in the snapshot")
+            .clone();
+        existing.nodes.insert(node, entry);
+    }
+    lock::write(&graph_root, &existing)?;
     Ok(0)
 }
 

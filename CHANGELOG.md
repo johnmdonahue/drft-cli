@@ -2,6 +2,12 @@
 
 All notable changes to drft are documented here.
 
+## Unreleased
+
+### New
+
+- **`drft lock` accepts several paths.** `drft lock a.md b.md` locks exactly those nodes and their outbound edges, merging into the existing lockfile; with no arguments it still snapshots the whole graph. A lock asserts the locked state was reviewed, and the scoped form is what keeps that assertion narrow enough to be true — a bulk lock also clears staleness nobody looked at, including work another person has in flight. Accepting one path at a time pushed callers toward the bulk form for any multi-file change, which is the case where scoping matters most. Every path resolves before anything is written, so an unresolvable path fails the command (exit 2) rather than leaving a partial lock behind.
+
 ## 0.12.0 (2026-07-30)
 
 Makes `drft impact` answer the question an edit actually asks. The output is a review list now, not a reachability dump.
