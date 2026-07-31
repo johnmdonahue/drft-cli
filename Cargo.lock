@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "drft-cli"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "blake3",

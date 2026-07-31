@@ -2,7 +2,9 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.12.0 (2026-07-30)
+
+Makes `drft impact` answer the question an edit actually asks. The output is a review list now, not a reachability dump.
 
 ### Breaking changes
 
