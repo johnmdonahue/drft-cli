@@ -2,7 +2,9 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.11.0 (2026-07-30)
+
+Closes the ways drft could report success while tracking nothing: a config that parsed but did nothing, a frontmatter graph that turned any path-shaped value into an edge, and a broken link that named a path nobody wrote.
 
 ### Breaking changes
 
