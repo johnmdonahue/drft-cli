@@ -35,12 +35,20 @@ pub enum RuleSeverity {
 pub struct GraphConfig {
     pub files: Vec<String>,
     pub parser: String,
+    /// `frontmatter` only: the keys whose values yield edges. `None` keeps
+    /// shape detection over the whole block.
+    pub keys: Option<Vec<String>>,
 }
 
+/// `deny_unknown_fields` so a key the parser does not support is a hard error
+/// rather than a silent discard. A graph table that parses is read as a graph
+/// that works — a speculative `keys = [...]` must not exit 0 doing nothing.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawGraph {
     files: Option<Vec<String>>,
     parser: String,
+    keys: Option<Vec<String>>,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -71,6 +79,11 @@ impl RuleConfig {
 
 /// Serde helper: a rule is either a bare severity (`stale-node = "error"`) or a
 /// table (`[rules.stale-node]` with `severity` and `ignore`).
+///
+/// The table variant cannot use `deny_unknown_fields` — an untagged enum reports
+/// a rejected variant as "data did not match any variant", which names neither
+/// the bad key nor the known set. Capturing the leftovers instead lets `load`
+/// raise the same precise error the graph tables give.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RawRuleValue {
@@ -80,8 +93,13 @@ enum RawRuleValue {
         severity: RuleSeverity,
         #[serde(default)]
         ignore: Vec<String>,
+        #[serde(flatten)]
+        unknown: BTreeMap<String, toml::Value>,
     },
 }
+
+/// Fields a `[rules.*]` table accepts, for the unknown-key error.
+const RULE_TABLE_FIELDS: &str = "`severity` or `ignore`";
 
 fn default_warn() -> RuleSeverity {
     RuleSeverity::Warn
@@ -117,7 +135,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct RawConfig {
     ignore: Option<Vec<String>>,
     graphs: Option<HashMap<String, RawGraph>>,
@@ -138,6 +156,9 @@ const BUILTIN_RULES: &[&str] = &[
 /// Parsers a graph may declare. `fs` is the implicit base graph (a provider, not
 /// a parser) and is intentionally absent — `parser = "fs"` is rejected.
 const KNOWN_PARSERS: &[&str] = &["markdown", "frontmatter"];
+
+/// Parsers that accept `keys`. Markdown has no keyed structure to scope.
+const PARSERS_WITH_KEYS: &[&str] = &["frontmatter"];
 
 /// Graph names reserved for drft's implicit graphs. Declaring one would collide
 /// with the core `@fs` namespace at compose and overwrite its `type`/`hash`.
@@ -192,11 +213,27 @@ impl Config {
                         KNOWN_PARSERS.join(", ")
                     );
                 }
+                // `keys` scopes a keyed structure; only the frontmatter parser has
+                // one. Accepting it elsewhere would reintroduce exactly the silent
+                // no-op that made it unfindable in the first place (#71).
+                if raw.keys.is_some() && !PARSERS_WITH_KEYS.contains(&raw.parser.as_str()) {
+                    anyhow::bail!(
+                        "`keys` is not supported by the \"{}\" parser in graph \"{name}\" (supported: {})",
+                        raw.parser,
+                        PARSERS_WITH_KEYS.join(", ")
+                    );
+                }
+                if raw.keys.as_ref().is_some_and(Vec::is_empty) {
+                    anyhow::bail!(
+                        "`keys` is empty in graph \"{name}\" — the graph would track nothing (omit it for shape detection)"
+                    );
+                }
                 config.graphs.insert(
                     name,
                     GraphConfig {
                         files: raw.files.unwrap_or_else(|| vec![DEFAULT_FILES.to_string()]),
                         parser: raw.parser,
+                        keys: raw.keys,
                     },
                 );
             }
@@ -210,7 +247,19 @@ impl Config {
             for (name, value) in raw_rules.rules {
                 let rule_config = match value {
                     RawRuleValue::Severity(severity) => RuleConfig::new(severity, Vec::new())?,
-                    RawRuleValue::Table { severity, ignore } => {
+                    RawRuleValue::Table {
+                        severity,
+                        ignore,
+                        unknown,
+                    } => {
+                        // Raised after parsing, so it carries the config path the
+                        // serde-level errors get from the `failed to parse` context.
+                        if let Some(key) = unknown.keys().next() {
+                            anyhow::bail!(
+                                "failed to parse {}: unknown field `{key}` in rules.{name}, expected {RULE_TABLE_FIELDS}",
+                                config_path.display()
+                            );
+                        }
                         RuleConfig::new(severity, ignore)
                             .with_context(|| format!("invalid globs in rules.{name}"))?
                     }
@@ -387,6 +436,120 @@ mod tests {
         assert!(config.is_rule_ignored("unresolved-edge", "vendor/x.md"));
         // It does not touch paths outside the group.
         assert!(!config.is_rule_ignored("stale-node", "yours.md"));
+    }
+
+    #[test]
+    fn unknown_graph_key_errors() {
+        // A key the parser does not support must not parse and do nothing — the
+        // near-miss spellings (`fields`, `include_keys`) are the likely case, so
+        // the error names the key and the accepted set.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.x]\nparser = \"frontmatter\"\ninclude_keys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `include_keys`"), "got: {err}");
+        assert!(err.contains("files"), "expected set not named: {err}");
+    }
+
+    #[test]
+    fn frontmatter_graph_accepts_keys() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(
+            config.graphs["fm"].keys.as_deref(),
+            Some(&["sources".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn keys_omitted_is_shape_detection() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\n",
+        )
+        .unwrap();
+        assert!(
+            Config::load(dir.path()).unwrap().graphs["fm"]
+                .keys
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn keys_on_markdown_parser_errors() {
+        // Markdown has no keyed structure — accepting `keys` there would be the
+        // silent no-op this option exists to remove.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.md]\nparser = \"markdown\"\nkeys = [\"sources\"]\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(
+            err.contains("not supported by the \"markdown\" parser"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_keys_errors() {
+        // `keys = []` would scope the graph to nothing — always a mistake.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = []\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("track nothing"), "got: {err}");
+    }
+
+    #[test]
+    fn unknown_top_level_key_errors() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), "ignores = [\"target/**\"]\n").unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `ignores`"), "got: {err}");
+    }
+
+    #[test]
+    fn unknown_rule_table_key_errors() {
+        // The untagged enum accepts any table (both fields default), so a typo'd
+        // key silently parsed as an all-defaults rule before the leftovers were
+        // captured. Distinct from an unknown *rule name*, which only warns.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules.stale-node]\nseverty = \"error\"\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
+        assert!(err.contains("unknown field `severty`"), "got: {err}");
+        assert!(err.contains("rules.stale-node"), "got: {err}");
+    }
+
+    #[test]
+    fn known_rule_table_keys_still_parse() {
+        // Guard against the flatten capture swallowing the real fields.
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[rules.detached-node]\nseverity = \"error\"\nignore = [\"README.md\"]\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert_eq!(config.rules["detached-node"].severity, RuleSeverity::Error);
+        assert!(config.is_rule_ignored("detached-node", "README.md"));
     }
 
     #[test]

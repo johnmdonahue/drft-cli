@@ -109,6 +109,12 @@ fn strip_code(content: &str) -> String {
 pub struct FrontmatterParser {
     /// File routing filter. None = receives all File nodes.
     pub file_filter: Option<globset::GlobSet>,
+    /// Keys whose values yield edges. `None` falls back to shape detection over
+    /// the whole block, which cannot tell a derivation (`sources:`) from a value
+    /// that merely looks like a path (`route: /customers`). Naming the keys lets
+    /// the config say what the graph tracks. Scopes edges only — metadata always
+    /// captures the entire block.
+    pub keys: Option<Vec<String>>,
 }
 
 impl Parser for FrontmatterParser {
@@ -134,7 +140,14 @@ impl Parser for FrontmatterParser {
         };
 
         let mut candidates = Vec::new();
-        collect_links(root, &mut candidates);
+        match &self.keys {
+            Some(keys) => {
+                let wanted: std::collections::HashSet<&str> =
+                    keys.iter().map(String::as_str).collect();
+                collect_scoped(root, &wanted, &mut candidates);
+            }
+            None => collect_links(root, &mut candidates),
+        }
         let links = candidates
             .into_iter()
             .filter(|(value, _)| is_link_candidate(value))
@@ -181,6 +194,37 @@ fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize)>) {
             }
         }
         YamlData::Tagged(_, inner) => collect_links(inner, out),
+        _ => {}
+    }
+}
+
+/// Collect scalars reachable only through one of `keys`. A matched key hands its
+/// whole subtree to `collect_links`, so a nested map or list under `sources:`
+/// still yields every path beneath it. Unmatched keys are still descended into,
+/// so a key nested under an unrelated one is found — the key is what scopes the
+/// walk, not its depth. A scalar reached under no matched key yields nothing.
+fn collect_scoped(
+    node: &MarkedYaml,
+    keys: &std::collections::HashSet<&str>,
+    out: &mut Vec<(String, usize)>,
+) {
+    match &node.data {
+        YamlData::Sequence(items) => {
+            for item in items {
+                collect_scoped(item, keys, out);
+            }
+        }
+        YamlData::Mapping(map) => {
+            for (key, value) in map {
+                match &key.data {
+                    YamlData::Value(Scalar::String(k)) if keys.contains(k.as_ref()) => {
+                        collect_links(value, out)
+                    }
+                    _ => collect_scoped(value, keys, out),
+                }
+            }
+        }
+        YamlData::Tagged(_, inner) => collect_scoped(inner, keys, out),
         _ => {}
     }
 }
@@ -232,7 +276,10 @@ mod tests {
     use super::*;
 
     fn parse(content: &str) -> ParseResult {
-        let parser = FrontmatterParser { file_filter: None };
+        let parser = FrontmatterParser {
+            file_filter: None,
+            keys: None,
+        };
         parser.parse("test.md", content)
     }
 
@@ -283,6 +330,86 @@ mod tests {
         assert!(result.metadata.is_none());
     }
 
+    /// Parse with `keys` scoping, returning the edge targets.
+    fn scoped(content: &str, keys: &[&str]) -> Vec<String> {
+        let parser = FrontmatterParser {
+            file_filter: None,
+            keys: Some(keys.iter().map(|k| k.to_string()).collect()),
+        };
+        parser
+            .parse("doc.md", content)
+            .links
+            .into_iter()
+            .map(|l| l.target)
+            .collect()
+    }
+
+    #[test]
+    fn keys_scope_excludes_other_keys() {
+        // The two real collisions from #73: an API route and a rule's glob scope,
+        // both path-shaped, neither a derivation.
+        let content = "---\nsources:\n  - ../src/lib.rs\nroute: /customers\npaths:\n  - \"api/openapi.yaml\"\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["../src/lib.rs"]);
+    }
+
+    #[test]
+    fn keys_scope_takes_whole_subtree() {
+        // A matched key hands its entire subtree over, so nesting under it still
+        // yields every path beneath.
+        let content = "---\nsources:\n  primary:\n    - ../a.rs\n  secondary: ../b.rs\n---\n";
+        let mut got = scoped(content, &["sources"]);
+        got.sort();
+        assert_eq!(got, vec!["../a.rs", "../b.rs"]);
+    }
+
+    #[test]
+    fn keys_scope_finds_nested_key() {
+        // The key scopes the walk, not its depth — `sources` under an unrelated
+        // parent is still found.
+        let content = "---\nmeta:\n  sources:\n    - ../a.rs\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["../a.rs"]);
+    }
+
+    #[test]
+    fn keys_scope_keeps_line_numbers() {
+        let content = "---\ntitle: T\nsources:\n  - ../a.rs\n---\n";
+        let parser = FrontmatterParser {
+            file_filter: None,
+            keys: Some(vec!["sources".to_string()]),
+        };
+        let links = parser.parse("doc.md", content).links;
+        assert_eq!(links[0].line, Some(4));
+    }
+
+    #[test]
+    fn keys_scope_still_shape_filters() {
+        // Scoping picks the key; `is_link_candidate` still rejects prose under it.
+        let content = "---\nsources:\n  - ../a.rs\n  - not a path at all\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["../a.rs"]);
+    }
+
+    #[test]
+    fn keys_scope_leaves_metadata_whole() {
+        // `keys` scopes edges only — the metadata namespace keeps the full block.
+        let content = "---\ntitle: T\nroute: /customers\nsources:\n  - ../a.rs\n---\n";
+        let parser = FrontmatterParser {
+            file_filter: None,
+            keys: Some(vec!["sources".to_string()]),
+        };
+        let meta = parser.parse("doc.md", content).metadata.unwrap();
+        assert_eq!(meta["title"], "T");
+        assert_eq!(meta["route"], "/customers");
+    }
+
+    #[test]
+    fn no_keys_scope_is_shape_detection() {
+        // The default is unchanged: every path-shaped value is a candidate.
+        let content = "---\nroute: /customers\nsources:\n  - ../a.rs\n---\n";
+        let mut got: Vec<String> = parse(content).links.into_iter().map(|l| l.target).collect();
+        got.sort();
+        assert_eq!(got, vec!["../a.rs", "/customers"]);
+    }
+
     #[test]
     fn frontmatter_skips_non_paths() {
         let content = "---\ntitle: My Document\nversion: 1.0\ntags:\n  - rust\n  - cli\n---\n";
@@ -329,7 +456,10 @@ mod tests {
 
     #[test]
     fn no_filter_matches_everything() {
-        let parser = FrontmatterParser { file_filter: None };
+        let parser = FrontmatterParser {
+            file_filter: None,
+            keys: None,
+        };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("main.rs"));
     }
@@ -340,6 +470,7 @@ mod tests {
         builder.add(globset::Glob::new("*.md").unwrap());
         let parser = FrontmatterParser {
             file_filter: Some(builder.build().unwrap()),
+            keys: None,
         };
         assert!(parser.matches("index.md"));
         assert!(!parser.matches("main.rs"));

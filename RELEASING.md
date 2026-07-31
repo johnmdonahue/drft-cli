@@ -4,12 +4,24 @@
 
 1. **Bump version** in `Cargo.toml`
 2. **Update CHANGELOG.md** with the new version and date
-3. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
-4. **Merge** after CI passes
-5. **Tag on main**: `git checkout main && git pull && git tag v0.x.x`
-6. **Push tag**: `git push origin v0.x.x`
+3. **Run `drft lock`** — see [the release commit is drift](#the-release-commit-is-drift) below
+4. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
+5. **Merge** after CI passes
+6. **Tag on main**: `git checkout main && git pull && git tag v0.x.x`
+7. **Push tag**: `git push origin v0.x.x`
 
 That's it. Everything else is automated.
+
+### The release commit is drift
+
+`check` is a required status check on `main`, and it runs `cargo run -- check`.
+Both `Cargo.toml` and `CHANGELOG.md` are nodes in drft's own graph, so steps 1
+and 2 make them stale and CI fails on the release commit itself. Run `drft lock`
+before committing.
+
+`main` also requires branches to be up to date before merging, so a release
+branch that falls behind needs `git merge origin/main` (and another `drft lock`
+if that pulls in tracked changes) before it can land.
 
 ## What happens automatically
 
@@ -39,6 +51,7 @@ npm uses **trusted publishing** (OIDC) — no token needed. Configure at https:/
 # Edit Cargo.toml: version = "0.3.0"
 # Edit CHANGELOG.md: add ## 0.3.0 section
 git checkout -b release/v0.3.0
+drft lock # both edits above are tracked nodes; CI runs drft check
 git commit -am "Release v0.3.0"
 git push -u origin release/v0.3.0
 gh pr create --title "Release v0.3.0"

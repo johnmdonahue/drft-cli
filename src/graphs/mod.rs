@@ -54,7 +54,12 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
         let files = compile_globs(&graph.files)?;
         match graph.parser.as_str() {
             "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
-            "frontmatter" => graphs.push(builders::frontmatter::build(name, &texts, files)),
+            "frontmatter" => graphs.push(builders::frontmatter::build(
+                name,
+                &texts,
+                files,
+                graph.keys.clone(),
+            )),
             // Parser names are validated at config load (`KNOWN_PARSERS`); an
             // unknown parser cannot reach here.
             other => unreachable!("unvalidated parser \"{other}\""),

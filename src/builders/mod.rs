@@ -45,6 +45,13 @@ pub fn link_edge(source: &str, raw: &str) -> Option<Edge> {
     if let Some(frag) = fragment {
         metadata.insert("link".into(), Value::String(format!("{target}{frag}")));
     }
+    // The literal text the author wrote, kept only when resolution moved it. The
+    // resolved target alone cannot distinguish `foo.md` from `./foo.md` — they
+    // resolve identically — and that distinction is what tells a wrong base from
+    // a deliberate doc-relative link. Graph-only, like `lines`; never locked.
+    if base != target {
+        metadata.insert("raw".into(), Value::String(base.to_string()));
+    }
 
     Some(Edge::with_metadata(source, target, metadata))
 }
@@ -91,6 +98,16 @@ mod tests {
         let edge = link_edge("docs/guide.md", "setup.md").unwrap();
         assert_eq!(edge.source, "docs/guide.md");
         assert_eq!(edge.target, "docs/setup.md");
+        // Resolution moved the path, so the literal text is kept for diagnostics.
+        assert_eq!(edge.metadata["raw"], Value::String("setup.md".into()));
+    }
+
+    #[test]
+    fn no_raw_metadata_when_resolution_is_identity() {
+        // A link already written from the graph root resolves to itself — there is
+        // no second spelling worth recording.
+        let edge = link_edge("guide.md", "setup.md").unwrap();
+        assert_eq!(edge.target, "setup.md");
         assert!(edge.metadata.is_empty());
     }
 

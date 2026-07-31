@@ -52,10 +52,21 @@ parser = "frontmatter"
 files = ["**/*.md"]
 ```
 
-| Field    | Required | Default       | Description                                                   |
-| -------- | -------- | ------------- | ------------------------------------------------------------- |
-| `parser` | yes      | —             | How to interpret the files (see [parsers](parsers/README.md)) |
-| `files`  | no       | `["**/*.md"]` | Globs scoping which files the parser reads                    |
+| Field    | Required | Default        | Description                                                        |
+| -------- | -------- | -------------- | ------------------------------------------------------------------ |
+| `parser` | yes      | —              | How to interpret the files (see [parsers](parsers/README.md))      |
+| `files`  | no       | `["**/*.md"]`  | Globs scoping which files the parser reads                         |
+| `keys`   | no       | shape detected | `frontmatter` only — the frontmatter keys whose values yield edges |
+
+`keys` names what the graph tracks, so a path-shaped value under an unrelated key
+(`route: /customers`) is not mistaken for a derivation. Omit it to classify by
+value shape across the whole block. It applies to the `frontmatter` parser only —
+`markdown` has no keyed structure — and declaring it elsewhere, or as an empty
+list, is a config error. See [the frontmatter parser](parsers/frontmatter.md#scoping-to-keys).
+
+These are the only accepted keys. Any other key is a config error naming the key
+and the accepted set. A graph table that parses is read as a graph that works, so
+an option drft does not support fails loudly rather than being silently discarded.
 
 The graph's name is its compose-time namespace: its facts nest under `@<name>`
 in the composed graph. A name must not contain `@`, start with `_`, or be `fs` —
@@ -93,5 +104,9 @@ not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
 | ---------- | -------- | ------- | ----------------------------------------------- |
 | `severity` | no       | `warn`  | `"error"`, `"warn"`, or `"off"`                 |
 | `ignore`   | no       | none    | Globs — suppress findings whose subject matches |
+
+Any other key in a `[rules.<name>]` table is a config error. An unknown rule
+_name_ only warns, since both fields default and a misspelled rule would
+otherwise configure nothing in silence.
 
 See [rules](rules/README.md) for the full set.

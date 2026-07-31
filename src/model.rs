@@ -128,6 +128,23 @@ impl Edge {
         }
         lines.into_iter().collect()
     }
+
+    /// The literal link text(s) that produced this edge, across contributing
+    /// graphs. Present only where resolution moved the path, so an edge whose
+    /// target is exactly what the author typed reports nothing. Two graphs can
+    /// disagree — one doc may write `./x.md` where another writes `x.md`.
+    pub fn raw_links(&self) -> Vec<&str> {
+        let mut raws = BTreeSet::new();
+        for (key, value) in &self.metadata {
+            if !key.starts_with('@') {
+                continue;
+            }
+            if let Some(raw) = value.get("raw").and_then(Value::as_str) {
+                raws.insert(raw);
+            }
+        }
+        raws.into_iter().collect()
+    }
 }
 
 /// A single JGF graph. Used for both a raw per-graph fragment (with `label`
