@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::Path;
 
-use cli::{Cli, ColorChoice, Commands, Direction, OutputFormat};
+use cli::{Cli, ColorChoice, Commands, Depth, Direction, OutputFormat};
 use config::{Config, RuleSeverity};
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
@@ -252,7 +252,7 @@ fn run_impact(
     root: &Path,
     format: OutputFormat,
     paths: &[String],
-    depth: Option<usize>,
+    depth: Depth,
     direction: Direction,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
@@ -269,7 +269,7 @@ fn run_impact(
         Direction::Outbound => impact::Direction::Outbound,
         Direction::Both => impact::Direction::Both,
     };
-    let impacted = impact::compute(&composed, &seeds, dir, depth);
+    let impacted = impact::compute(&composed, &seeds, dir, depth.max_hops());
 
     match format {
         OutputFormat::Json => {
