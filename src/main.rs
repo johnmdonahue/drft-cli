@@ -142,44 +142,46 @@ fn run_lock(root: &Path, paths: &[String]) -> Result<i32> {
         return Ok(0);
     }
 
+    let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+
     // Resolve every path before writing any of them. A typo in the third of five
     // must not leave the first two locked: a partial lock claims some files were
     // reviewed and drops the rest without saying so, which is worse than failing.
+    // A path resolves against the graph or, when its file is gone, against the
+    // lockfile — so a deleted node can be named to clear its `removed-node` finding.
     let nodes = paths
         .iter()
-        .map(|p| resolve_node(&composed, root, &graph_root, p))
+        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+    // Make the lockfile reflect each named path's current state: re-snapshot a node
+    // that carries content, and drop the entry for anything that no longer does —
+    // a deleted file, or a path that has become a hash-less directory. Dropping the
+    // entry for a reviewed deletion is how a `removed-node` finding is cleared.
     for node in nodes {
-        let entry = snapshot
-            .nodes
-            .get(&node)
-            .expect("resolved node is in the snapshot")
-            .clone();
-        existing.nodes.insert(node, entry);
+        match snapshot.nodes.get(&node) {
+            Some(entry) => {
+                existing.nodes.insert(node, entry.clone());
+            }
+            None => {
+                existing.nodes.remove(&node);
+            }
+        }
     }
     lock::write(&graph_root, &existing)?;
     Ok(0)
 }
 
-/// Resolve a user-supplied path to a node key in the composed graph.
+/// Candidate node keys for a user-supplied path, most-specific first.
 ///
 /// Nodes are keyed by graph-root-relative path, but the argument is relative to
 /// the current directory (`root`) like any other CLI path — so it is resolved
-/// against `root`, normalized, and made relative to `graph_root` before lookup.
-/// This makes the command cwd-agnostic: the same file resolves whether given
+/// against `root`, normalized, and made relative to `graph_root` first. This
+/// makes lookup cwd-agnostic: the same file resolves whether given
 /// project-relative from a subdirectory or root-relative from the top. A `.md`
-/// suffix is tried as a fallback, and the raw argument is tried last for back
-/// compatibility. On a miss, a node whose key ends with the argument is
-/// suggested — but only when the suffix match is unambiguous (otherwise the
-/// candidates are listed, so an arbitrary pick is never presented as "the" one).
-fn resolve_node(
-    composed: &drft::model::Graph,
-    root: &Path,
-    graph_root: &Path,
-    path: &str,
-) -> Result<String> {
+/// suffix is offered as a fallback, and the raw argument is tried last for back
+/// compatibility.
+fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
     let mut candidates = Vec::new();
     if let Some(key) = graph_key(root, graph_root, path) {
         candidates.push(format!("{key}.md"));
@@ -187,27 +189,25 @@ fn resolve_node(
     }
     candidates.push(format!("{path}.md"));
     candidates.push(path.to_string());
+    candidates
+}
 
-    for candidate in &candidates {
-        if composed.nodes.contains_key(candidate) {
-            return Ok(candidate.clone());
-        }
-    }
-
-    // Suggest nodes whose key ends with the given path (e.g. a bare filename or
-    // a project-relative suffix) — the common "right file, wrong prefix" miss.
-    // Normalize the needle so it matches the graph's forward-slash keys, and only
-    // present a single suggestion when it's unambiguous.
+/// Build a "node not found" error, suggesting a key that ends with the given path
+/// (the common "right file, wrong prefix" miss). The needle is normalized to match
+/// the graph's forward-slash keys, and a single suggestion is only offered when the
+/// suffix match is unambiguous — otherwise the candidates are listed, so an
+/// arbitrary pick is never presented as "the" one.
+fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> anyhow::Error {
     let needle = drft::util::normalize_relative_path(path);
     let suffix = format!("/{needle}");
-    let matches: Vec<&String> = composed
-        .nodes
-        .keys()
+    let mut matches: Vec<&String> = keys
         .filter(|k| k.as_str() == needle || k.ends_with(&suffix))
         .collect();
+    matches.sort();
+    matches.dedup();
     match matches.as_slice() {
-        [] => anyhow::bail!("node not found: \"{path}\""),
-        [hit] => anyhow::bail!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        [] => anyhow::anyhow!("node not found: \"{path}\""),
+        [hit] => anyhow::anyhow!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
         many => {
             let shown = many
                 .iter()
@@ -219,12 +219,52 @@ fn resolve_node(
             } else {
                 String::new()
             };
-            anyhow::bail!(
+            anyhow::anyhow!(
                 "node not found: \"{path}\" — multiple matches: {}{more}",
                 shown.join(", ")
             )
         }
     }
+}
+
+/// Resolve a user-supplied path to a node key in the composed graph.
+fn resolve_node(
+    composed: &drft::model::Graph,
+    root: &Path,
+    graph_root: &Path,
+    path: &str,
+) -> Result<String> {
+    for candidate in node_candidates(root, graph_root, path) {
+        if composed.nodes.contains_key(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(not_found_error(composed.nodes.keys(), path))
+}
+
+/// Resolve a lock path to a node key present in the graph or, when its file is
+/// gone, in the existing lockfile. A live node re-snapshots; a key that survives
+/// only in the lock is a deletion under review, and naming it drops the entry.
+/// This is what lets a `removed-node` finding be cleared by locking the vanished
+/// path — the reviewed-deletion case the graph alone cannot resolve. Suggestions
+/// on a miss search both the graph and the lockfile, so a mistyped deleted path
+/// still gets one.
+fn resolve_lock_node(
+    composed: &drft::model::Graph,
+    existing: &lock::Lock,
+    root: &Path,
+    graph_root: &Path,
+    path: &str,
+) -> Result<String> {
+    for candidate in node_candidates(root, graph_root, path) {
+        if composed.nodes.contains_key(&candidate) || existing.nodes.contains_key(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(not_found_error(
+        composed.nodes.keys().chain(existing.nodes.keys()),
+        path,
+    ))
 }
 
 /// Resolve `arg` (relative to the current directory `root`, or absolute) to a

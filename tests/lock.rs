@@ -182,3 +182,95 @@ fn scoped_lock_writes_nothing_when_a_path_is_unresolvable() {
         "a.md must not be locked when a later path fails, got: {stdout}"
     );
 }
+
+/// Locking a path whose file has been deleted drops its lock entry, clearing
+/// `removed-node`. The deletion is the finding, so naming the vanished path is how
+/// you review it — the case the graph alone cannot resolve, since the node is gone.
+#[test]
+fn scoped_lock_drops_a_removed_node() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[doomed](doomed.md)").unwrap();
+    fs::write(dir.path().join("doomed.md"), "# Doomed").unwrap();
+    lock(dir.path());
+
+    fs::remove_file(dir.path().join("doomed.md")).unwrap();
+    assert!(check(dir.path()).contains("removed-node"));
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "doomed.md"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "locking a removed path should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !check(dir.path()).contains("removed-node"),
+        "removed-node should be cleared after locking the deleted path"
+    );
+}
+
+/// A batch of a repaired live path and a deleted one locks in one atomic call: the
+/// live path re-snapshots, the deleted one drops. This is the workflow the earlier
+/// one-path-per-call form could not express without the forbidden bare `drft lock`.
+#[test]
+fn scoped_lock_batches_a_live_update_with_a_drop() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[guide](guide.md) [doomed](doomed.md)",
+    )
+    .unwrap();
+    fs::write(dir.path().join("guide.md"), "# Guide").unwrap();
+    fs::write(dir.path().join("doomed.md"), "# Doomed").unwrap();
+    lock(dir.path());
+
+    // Delete one target and repair the citing document in the same breath.
+    fs::remove_file(dir.path().join("doomed.md")).unwrap();
+    fs::write(dir.path().join("index.md"), "[guide](guide.md)").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "lock",
+            "index.md",
+            "doomed.md",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = check(dir.path());
+    for finding in ["removed-node", "removed-edge", "stale"] {
+        assert!(
+            !stdout.contains(finding),
+            "expected no {finding} after the batch lock, got: {stdout}"
+        );
+    }
+}
+
+/// Locking a directory is a no-op, not a panic. A directory node carries no hash
+/// and no edges, so it is never a lock entry; naming one has nothing to snapshot.
+#[test]
+fn scoped_lock_of_a_directory_is_a_noop() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
+    fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
+    lock(dir.path());
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "locking a directory should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

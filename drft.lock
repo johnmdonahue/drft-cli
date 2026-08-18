@@ -300,7 +300,7 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:297802b051fbd298663b74c0bfd217ba91ad11120d3df519eea680e1176659a7"
+hash = "b3:5523068674b1faea1f7f634d0c161debf09d24829c7343a93a5b35f0b71e2a67"
 
 [[node]]
 path = "src/model.rs"
@@ -368,7 +368,7 @@ hash = "b3:dc15abb7afc8314627fd1346ade4e129ad9796ddcbab651d82f342c15db03dfc"
 
 [[node]]
 path = "tests/lock.rs"
-hash = "b3:0038a8b5130180edccaa42ea447a03352eee911cef76bcbbea2e96179417e5e7"
+hash = "b3:8ed372bf58ec2e1f76d314cc364ac2992aa02f80bce65f9d8e39557e1f1299ef"
 
 [[node]]
 path = "tests/output.rs"
