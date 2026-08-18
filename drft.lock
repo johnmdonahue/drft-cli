@@ -98,7 +98,7 @@ hash = "b3:871c2fd5cdfe89fa6ff01664a1420bf40d0ab18c0e250e59a3ab27225f31bb0e"
 
 [[node]]
 path = "README.md"
-hash = "b3:ca38d7ba3882ce9e2aee9678932862967cf9a3497b0ee1d79ec0aea6ef3def22"
+hash = "b3:cf2229f3c176501f153d8512a2d24fd5889b72d5203b6880fd1ec5835185fe62"
 
 [[node.edge]]
 target = "CLAUDE.md"
@@ -157,7 +157,7 @@ target_hash = "b3:001783ea083536a80cc88600bce3816cc6c90106685e825fe3e23e29936d82
 
 [[node.edge]]
 target = "src/cli.rs"
-target_hash = "b3:d23b0f8d5686a9f340a4129384bac66abb10a8b5a6a12eabee05a409bf83907b"
+target_hash = "b3:a95863600566534eb07a41be3b45b50e3bae677ad8d177d7931da17c55b70fe1"
 
 [[node.edge]]
 target = "src/config.rs"
@@ -268,7 +268,7 @@ hash = "b3:f56fdcddee36a2cc7c9c55b619b80c0571ca85e89334e06741b157d4315d84d4"
 
 [[node]]
 path = "src/cli.rs"
-hash = "b3:d23b0f8d5686a9f340a4129384bac66abb10a8b5a6a12eabee05a409bf83907b"
+hash = "b3:a95863600566534eb07a41be3b45b50e3bae677ad8d177d7931da17c55b70fe1"
 
 [[node]]
 path = "src/compose.rs"
@@ -292,7 +292,7 @@ hash = "b3:297723111a36e1bf06d13b460e12175d1093505ec7df97149b52e6aa67921a55"
 
 [[node]]
 path = "src/lib.rs"
-hash = "b3:9bd6306f5e3878158b0e19958a2dafd3b1203e61afd544e2204081b212b04fb3"
+hash = "b3:18b71e751e2d963195b28bb7a14c02d8ddd5371b891a31c497c2797b0edf54c3"
 
 [[node]]
 path = "src/lock.rs"
@@ -300,11 +300,15 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:7e79dbb71abcbbbbc2e07154df140fb6ac7f1c7dc127f869f08e6a5890e2e94d"
+hash = "b3:b23403cf50afbb8fe1b5129b0d19e17021d8019c668589f34a9960c8028d35aa"
 
 [[node]]
 path = "src/model.rs"
 hash = "b3:8c1fefc41499866612547a86607ed805cb3ad04adceaafbafaba59aa495a1c4e"
+
+[[node]]
+path = "src/nodes.rs"
+hash = "b3:1c02814ec3c3cd546ce6245bad395daae5bea765ef857784b76fe6c630793344"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
@@ -369,6 +373,10 @@ hash = "b3:dc15abb7afc8314627fd1346ade4e129ad9796ddcbab651d82f342c15db03dfc"
 [[node]]
 path = "tests/lock.rs"
 hash = "b3:a4e6a7a9c1bec9cf0eee23d73d224ba35725928da4f0d1bb8671f1cf6a85f213"
+
+[[node]]
+path = "tests/nodes.rs"
+hash = "b3:5a150c88e48a59c6a010cbf87d0ba753d143494d4f9664610e8ca42acfacb9ae"
 
 [[node]]
 path = "tests/output.rs"

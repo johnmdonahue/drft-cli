@@ -9,6 +9,7 @@ pub mod graphs;
 pub mod impact;
 pub mod lock;
 pub mod model;
+pub mod nodes;
 pub mod parsers;
 pub mod rules;
 pub mod sources;

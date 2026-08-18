@@ -5,6 +5,7 @@ use drft::config;
 use drft::graphs;
 use drft::impact;
 use drft::lock;
+use drft::nodes;
 use drft::rules;
 
 use anyhow::{Context, Result};
@@ -81,6 +82,11 @@ fn try_main() -> Result<i32> {
             direction,
         } => run_impact(&root, cli.format, paths, *depth, *direction),
         Commands::Graph { raw } => run_graph(&root, *raw),
+        Commands::Nodes {
+            selectors,
+            namespaces,
+            fields,
+        } => run_nodes(&root, cli.format, selectors, namespaces, fields),
         Commands::Check => run_check(&root, cli.format, cli.color),
     }
 }
@@ -306,6 +312,179 @@ fn run_graph(root: &Path, raw: bool) -> Result<i32> {
     };
     println!("{json}");
     Ok(0)
+}
+
+/// Project the composed graph's nodes and their metadata, scoped by `selectors`
+/// and narrowed by `namespaces`/`fields`. A reader: expanding a selector to many
+/// nodes is expected and has no side effect.
+fn run_nodes(
+    root: &Path,
+    format: OutputFormat,
+    selectors: &[String],
+    namespaces: &[String],
+    fields: &[String],
+) -> Result<i32> {
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+
+    // Validate namespaces up front: a typo must error, not read as an empty
+    // answer. Normalize to the `@<graph>` keys the projection matches on.
+    let requested_ns = resolve_namespaces(&config, namespaces)?;
+
+    let keys = resolve_selectors(&composed, root, &graph_root, selectors)?;
+    let projected = nodes::project(&composed, &keys, &requested_ns, fields);
+
+    match format {
+        OutputFormat::Json => {
+            let output = serde_json::json!({
+                "total": projected.len(),
+                "nodes": projected,
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        OutputFormat::Text => {
+            // One compact block per node — id, indented namespaces, fields — so a
+            // model can read it for grounding without parsing JSON.
+            print!("{}", nodes::format_text(&projected));
+        }
+    }
+
+    Ok(0)
+}
+
+/// Validate each requested namespace against the declared graphs (`fs` plus every
+/// `[graphs.*]`) and normalize it to its `@<graph>` metadata key, deduped in the
+/// order given. An unknown namespace is a typo — error, listing the declared
+/// graphs — so it never reads as an empty answer.
+fn resolve_namespaces(config: &Config, namespaces: &[String]) -> Result<Vec<String>> {
+    // `fs` plus every configured graph, sorted for a deterministic error listing.
+    let declared: std::collections::BTreeSet<&str> = config
+        .graphs
+        .keys()
+        .map(String::as_str)
+        .chain(std::iter::once("fs"))
+        .collect();
+
+    let mut normalized: Vec<String> = Vec::new();
+    for name in namespaces {
+        let bare = name.strip_prefix('@').unwrap_or(name);
+        if !declared.contains(bare) {
+            anyhow::bail!(
+                "unknown namespace \"{name}\" — declared graphs: {}",
+                declared.iter().copied().collect::<Vec<_>>().join(", ")
+            );
+        }
+        let key = nodes::normalize_namespace(name);
+        if !normalized.contains(&key) {
+            normalized.push(key);
+        }
+    }
+    Ok(normalized)
+}
+
+/// Resolve the positional selectors to node keys, sorted and deduped. With none,
+/// the whole node set. Each selector is a globset pattern over node keys, a bare
+/// directory (its recursive subtree), or an exact path — reusing `node_candidates`
+/// for the exact, cwd-aware resolution `impact`/`lock` already use.
+fn resolve_selectors(
+    composed: &drft::model::Graph,
+    root: &Path,
+    graph_root: &Path,
+    selectors: &[String],
+) -> Result<Vec<String>> {
+    if selectors.is_empty() {
+        return Ok(composed.nodes.keys().cloned().collect());
+    }
+
+    let mut keys = std::collections::BTreeSet::new();
+    for selector in selectors {
+        keys.extend(resolve_selector(composed, root, graph_root, selector)?);
+    }
+    Ok(keys.into_iter().collect())
+}
+
+/// Resolve one selector to matching node keys.
+///
+/// A glob selector matches its pattern against node keys, graph-root-relative like
+/// `drft.toml`'s `files`/`ignore`; an empty match is a legitimate query result. A
+/// selector with no glob metacharacters is resolved cwd-aware: an exact file
+/// resolves to itself, and a bare directory expands to its recursive subtree
+/// (`docs/` ⇒ `docs/**`) — the same set the glob spelling names, so there is no
+/// wrong spelling. An explicit path that matches nothing is a likely typo and
+/// errors with a suggestion, rather than reading as empty.
+fn resolve_selector(
+    composed: &drft::model::Graph,
+    root: &Path,
+    graph_root: &Path,
+    selector: &str,
+) -> Result<Vec<String>> {
+    if has_glob_meta(selector) {
+        return glob_match_keys(composed, selector);
+    }
+
+    let mut matched: Vec<String> = Vec::new();
+    let prefix = graph_key(root, graph_root, selector);
+
+    // Does the exact key (no `.md` fallback) name a directory node? Checking this
+    // before the fallback is what keeps a `docs.md` file from shadowing a `docs`
+    // directory when both exist. A trailing slash also declares a directory
+    // outright. Either way, a directory is represented by the subtree below, not the
+    // bare directory node — so `docs`, `docs/`, and `docs/**` name one set.
+    let names_dir = prefix
+        .as_deref()
+        .and_then(|key| composed.nodes.get(key))
+        .is_some_and(|node| node.fs_type() == Some("directory"));
+    let is_dir = names_dir || selector.ends_with('/');
+
+    // A non-directory selector resolves to an exact node, with the `.md` fallback
+    // impact/lock use, most-specific first. A file resolves to itself.
+    if !is_dir {
+        for candidate in node_candidates(root, graph_root, selector) {
+            if composed.nodes.contains_key(&candidate) {
+                matched.push(candidate);
+                break;
+            }
+        }
+    }
+
+    // Directory ⇒ recursive subtree (`docs/` ⇒ `docs/**`). `graph_key` normalizes
+    // the selector to a graph-root-relative prefix the same way exact resolution does.
+    if let Some(prefix) = &prefix {
+        for key in glob_match_keys(composed, &format!("{prefix}/**"))? {
+            if !matched.contains(&key) {
+                matched.push(key);
+            }
+        }
+    }
+
+    // Nothing resolved is a likely typo — error with a suggestion — unless the
+    // selector named a real directory that simply has no descendants, which is a
+    // legitimate empty result.
+    if matched.is_empty() && !names_dir {
+        return Err(not_found_error(composed.nodes.keys(), selector));
+    }
+    Ok(matched)
+}
+
+/// Whether a selector carries glob metacharacters — the signal that switches it
+/// from an exact/subtree path to a pattern matched against node keys.
+fn has_glob_meta(selector: &str) -> bool {
+    selector.contains(['*', '?', '[', ']', '{', '}'])
+}
+
+/// Match one glob pattern against the composed graph's node keys, graph-root-
+/// relative like `drft.toml`'s `files`/`ignore`. Node keys iterate sorted, so the
+/// result is sorted; an empty match is a legitimate reader result.
+fn glob_match_keys(composed: &drft::model::Graph, pattern: &str) -> Result<Vec<String>> {
+    let set = drft::config::compile_globs(std::slice::from_ref(&pattern.to_string()))?
+        .expect("a single non-empty pattern compiles to a set");
+    Ok(composed
+        .nodes
+        .keys()
+        .filter(|k| set.is_match(k.as_str()))
+        .cloned()
+        .collect())
 }
 
 /// List nodes that transitively depend on `paths` (a structural query; `paths`
