@@ -56,6 +56,8 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 
+`drft lock` takes paths to lock a subset: `drft lock a.md b.md` snapshots only those nodes and merges them into the existing lockfile, leaving every other entry untouched. Locking a path whose file has been deleted drops its entry — how you clear a `removed-node` finding once you have reviewed the deletion. Paths that resolve are written even when another path in the same call does not; the unresolved ones are reported and set a non-zero exit.
+
 ## Configuration
 
 `drft.toml` in the directory root:

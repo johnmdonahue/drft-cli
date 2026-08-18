@@ -74,7 +74,7 @@ fn try_main() -> Result<i32> {
 
     match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { path } => run_lock(&root, path.as_deref()),
+        Commands::Lock { paths } => run_lock(&root, paths),
         Commands::Impact {
             paths,
             depth,
@@ -120,49 +120,76 @@ files = ["**/*.md"]
 }
 
 /// Snapshot the composed graph into `drft.lock`: node content hashes and each
-/// node's outbound edge target hashes. With a path, lock only that node (its
-/// bytes and its outbound edge targets), merging into the existing lockfile.
-fn run_lock(root: &Path, path: Option<&str>) -> Result<i32> {
+/// node's outbound edge target hashes. With no paths, lock the whole graph. With
+/// paths, lock only those nodes (their bytes and outbound edge targets), merging
+/// into the existing lockfile — and drop the entry for a path that is locked but
+/// no longer in the graph, which is how a `removed-node` finding is reviewed and
+/// cleared. Resolution is tolerant: paths that resolve are written, unresolved
+/// paths are reported, and the command exits non-zero only if some path missed.
+fn run_lock(root: &Path, paths: &[String]) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
 
-    match path {
-        None => lock::write(&graph_root, &snapshot)?,
-        Some(path) => {
-            let node = resolve_node(&composed, root, &graph_root, path)?;
-            let mut existing = lock::read(&graph_root)?.unwrap_or_default();
-            let entry = snapshot
-                .nodes
-                .get(&node)
-                .expect("resolved node is in the snapshot")
-                .clone();
-            existing.nodes.insert(node, entry);
-            lock::write(&graph_root, &existing)?;
+    if paths.is_empty() {
+        lock::write(&graph_root, &snapshot)?;
+        return Ok(0);
+    }
+
+    let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+    let mut changed = false;
+    let mut misses = Vec::new();
+
+    for path in paths {
+        match resolve_lock_target(&composed, &existing, root, &graph_root, path) {
+            Some(LockTarget::Live(node)) => match snapshot.nodes.get(&node) {
+                Some(entry) => {
+                    existing.nodes.insert(node, entry.clone());
+                    changed = true;
+                }
+                // A directory (or other hash-less, edge-less node) carries nothing
+                // that can drift, so it is never a lock entry — nothing to lock.
+                None => eprintln!("nothing to lock: {node} (no content to snapshot)"),
+            },
+            Some(LockTarget::Removed(node)) => {
+                existing.nodes.remove(&node);
+                changed = true;
+                eprintln!("unlocked removed node: {node}");
+            }
+            None => misses.push(path.as_str()),
         }
     }
-    Ok(0)
+
+    if changed {
+        lock::write(&graph_root, &existing)?;
+    }
+
+    for path in &misses {
+        eprintln!("{}", not_found_message(&composed, Some(&existing), path));
+    }
+    Ok(if misses.is_empty() { 0 } else { 2 })
 }
 
-/// Resolve a user-supplied path to a node key in the composed graph.
+/// What a lock path resolves to: a node still in the graph (re-snapshot it), or a
+/// node present only in the lockfile because its file is gone (drop it — the
+/// reviewed-deletion case that clears a `removed-node` finding).
+enum LockTarget {
+    Live(String),
+    Removed(String),
+}
+
+/// Candidate node keys for a user-supplied path, most-specific first.
 ///
 /// Nodes are keyed by graph-root-relative path, but the argument is relative to
 /// the current directory (`root`) like any other CLI path — so it is resolved
-/// against `root`, normalized, and made relative to `graph_root` before lookup.
-/// This makes the command cwd-agnostic: the same file resolves whether given
+/// against `root`, normalized, and made relative to `graph_root` first. This
+/// makes lookup cwd-agnostic: the same file resolves whether given
 /// project-relative from a subdirectory or root-relative from the top. A `.md`
-/// suffix is tried as a fallback, and the raw argument is tried last for back
-/// compatibility. On a miss, a node whose key ends with the argument is
-/// suggested — but only when the suffix match is unambiguous (otherwise the
-/// candidates are listed, so an arbitrary pick is never presented as "the" one).
-fn resolve_node(
-    composed: &drft::model::Graph,
-    root: &Path,
-    graph_root: &Path,
-    path: &str,
-) -> Result<String> {
+/// suffix is offered as a fallback, and the raw argument is tried last for back
+/// compatibility.
+fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
     let mut candidates = Vec::new();
     if let Some(key) = graph_key(root, graph_root, path) {
         candidates.push(format!("{key}.md"));
@@ -170,27 +197,75 @@ fn resolve_node(
     }
     candidates.push(format!("{path}.md"));
     candidates.push(path.to_string());
+    candidates
+}
 
-    for candidate in &candidates {
-        if composed.nodes.contains_key(candidate) {
-            return Ok(candidate.clone());
+/// Resolve a user-supplied path to a node key in the composed graph. On a miss,
+/// a node whose key ends with the argument is suggested — but only when the
+/// suffix match is unambiguous (otherwise the candidates are listed, so an
+/// arbitrary pick is never presented as "the" one).
+fn resolve_node(
+    composed: &drft::model::Graph,
+    root: &Path,
+    graph_root: &Path,
+    path: &str,
+) -> Result<String> {
+    for candidate in node_candidates(root, graph_root, path) {
+        if composed.nodes.contains_key(&candidate) {
+            return Ok(candidate);
         }
     }
+    anyhow::bail!("{}", not_found_message(composed, None, path))
+}
 
-    // Suggest nodes whose key ends with the given path (e.g. a bare filename or
-    // a project-relative suffix) — the common "right file, wrong prefix" miss.
-    // Normalize the needle so it matches the graph's forward-slash keys, and only
-    // present a single suggestion when it's unambiguous.
+/// Resolve a lock path to a live node or a removed one. A live node (still in the
+/// graph) wins over a lockfile entry, so re-locking a tracked file updates it
+/// rather than dropping it; a path present only in the lockfile resolves to
+/// `Removed`. `None` means the path matched neither.
+fn resolve_lock_target(
+    composed: &drft::model::Graph,
+    existing: &lock::Lock,
+    root: &Path,
+    graph_root: &Path,
+    path: &str,
+) -> Option<LockTarget> {
+    let candidates = node_candidates(root, graph_root, path);
+    for candidate in &candidates {
+        if composed.nodes.contains_key(candidate) {
+            return Some(LockTarget::Live(candidate.clone()));
+        }
+    }
+    for candidate in &candidates {
+        if existing.nodes.contains_key(candidate) {
+            return Some(LockTarget::Removed(candidate.clone()));
+        }
+    }
+    None
+}
+
+/// Build the "node not found" message. Suggests nodes whose key ends with the
+/// given path (the common "right file, wrong prefix" miss), searching the graph
+/// and — when provided — the lockfile, so a mistyped removed node still gets a
+/// suggestion. Normalizes the needle to match the graph's forward-slash keys and
+/// only presents a single suggestion when it's unambiguous.
+fn not_found_message(
+    composed: &drft::model::Graph,
+    lock: Option<&lock::Lock>,
+    path: &str,
+) -> String {
     let needle = drft::util::normalize_relative_path(path);
     let suffix = format!("/{needle}");
-    let matches: Vec<&String> = composed
+    let mut matches: Vec<&String> = composed
         .nodes
         .keys()
+        .chain(lock.into_iter().flat_map(|l| l.nodes.keys()))
         .filter(|k| k.as_str() == needle || k.ends_with(&suffix))
         .collect();
+    matches.sort();
+    matches.dedup();
     match matches.as_slice() {
-        [] => anyhow::bail!("node not found: \"{path}\""),
-        [hit] => anyhow::bail!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        [] => format!("node not found: \"{path}\""),
+        [hit] => format!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
         many => {
             let shown = many
                 .iter()
@@ -202,7 +277,7 @@ fn resolve_node(
             } else {
                 String::new()
             };
-            anyhow::bail!(
+            format!(
                 "node not found: \"{path}\" — multiple matches: {}{more}",
                 shown.join(", ")
             )

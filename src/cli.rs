@@ -31,8 +31,10 @@ pub enum Commands {
 
     /// Snapshot the current state to drft.lock
     Lock {
-        /// Lock only this path and its outbound edges (default: lock the whole graph)
-        path: Option<String>,
+        /// Lock only these paths and their outbound edges (default: lock the whole
+        /// graph). A path that is locked but no longer on disk is dropped — the way
+        /// a removed-node finding is reviewed.
+        paths: Vec<String>,
     },
 
     /// Export the dependency graph as composed JGF
