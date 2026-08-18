@@ -2,6 +2,18 @@
 
 All notable changes to drft are documented here.
 
+## 0.14.0 (2026-08-18)
+
+Adds the first read verb of the #90 query surface. `drft nodes` reads what the graph knows about a set of paths, so an agent can ground itself on a file's metadata without exporting and parsing the whole composed graph.
+
+### New
+
+- **`drft nodes` projects node metadata** (#90). `drft nodes <selector…> [--namespace <g>…] [--field <k>…] [--format text|json]` reads the composed graph's node half, scoped by a selector and narrowed by namespace and field. A selector is an exact path (cwd-aware, with the `.md` fallback `impact` and `lock` use), a bare directory standing for its recursive subtree (`docs/` ⇒ `docs/**`), or a globset pattern over node keys — the same vocabulary as `drft.toml`'s `files`/`ignore` — and `docs`, `docs/`, and `docs/**` all name one set. `--namespace` accepts the bare graph name or its `@`-prefixed key, filters the node set as well as the metadata, and errors on an unknown namespace with the declared graphs listed; `--field` narrows to named keys and lists only the nodes that declare them, so a wholly unmatched field is a legitimate empty result rather than an error. Text output is a first-class projection — one compact block per node — for reading without parsing JSON; JSON carries `{ total, nodes: [{ id, metadata }] }`. As a reader it expands selectors freely, so a mistyped path errors while an empty glob is exit 0. First increment of #90; `edges` and `graph --format text` follow.
+
+### Fixed
+
+- **`drft lock` clears a removed node when you name its deleted path** (#89). A file deleted from the graph left a `removed-node` finding that nothing could clear, because the path no longer resolved to a node to re-snapshot. Naming the vanished path now drops its lockfile entry, so a reviewed deletion clears the finding — the case the live graph alone could not resolve. Relatedly, the `.md` fallback is only tried when the named path has no extension, so locking `guide.md` no longer also invents a `guide.md.md` candidate.
+
 ## 0.13.0 (2026-07-30)
 
 Makes the honest form of `drft lock` the convenient one, so agent guidance can scope the lock rather than ban it.
