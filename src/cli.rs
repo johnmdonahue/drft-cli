@@ -57,6 +57,22 @@ pub enum Commands {
         direction: Direction,
     },
 
+    /// Project nodes and their metadata, scoped by selector and narrowed by namespace/field
+    Nodes {
+        /// Globset patterns matched against node keys; a bare directory is its
+        /// recursive subtree. With none, every node is returned.
+        selectors: Vec<String>,
+
+        /// Restrict to a declared graph namespace (repeatable). Accepts the bare
+        /// name (`frontmatter`) or the prefixed key (`@frontmatter`).
+        #[arg(long = "namespace")]
+        namespaces: Vec<String>,
+
+        /// Restrict returned metadata to named fields (repeatable).
+        #[arg(long = "field")]
+        fields: Vec<String>,
+    },
+
     /// Check the composed graph against the lockfile for drift and structural findings
     Check,
 }
