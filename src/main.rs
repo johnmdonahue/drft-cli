@@ -182,12 +182,21 @@ fn run_lock(root: &Path, paths: &[String]) -> Result<i32> {
 /// suffix is offered as a fallback, and the raw argument is tried last for back
 /// compatibility.
 fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
+    // The `.md` fallback is for a bare doc name (`guide` → `guide.md`). An argument
+    // that already carries an extension names a specific file, so appending `.md`
+    // would only invent a bogus `guide.md.md` candidate — and, pushed first, try it
+    // ahead of the exact key.
+    let add_md = Path::new(path).extension().is_none();
     let mut candidates = Vec::new();
     if let Some(key) = graph_key(root, graph_root, path) {
-        candidates.push(format!("{key}.md"));
+        if add_md {
+            candidates.push(format!("{key}.md"));
+        }
         candidates.push(key);
     }
-    candidates.push(format!("{path}.md"));
+    if add_md {
+        candidates.push(format!("{path}.md"));
+    }
     candidates.push(path.to_string());
     candidates
 }

@@ -274,3 +274,34 @@ fn scoped_lock_of_a_directory_is_a_noop() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// An argument with an extension resolves to that exact node, not a `.md`-appended
+/// variant. With both `a.md` and `a.md.md` present, `lock a.md` must snapshot
+/// `a.md` — the `.md` fallback is only for a bare doc name.
+#[test]
+fn scoped_lock_of_an_extensioned_path_does_not_prefer_a_dot_md_variant() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    fs::write(dir.path().join("a.md.md"), "# A dot md").unwrap();
+    lock(dir.path());
+
+    fs::write(dir.path().join("a.md"), "# A edited").unwrap();
+    fs::write(dir.path().join("a.md.md"), "# A dot md edited").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = check(dir.path());
+    assert!(
+        !stdout.contains("stale-node]: a.md "),
+        "a.md itself should have been locked, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("stale-node]: a.md.md"),
+        "a.md.md must stay stale — it was not the named path, got: {stdout}"
+    );
+}
