@@ -73,6 +73,22 @@ pub enum Commands {
         fields: Vec<String>,
     },
 
+    /// Project edges (matched on source), scoped by selector and narrowed by namespace/field
+    Edges {
+        /// Globset patterns matched against node keys (edge sources); a bare
+        /// directory is its recursive subtree. With none, every edge is returned.
+        selectors: Vec<String>,
+
+        /// Restrict to a declared graph namespace (repeatable). Accepts the bare
+        /// name (`markdown`) or the prefixed key (`@markdown`).
+        #[arg(long = "namespace")]
+        namespaces: Vec<String>,
+
+        /// Restrict returned metadata to named fields (repeatable).
+        #[arg(long = "field")]
+        fields: Vec<String>,
+    },
+
     /// Check the composed graph against the lockfile for drift and structural findings
     Check,
 }
