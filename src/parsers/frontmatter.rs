@@ -126,7 +126,10 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        // `stripped` is owned and outlives the borrowed marked AST below.
+        // The edge scan runs on a *masked* copy: `strip_code` blanks code spans so
+        // a `path.md` written in prose can't be mistaken for a link target. Metadata
+        // capture (below) runs on the raw frontmatter instead, so the two no longer
+        // share a buffer. `stripped` is owned and outlives the borrowed AST.
         let stripped = strip_code(content);
         let Some(yaml_str) = frontmatter_block(&stripped) else {
             return ParseResult::default();
@@ -157,17 +160,32 @@ impl Parser for FrontmatterParser {
             })
             .collect();
 
-        ParseResult {
-            links,
-            metadata: Some(to_json(root)),
-        }
+        // Metadata captures the *raw* frontmatter so a code span in a value — the
+        // service name or path an author put in backticks — survives as the prose it
+        // is, instead of coming back blanked. The masked parse only stands in when
+        // the raw block is not valid YAML on its own (a code span can hide a `:` that
+        // would otherwise break the mapping), preserving the previous behavior there.
+        let metadata = raw_metadata(content).or_else(|| Some(to_json(root)));
+
+        ParseResult { links, metadata }
     }
 }
 
-/// Extract the YAML frontmatter block from code-stripped content — the text
-/// between the opening `---` and the next `\n---`, or `None` when there is no
-/// well-formed block. The slice keeps the newline that follows the opening
-/// fence, so a node's line within the block equals its line within the file.
+/// Parse the raw (unmasked) frontmatter block into metadata JSON. Returns `None`
+/// when there is no block or it is not valid YAML on its own — the caller falls
+/// back to the masked parse in that case.
+fn raw_metadata(content: &str) -> Option<serde_json::Value> {
+    let yaml_str = frontmatter_block(content)?;
+    let docs = MarkedYaml::load_from_str(yaml_str).ok()?;
+    docs.first().map(to_json)
+}
+
+/// Extract the YAML frontmatter block — the text between the opening `---` and
+/// the next `\n---`, or `None` when there is no well-formed block. Works on either
+/// the masked copy (for the edge scan) or the raw content (for metadata): masking
+/// preserves offsets and newlines, so both agree on the block's boundaries. The
+/// slice keeps the newline that follows the opening fence, so a node's line within
+/// the block equals its line within the file.
 fn frontmatter_block(stripped: &str) -> Option<&str> {
     let rest = stripped.strip_prefix("---")?;
     let end = rest.find("\n---")?;
@@ -443,6 +461,47 @@ mod tests {
     fn no_metadata_without_frontmatter() {
         let result = parse("# Just a heading\n");
         assert!(result.metadata.is_none());
+    }
+
+    #[test]
+    fn metadata_keeps_code_spans_in_values() {
+        // The edge-scan mask blanked code spans in captured metadata; metadata now
+        // carries the raw value, so `widget-loader` survives as the prose it is.
+        let content =
+            "---\npurpose: A code span like `widget-loader` and a path `claims.md`.\n---\n";
+        let meta = parse(content).metadata.unwrap();
+        assert_eq!(
+            meta["purpose"],
+            "A code span like `widget-loader` and a path `claims.md`."
+        );
+    }
+
+    #[test]
+    fn code_span_in_metadata_does_not_become_an_edge() {
+        // Scope guard: capturing the raw value must not make a code-span path an
+        // edge. The mask still governs edge extraction, so nothing links here.
+        let content = "---\npurpose: see `config.rs` for details\n---\n";
+        let result = parse(content);
+        assert!(result.links.is_empty(), "code spans are not edges");
+        assert_eq!(
+            result.metadata.unwrap()["purpose"],
+            "see `config.rs` for details"
+        );
+    }
+
+    #[test]
+    fn block_scalar_with_code_span_survives_whole() {
+        // The reported case: a multi-line `purpose` block scalar whose spans were
+        // blanked. Every character now comes back, newline included.
+        let content = "---\npurpose: |\n  Plain words. A span like `widget-loader` stays.\nsources:\n  - b.md\n---\n";
+        let result = parse(content);
+        assert_eq!(
+            result.metadata.unwrap()["purpose"],
+            "Plain words. A span like `widget-loader` stays.\n"
+        );
+        // The real derivation is still an edge.
+        assert_eq!(result.links.len(), 1);
+        assert_eq!(result.links[0].target, "b.md");
     }
 
     #[test]
