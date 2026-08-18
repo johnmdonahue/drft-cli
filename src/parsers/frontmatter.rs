@@ -179,10 +179,15 @@ impl FrontmatterParser {
 
 /// Capture the frontmatter block as node metadata. Prefers the *raw* block so a
 /// code span in a value — the service name or path an author put in backticks —
-/// survives as the prose it is, instead of coming back blanked. Falls back to the
-/// masked block only when the raw block is not valid YAML on its own (a code span
-/// can hide a `:` that would otherwise break the mapping), and returns `None` when
-/// there is no frontmatter block at all.
+/// survives as the prose it is, instead of coming back blanked.
+///
+/// Falls back to the masked block only when the raw block is not valid YAML on its
+/// own: an unquoted value that *begins* with a backtick, or hides a `:` inside a
+/// span, is rejected by every YAML parser (backtick is a reserved indicator), so
+/// drft — not a YAML linter — cannot recover it. The fallback keeps the sibling
+/// fields structured at the cost of blanking that one span; the author's fix is to
+/// quote the value or use a `|` block scalar, both of which the raw path captures
+/// verbatim. Returns `None` when there is no frontmatter block at all.
 fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     // Prefer the raw block so code spans survive as prose.
     if let Some(block) = frontmatter_block(content)
@@ -199,12 +204,15 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     docs.first().map(to_json)
 }
 
-/// Extract the YAML frontmatter block — the text between the opening `---` and
-/// the next `\n---`, or `None` when there is no well-formed block. Works on either
-/// the masked copy (for the edge scan) or the raw content (for metadata): masking
-/// preserves offsets and newlines, so both agree on the block's boundaries. The
-/// slice keeps the newline that follows the opening fence, so a node's line within
-/// the block equals its line within the file.
+/// Extract the YAML frontmatter block — the text between the opening `---` and the
+/// next `\n---`, or `None` when there is no well-formed block. Callable on the raw
+/// content (for metadata) or the masked copy (for the edge scan). The two usually
+/// agree on the block, but need not: `strip_code` blanks a whole span, newlines
+/// included, so a `\n---` hidden inside a code span survives in the raw content but
+/// not the masked copy, and the two then find different boundaries — one reason
+/// metadata and the edge scan run as independent buffers. The slice keeps the
+/// newline after the opening fence, so a node's line within the block equals its
+/// line within the file.
 fn frontmatter_block(stripped: &str) -> Option<&str> {
     let rest = stripped.strip_prefix("---")?;
     let end = rest.find("\n---")?;
@@ -517,14 +525,33 @@ mod tests {
 
     #[test]
     fn metadata_falls_back_to_masked_when_raw_is_not_valid_yaml() {
-        // A code span hiding a `:` makes the raw block ambiguous YAML; the masked
-        // parse stands in so the block still yields structured metadata (the span
-        // blanks in the fallback) rather than being dropped whole.
+        // A code span hiding a `:` makes the raw block invalid YAML; the masked
+        // parse stands in so the block still yields structured metadata rather than
+        // being dropped whole. `title` blanks to null — the tell that the *masked*
+        // path ran, not raw (raw would keep the backticks or fail outright) — while
+        // the sibling `status` comes through.
         let content = "---\ntitle: `key: value`\nstatus: draft\n---\n";
         let meta = parse(content)
             .metadata
-            .expect("masked fallback keeps metadata when raw YAML is ambiguous");
+            .expect("masked fallback keeps metadata when raw YAML is invalid");
+        assert!(
+            meta["title"].is_null(),
+            "masked span blanks to null: {meta}"
+        );
         assert_eq!(meta["status"], "draft");
+    }
+
+    #[test]
+    fn unquoted_leading_backtick_is_invalid_yaml_and_blanks_via_fallback() {
+        // Known limitation: a value that *starts* with a code span is invalid YAML
+        // (backtick is a reserved indicator — Psych, saphyr, and js-yaml all reject
+        // it), so the raw parse fails and the masked fallback blanks the leading
+        // span. Sibling fields are unharmed. The author's fix is to quote the value
+        // or use a `|` block scalar, both captured verbatim (see the tests above).
+        let content = "---\npurpose: `widget-loader` is the entry point\nstatus: ok\n---\n";
+        let meta = parse(content).metadata.unwrap();
+        assert_eq!(meta["purpose"], "is the entry point");
+        assert_eq!(meta["status"], "ok");
     }
 
     #[test]
