@@ -228,3 +228,41 @@ fn text_format_is_source_arrow_target() {
         "docs/a.md → index.md\n  @frontmatter\n    lines: [3]\n"
     );
 }
+
+/// An edge to a target with no defining node — an external URL, or a broken link —
+/// is still projected: edges are matched on source, and the target need not resolve.
+#[test]
+fn external_and_unresolved_targets_are_projected() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("a.md"),
+        "[home](https://example.com) and [gone](./missing.md)\n",
+    )
+    .unwrap();
+    let v = edges_json(dir.path(), &["a.md"]);
+    let targets: Vec<String> = v["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["target"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        targets.iter().any(|t| t == "https://example.com"),
+        "external URL is an edge target, got {targets:?}"
+    );
+    assert!(
+        targets.iter().any(|t| t == "missing.md"),
+        "unresolved link is an edge target, got {targets:?}"
+    );
+}
+
+/// Multiple selectors union their source sets.
+#[test]
+fn multiple_selectors_union_sources() {
+    let dir = fixture();
+    let v = edges_json(dir.path(), &["index.md", "docs/a.md"]);
+    let sources: Vec<String> = pairs(&v).into_iter().map(|(s, _)| s).collect();
+    assert!(sources.iter().any(|s| s == "index.md"), "got {sources:?}");
+    assert!(sources.iter().any(|s| s == "docs/a.md"), "got {sources:?}");
+}

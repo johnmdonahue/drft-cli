@@ -375,9 +375,15 @@ fn run_edges(
     let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
 
     let requested_ns = resolve_namespaces(&config, namespaces)?;
-    // Edges match on source, so the selector resolves to the source node set.
-    let sources = resolve_selectors(&composed, root, &graph_root, selectors)?;
-    let projected = edges::project(&composed, &sources, &requested_ns, fields);
+    // Edges match on source, so a selector resolves to the source node set. No
+    // selector means every edge — passed as `None` so it never rides on the node
+    // set, keeping the "every edge" guarantee independent of that coupling.
+    let sources = if selectors.is_empty() {
+        None
+    } else {
+        Some(resolve_selectors(&composed, root, &graph_root, selectors)?)
+    };
+    let projected = edges::project(&composed, sources.as_deref(), &requested_ns, fields);
 
     match format {
         OutputFormat::Json => {

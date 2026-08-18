@@ -28,22 +28,29 @@ pub struct EdgeProjection {
     pub metadata: Map<String, Value>,
 }
 
-/// Project the edges whose `source` is in `sources`, narrowing each edge's metadata
-/// to `namespaces`/`fields`. Iterates `graph.edges`, which compose sorts by
-/// `(source, target)`, so the result is deterministic.
+/// Project the edges whose `source` is in `sources`, or every edge when `sources`
+/// is `None`, narrowing each edge's metadata to `namespaces`/`fields`. `None` is
+/// the no-selector case and returns every edge directly, so the "every edge"
+/// guarantee holds independent of whether each source is also a node. Iterates
+/// `graph.edges`, which compose sorts by `(source, target)`, so the result is
+/// deterministic.
 ///
 /// An edge drops out only when a namespace or field filter is set and the edge
 /// carries none of it; with no filter, an edge with no per-graph metadata is kept.
+/// Note that `--namespace fs` matches no edges: fs contributes edge *provenance*
+/// (`_graphs`) but no `@fs` block, so the block-presence filter drops every one.
 pub fn project(
     graph: &Graph,
-    sources: &[String],
+    sources: Option<&[String]>,
     namespaces: &[String],
     fields: &[String],
 ) -> Vec<EdgeProjection> {
-    let sources: HashSet<&str> = sources.iter().map(String::as_str).collect();
+    let source_set: Option<HashSet<&str>> = sources.map(|s| s.iter().map(String::as_str).collect());
     let mut out = Vec::new();
     for edge in &graph.edges {
-        if !sources.contains(edge.source.as_str()) {
+        if let Some(set) = &source_set
+            && !set.contains(edge.source.as_str())
+        {
             continue;
         }
         let metadata = projection::filter_metadata(&edge.metadata, namespaces, fields);
@@ -111,7 +118,7 @@ mod tests {
     #[test]
     fn matches_on_source() {
         let g = sample_graph();
-        let out = project(&g, &["a.md".into()], &[], &[]);
+        let out = project(&g, Some(&["a.md".into()]), &[], &[]);
         let pairs: Vec<_> = out.iter().map(|e| (&e.source, &e.target)).collect();
         assert_eq!(
             pairs,
@@ -125,7 +132,7 @@ mod tests {
     #[test]
     fn bare_edge_keeps_empty_metadata_without_filter() {
         let g = sample_graph();
-        let out = project(&g, &["a.md".into()], &[], &[]);
+        let out = project(&g, Some(&["a.md".into()]), &[], &[]);
         let bare = out.iter().find(|e| e.target == "c.md").unwrap();
         assert!(
             bare.metadata.is_empty(),
@@ -138,10 +145,10 @@ mod tests {
     fn namespace_filter_drops_edges_without_the_lens() {
         let g = sample_graph();
         // Every edge leaving a.md, restricted to @frontmatter — none carry it.
-        let out = project(&g, &["a.md".into()], &["@frontmatter".into()], &[]);
+        let out = project(&g, Some(&["a.md".into()]), &["@frontmatter".into()], &[]);
         assert!(out.is_empty());
         // b.md's edge does carry @frontmatter.
-        let out = project(&g, &["b.md".into()], &["@frontmatter".into()], &[]);
+        let out = project(&g, Some(&["b.md".into()]), &["@frontmatter".into()], &[]);
         assert_eq!(out.len(), 1);
         assert_eq!(
             out[0].metadata,
@@ -154,7 +161,7 @@ mod tests {
         let g = sample_graph();
         let out = project(
             &g,
-            &["a.md".into()],
+            Some(&["a.md".into()]),
             &["@markdown".into()],
             &["lines".into()],
         );
@@ -171,7 +178,7 @@ mod tests {
         let g = sample_graph();
         let out = project(
             &g,
-            &["a.md".into()],
+            Some(&["a.md".into()]),
             &["@markdown".into()],
             &["lines".into()],
         );
@@ -184,10 +191,40 @@ mod tests {
     #[test]
     fn format_text_bare_edge_is_header_only() {
         let g = sample_graph();
-        let out = project(&g, &["a.md".into()], &[], &[]);
+        let out = project(&g, Some(&["a.md".into()]), &[], &[]);
         let text = format_text(&out);
         // The bare a.md → c.md edge renders as just its header, no indented lines.
         assert!(text.contains("a.md → c.md\n"), "got: {text}");
+    }
+
+    #[test]
+    fn none_sources_returns_every_edge() {
+        // The no-selector case: every edge, in `(source, target)` order, without
+        // riding on the node set.
+        let g = sample_graph();
+        let out = project(&g, None, &[], &[]);
+        let pairs: Vec<_> = out
+            .iter()
+            .map(|e| (e.source.as_str(), e.target.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![("a.md", "b.md"), ("a.md", "c.md"), ("b.md", "c.md")]
+        );
+    }
+
+    #[test]
+    fn namespace_fs_matches_no_edges() {
+        // fs contributes edge provenance (`_graphs`) but no `@fs` block, so the
+        // block-presence filter drops every fs edge — the documented asymmetry with
+        // `nodes --namespace fs`, where every node has an `@fs` block.
+        let mut g = Graph::composed();
+        g.add_edge(Edge::with_metadata(
+            "link",
+            "target.md",
+            obj(json!({ "_graphs": ["@fs"] })),
+        ));
+        assert!(project(&g, None, &["@fs".into()], &[]).is_empty());
     }
 
     #[test]
