@@ -424,27 +424,33 @@ fn resolve_selector(
     }
 
     let mut matched: Vec<String> = Vec::new();
+    let prefix = graph_key(root, graph_root, selector);
 
-    // Exact, cwd-aware resolution (with the `.md` fallback), most-specific first. A
-    // file resolves to itself; a directory is represented by the subtree below, not
-    // the bare directory node — so `docs`, `docs/`, and `docs/**` name one set. A
-    // directory that exists but is empty is a legitimate empty result, not a typo.
-    let mut dir_hit = false;
-    for candidate in node_candidates(root, graph_root, selector) {
-        if let Some(node) = composed.nodes.get(&candidate) {
-            if node.fs_type() == Some("directory") {
-                dir_hit = true;
-            } else {
+    // Does the exact key (no `.md` fallback) name a directory node? Checking this
+    // before the fallback is what keeps a `docs.md` file from shadowing a `docs`
+    // directory when both exist. A trailing slash also declares a directory
+    // outright. Either way, a directory is represented by the subtree below, not the
+    // bare directory node — so `docs`, `docs/`, and `docs/**` name one set.
+    let names_dir = prefix
+        .as_deref()
+        .and_then(|key| composed.nodes.get(key))
+        .is_some_and(|node| node.fs_type() == Some("directory"));
+    let is_dir = names_dir || selector.ends_with('/');
+
+    // A non-directory selector resolves to an exact node, with the `.md` fallback
+    // impact/lock use, most-specific first. A file resolves to itself.
+    if !is_dir {
+        for candidate in node_candidates(root, graph_root, selector) {
+            if composed.nodes.contains_key(&candidate) {
                 matched.push(candidate);
+                break;
             }
-            break;
         }
     }
 
-    // Bare directory ⇒ recursive subtree (`docs/` ⇒ `docs/**`). `graph_key`
-    // normalizes the selector to a graph-root-relative prefix the same way exact
-    // resolution does.
-    if let Some(prefix) = graph_key(root, graph_root, selector) {
+    // Directory ⇒ recursive subtree (`docs/` ⇒ `docs/**`). `graph_key` normalizes
+    // the selector to a graph-root-relative prefix the same way exact resolution does.
+    if let Some(prefix) = &prefix {
         for key in glob_match_keys(composed, &format!("{prefix}/**"))? {
             if !matched.contains(&key) {
                 matched.push(key);
@@ -452,9 +458,10 @@ fn resolve_selector(
         }
     }
 
-    // A non-glob selector that resolves to nothing at all is a likely typo — error
-    // with a suggestion rather than reading as an empty answer.
-    if matched.is_empty() && !dir_hit {
+    // Nothing resolved is a likely typo — error with a suggestion — unless the
+    // selector named a real directory that simply has no descendants, which is a
+    // legitimate empty result.
+    if matched.is_empty() && !names_dir {
         return Err(not_found_error(composed.nodes.keys(), selector));
     }
     Ok(matched)

@@ -321,3 +321,29 @@ fn text_format_is_the_default_and_separates_nodes() {
         "blank line between node blocks, got: {stdout}"
     );
 }
+
+/// When a `docs.md` file and a `docs/` directory both exist, every spelling of the
+/// directory selector still names exactly the subtree — the sibling file must not
+/// leak in, so `docs`, `docs/`, and `docs/**` stay one set.
+#[test]
+fn directory_selector_is_not_shadowed_by_a_sibling_md_file() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("docs.md"), "# Docs, the file").unwrap();
+    let docs = dir.path().join("docs");
+    fs::create_dir_all(&docs).unwrap();
+    fs::write(docs.join("a.md"), "# A").unwrap();
+
+    for sel in ["docs", "docs/", "docs/**"] {
+        let v = nodes_json(dir.path(), &[sel]);
+        let keys = ids(&v);
+        assert!(
+            keys.iter().any(|k| k == "docs/a.md"),
+            "{sel}: names the subtree, got {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "docs.md"),
+            "{sel}: the sibling file must not leak in, got {keys:?}"
+        );
+    }
+}

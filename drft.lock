@@ -300,7 +300,7 @@ hash = "b3:b437206e0e16ea1a0643edda5d8b1ab7361816bb42222bc80e488e13329b0516"
 
 [[node]]
 path = "src/main.rs"
-hash = "b3:f6e7b95ab9eb1bf5f2fc560464220671963773e8e2f5afa9c11937fd842830aa"
+hash = "b3:b23403cf50afbb8fe1b5129b0d19e17021d8019c668589f34a9960c8028d35aa"
 
 [[node]]
 path = "src/model.rs"
@@ -308,7 +308,7 @@ hash = "b3:8c1fefc41499866612547a86607ed805cb3ad04adceaafbafaba59aa495a1c4e"
 
 [[node]]
 path = "src/nodes.rs"
-hash = "b3:5ad688839aca7d13501ab5916f64168e2a797c7ce9df4f18434743a4a032e9d6"
+hash = "b3:1c02814ec3c3cd546ce6245bad395daae5bea765ef857784b76fe6c630793344"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
@@ -376,7 +376,7 @@ hash = "b3:a4e6a7a9c1bec9cf0eee23d73d224ba35725928da4f0d1bb8671f1cf6a85f213"
 
 [[node]]
 path = "tests/nodes.rs"
-hash = "b3:3c04a48d346712c178ad1c85f0aeacd469b5c2c035d84fe6628af09044dcedb9"
+hash = "b3:5a150c88e48a59c6a010cbf87d0ba753d143494d4f9664610e8ca42acfacb9ae"
 
 [[node]]
 path = "tests/output.rs"

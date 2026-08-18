@@ -119,15 +119,15 @@ pub fn format_text(nodes: &[NodeProjection]) -> String {
     format!("{}\n", blocks.join("\n\n"))
 }
 
-/// Render a metadata value for text output: a bare string/number/bool prints as
-/// itself; an array or object prints as compact JSON so the block stays scannable.
+/// Render a metadata value for text output. An ordinary string prints bare; a
+/// string carrying control characters — a YAML block scalar's newlines, say —
+/// would break the one-line-per-field layout (and an embedded blank line could
+/// read as a node separator), so it renders as compact JSON like every array,
+/// object, number, or bool: the controls are escaped and the field stays one line.
 fn render_value(value: &Value) -> String {
     match value {
-        Value::String(s) => s.clone(),
-        Value::Bool(b) => b.to_string(),
-        Value::Number(n) => n.to_string(),
-        Value::Null => "null".to_string(),
-        other => other.to_string(),
+        Value::String(s) if !s.chars().any(char::is_control) => s.clone(),
+        _ => value.to_string(),
     }
 }
 
@@ -236,5 +236,29 @@ mod tests {
     #[test]
     fn format_text_empty_is_blank() {
         assert_eq!(format_text(&[]), "");
+    }
+
+    #[test]
+    fn multiline_string_renders_escaped_to_stay_one_line() {
+        // A YAML block scalar's newline must not break the one-line-per-field layout
+        // or read as a node separator: it renders as escaped JSON on a single line.
+        let mut g = Graph::composed();
+        g.set_node(
+            "docs/a.md",
+            Node::new(obj(json!({
+                "@frontmatter": { "purpose": "line one\nline two" },
+                "@fs": { "type": "file", "hash": "b3:1" }
+            }))),
+        );
+        let out = project(
+            &g,
+            &["docs/a.md".into()],
+            &["@frontmatter".into()],
+            &["purpose".into()],
+        );
+        assert_eq!(
+            format_text(&out),
+            "docs/a.md\n  @frontmatter\n    purpose: \"line one\\nline two\"\n"
+        );
     }
 }
