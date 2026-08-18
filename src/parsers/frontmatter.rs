@@ -126,20 +126,35 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        // The edge scan runs on a *masked* copy: `strip_code` blanks code spans so
-        // a `path.md` written in prose can't be mistaken for a link target. Metadata
-        // capture (below) runs on the raw frontmatter instead, so the two no longer
-        // share a buffer. `stripped` is owned and outlives the borrowed AST.
+        // Two independent buffers, one per job. The edge scan runs on a *masked*
+        // copy — `strip_code` blanks code spans so a `path.md` written in prose
+        // can't be mistaken for a link target. Metadata runs on the *raw*
+        // frontmatter, so a code span in a value survives as the prose it is.
+        // Neither gates the other: a stray backtick that blanks the closing `---`
+        // in the masked copy must not also erase the metadata, and vice versa.
+        ParseResult {
+            links: self.extract_links(content),
+            metadata: extract_metadata(content),
+        }
+    }
+}
+
+impl FrontmatterParser {
+    /// Extract frontmatter link edges from the *masked* frontmatter block, where
+    /// code spans are blanked so a `path.md` written in prose is never a link
+    /// target. An absent or malformed masked block yields no links.
+    fn extract_links(&self, content: &str) -> Vec<Link> {
+        // `stripped` is owned and outlives the borrowed marked AST below.
         let stripped = strip_code(content);
         let Some(yaml_str) = frontmatter_block(&stripped) else {
-            return ParseResult::default();
+            return Vec::new();
         };
         // Malformed YAML contributes nothing — drft is not a YAML linter.
         let Ok(docs) = MarkedYaml::load_from_str(yaml_str) else {
-            return ParseResult::default();
+            return Vec::new();
         };
         let Some(root) = docs.first() else {
-            return ParseResult::default();
+            return Vec::new();
         };
 
         let mut candidates = Vec::new();
@@ -151,32 +166,36 @@ impl Parser for FrontmatterParser {
             }
             None => collect_links(root, &mut candidates),
         }
-        let links = candidates
+        candidates
             .into_iter()
             .filter(|(value, _)| is_link_candidate(value))
             .map(|(target, line)| Link {
                 target,
                 line: Some(line),
             })
-            .collect();
-
-        // Metadata captures the *raw* frontmatter so a code span in a value — the
-        // service name or path an author put in backticks — survives as the prose it
-        // is, instead of coming back blanked. The masked parse only stands in when
-        // the raw block is not valid YAML on its own (a code span can hide a `:` that
-        // would otherwise break the mapping), preserving the previous behavior there.
-        let metadata = raw_metadata(content).or_else(|| Some(to_json(root)));
-
-        ParseResult { links, metadata }
+            .collect()
     }
 }
 
-/// Parse the raw (unmasked) frontmatter block into metadata JSON. Returns `None`
-/// when there is no block or it is not valid YAML on its own — the caller falls
-/// back to the masked parse in that case.
-fn raw_metadata(content: &str) -> Option<serde_json::Value> {
-    let yaml_str = frontmatter_block(content)?;
-    let docs = MarkedYaml::load_from_str(yaml_str).ok()?;
+/// Capture the frontmatter block as node metadata. Prefers the *raw* block so a
+/// code span in a value — the service name or path an author put in backticks —
+/// survives as the prose it is, instead of coming back blanked. Falls back to the
+/// masked block only when the raw block is not valid YAML on its own (a code span
+/// can hide a `:` that would otherwise break the mapping), and returns `None` when
+/// there is no frontmatter block at all.
+fn extract_metadata(content: &str) -> Option<serde_json::Value> {
+    // Prefer the raw block so code spans survive as prose.
+    if let Some(block) = frontmatter_block(content)
+        && let Ok(docs) = MarkedYaml::load_from_str(block)
+        && let Some(root) = docs.first()
+    {
+        return Some(to_json(root));
+    }
+    // Fall back to the masked block only when the raw block is not valid YAML on its
+    // own — a code span can hide a `:` that would otherwise break the mapping.
+    let stripped = strip_code(content);
+    let block = frontmatter_block(&stripped)?;
+    let docs = MarkedYaml::load_from_str(block).ok()?;
     docs.first().map(to_json)
 }
 
@@ -466,14 +485,46 @@ mod tests {
     #[test]
     fn metadata_keeps_code_spans_in_values() {
         // The edge-scan mask blanked code spans in captured metadata; metadata now
-        // carries the raw value, so `widget-loader` survives as the prose it is.
-        let content =
-            "---\npurpose: A code span like `widget-loader` and a path `claims.md`.\n---\n";
+        // carries the raw value across every field, not just one — the issue flagged
+        // `title`/`description` too, so assert a second field, not only `purpose`.
+        let content = "---\npurpose: A code span like `widget-loader` and a path `claims.md`.\ntitle: the `Foo` service\n---\n";
         let meta = parse(content).metadata.unwrap();
         assert_eq!(
             meta["purpose"],
             "A code span like `widget-loader` and a path `claims.md`."
         );
+        assert_eq!(meta["title"], "the `Foo` service");
+    }
+
+    #[test]
+    fn metadata_survives_when_a_stray_backtick_breaks_the_masked_block() {
+        // An unclosed backtick in a value pairs with one in the body, so the mask
+        // blanks everything between — including the closing `---` — and the edge
+        // scan finds no block. Metadata reads the raw frontmatter on its own buffer,
+        // so it is still captured. (The masked edge scan finds nothing, unchanged.)
+        let content =
+            "---\npurpose: a `widget\nsources:\n  - b.md\n---\n\n# Body with a `code span`\n";
+        let result = parse(content);
+        let meta = result
+            .metadata
+            .expect("metadata comes from the raw block, not the masked one");
+        assert_eq!(meta["purpose"], "a `widget");
+        assert!(
+            result.links.is_empty(),
+            "the masked edge scan finds no block"
+        );
+    }
+
+    #[test]
+    fn metadata_falls_back_to_masked_when_raw_is_not_valid_yaml() {
+        // A code span hiding a `:` makes the raw block ambiguous YAML; the masked
+        // parse stands in so the block still yields structured metadata (the span
+        // blanks in the fallback) rather than being dropped whole.
+        let content = "---\ntitle: `key: value`\nstatus: draft\n---\n";
+        let meta = parse(content)
+            .metadata
+            .expect("masked fallback keeps metadata when raw YAML is ambiguous");
+        assert_eq!(meta["status"], "draft");
     }
 
     #[test]
