@@ -8,7 +8,9 @@ fn graph_json(dir: &std::path::Path) -> serde_json::Value {
 }
 
 fn graph_json_args(dir: &std::path::Path, extra: &[&str]) -> serde_json::Value {
-    let mut args = vec!["-C", dir.to_str().unwrap(), "graph"];
+    // `graph` respects `--format`, whose default is `text`; JSON assertions ask
+    // for it explicitly.
+    let mut args = vec!["-C", dir.to_str().unwrap(), "graph", "--format", "json"];
     args.extend_from_slice(extra);
     let output = drft_bin().args(&args).output().unwrap();
     assert!(
@@ -67,7 +69,13 @@ fn graph_nodes_are_sorted() {
     fs::write(dir.path().join("a.md"), "a").unwrap();
 
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "graph"])
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "graph",
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -210,4 +218,93 @@ fn graph_raw_emits_the_set() {
     let markdown = graphs.iter().find(|g| g["label"] == "markdown").unwrap();
     assert_eq!(frontmatter["nodes"]["doc.md"]["metadata"]["title"], "Doc");
     assert!(markdown["nodes"].as_object().unwrap().is_empty());
+}
+
+/// `--raw` is JSON-only: it emits the fragment set even under the default text
+/// format, so `drft graph --raw | jq` keeps working without `--format json`.
+#[test]
+fn graph_raw_ignores_text_format() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph", "--raw"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).expect("raw is JSON");
+    assert!(v["graphs"].is_array(), "raw emits the fragment set");
+}
+
+/// Bare `drft graph` defaults to the text projection: the composed graph as
+/// `# nodes` / `# edges` sections, so a model reads it without parsing JSON.
+#[test]
+fn graph_defaults_to_text_with_node_and_edge_sections() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Section headers label the two halves; the boundary is unambiguous.
+    let nodes_hdr = stdout.find("# nodes").expect("nodes section header");
+    let edges_hdr = stdout.find("# edges").expect("edges section header");
+    assert!(nodes_hdr < edges_hdr, "nodes section precedes edges");
+
+    // Nodes render with their `@fs` metadata; the markdown link is an edge.
+    assert!(
+        stdout.contains("index.md\n  @fs\n"),
+        "node block with @fs:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("index.md → setup.md"),
+        "edge block source → target:\n{stdout}"
+    );
+    // The edge belongs under the edges section, not the nodes one.
+    let edge_pos = stdout.find("index.md → setup.md").unwrap();
+    assert!(edge_pos > edges_hdr, "edge sits under the edges header");
+}
+
+/// The text and JSON projections cover the same node/edge set; `--format json`
+/// still yields the composed JGF document. (The views are not information-equal:
+/// text is a projection that drops `_graphs` provenance, JGF keeps it.)
+#[test]
+fn graph_format_json_still_emits_jgf() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+    let v = graph_json(dir.path());
+    assert_eq!(
+        v.as_object().unwrap().keys().collect::<Vec<_>>(),
+        vec!["graph"]
+    );
+}
+
+/// The text projection lists nodes in sorted order, like the JSON one — the text
+/// path rides on a different code route (`BTreeMap` iteration via the whole-graph
+/// selector), so it gets its own ordering guard.
+#[test]
+fn graph_text_nodes_are_sorted() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("z.md"), "z").unwrap();
+    fs::write(dir.path().join("a.md"), "a").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let a = stdout.find("\na.md\n").expect("a.md node block");
+    let z = stdout.find("\nz.md\n").expect("z.md node block");
+    assert!(a < z, "text node blocks should be sorted");
 }

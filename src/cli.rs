@@ -35,9 +35,10 @@ pub enum Commands {
         paths: Vec<String>,
     },
 
-    /// Export the dependency graph as composed JGF
+    /// Render the composed graph as text or JGF
     Graph {
         /// Emit the raw set of per-graph fragments instead of the composed graph
+        /// (JSON only; ignores --format)
         #[arg(long)]
         raw: bool,
     },

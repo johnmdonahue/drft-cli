@@ -85,6 +85,31 @@ pub fn join_blocks(blocks: Vec<String>) -> String {
     format!("{}\n", blocks.join("\n\n"))
 }
 
+/// Join labeled sections for the composed `graph` text view. Each section is a
+/// `# <label>` header followed by its already-rendered body (from `join_blocks`),
+/// with one blank line between the header and a non-empty body and one blank line
+/// between sections. An empty body renders as its header alone — the section is
+/// still named, so a graph with no edges reads as `# edges` with nothing under it
+/// rather than a missing or dangling section. Metadata lines are always indented,
+/// so they never look like a marker; a flush-left content line could in principle
+/// collide (a file literally named `# edges` would render one), but no ordinary
+/// path or `source → target` header begins with `# `, so in practice the markers
+/// stand out.
+pub fn join_sections(sections: &[(&str, &str)]) -> String {
+    let mut out = String::new();
+    for (i, (label, body)) in sections.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!("# {label}\n"));
+        if !body.is_empty() {
+            out.push('\n');
+            out.push_str(body);
+        }
+    }
+    out
+}
+
 /// Render a metadata value for text output. An ordinary string prints bare; a
 /// string carrying control characters — a YAML block scalar's newlines, say —
 /// would break the one-line-per-field layout (and an embedded blank line could
@@ -154,5 +179,46 @@ mod tests {
     fn join_blocks_envelope() {
         assert_eq!(join_blocks(vec![]), "");
         assert_eq!(join_blocks(vec!["a".into(), "b".into()]), "a\n\nb\n");
+    }
+
+    #[test]
+    fn join_sections_labels_both_and_separates_with_a_blank_line() {
+        // Each body is what `join_blocks` yields — a trailing newline included.
+        let nodes = join_blocks(vec!["docs/a.md".into()]);
+        let edges = join_blocks(vec!["a.md → b.md".into()]);
+        assert_eq!(
+            join_sections(&[("nodes", &nodes), ("edges", &edges)]),
+            "# nodes\n\ndocs/a.md\n\n# edges\n\na.md → b.md\n"
+        );
+    }
+
+    #[test]
+    fn join_sections_keeps_an_empty_section_as_its_header() {
+        // A graph with no edges: the `# edges` header still names the section, with
+        // nothing under it and no dangling blank line.
+        let nodes = join_blocks(vec!["docs/a.md".into()]);
+        assert_eq!(
+            join_sections(&[("nodes", &nodes), ("edges", "")]),
+            "# nodes\n\ndocs/a.md\n\n# edges\n"
+        );
+    }
+
+    #[test]
+    fn join_sections_empty_graph_is_both_headers() {
+        // A graph with no nodes and no edges: both headers, nothing under either.
+        assert_eq!(
+            join_sections(&[("nodes", ""), ("edges", "")]),
+            "# nodes\n\n# edges\n"
+        );
+    }
+
+    #[test]
+    fn join_sections_empty_nodes_with_edges() {
+        // An empty leading section still gets its header, then the populated one.
+        let edges = join_blocks(vec!["a.md → b.md".into()]);
+        assert_eq!(
+            join_sections(&[("nodes", ""), ("edges", &edges)]),
+            "# nodes\n\n# edges\n\na.md → b.md\n"
+        );
     }
 }

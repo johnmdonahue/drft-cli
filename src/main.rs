@@ -7,6 +7,7 @@ use drft::graphs;
 use drft::impact;
 use drft::lock;
 use drft::nodes;
+use drft::projection;
 use drft::rules;
 
 use anyhow::{Context, Result};
@@ -82,7 +83,7 @@ fn try_main() -> Result<i32> {
             depth,
             direction,
         } => run_impact(&root, cli.format, paths, *depth, *direction),
-        Commands::Graph { raw } => run_graph(&root, *raw),
+        Commands::Graph { raw } => run_graph(&root, *raw, cli.format),
         Commands::Nodes {
             selectors,
             namespaces,
@@ -306,17 +307,41 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
     (!key.is_empty()).then_some(key)
 }
 
-fn run_graph(root: &Path, raw: bool) -> Result<i32> {
+fn run_graph(root: &Path, raw: bool, format: OutputFormat) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
 
-    let json = if raw {
-        serde_json::to_string_pretty(&set)?
-    } else {
-        serde_json::to_string_pretty(&compose::compose(&set).into_document())?
-    };
-    println!("{json}");
+    // `--raw` dumps the per-graph fragment set — a JSON structure with no text
+    // projection — so it is JSON-only and ignores `--format`. The composed views
+    // below honor it.
+    if raw {
+        println!("{}", serde_json::to_string_pretty(&set)?);
+        return Ok(0);
+    }
+
+    let composed = compose::compose(&set);
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&composed.into_document())?
+            );
+        }
+        OutputFormat::Text => {
+            // The whole composed graph as text: every node's metadata, then every
+            // edge. `# nodes` / `# edges` headers keep the two sections legible
+            // for a model reading the graph without parsing JSON. Reuses the same
+            // per-node/per-edge rendering as `drft nodes` and `drft edges`.
+            let keys = resolve_selectors(&composed, root, &graph_root, &[])?;
+            let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
+            let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
+            print!(
+                "{}",
+                projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)])
+            );
+        }
+    }
     Ok(0)
 }
 

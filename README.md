@@ -46,15 +46,15 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 
 ## Commands
 
-| Command       | What it does                                                |
-| ------------- | ----------------------------------------------------------- |
-| `drft init`   | Create a default `drft.toml`                                |
-| `drft graph`  | Export the composed graph as JGF (`--raw` for the set)      |
-| `drft nodes`  | Project node metadata by path, subtree, or glob             |
-| `drft edges`  | Project edges (matched on source) by path, subtree, or glob |
-| `drft impact` | Show what depends on given files, sorted by review priority |
-| `drft check`  | Compare the graph against the lockfile for drift            |
-| `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking       |
+| Command       | What it does                                                   |
+| ------------- | -------------------------------------------------------------- |
+| `drft init`   | Create a default `drft.toml`                                   |
+| `drft graph`  | Render the composed graph as text or JGF (`--raw` for the set) |
+| `drft nodes`  | Project node metadata by path, subtree, or glob                |
+| `drft edges`  | Project edges (matched on source) by path, subtree, or glob    |
+| `drft impact` | Show what depends on given files, sorted by review priority    |
+| `drft check`  | Compare the graph against the lockfile for drift               |
+| `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking          |
 
 `drft lock` with no argument snapshots the whole graph. Given paths — `drft lock
 src/lib.rs docs/guide.md` — it locks only those nodes and their outbound edges,
