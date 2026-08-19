@@ -1,4 +1,5 @@
 ---
+purpose: configure the walk, graphs, and rules through drft.toml
 sources:
   - ../src/config.rs
   - ../src/cli.rs

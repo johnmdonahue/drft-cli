@@ -1,4 +1,5 @@
 ---
+purpose: the frontmatter parser — edges from link values plus node metadata
 sources:
   - ../../src/parsers/frontmatter.rs
 ---

@@ -1,7 +1,9 @@
 ---
+purpose: read the graph with nodes, edges, and graph to ground an agent
 sources:
   - ../src/nodes.rs
   - ../src/edges.rs
+  - ../src/impact.rs
   - ../src/projection.rs
   - ../src/main.rs
   - ../src/cli.rs

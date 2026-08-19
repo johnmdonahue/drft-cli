@@ -1,3 +1,7 @@
+---
+purpose: map of drft's reference documentation
+---
+
 # Documentation
 
 drft builds a dependency graph from your files and checks it for drift. The

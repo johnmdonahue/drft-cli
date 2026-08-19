@@ -1,4 +1,5 @@
 ---
+purpose: the drift and structural findings drft check emits
 sources:
   - ../../src/rules/staleness.rs
   - ../../src/rules/structural.rs

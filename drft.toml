@@ -16,6 +16,9 @@ files = ["**/*.md"]
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
+# Edges come only from `sources`; every other frontmatter field (purpose, …) is
+# pure node metadata, read with `drft nodes --field`.
+keys = ["sources"]
 
 # Drift is the value prop — promote staleness to error for CI.
 [rules.stale-node]

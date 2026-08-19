@@ -1,4 +1,5 @@
 ---
+purpose: the markdown parser — link edges from body link syntax
 sources:
   - ../../src/parsers/markdown.rs
 ---
