@@ -38,6 +38,7 @@ pub enum Commands {
     /// Export the dependency graph as composed JGF
     Graph {
         /// Emit the raw set of per-graph fragments instead of the composed graph
+        /// (JSON only; ignores --format)
         #[arg(long)]
         raw: bool,
     },
