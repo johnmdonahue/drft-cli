@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[command(
     name = "drft",
     version,
-    about = "Structural integrity checker for linked file systems"
+    about = "A drift checker for linked files, built for LLMs and humans working in the same repo"
 )]
 pub struct Cli {
     #[command(subcommand)]

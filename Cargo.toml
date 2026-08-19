@@ -8,7 +8,7 @@ keywords = ["graph", "linter", "dependency-graph", "structural-integrity"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/johnmdonahue/drft-cli"
-description = "A structural integrity checker for linked file systems"
+description = "A drift checker for linked files, built for LLMs and humans working in the same repo"
 
 [lib]
 name = "drft"

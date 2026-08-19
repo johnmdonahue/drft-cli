@@ -1,6 +1,6 @@
 # drft
 
-A structural integrity checker for linked file systems. Treats a directory of files as a dependency graph — files are nodes, links are edges — and validates the graph against configurable rules.
+A drift checker for linked files, built for LLMs and humans working in the same repo. It treats a directory of files as a dependency graph — files are nodes, links are edges — and flags what drifts when a dependency changes.
 
 ## Dogfooding
 

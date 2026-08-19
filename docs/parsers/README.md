@@ -1,4 +1,5 @@
 ---
+purpose: how parsers extract links and metadata from a graph's files
 sources:
   - ../../src/parsers/mod.rs
 ---
