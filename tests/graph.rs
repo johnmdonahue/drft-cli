@@ -272,8 +272,9 @@ fn graph_defaults_to_text_with_node_and_edge_sections() {
     assert!(edge_pos > edges_hdr, "edge sits under the edges header");
 }
 
-/// The text and JSON projections describe the same graph: `--format json` still
-/// yields the composed JGF document.
+/// The text and JSON projections cover the same node/edge set; `--format json`
+/// still yields the composed JGF document. (The views are not information-equal:
+/// text is a projection that drops `_graphs` provenance, JGF keeps it.)
 #[test]
 fn graph_format_json_still_emits_jgf() {
     let dir = TempDir::new().unwrap();
@@ -285,4 +286,25 @@ fn graph_format_json_still_emits_jgf() {
         v.as_object().unwrap().keys().collect::<Vec<_>>(),
         vec!["graph"]
     );
+}
+
+/// The text projection lists nodes in sorted order, like the JSON one — the text
+/// path rides on a different code route (`BTreeMap` iteration via the whole-graph
+/// selector), so it gets its own ordering guard.
+#[test]
+fn graph_text_nodes_are_sorted() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("z.md"), "z").unwrap();
+    fs::write(dir.path().join("a.md"), "a").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "graph"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let a = stdout.find("\na.md\n").expect("a.md node block");
+    let z = stdout.find("\nz.md\n").expect("z.md node block");
+    assert!(a < z, "text node blocks should be sorted");
 }

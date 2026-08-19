@@ -90,8 +90,11 @@ pub fn join_blocks(blocks: Vec<String>) -> String {
 /// with one blank line between the header and a non-empty body and one blank line
 /// between sections. An empty body renders as its header alone — the section is
 /// still named, so a graph with no edges reads as `# edges` with nothing under it
-/// rather than a missing or dangling section. No node id or `source → target`
-/// header begins with `# `, so the section markers never collide with content.
+/// rather than a missing or dangling section. Metadata lines are always indented,
+/// so they never look like a marker; a flush-left content line could in principle
+/// collide (a file literally named `# edges` would render one), but no ordinary
+/// path or `source → target` header begins with `# `, so in practice the markers
+/// stand out.
 pub fn join_sections(sections: &[(&str, &str)]) -> String {
     let mut out = String::new();
     for (i, (label, body)) in sections.iter().enumerate() {
@@ -197,6 +200,25 @@ mod tests {
         assert_eq!(
             join_sections(&[("nodes", &nodes), ("edges", "")]),
             "# nodes\n\ndocs/a.md\n\n# edges\n"
+        );
+    }
+
+    #[test]
+    fn join_sections_empty_graph_is_both_headers() {
+        // A graph with no nodes and no edges: both headers, nothing under either.
+        assert_eq!(
+            join_sections(&[("nodes", ""), ("edges", "")]),
+            "# nodes\n\n# edges\n"
+        );
+    }
+
+    #[test]
+    fn join_sections_empty_nodes_with_edges() {
+        // An empty leading section still gets its header, then the populated one.
+        let edges = join_blocks(vec!["a.md → b.md".into()]);
+        assert_eq!(
+            join_sections(&[("nodes", ""), ("edges", &edges)]),
+            "# nodes\n\n# edges\n\na.md → b.md\n"
         );
     }
 }
