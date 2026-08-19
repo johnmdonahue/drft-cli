@@ -18,7 +18,7 @@ hash = "b3:1441b37db086033ab82ff2795298724b4192812f7bc47f676c94c2946372f45e"
 
 [[node]]
 path = ".gitignore"
-hash = "b3:2a96e992de334b67fe25ad9bfd611a83ee491da2a51160d1ed6344a02b764042"
+hash = "b3:fdfab84f5fb35961e9a6a9b20c82f2c9f60ca9c9ab801eaa055e286d46ceb5bd"
 
 [[node]]
 path = "CHANGELOG.md"
