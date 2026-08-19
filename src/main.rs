@@ -2,6 +2,7 @@ mod cli;
 
 use drft::compose;
 use drft::config;
+use drft::edges;
 use drft::graphs;
 use drft::impact;
 use drft::lock;
@@ -87,6 +88,11 @@ fn try_main() -> Result<i32> {
             namespaces,
             fields,
         } => run_nodes(&root, cli.format, selectors, namespaces, fields),
+        Commands::Edges {
+            selectors,
+            namespaces,
+            fields,
+        } => run_edges(&root, cli.format, selectors, namespaces, fields),
         Commands::Check => run_check(&root, cli.format, cli.color),
     }
 }
@@ -347,6 +353,49 @@ fn run_nodes(
             // One compact block per node — id, indented namespaces, fields — so a
             // model can read it for grounding without parsing JSON.
             print!("{}", nodes::format_text(&projected));
+        }
+    }
+
+    Ok(0)
+}
+
+/// Project the composed graph's edges, matched on source: the selector picks source
+/// nodes, and every edge leaving them is returned — the outbound one-hop view. A
+/// reader, so expanding a selector to many sources is expected and has no side
+/// effect. With no selector, every edge is projected.
+fn run_edges(
+    root: &Path,
+    format: OutputFormat,
+    selectors: &[String],
+    namespaces: &[String],
+    fields: &[String],
+) -> Result<i32> {
+    let graph_root = find_graph_root(root);
+    let config = Config::load(&graph_root)?;
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+
+    let requested_ns = resolve_namespaces(&config, namespaces)?;
+    // Edges match on source, so a selector resolves to the source node set. No
+    // selector means every edge — passed as `None` so it never rides on the node
+    // set, keeping the "every edge" guarantee independent of that coupling.
+    let sources = if selectors.is_empty() {
+        None
+    } else {
+        Some(resolve_selectors(&composed, root, &graph_root, selectors)?)
+    };
+    let projected = edges::project(&composed, sources.as_deref(), &requested_ns, fields);
+
+    match format {
+        OutputFormat::Json => {
+            let output = serde_json::json!({
+                "total": projected.len(),
+                "edges": projected,
+            });
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        OutputFormat::Text => {
+            // One compact block per edge — `source → target`, then its metadata.
+            print!("{}", edges::format_text(&projected));
         }
     }
 

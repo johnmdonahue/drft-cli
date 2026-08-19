@@ -51,6 +51,7 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft init`   | Create a default `drft.toml`                                |
 | `drft graph`  | Export the composed graph as JGF (`--raw` for the set)      |
 | `drft nodes`  | Project node metadata by path, subtree, or glob             |
+| `drft edges`  | Project edges (matched on source) by path, subtree, or glob |
 | `drft impact` | Show what depends on given files, sorted by review priority |
 | `drft check`  | Compare the graph against the lockfile for drift            |
 | `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking       |

@@ -13,6 +13,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use crate::model::{Graph, namespace};
+use crate::projection;
 
 /// Normalize a `--namespace` value to its `@`-prefixed metadata key. Accepts the
 /// bare config name (`frontmatter`) or the already-prefixed form (`@frontmatter`),
@@ -51,36 +52,11 @@ pub fn project(
         let Some(node) = graph.nodes.get(key) else {
             continue;
         };
-        let mut metadata = Map::new();
-        for (ns, value) in &node.metadata {
-            // Only `@<graph>` lenses are projected; `_graphs` provenance is not.
-            if !ns.starts_with('@') {
-                continue;
-            }
-            if !namespaces.is_empty() && !namespaces.contains(ns) {
-                continue;
-            }
-            let block = if fields.is_empty() {
-                value.clone()
-            } else {
-                let Some(obj) = value.as_object() else {
-                    continue;
-                };
-                let filtered: Map<String, Value> = obj
-                    .iter()
-                    .filter(|(k, _)| fields.iter().any(|f| f == *k))
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
-                if filtered.is_empty() {
-                    continue;
-                }
-                Value::Object(filtered)
-            };
-            metadata.insert(ns.clone(), block);
-        }
+        let metadata = projection::filter_metadata(&node.metadata, namespaces, fields);
         // A namespace or field filter that left nothing means this node does not
-        // carry what was asked for — drop it rather than emit an empty block.
-        if metadata.is_empty() && (!namespaces.is_empty() || !fields.is_empty()) {
+        // carry what was asked for — drop it rather than emit an empty block. Every
+        // node has `@fs`, so with no filter this never drops one.
+        if projection::filtered_out(&metadata, namespaces, fields) {
             continue;
         }
         out.push(NodeProjection {
@@ -97,38 +73,13 @@ pub fn project(
 /// inline; arrays and objects render as compact JSON. An empty projection renders
 /// to the empty string (no trailing newline), so piping stays clean.
 pub fn format_text(nodes: &[NodeProjection]) -> String {
-    if nodes.is_empty() {
-        return String::new();
-    }
     let mut blocks = Vec::new();
     for node in nodes {
         let mut lines = vec![node.id.clone()];
-        for (ns, value) in &node.metadata {
-            lines.push(format!("  {ns}"));
-            match value.as_object() {
-                Some(obj) => {
-                    for (k, v) in obj {
-                        lines.push(format!("    {k}: {}", render_value(v)));
-                    }
-                }
-                None => lines.push(format!("    {}", render_value(value))),
-            }
-        }
+        projection::push_metadata_lines(&mut lines, &node.metadata);
         blocks.push(lines.join("\n"));
     }
-    format!("{}\n", blocks.join("\n\n"))
-}
-
-/// Render a metadata value for text output. An ordinary string prints bare; a
-/// string carrying control characters — a YAML block scalar's newlines, say —
-/// would break the one-line-per-field layout (and an embedded blank line could
-/// read as a node separator), so it renders as compact JSON like every array,
-/// object, number, or bool: the controls are escaped and the field stays one line.
-fn render_value(value: &Value) -> String {
-    match value {
-        Value::String(s) if !s.chars().any(char::is_control) => s.clone(),
-        _ => value.to_string(),
-    }
+    projection::join_blocks(blocks)
 }
 
 #[cfg(test)]
