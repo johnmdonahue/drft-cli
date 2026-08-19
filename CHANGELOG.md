@@ -2,6 +2,23 @@
 
 All notable changes to drft are documented here.
 
+## 0.15.0 (2026-08-19)
+
+Finishes the read verbs of the #90 query surface. `drft edges` projects the graph's edges, and `drft graph` gains a text rendering of the whole composed graph — so an agent can read nodes, edges, or the entire graph without parsing JSON.
+
+### Breaking changes
+
+- **`drft graph` defaults to text output** (#90). `drft graph` now honors the global `--format`, whose default is `text`, and renders the composed graph as `# nodes` / `# edges` sections. It previously always emitted the composed JGF as pretty JSON. **This breaks pipelines**: `drft graph | jq …` now feeds text to `jq`, which errors — pass `--format json` to restore the JGF document. `--raw` is unaffected — it stays JSON-only and ignores `--format`, so `drft graph --raw` is unchanged.
+
+### New
+
+- **`drft edges` projects the graph's edges** (#90). `drft edges <selector…> [--namespace <g>…] [--field <k>…] [--format text|json]` reads the composed graph's edge half, matched on source: the selector resolves to source nodes — the same vocabulary as `drft nodes` (exact path, bare directory standing for its recursive subtree, or a globset over node keys) — and the projection is every edge leaving them, the outbound one-hop view. With no selector, every edge. It stays distinct from `drft impact` (a transitive traversal from a seed set) and `drft check` (a whole-graph gate). `--namespace` and `--field` narrow the edge set and its metadata as they do for `nodes`; a mistyped source errors while an empty glob is exit 0. Text is one block per edge — `source → target` then its metadata; JSON carries `{ total, edges: [{ source, target, metadata }] }`. An edge with no per-graph metadata still projects. The metadata narrowing and text rendering shared with `nodes` moved into a new `projection` module.
+- **`drft graph` renders the composed graph as text** (#90). Under the default `--format text`, `drft graph` prints every node's metadata under a `# nodes` header, then every edge under `# edges`, reusing the `nodes` and `edges` renderings — so a model reads the whole graph in one call without parsing JSON. `--format json` still yields the composed JGF (see the breaking-changes note on the default). Scoped selectors on `graph` are out of scope — `drft nodes` and `drft edges` cover scoped projection.
+
+### Fixed
+
+- **`@frontmatter` metadata keeps code spans** (#95). The frontmatter parser masks backtick code spans before scanning for link targets, so a `path.md` written in prose can't be mistaken for an edge. That masked buffer was also captured as node metadata, so an `@frontmatter` value like `purpose` came back with its code spans blanked — surfaced once `drft nodes` and `drft graph --format json` read frontmatter metadata as prose. Metadata is now captured from the raw frontmatter while edge extraction still runs on the masked copy, so code spans survive as authored and edges are byte-identical to before. A value that is invalid YAML on its own — one beginning with a backtick, or hiding a `:` in an unquoted span — still falls back to the masked parse; quoting it or using a `|` block scalar captures it verbatim.
+
 ## 0.14.0 (2026-08-18)
 
 Adds the first read verb of the #90 query surface. `drft nodes` reads what the graph knows about a set of paths, so an agent can ground itself on a file's metadata without exporting and parsing the whole composed graph.
