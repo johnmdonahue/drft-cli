@@ -96,7 +96,13 @@ See the [configuration reference](docs/config.md) for all options.
 
 ## LLM integration
 
-All commands support `--format json` with actionable `fix` fields in every diagnostic. `drft impact` is designed for agent workflows — it shows which files to review after an edit, sorted by priority.
+drft grounds an agent in a codebase's structure without making it open every file. The read verbs project what the graph already knows:
+
+- `drft nodes <path>` returns a file's metadata — its frontmatter fields (say, `purpose` or `sources`) plus its `fs` type and hash — so an agent learns what a file is _for_ without reading it.
+- `drft edges <path>` returns what a file links to; `drft impact <path>` returns what depends on it, sorted by review priority.
+- `drft graph` renders the whole composed graph as compact text, so a model reads the structure in one call without parsing JSON.
+
+Every command also emits `--format json` with actionable `fix` fields in each diagnostic. See [Reading the graph](docs/reading.md) for the selector grammar and the `--namespace` / `--field` filters.
 
 This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and `.claude/settings.json` for the hook configuration.
 

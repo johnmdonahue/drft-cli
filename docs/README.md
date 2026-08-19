@@ -11,3 +11,4 @@ graph to emit findings.
 - [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`
 - [Parsers](parsers/README.md) — how parsers extract links and metadata
 - [Rules](rules/README.md) — the drift and structural findings `drft check` emits
+- [Reading the graph](reading.md) — the `nodes`, `edges`, and `graph` read verbs, and grounding an agent on graph metadata

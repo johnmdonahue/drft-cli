@@ -98,7 +98,7 @@ hash = "b3:871c2fd5cdfe89fa6ff01664a1420bf40d0ab18c0e250e59a3ab27225f31bb0e"
 
 [[node]]
 path = "README.md"
-hash = "b3:d83c14f6950c702404e883b7cab6d40bea9b6c3ca5635a8b9af196684846a4ff"
+hash = "b3:ad52d251fb0442eac3f97e52cd31612e970bbf0236d655faaa5c20921c344212"
 
 [[node.edge]]
 target = "CLAUDE.md"
@@ -106,11 +106,15 @@ target_hash = "b3:0608a5e5ab70aa73b528d4a3402b712df92ca9913231a76046aa2e815474e8
 
 [[node.edge]]
 target = "docs/README.md"
-target_hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2e1"
+target_hash = "b3:2a1a8d8111f2c056343531d5a55651f2713aee9320a7d97b4aef702ac717d97e"
 
 [[node.edge]]
 target = "docs/config.md"
 target_hash = "b3:8b71e3f3697412fa4f88a0e9dbd52a66c7f68549cf1869b5da1b5c2c76b7125e"
+
+[[node.edge]]
+target = "docs/reading.md"
+target_hash = "b3:1078da2341994ee7572d6c75133d1cb4eaecc427c4555f5ea451d643f6274adf"
 
 [[node.edge]]
 target = "https://github.com/johnmdonahue/drft-cli/releases"
@@ -125,7 +129,7 @@ hash = "b3:70c1b3ef7b655bf68cbb1a35b6d9683924c97b34b9f6647f9aef507ef116cebf"
 
 [[node]]
 path = "docs/README.md"
-hash = "b3:8d7418c6e44101f556bd8bb0852965e24ba8259cbd21a29d1f48c080f069d2e1"
+hash = "b3:2a1a8d8111f2c056343531d5a55651f2713aee9320a7d97b4aef702ac717d97e"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -134,6 +138,10 @@ target_hash = "b3:8b71e3f3697412fa4f88a0e9dbd52a66c7f68549cf1869b5da1b5c2c76b712
 [[node.edge]]
 target = "docs/parsers/README.md"
 target_hash = "b3:9907cb7e84e573adeefca75129e6a7f8514e3d28ca101cbb19fb55265083f011"
+
+[[node.edge]]
+target = "docs/reading.md"
+target_hash = "b3:1078da2341994ee7572d6c75133d1cb4eaecc427c4555f5ea451d643f6274adf"
 
 [[node.edge]]
 target = "docs/rules/README.md"
@@ -206,6 +214,30 @@ target_hash = "b3:ef2ebd19dbc6c8b7d88f9561c2afceed6c8db753fcd8f2c49e20194150986d
 [[node.edge]]
 target = "src/parsers/markdown.rs"
 target_hash = "b3:952fafe8eb3a776168da8ec935438fbd39de4599375f1c0e82334d3dd8d36183"
+
+[[node]]
+path = "docs/reading.md"
+hash = "b3:1078da2341994ee7572d6c75133d1cb4eaecc427c4555f5ea451d643f6274adf"
+
+[[node.edge]]
+target = "src/cli.rs"
+target_hash = "b3:55a73406640ceb7106cd6a8ac8a16b0c9bf0dbdbad59b714a5dda20bff6bc3ff"
+
+[[node.edge]]
+target = "src/edges.rs"
+target_hash = "b3:be1dec67033a9c7cc489da7609beafedb6ce6ff043178ae908e6ceb8e9ac599b"
+
+[[node.edge]]
+target = "src/main.rs"
+target_hash = "b3:4b25105ac3ffc8b8136b8e4ba36092644f2cdd6774204f36252170d92413480d"
+
+[[node.edge]]
+target = "src/nodes.rs"
+target_hash = "b3:89a1a9a83bac02b9bdac38f1c0b4f3a86de8a7d07bfa246c5e5762fff44c8922"
+
+[[node.edge]]
+target = "src/projection.rs"
+target_hash = "b3:c45f328c6d4cc3cb58e4d764ac360bde82d4ee17e411dbcb786fa7019a76c63b"
 
 [[node]]
 path = "docs/rules/README.md"
