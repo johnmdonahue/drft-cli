@@ -237,7 +237,7 @@ target_hash = "b3:4b25105ac3ffc8b8136b8e4ba36092644f2cdd6774204f36252170d9241348
 
 [[node.edge]]
 target = "src/nodes.rs"
-target_hash = "b3:89a1a9a83bac02b9bdac38f1c0b4f3a86de8a7d07bfa246c5e5762fff44c8922"
+target_hash = "b3:bd63f170e88bb37482e7384aa3becb20cea1d7dfcf2be4b4ab79a8e636329920"
 
 [[node.edge]]
 target = "src/projection.rs"
@@ -348,7 +348,7 @@ hash = "b3:8c1fefc41499866612547a86607ed805cb3ad04adceaafbafaba59aa495a1c4e"
 
 [[node]]
 path = "src/nodes.rs"
-hash = "b3:89a1a9a83bac02b9bdac38f1c0b4f3a86de8a7d07bfa246c5e5762fff44c8922"
+hash = "b3:bd63f170e88bb37482e7384aa3becb20cea1d7dfcf2be4b4ab79a8e636329920"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"

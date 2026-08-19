@@ -1,5 +1,5 @@
 //! `drft nodes`: project node metadata for a set of paths — the read verb that
-//! grounds an LLM (or a human) on what the graph knows about each node.
+//! grounds the reader on what the graph knows about each node.
 //!
 //! `nodes` is a *reader*: its selectors expand (an exact path, a subtree, or a
 //! glob), which is safe because a read has no side effect. This module owns the
