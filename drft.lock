@@ -114,7 +114,7 @@ target_hash = "b3:a782543cd5ba74b04fd8583049352836636b4c3b05f429877235ca9ef963dd
 
 [[node.edge]]
 target = "docs/reading.md"
-target_hash = "b3:90b0460f916bcd13e76f7ed82c49f16e13bcb3fd8f63c1251c1f085fe5a26258"
+target_hash = "b3:8a1deddf23a2b49ac31705f188c439575579d34052e318a07b5bbad7a37b6e27"
 
 [[node.edge]]
 target = "https://github.com/johnmdonahue/drft-cli/releases"
@@ -141,7 +141,7 @@ target_hash = "b3:48af6aaf933bc63dc2f2c1ef5fb4ac77dbf9dddb695779a751d8a77f10e203
 
 [[node.edge]]
 target = "docs/reading.md"
-target_hash = "b3:90b0460f916bcd13e76f7ed82c49f16e13bcb3fd8f63c1251c1f085fe5a26258"
+target_hash = "b3:8a1deddf23a2b49ac31705f188c439575579d34052e318a07b5bbad7a37b6e27"
 
 [[node.edge]]
 target = "docs/rules/README.md"
@@ -165,7 +165,7 @@ target_hash = "b3:e4e6c40e2a07fd773c48102664c26af665fa45a4502523d9e1df97d52c9726
 
 [[node.edge]]
 target = "src/cli.rs"
-target_hash = "b3:55a73406640ceb7106cd6a8ac8a16b0c9bf0dbdbad59b714a5dda20bff6bc3ff"
+target_hash = "b3:ae162d118f40d11d1f5df0dd021808af110232cc813d30a1a78e15bc14265bb5"
 
 [[node.edge]]
 target = "src/config.rs"
@@ -217,11 +217,15 @@ target_hash = "b3:952fafe8eb3a776168da8ec935438fbd39de4599375f1c0e82334d3dd8d361
 
 [[node]]
 path = "docs/reading.md"
-hash = "b3:90b0460f916bcd13e76f7ed82c49f16e13bcb3fd8f63c1251c1f085fe5a26258"
+hash = "b3:8a1deddf23a2b49ac31705f188c439575579d34052e318a07b5bbad7a37b6e27"
 
 [[node.edge]]
 target = "src/cli.rs"
-target_hash = "b3:55a73406640ceb7106cd6a8ac8a16b0c9bf0dbdbad59b714a5dda20bff6bc3ff"
+target_hash = "b3:ae162d118f40d11d1f5df0dd021808af110232cc813d30a1a78e15bc14265bb5"
+
+[[node.edge]]
+target = "src/config.rs"
+target_hash = "b3:b0e7369b409c17d0bafc0284666b68a138a06abc23ff7b3905b95f37ae70f906"
 
 [[node.edge]]
 target = "src/edges.rs"
@@ -304,7 +308,7 @@ hash = "b3:f56fdcddee36a2cc7c9c55b619b80c0571ca85e89334e06741b157d4315d84d4"
 
 [[node]]
 path = "src/cli.rs"
-hash = "b3:55a73406640ceb7106cd6a8ac8a16b0c9bf0dbdbad59b714a5dda20bff6bc3ff"
+hash = "b3:ae162d118f40d11d1f5df0dd021808af110232cc813d30a1a78e15bc14265bb5"
 
 [[node]]
 path = "src/compose.rs"

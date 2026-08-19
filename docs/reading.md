@@ -7,6 +7,7 @@ sources:
   - ../src/projection.rs
   - ../src/main.rs
   - ../src/cli.rs
+  - ../src/config.rs
 ---
 
 # Reading the graph
@@ -126,5 +127,6 @@ rather than from its bytes:
 Because a selector expands to many nodes, one call can ground a whole subtree:
 `drft nodes docs/ --namespace frontmatter --field purpose` returns every doc's
 stated purpose, and `drft nodes $(drft impact observations.md --format json | jq
--r '.impacted[].path')` reads the metadata of exactly the files an edit puts in
-review.
+-r '.impacted[].node')` reads the metadata of exactly the files an edit puts in
+review. (The key is `.node`; `impact` reports no `.path`, and an empty expansion
+would collapse to a bare `drft nodes` that projects every node.)
