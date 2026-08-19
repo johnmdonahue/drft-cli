@@ -26,7 +26,7 @@ hash = "b3:cf23c9d6fc2d8d849114f11cdb8ab84c4461cc99fa92ffd559c463f0ccefd211"
 
 [[node]]
 path = "CLAUDE.md"
-hash = "b3:0608a5e5ab70aa73b528d4a3402b712df92ca9913231a76046aa2e815474e8b7"
+hash = "b3:0257778ef9a19e27c49c766f0e59b9d696e238758b2dcb60cebaf95b34cca2a4"
 
 [[node.edge]]
 target = "RELEASING.md"
@@ -90,7 +90,7 @@ target_hash = "b3:6ce4d5c42026071af2b68201e9debff0112ad9d9d8d8fc75d16d562d5fc1a7
 
 [[node]]
 path = "Cargo.toml"
-hash = "b3:380393d708f2c4cd480503d35c394b42c7c59fb608321fdfb17252d88223b8bd"
+hash = "b3:dad801e584c3606d1102e7f5d21c40426743d14a037d743afedb2f91d53a18a2"
 
 [[node]]
 path = "LICENSE"
@@ -98,15 +98,15 @@ hash = "b3:871c2fd5cdfe89fa6ff01664a1420bf40d0ab18c0e250e59a3ab27225f31bb0e"
 
 [[node]]
 path = "README.md"
-hash = "b3:ad52d251fb0442eac3f97e52cd31612e970bbf0236d655faaa5c20921c344212"
+hash = "b3:376b83692dd7ef2d17c78b01ae9b0158a5ac9c9939d7dcda22089d497368f420"
 
 [[node.edge]]
 target = "CLAUDE.md"
-target_hash = "b3:0608a5e5ab70aa73b528d4a3402b712df92ca9913231a76046aa2e815474e8b7"
+target_hash = "b3:0257778ef9a19e27c49c766f0e59b9d696e238758b2dcb60cebaf95b34cca2a4"
 
 [[node.edge]]
 target = "docs/README.md"
-target_hash = "b3:02385b2bdd49988b5b4e18df9bc326328e4629806923ad3f4855560193c8b356"
+target_hash = "b3:5d7c551d580837a78023fee615d11b96bedeb22ac00a7b28f0c71d724f2c08d6"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -129,7 +129,7 @@ hash = "b3:70c1b3ef7b655bf68cbb1a35b6d9683924c97b34b9f6647f9aef507ef116cebf"
 
 [[node]]
 path = "docs/README.md"
-hash = "b3:02385b2bdd49988b5b4e18df9bc326328e4629806923ad3f4855560193c8b356"
+hash = "b3:5d7c551d580837a78023fee615d11b96bedeb22ac00a7b28f0c71d724f2c08d6"
 
 [[node.edge]]
 target = "docs/config.md"

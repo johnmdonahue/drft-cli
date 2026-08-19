@@ -4,11 +4,12 @@ purpose: map of drft's reference documentation
 
 # Documentation
 
-drft builds a dependency graph from your files and checks it for drift. The
-substrate is a **set of independent graphs** — `fs` (a node per file, typed and
-hashed), `markdown` (link edges), and `frontmatter` (edges plus metadata). A
-composition step merges them by path into one graph, and rules read the composed
-graph to emit findings.
+drft is a drift checker for linked files, built for LLMs and humans working in
+the same repo. It builds a dependency graph from your files and checks it for
+drift. The substrate is a **set of independent graphs** — `fs` (a node per file,
+typed and hashed), `markdown` (link edges), and `frontmatter` (edges plus
+metadata). A composition step merges them by path into one graph, and rules read
+the composed graph to emit findings.
 
 ## Reference
 

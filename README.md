@@ -1,12 +1,12 @@
 # drft
 
-A structural integrity checker for linked file systems.
+A drift checker for linked files, built for LLMs and humans working in the same repo.
 
-Files link to other files. When a target changes, the files that depend on it may no longer be accurate. drft tracks these dependencies and flags what needs review.
+When one file derives from another — a doc from code, a summary from its source, a plan from the research behind it — a change to the source can leave the dependent out of date. drft records these derivations as links in a graph, snapshots a reviewed baseline with `drft lock`, and reports which files a change has left stale or otherwise drifted. Staleness is one kind of drift; the graph's shape drifts too — a broken link, a removed file, a new edge — and drft reports those as well.
 
-It treats your directory as a graph — files are nodes, links are edges — and checks the structure for drift. `drft check` catches broken links and staleness. `drft lock` snapshots hashes so it can detect when a dependency changes and flag everything downstream. `drft impact <file>` tells you what to review when you touch a file.
+Whether a flagged derivation still holds is a reading, not something a linter can settle, so drft surfaces it for review rather than asserting it's broken. `drft impact <file>` lists what to review before an edit. `drft nodes <path>` reads a file's declared metadata so an agent can orient without opening it. `drft check` reports drift; `drft lock` records that a change was reviewed.
 
-Each `drft.toml` declares exactly one graph. Run drft from anywhere inside the directory tree and it walks up to the nearest config. That's the model — everything else is configuration.
+Each `drft.toml` declares one graph; run drft from anywhere inside the tree and it walks up to the nearest config.
 
 ## Install
 
