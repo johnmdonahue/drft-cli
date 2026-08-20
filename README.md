@@ -56,13 +56,18 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft check`  | Compare the graph against the lockfile for drift               |
 | `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking          |
 
-`drft lock` with no argument snapshots the whole graph. Given paths — `drft lock
-src/lib.rs docs/guide.md` — it locks only those nodes and their outbound edges,
+`drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges,
 merging into the existing lockfile. A lock asserts the locked state was reviewed,
 so scope it to what you actually read: a bulk lock also clears staleness you
 never looked at, including someone else's unfinished work. Paths all resolve
 before anything is written, so a typo fails the command rather than leaving a
 partial lock behind.
+
+The whole-graph lock is `drft lock --all`, and it has to be named: `drft lock`
+with no paths errors (exit 2). Zero paths is also what a shell hands over when a
+command substitution matches nothing, so without the flag a scoped invocation
+whose expansion came back empty would snapshot the whole graph at exit 0, with
+nothing in the output to say it had.
 
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 

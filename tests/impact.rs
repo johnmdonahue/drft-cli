@@ -137,7 +137,7 @@ fn scoped_lock_refreshes_only_one_node() {
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
     drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "lock"])
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
         .output()
         .unwrap();
 

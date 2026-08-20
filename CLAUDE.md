@@ -23,10 +23,10 @@ Do not suppress warnings by removing links, ignoring paths, or disabling rules �
 **Lock only what you reviewed, by name.** A lock asserts the locked state was read and is correct, so the assertion has to stay narrow enough to be true:
 
 - **You may** run `drft lock <path>...` for paths you edited this session, once you have reviewed their impacted dependents. Name every path.
-- **Never run bare `drft lock`.** It clears staleness across the whole graph, including files you never opened and work someone else has in flight. That launders an unreviewed state into a reviewed one, and the record that it was never read is gone.
+- **Never run `drft lock --all`.** It clears staleness across the whole graph, including files you never opened and work someone else has in flight. That launders an unreviewed state into a reviewed one, and the record that it was never read is gone. Bare `drft lock` is a usage error (exit 2), so an empty shell expansion can no longer widen a scoped lock by accident — but `--all` typed deliberately still does everything this rule forbids.
 - **Never lock staleness you did not cause.** If `drft check` reports findings you cannot account for, stop and say so — those are the user's to inspect.
 
-The one bare lock that is correct is **regenerating a baseline**: no `drft.lock` exists, or a release requires every lockfile to be rewritten (0.8.0, 0.9.0, and 0.10.0 each did). There is no prior baseline to preserve, so nothing is being laundered. Ask first, and say that is what you are doing — it is the call the rule otherwise forbids.
+The one `--all` lock that is correct is **regenerating a baseline**: no `drft.lock` exists, or a release requires every lockfile to be rewritten (0.8.0, 0.9.0, and 0.10.0 each did). There is no prior baseline to preserve, so nothing is being laundered. Ask first, and say that is what you are doing — it is the call the rule otherwise forbids.
 
 **A `stale-edge` clears from the declaring side.** An edge's recorded target hash lives on the file that wrote the link, so locking a changed source clears its own `stale-node` and leaves every inbound `stale-edge` standing. Those clear when you lock the dependent — the file whose promise you actually checked. Scoped locking therefore cannot wave off the review it exists to record.
 

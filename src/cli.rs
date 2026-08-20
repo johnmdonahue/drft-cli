@@ -31,8 +31,14 @@ pub enum Commands {
 
     /// Snapshot the current state to drft.lock
     Lock {
-        /// Lock only these paths and their outbound edges (default: lock the whole graph)
+        /// Lock these paths and their outbound edges (at least one required, or --all)
         paths: Vec<String>,
+
+        /// Lock every node in the graph. Required to be explicit: a lock asserts
+        /// the locked state was reviewed, and zero paths is also what a shell
+        /// hands over when a command substitution matches nothing.
+        #[arg(long)]
+        all: bool,
     },
 
     /// Render the composed graph as text or JGF

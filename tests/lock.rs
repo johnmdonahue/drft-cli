@@ -12,9 +12,9 @@ fn check(dir: &std::path::Path) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn lock(dir: &std::path::Path) {
+fn lock_all(dir: &std::path::Path) {
     let output = drft_bin()
-        .args(["-C", dir.to_str().unwrap(), "lock"])
+        .args(["-C", dir.to_str().unwrap(), "lock", "--all"])
         .output()
         .unwrap();
     assert!(output.status.success(), "lock should exit 0");
@@ -29,7 +29,7 @@ fn first_lock_then_clean_check() {
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    lock(dir.path());
+    lock_all(dir.path());
 
     let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
     assert!(lockfile.contains("[[node]]"));
@@ -63,7 +63,7 @@ fn edit_dependency_reports_stale_node_and_stale_edge() {
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    lock(dir.path());
+    lock_all(dir.path());
     fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
 
     let stdout = check(dir.path());
@@ -85,11 +85,11 @@ fn relock_clears_staleness() {
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    lock(dir.path());
+    lock_all(dir.path());
     fs::write(dir.path().join("setup.md"), "# Setup (edited)").unwrap();
     assert!(check(dir.path()).contains("stale"));
 
-    lock(dir.path());
+    lock_all(dir.path());
     assert!(
         !check(dir.path()).contains("stale"),
         "re-locking should clear staleness"
@@ -105,7 +105,7 @@ fn deleted_file_reports_unresolved_and_removed_node() {
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    lock(dir.path());
+    lock_all(dir.path());
     fs::remove_file(dir.path().join("setup.md")).unwrap();
 
     let stdout = check(dir.path());
@@ -129,7 +129,7 @@ fn scoped_lock_accepts_several_paths() {
     for name in ["a", "b", "c"] {
         fs::write(dir.path().join(format!("{name}.md")), format!("# {name}")).unwrap();
     }
-    lock(dir.path());
+    lock_all(dir.path());
 
     for name in ["a", "b", "c"] {
         fs::write(
@@ -161,7 +161,7 @@ fn scoped_lock_writes_nothing_when_a_path_is_unresolvable() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
-    lock(dir.path());
+    lock_all(dir.path());
     fs::write(dir.path().join("a.md"), "# a edited").unwrap();
 
     let output = drft_bin()
@@ -192,7 +192,7 @@ fn scoped_lock_drops_a_removed_node() {
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[doomed](doomed.md)").unwrap();
     fs::write(dir.path().join("doomed.md"), "# Doomed").unwrap();
-    lock(dir.path());
+    lock_all(dir.path());
 
     fs::remove_file(dir.path().join("doomed.md")).unwrap();
     assert!(check(dir.path()).contains("removed-node"));
@@ -226,7 +226,7 @@ fn scoped_lock_batches_a_live_update_with_a_drop() {
     .unwrap();
     fs::write(dir.path().join("guide.md"), "# Guide").unwrap();
     fs::write(dir.path().join("doomed.md"), "# Doomed").unwrap();
-    lock(dir.path());
+    lock_all(dir.path());
 
     // Delete one target and repair the citing document in the same breath.
     fs::remove_file(dir.path().join("doomed.md")).unwrap();
@@ -262,7 +262,7 @@ fn scoped_lock_of_a_directory_is_a_noop() {
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
-    lock(dir.path());
+    lock_all(dir.path());
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
@@ -284,7 +284,7 @@ fn scoped_lock_of_an_extensioned_path_does_not_prefer_a_dot_md_variant() {
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("a.md.md"), "# A dot md").unwrap();
-    lock(dir.path());
+    lock_all(dir.path());
 
     fs::write(dir.path().join("a.md"), "# A edited").unwrap();
     fs::write(dir.path().join("a.md.md"), "# A dot md edited").unwrap();
@@ -303,5 +303,118 @@ fn scoped_lock_of_an_extensioned_path_does_not_prefer_a_dot_md_variant() {
     assert!(
         stdout.contains("stale-node]: a.md.md"),
         "a.md.md must stay stale — it was not the named path, got: {stdout}"
+    );
+}
+
+/// Zero paths is a usage error, not the whole graph. `drft lock $(cmd)` where
+/// `cmd` printed nothing hands drft exactly this argv, so inferring "every node"
+/// from it would turn a scoped invocation into a whole-graph review assertion
+/// with nothing in the output saying so.
+#[test]
+fn lock_with_no_paths_errors_and_writes_nothing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2), "usage error exits 2");
+    assert!(
+        !dir.path().join("drft.lock").exists(),
+        "a refused lock must not write a lockfile"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("drft lock <path>...") && stderr.contains("--all"),
+        "the error should name both remedies, got: {stderr}"
+    );
+}
+
+/// The refusal leaves an existing lockfile untouched, so a mis-expanded command
+/// cannot re-snapshot the baseline on its way to failing.
+#[test]
+fn lock_with_no_paths_leaves_an_existing_lockfile_alone() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+    lock_all(dir.path());
+    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+
+    fs::write(dir.path().join("a.md"), "# a edited").unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+
+    assert_eq!(
+        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        before,
+        "the lockfile should be byte-identical after a refused lock"
+    );
+    let stdout = check(dir.path());
+    assert!(
+        stdout.contains("stale-node]: a.md"),
+        "the staleness the refused lock would have cleared must still be reported, got: {stdout}"
+    );
+}
+
+/// `--all` names the whole-graph lock the bare form used to be: every node,
+/// including ones never passed on the command line.
+#[test]
+fn lock_all_locks_every_node() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    for name in ["a", "b", "c"] {
+        fs::write(dir.path().join(format!("{name}.md")), format!("# {name}")).unwrap();
+    }
+    lock_all(dir.path());
+
+    for name in ["a", "b", "c"] {
+        fs::write(
+            dir.path().join(format!("{name}.md")),
+            format!("# {name} edited"),
+        )
+        .unwrap();
+    }
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = check(dir.path());
+    assert!(
+        !stdout.contains("stale"),
+        "--all should clear every node, got: {stdout}"
+    );
+}
+
+/// `--all` and paths state two different scopes. Honoring either one silently
+/// would be the same mis-scoped write the flag exists to prevent, so it errors.
+#[test]
+fn lock_all_with_paths_is_a_usage_error() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+    fs::write(dir.path().join("b.md"), "# b").unwrap();
+    lock_all(dir.path());
+    fs::write(dir.path().join("a.md"), "# a edited").unwrap();
+    fs::write(dir.path().join("b.md"), "# b edited").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all", "a.md"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = check(dir.path());
+    assert!(
+        stdout.contains("stale-node]: a.md") && stdout.contains("stale-node]: b.md"),
+        "neither scope should have been written, got: {stdout}"
     );
 }

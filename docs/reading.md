@@ -43,7 +43,11 @@ itself. `drft edges` matches the selector against edge **sources**, so a directo
 selector projects every edge leaving that subtree.
 
 Selector expansion is a reader affordance only. Writers like `drft lock` stay
-exact-path-only, so a subtree or glob never fans out into a write.
+exact-path-only, so a subtree or glob never fans out into a write. The empty
+selector splits the same way: a reader with none returns everything, while `drft
+lock` with no paths errors and requires `--all` to name the whole graph — for a
+reader the cost is a large read, for a writer it is a durable claim that the
+whole graph was reviewed.
 
 An exact path that matches nothing is a likely typo: the command errors (exit 2)
 with a suggestion. A glob that matches nothing is a legitimate empty result
