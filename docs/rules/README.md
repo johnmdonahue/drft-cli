@@ -52,9 +52,11 @@ tree and is not one. Link the file that carries what the prose claims —
 graph root but not from the declaring file. Links resolve relative to the file
 that declares them, so a root-relative path fails against a target nobody wrote
 and reads as a typo; the `cause` names the base and suggests the rewrite. It is
-withheld for paths written `./`, `../`, or `/`, which are relative by intent. It
-renders as an indented line under the finding in text output and as a `cause`
-field in JSON.
+withheld for paths written `./`, `../`, or `/`, which are relative by intent. The
+check runs per link occurrence, so a target cited from several places carries the
+cause when any one of those links is bare — the finding names every line, and the
+cause describes the bare one. It renders as an indented line under the finding in
+text output and as a `cause` field in JSON.
 
 A finding is about an item in the graph. A statement about the _run_ that
 produced it — an unknown rule name, a selector that matched nothing — is a

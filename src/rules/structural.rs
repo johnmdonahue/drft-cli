@@ -122,9 +122,52 @@ mod tests {
             fs.set_node(*f, fs_node());
         }
         let mut meta = Metadata::new();
-        meta.insert("raw".into(), json!(raw));
+        meta.insert("occurrences".into(), json!([{ "raw": raw }]));
         fs.add_edge(Edge::with_metadata(source, target, meta));
         compose(&GraphSet::new(vec![fs]))
+    }
+
+    #[test]
+    fn wrong_base_cause_reaches_a_later_spelling() {
+        // Two spellings resolve to the same missing target: an explicitly relative
+        // one and a bare one that would resolve from the graph root. Because every
+        // occurrence keeps its own `raw`, the cause finds the second — the first
+        // is unambiguously relative by intent and names no cause on its own.
+        //
+        // The edge is built through `link_edges` rather than hand-rolled, so this
+        // guards the aggregation as well as the rule: a first-occurrence-wins
+        // builder would drop the bare spelling and the cause with it.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("docs/guide.md", fs_node());
+        fs.set_node("config.md", fs_node());
+        let links = [
+            crate::parsers::Link {
+                target: "./config.md".into(),
+                line: Some(3),
+            },
+            crate::parsers::Link {
+                target: "config.md".into(),
+                line: Some(5),
+            },
+        ];
+        let mut markdown = Graph::labeled("markdown");
+        for edge in crate::builders::link_edges("docs/guide.md", &links) {
+            markdown.add_edge(edge);
+        }
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
+
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .expect("docs/config.md does not exist");
+        assert_eq!(f.lines, vec![3, 5]);
+        let cause = f.cause.as_deref().expect("expected a cause");
+        assert!(
+            cause.contains("`config.md` resolves from the graph root"),
+            "got: {cause}"
+        );
+        assert!(cause.contains("../config.md"), "got: {cause}");
     }
 
     #[test]
@@ -194,7 +237,7 @@ mod tests {
         // A markdown link to a missing target on line 3 — the finding points there.
         let mut markdown = Graph::labeled("markdown");
         let mut meta = Metadata::new();
-        meta.insert("lines".into(), json!([3]));
+        meta.insert("occurrences".into(), json!([{ "line": 3 }]));
         markdown.add_edge(Edge::with_metadata("index.md", "gone.md", meta));
         let mut fs = Graph::labeled("fs");
         fs.set_node("index.md", fs_node());

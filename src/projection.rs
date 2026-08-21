@@ -30,17 +30,43 @@ pub fn filter_metadata(
             let Some(obj) = value.as_object() else {
                 continue;
             };
-            let filtered: Map<String, Value> = obj
-                .iter()
-                .filter(|(k, _)| fields.iter().any(|f| f == *k))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let filtered = filter_fields(obj, fields);
             if filtered.is_empty() {
                 continue;
             }
             Value::Object(filtered)
         };
         out.insert(ns.clone(), block);
+    }
+    out
+}
+
+/// Narrow one namespace block to `fields`. A key whose own name matches is kept
+/// whole. A key holding an array of objects is kept with each entry narrowed the
+/// same way, so a field names what it is wherever it is declared: `--field line`
+/// reaches an edge's per-occurrence facts, and `--field role` reaches an authored
+/// frontmatter list, without the caller naming the array it lives in. An entry
+/// that keeps nothing drops out, and a key whose entries all drop out goes with
+/// them — so the descent also decides whether a node survives `filtered_out`.
+fn filter_fields(block: &Map<String, Value>, fields: &[String]) -> Map<String, Value> {
+    let mut out = Map::new();
+    for (key, value) in block {
+        if fields.iter().any(|f| f == key) {
+            out.insert(key.clone(), value.clone());
+            continue;
+        }
+        let Some(entries) = object_entries(value) else {
+            continue;
+        };
+        let narrowed: Vec<Value> = entries
+            .into_iter()
+            .map(|entry| filter_fields(entry, fields))
+            .filter(|entry| !entry.is_empty())
+            .map(Value::Object)
+            .collect();
+        if !narrowed.is_empty() {
+            out.insert(key.clone(), Value::Array(narrowed));
+        }
     }
     out
 }
@@ -65,14 +91,67 @@ pub fn push_metadata_lines(lines: &mut Vec<String>, metadata: &Map<String, Value
     for (ns, value) in metadata {
         lines.push(format!("  {ns}"));
         match value.as_object() {
-            Some(obj) => {
-                for (k, v) in obj {
-                    lines.push(format!("    {k}: {}", render_value(v)));
-                }
-            }
+            Some(obj) => push_fields(lines, obj, 4),
             None => lines.push(format!("    {}", render_value(value))),
         }
     }
+}
+
+/// Render one object's fields at `indent` spaces, one `key: value` per line.
+///
+/// A field holding an array of objects — an edge's `occurrences`, or an authored
+/// frontmatter list — renders as a bare header line followed by a `- `-marked
+/// sub-block per entry, so each entry's fields keep their own lines. Rendering it
+/// through [`render_value`] instead would collapse the whole array onto one long
+/// JSON line, which is the opposite of what the text shape is for.
+///
+/// An entry with no fields renders as `- {}`. It has no key to carry the marker,
+/// so emitting nothing would drop it from the rendering and silently misreport
+/// how many entries the array holds.
+fn push_fields(lines: &mut Vec<String>, obj: &Map<String, Value>, indent: usize) {
+    let pad = " ".repeat(indent);
+    for (key, value) in obj {
+        let Some(entries) = object_entries(value) else {
+            lines.push(format!("{pad}{key}: {}", render_value(value)));
+            continue;
+        };
+        lines.push(format!("{pad}{key}"));
+        for entry in entries {
+            if entry.is_empty() {
+                lines.push(format!("{pad}  - {{}}"));
+                continue;
+            }
+            // Render the entry as its own object so a nested list of objects
+            // descends too, then hang the marker on the first line by replacing
+            // the last two spaces of its indent. `filter_fields` narrows at any
+            // depth, so stopping here would print exactly the long JSON line the
+            // sub-block shape exists to avoid.
+            let mut entry_lines = Vec::new();
+            push_fields(&mut entry_lines, entry, indent + 4);
+            if let Some(first) = entry_lines.first_mut() {
+                first.replace_range(indent + 2..indent + 4, "- ");
+            }
+            lines.extend(entry_lines);
+        }
+    }
+}
+
+/// The entries of a non-empty array whose every element is an object. A scalar, a
+/// mixed array, or an empty array returns `None`, so the caller falls back to
+/// rendering the value whole.
+///
+/// Entries that carry no fields are admitted. Requiring one non-empty entry would
+/// make an entry's rendering depend on whether a *sibling* declared anything —
+/// the same list shape printing as sub-blocks or as inline JSON according to its
+/// contents — and there is nothing left to protect against, since a keyless entry
+/// renders as `- {}` rather than vanishing.
+fn object_entries(value: &Value) -> Option<Vec<&Map<String, Value>>> {
+    let entries: Vec<&Map<String, Value>> = value
+        .as_array()?
+        .iter()
+        .map(Value::as_object)
+        .collect::<Option<Vec<_>>>()?;
+    (!entries.is_empty()).then_some(entries)
 }
 
 /// Join per-entry blocks into the final text: one blank line between blocks and a
@@ -133,7 +212,10 @@ mod tests {
 
     #[test]
     fn filter_drops_provenance_and_keeps_all_by_default() {
-        let m = obj(json!({ "@markdown": { "lines": [4] }, "_graphs": ["@markdown"] }));
+        let m = obj(json!({
+            "@markdown": { "occurrences": [{ "line": 4 }] },
+            "_graphs": ["@markdown"]
+        }));
         let out = filter_metadata(&m, &[], &[]);
         assert_eq!(out.keys().collect::<Vec<_>>(), vec!["@markdown"]);
     }
@@ -141,12 +223,172 @@ mod tests {
     #[test]
     fn filter_by_namespace_and_field() {
         let m = obj(json!({
-            "@markdown": { "lines": [4], "raw": "./b.md" },
-            "@frontmatter": { "lines": [2] },
-            "_graphs": ["@frontmatter", "@markdown"]
+            "@frontmatter": { "purpose": "how the walk is scoped", "status": "draft" },
+            "@fs": { "type": "file", "hash": "b3:1" },
+            "_graphs": ["@frontmatter", "@fs"]
         }));
-        let out = filter_metadata(&m, &["@markdown".into()], &["lines".into()]);
-        assert_eq!(out, obj(json!({ "@markdown": { "lines": [4] } })));
+        let out = filter_metadata(&m, &["@frontmatter".into()], &["purpose".into()]);
+        assert_eq!(
+            out,
+            obj(json!({ "@frontmatter": { "purpose": "how the walk is scoped" } }))
+        );
+    }
+
+    #[test]
+    fn filter_reaches_into_occurrence_entries() {
+        // `--field line` narrows each occurrence without the caller naming the
+        // array it lives in.
+        let m = obj(json!({
+            "@markdown": { "occurrences": [
+                { "line": 53, "link": "b.md#x", "raw": "./b.md" },
+                { "line": 77, "link": "b.md#y", "raw": "./b.md" },
+            ] },
+            "_graphs": ["@markdown"],
+        }));
+        let out = filter_metadata(&m, &[], &["line".into()]);
+        assert_eq!(
+            out["@markdown"],
+            json!({ "occurrences": [{ "line": 53 }, { "line": 77 }] })
+        );
+    }
+
+    #[test]
+    fn filter_keeps_a_named_array_whole() {
+        let m = obj(json!({ "@markdown": { "occurrences": [{ "line": 4 }] } }));
+        let out = filter_metadata(&m, &[], &["occurrences".into()]);
+        assert_eq!(out["@markdown"], json!({ "occurrences": [{ "line": 4 }] }));
+    }
+
+    #[test]
+    fn filter_drops_a_block_matching_at_neither_level() {
+        let m = obj(json!({ "@markdown": { "occurrences": [{ "line": 4 }] } }));
+        assert!(filter_metadata(&m, &[], &["purpose".into()]).is_empty());
+    }
+
+    #[test]
+    fn occurrences_render_one_entry_per_sub_block() {
+        // The array must not collapse onto one JSON line — the text shape exists
+        // so a reader can see which line cites which anchor.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@markdown": { "occurrences": [
+                { "line": 53, "link": "owners.md#security-console" },
+                { "line": 77, "link": "owners.md#ngwaf-edge" },
+            ] } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @markdown",
+                "    occurrences",
+                "      - line: 53",
+                "        link: owners.md#security-console",
+                "      - line: 77",
+                "        link: owners.md#ngwaf-edge",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_all_empty_list_still_renders_as_entries() {
+        // The shape must not depend on whether a sibling entry declared a field.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "slots": [{}, {}] } })),
+        );
+        assert_eq!(
+            lines,
+            vec!["  @frontmatter", "    slots", "      - {}", "      - {}"]
+        );
+    }
+
+    #[test]
+    fn a_nested_list_descends_as_far_as_the_filter_does() {
+        // `filter_fields` narrows at any depth, so the renderer has to reach the
+        // same depth: stopping one level down would print the long JSON line the
+        // sub-block shape exists to avoid.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "teams": [
+                { "name": "alpha", "members": [
+                    { "name": "Ana", "role": "lead" },
+                    { "name": "Bo" },
+                ] },
+            ] } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @frontmatter",
+                "    teams",
+                "      - members",
+                "          - name: Ana",
+                "            role: lead",
+                "          - name: Bo",
+                "        name: alpha",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_plain_array_still_renders_inline() {
+        // Only an array of objects gets the sub-block treatment; a scalar array
+        // keeps the one-line-per-field shape.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "tags": ["graph", "core"] } })),
+        );
+        assert_eq!(
+            lines,
+            vec!["  @frontmatter", "    tags: [\"graph\",\"core\"]"]
+        );
+    }
+
+    #[test]
+    fn filter_reaches_into_an_authored_frontmatter_list() {
+        // `filter_fields` is shared by `nodes` and `edges`, so the descent applies
+        // to authored frontmatter too: a field names what it is wherever it is
+        // declared, and a node declaring it only inside a list survives the filter.
+        let m = obj(json!({ "@frontmatter": { "authors": [
+            { "name": "Ana", "role": "lead" },
+            { "role": "reviewer" },
+        ] } }));
+        let out = filter_metadata(&m, &[], &["role".into()]);
+        assert_eq!(
+            out["@frontmatter"],
+            json!({ "authors": [{ "role": "lead" }, { "role": "reviewer" }] })
+        );
+        assert!(!filtered_out(&out, &[], &["role".into()]));
+    }
+
+    #[test]
+    fn an_empty_entry_still_renders() {
+        // An empty entry has no key to carry the `- ` marker. Emitting nothing
+        // would drop it and misreport how many entries the array holds.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "authors": [
+                { "name": "Ana" },
+                {},
+                { "name": "Bo" },
+            ] } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @frontmatter",
+                "    authors",
+                "      - name: Ana",
+                "      - {}",
+                "      - name: Bo",
+            ],
+            "three entries in, three entries out"
+        );
     }
 
     #[test]

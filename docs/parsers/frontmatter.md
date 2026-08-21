@@ -12,7 +12,7 @@ The frontmatter parser extracts YAML frontmatter from files. It serves two purpo
 
 ## Link types
 
-The parser extracts one type of link. Each becomes an edge with parser provenance `frontmatter` in the graph. Every edge records the 1-based source line(s) where the value appears as `lines` in its `frontmatter` metadata, exposed in `drft graph` and used by `drft impact` to point a review at the exact reference.
+The parser extracts one type of link. Each becomes an edge with parser provenance `frontmatter` in the graph. Every edge carries an `occurrences` array in its `frontmatter` metadata, one entry per value, each recording the 1-based source `line` where that value appears. `drft graph` exposes the array; `drft impact` reads the lines to point a review at the exact reference.
 
 ### link
 

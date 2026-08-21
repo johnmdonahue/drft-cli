@@ -321,7 +321,10 @@ mod tests {
         g.set_node("dependent.md", fs_node());
         g.set_node("dep.md", fs_node());
         let mut meta = Metadata::new();
-        meta.insert("@markdown".into(), json!({ "lines": [49, 12] }));
+        meta.insert(
+            "@markdown".into(),
+            json!({ "occurrences": [{ "line": 49 }, { "line": 12 }] }),
+        );
         g.add_edge(Edge::with_metadata("dependent.md", "dep.md", meta));
 
         let inbound = compute(&g, &["dep.md".into()], Direction::Inbound, None);

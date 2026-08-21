@@ -160,12 +160,12 @@ mod tests {
         markdown.add_edge(Edge::with_metadata(
             "a.md",
             "b.md",
-            obj(json!({ "link": "b.md#x" })),
+            obj(json!({ "occurrences": [{ "line": 4, "link": "b.md#x" }] })),
         ));
         let composed = compose(&GraphSet::new(vec![markdown]));
         assert_eq!(
-            composed.edges[0].metadata["@markdown"]["link"],
-            json!("b.md#x")
+            composed.edges[0].metadata["@markdown"]["occurrences"],
+            json!([{ "line": 4, "link": "b.md#x" }])
         );
     }
 }

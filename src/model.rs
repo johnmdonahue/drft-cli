@@ -110,36 +110,42 @@ impl Edge {
         }
     }
 
-    /// The source line(s) where this edge's link appears, unioned across parser
-    /// namespaces (`@markdown`, `@frontmatter`, …) and sorted/deduped. Empty when
-    /// no parser recorded a line. The link lives in `source`, so these are
-    /// positions within `source`.
+    /// Every link occurrence on this edge, across contributing parser
+    /// namespaces (`@markdown`, `@frontmatter`, …). One entry per link the
+    /// author wrote, carrying that link's own `line`, fragment-qualified `link`,
+    /// and literal `raw` spelling. Namespace order is the metadata's sorted key
+    /// order, so the iteration is deterministic.
+    pub fn occurrences(&self) -> impl Iterator<Item = &Metadata> {
+        self.metadata
+            .iter()
+            .filter(|(key, _)| key.starts_with('@'))
+            .filter_map(|(_, value)| value.get("occurrences"))
+            .filter_map(Value::as_array)
+            .flatten()
+            .filter_map(Value::as_object)
+    }
+
+    /// The source line(s) where this edge's links appear, sorted and deduped
+    /// across parser namespaces. Empty when no parser located a link. The links
+    /// live in `source`, so these are positions within `source`.
     pub fn lines(&self) -> Vec<usize> {
         let mut lines = BTreeSet::new();
-        for (key, value) in &self.metadata {
-            if !key.starts_with('@') {
-                continue;
-            }
-            if let Some(arr) = value.get("lines").and_then(Value::as_array) {
-                for n in arr.iter().filter_map(Value::as_u64) {
-                    lines.insert(n as usize);
-                }
+        for occurrence in self.occurrences() {
+            if let Some(line) = occurrence.get("line").and_then(Value::as_u64) {
+                lines.insert(line as usize);
             }
         }
         lines.into_iter().collect()
     }
 
-    /// The literal link text(s) that produced this edge, across contributing
-    /// graphs. Present only where resolution moved the path, so an edge whose
-    /// target is exactly what the author typed reports nothing. Two graphs can
-    /// disagree — one doc may write `./x.md` where another writes `x.md`.
+    /// The literal link text(s) that produced this edge. Present only where
+    /// resolution moved the path, so a link whose target is exactly what the
+    /// author typed reports nothing. Two occurrences can disagree — one line may
+    /// write `./x.md` where another writes `x.md`.
     pub fn raw_links(&self) -> Vec<&str> {
         let mut raws = BTreeSet::new();
-        for (key, value) in &self.metadata {
-            if !key.starts_with('@') {
-                continue;
-            }
-            if let Some(raw) = value.get("raw").and_then(Value::as_str) {
+        for occurrence in self.occurrences() {
+            if let Some(raw) = occurrence.get("raw").and_then(Value::as_str) {
                 raws.insert(raw);
             }
         }
@@ -298,13 +304,20 @@ mod tests {
     }
 
     #[test]
-    fn edge_lines_unions_namespaces_sorted() {
+    fn edge_occurrences_union_namespaces_sorted() {
         let mut m = Metadata::new();
-        m.insert("@markdown".into(), json!({ "lines": [5, 2] }));
-        m.insert("@frontmatter".into(), json!({ "lines": [2, 9] }));
+        m.insert(
+            "@markdown".into(),
+            json!({ "occurrences": [{ "line": 5, "raw": "./b.md" }, { "line": 2 }] }),
+        );
+        m.insert(
+            "@frontmatter".into(),
+            json!({ "occurrences": [{ "line": 2 }, { "line": 9 }] }),
+        );
         m.insert("_graphs".into(), json!(["@markdown", "@frontmatter"]));
         let edge = Edge::with_metadata("a.md", "b.md", m);
         assert_eq!(edge.lines(), vec![2, 5, 9], "unioned, sorted, deduped");
+        assert_eq!(edge.raw_links(), vec!["./b.md"]);
         assert!(Edge::new("a.md", "b.md").lines().is_empty());
     }
 

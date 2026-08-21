@@ -18,9 +18,10 @@ use crate::model::Graph;
 use crate::projection;
 
 /// A projected edge: its endpoints and the namespaced metadata that survived the
-/// namespace/field filters. `metadata` holds only `@<graph>` blocks (`lines`,
-/// `raw`, …); the `_graphs` provenance is dropped. An edge with no per-graph
-/// metadata projects with an empty object — it is still an edge.
+/// namespace/field filters. `metadata` holds only `@<graph>` blocks (each an
+/// `occurrences` array, one entry per link the author wrote); the `_graphs`
+/// provenance is dropped. An edge with no per-graph metadata projects with an
+/// empty object — it is still an edge.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EdgeProjection {
     pub source: String,
@@ -96,9 +97,10 @@ mod tests {
         g.add_edge(Edge::with_metadata(
             "a.md",
             "b.md",
-            obj(
-                json!({ "@markdown": { "lines": [4], "raw": "./b.md" }, "_graphs": ["@markdown"] }),
-            ),
+            obj(json!({
+                "@markdown": { "occurrences": [{ "line": 4, "raw": "./b.md" }] },
+                "_graphs": ["@markdown"]
+            })),
         ));
         g.add_edge(Edge::with_metadata(
             "a.md",
@@ -109,7 +111,10 @@ mod tests {
         g.add_edge(Edge::with_metadata(
             "b.md",
             "c.md",
-            obj(json!({ "@frontmatter": { "lines": [2] }, "_graphs": ["@frontmatter"] })),
+            obj(json!({
+                "@frontmatter": { "occurrences": [{ "line": 2 }] },
+                "_graphs": ["@frontmatter"]
+            })),
         ));
         g.sort_edges();
         g
@@ -152,7 +157,7 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(
             out[0].metadata,
-            obj(json!({ "@frontmatter": { "lines": [2] } }))
+            obj(json!({ "@frontmatter": { "occurrences": [{ "line": 2 }] } }))
         );
     }
 
@@ -163,13 +168,14 @@ mod tests {
             &g,
             Some(&["a.md".into()]),
             &["@markdown".into()],
-            &["lines".into()],
+            &["line".into()],
         );
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].target, "b.md");
         assert_eq!(
             out[0].metadata,
-            obj(json!({ "@markdown": { "lines": [4] } }))
+            obj(json!({ "@markdown": { "occurrences": [{ "line": 4 }] } })),
+            "narrowed within each occurrence, dropping its `raw`"
         );
     }
 
@@ -180,11 +186,11 @@ mod tests {
             &g,
             Some(&["a.md".into()]),
             &["@markdown".into()],
-            &["lines".into()],
+            &["line".into()],
         );
         assert_eq!(
             format_text(&out),
-            "a.md → b.md\n  @markdown\n    lines: [4]\n"
+            "a.md → b.md\n  @markdown\n    occurrences\n      - line: 4\n"
         );
     }
 

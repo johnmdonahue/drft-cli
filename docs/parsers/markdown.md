@@ -13,10 +13,12 @@ The markdown parser is drft's built-in parser for standard markdown link syntax.
 ## Link types
 
 Each link type becomes an edge with parser provenance `markdown` in the graph.
-Every edge records the 1-based source line(s) where the link appears as `lines`
-in its `markdown` metadata, exposed in `drft graph` and used by `drft impact` to
-point a review at the exact reference; a target linked from more than one line
-carries each.
+Every edge carries an `occurrences` array in its `markdown` metadata, one entry
+per link the author wrote. Each entry records that link's own 1-based source
+`line`, its fragment-qualified `link`, and its literal `raw` spelling, so a
+target cited from several places keeps each line paired with what that line
+actually said. `drft graph` exposes the array; `drft impact` reads the lines to
+point a review at the exact reference.
 
 ### inline
 
@@ -27,7 +29,7 @@ Standard markdown links where the URL is inline with the text.
 [with fragment](setup.md#installation)
 ```
 
-Fragments (`#heading`) are stripped -- `setup.md#installation` produces an edge to `setup.md`.
+Fragments (`#heading`) are stripped from the target -- `setup.md#installation` produces an edge to `setup.md` -- and kept on the occurrence as `link`.
 
 ### reference
 
@@ -83,4 +85,4 @@ This matters most where it reads like coverage. A layout table citing `` `edge/`
 
 ## External URLs
 
-External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw edge targets. A URI target has no defining node, so the `unresolved-edge` rule treats it as an intentional external reference and does not flag it. Anchor-only links (`#heading`) are dropped, and fragments are stripped from targets (`file.md#section` → `file.md`) — both handled when the edge is built, not by the parser.
+External links (`http://`, `https://`, `mailto:`, and other URI schemes) are emitted as raw edge targets. A URI target has no defining node, so the `unresolved-edge` rule treats it as an intentional external reference and does not flag it. Anchor-only links (`#heading`) are dropped, and fragments are stripped from targets (`file.md#section` → `file.md`) and kept on the occurrence — all handled when the edge is built, not by the parser.
