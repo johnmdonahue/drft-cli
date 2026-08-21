@@ -1,4 +1,5 @@
 use saphyr::{LoadableYamlNode, MarkedYaml, Scalar, YamlData};
+use std::borrow::Cow;
 
 use super::{Link, ParseResult, Parser};
 
@@ -191,20 +192,39 @@ impl FrontmatterParser {
 /// fields structured at the cost of blanking that one span; the author's fix is to
 /// quote the value or use a `|` block scalar, both of which the raw path captures
 /// verbatim. Returns `None` when there is no frontmatter block at all.
+///
+/// The masking applies to the block, not to the file — see [`parsed_block`].
 fn extract_metadata(content: &str) -> Option<serde_json::Value> {
-    // Prefer the raw block so code spans survive as prose.
-    if let Some(block) = frontmatter_block(content)
-        && let Ok(docs) = MarkedYaml::load_from_str(block)
-        && let Some(root) = docs.first()
-    {
-        return Some(to_json(root));
+    parsed_block(content).map(|(_, metadata)| metadata)
+}
+
+/// The frontmatter block this parser recognizes: where it ends in `content`, and
+/// its parsed mapping.
+///
+/// One selector, so the offset the markdown parser masks and the metadata this
+/// parser contributes can never describe different spans. They did: this looked
+/// for its block in a copy of the **whole file** with code spans blanked, so a
+/// backtick opened in frontmatter and closed in the body blanked the closing
+/// fence and moved the boundary past it. The mask, working from the raw content,
+/// saw no frontmatter at all — and the file published anchors slugged from a
+/// block this parser had already claimed.
+///
+/// Masking is applied to the block text instead, which serves the reason it
+/// exists — a code span can hide a `:` that would otherwise break the mapping —
+/// without letting a span decide where the block ends.
+fn parsed_block(content: &str) -> Option<(usize, serde_json::Value)> {
+    let block = frontmatter_block(content)?;
+    let end = "---".len() + block.len() + "\n---".len();
+    // Raw first, so a code span survives as the prose it is.
+    for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block))] {
+        if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
+            && let Some(root) = docs.first()
+            && matches!(root.data, YamlData::Mapping(_))
+        {
+            return Some((end, to_json(root)));
+        }
     }
-    // Fall back to the masked block only when the raw block is not valid YAML on its
-    // own — a code span can hide a `:` that would otherwise break the mapping.
-    let stripped = strip_code(content);
-    let block = frontmatter_block(&stripped)?;
-    let docs = MarkedYaml::load_from_str(block).ok()?;
-    docs.first().map(to_json)
+    None
 }
 
 /// The byte offset just past a leading YAML frontmatter block, or `None` when the
@@ -217,40 +237,7 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
 /// what this one claims, rather than guessing at the boundary a second time and
 /// disagreeing.
 pub fn mapping_block_end(content: &str) -> Option<usize> {
-    let block = frontmatter_block(content)?;
-    // The boundary always comes from the raw content, so the offset indexes the
-    // string the caller holds. `strip_code` rebuilds lines — dropping `\r`, adding
-    // a trailing newline — so an offset taken from its output would not. It is
-    // applied to the block text alone and only to decide whether the block parses,
-    // which is the same raw-then-masked order `extract_metadata` uses: a code span
-    // can hide a `:` that would otherwise break the mapping.
-    (is_mapping(block) || is_mapping(&strip_code(block)))
-        .then_some("---".len() + block.len() + "\n---".len())
-}
-
-/// Whether `block` parses as a YAML **mapping** — the shape that separates
-/// frontmatter from a document opening with a `---` thematic break.
-///
-/// A mapping is required rather than any valid YAML, and the reason is that YAML
-/// and markdown collide on two constructs. A block carrying only comments parses
-/// to no document at all — but `# First` is a YAML comment *and* a markdown ATX
-/// heading, so accepting it would read `---\n\n# First\n\n---` as frontmatter and
-/// delete the most ordinary heading in markdown, along with any link beneath it.
-/// A block parsing to a bare scalar is ambiguous the same way:
-/// `---\nMy Title\n---` is equally a rule above a setext heading.
-///
-/// So both are left as content. The cost is that comment-only frontmatter, which
-/// other tools do recognize, has its text read as prose; the alternative is
-/// deleting real content, and only one of those is recoverable by reading the
-/// page.
-fn is_mapping(block: &str) -> bool {
-    MarkedYaml::load_from_str(block)
-        .ok()
-        .and_then(|docs| {
-            docs.first()
-                .map(|doc| matches!(doc.data, YamlData::Mapping(_)))
-        })
-        .unwrap_or(false)
+    parsed_block(content).map(|(end, _)| end)
 }
 
 /// Extract the YAML frontmatter block — the text between the opening `---` and the
@@ -381,6 +368,17 @@ mod tests {
             keys: None,
         };
         parser.parse("test.md", content)
+    }
+
+    #[test]
+    fn a_code_span_crossing_the_fence_does_not_move_the_block() {
+        // A backtick opened in frontmatter and closed in the body. Masking the
+        // whole file would blank the closing fence and push the block past it, so
+        // this parser would claim a span the markdown parser cannot see — and the
+        // file would publish anchors slugged out of what this one had claimed.
+        let content = "---\npurpose: `a: b\n---\nc: d` tail\nkey: v\n---\n\n# Body\n";
+        assert!(parse(content).metadata.is_none());
+        assert!(mapping_block_end(content).is_none(), "and the mask agrees");
     }
 
     #[test]

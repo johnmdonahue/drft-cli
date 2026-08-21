@@ -205,7 +205,7 @@ target_hash = "b3:3f462d3841e40b0b6e9eb79ebe63f8289695e9f51ba0dae761b639c5a58b6a
 
 [[node.edge]]
 target = "src/parsers/frontmatter.rs"
-target_hash = "b3:5743cdf7ba72bb239915cf9475d5703097a264ab8c093e9cdd743625c30cfa7c"
+target_hash = "b3:99e160bf6479d2eb5e558d6c4d3221f96eb25aa9e046581500ae52bd9755cd00"
 
 [[node]]
 path = "docs/parsers/markdown.md"
@@ -376,7 +376,7 @@ hash = "b3:bd63f170e88bb37482e7384aa3becb20cea1d7dfcf2be4b4ab79a8e636329920"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
-hash = "b3:5743cdf7ba72bb239915cf9475d5703097a264ab8c093e9cdd743625c30cfa7c"
+hash = "b3:99e160bf6479d2eb5e558d6c4d3221f96eb25aa9e046581500ae52bd9755cd00"
 
 [[node]]
 path = "src/parsers/markdown.rs"
