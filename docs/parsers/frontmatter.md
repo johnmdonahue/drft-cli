@@ -76,6 +76,8 @@ Omitting `keys` keeps shape detection over the entire block. Prefer `keys` where
 
 The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
 
+A block counts as frontmatter only when it parses as a YAML **mapping**. The [markdown parser](markdown.md) masks the same block before reading headings, so the two agree on where the document begins: a file opening with a `---` thematic break rather than frontmatter keeps its first heading and its links.
+
 ## Configuration
 
 Declare a graph that uses the frontmatter parser:

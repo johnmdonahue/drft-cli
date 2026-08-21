@@ -99,7 +99,8 @@ pub fn evaluate(graph: &Graph, anchor_namespaces: &[String]) -> Vec<Finding> {
             )
             .with_target(format!("{}#{fragment}", edge.target))
             .with_lines(lines.into_iter().collect());
-            if let Some(cause) = case_mismatch_cause(&anchors, fragment) {
+            if let Some(cause) = case_mismatch_cause(&anchors, fragment, &percent_decode(fragment))
+            {
                 finding = finding.with_cause(cause);
             }
             findings.push(finding);
@@ -141,6 +142,8 @@ fn percent_decode(fragment: &str) -> String {
     while i < bytes.len() {
         if bytes[i] == b'%'
             && let Some(hex) = fragment.get(i + 1..i + 3)
+            // `from_str_radix` accepts a leading sign, so `%+A` would decode.
+            && hex.bytes().all(|b| b.is_ascii_hexdigit())
             && let Ok(byte) = u8::from_str_radix(hex, 16)
         {
             out.push(byte);
@@ -160,11 +163,15 @@ fn percent_decode(fragment: &str) -> String {
 /// untidy — the cause exists to make the fix obvious, not to excuse it.
 /// Resolution stays exact: matching case-insensitively here would accept an
 /// address the platform does not resolve.
-fn case_mismatch_cause(anchors: &[&str], fragment: &str) -> Option<String> {
-    let lowered = fragment.to_lowercase();
-    let anchor = anchors
-        .iter()
-        .find(|anchor| anchor.to_lowercase() == lowered)?;
+fn case_mismatch_cause(anchors: &[&str], fragment: &str, decoded: &str) -> Option<String> {
+    // Checked against the decoded spelling too, so a percent-encoded fragment
+    // gets the same help as a literal one.
+    let written = fragment.to_lowercase();
+    let decoded = decoded.to_lowercase();
+    let anchor = anchors.iter().find(|anchor| {
+        let anchor = anchor.to_lowercase();
+        anchor == written || anchor == decoded
+    })?;
     Some(format!(
         "`#{fragment}` differs only in case from `#{anchor}`, which the target defines"
     ))

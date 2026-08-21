@@ -207,6 +207,30 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     docs.first().map(to_json)
 }
 
+/// The byte offset just past a leading YAML frontmatter block, or `None` when the
+/// file does not open with one.
+///
+/// The block has to parse as a **mapping**, which is what separates frontmatter
+/// from a document that merely opens with a `---` thematic break. Only a mapping
+/// contributes node metadata (see [`crate::builders::frontmatter`]), so this is
+/// the same block this parser consumes — and the markdown parser masks exactly
+/// what this one claims, rather than guessing at the boundary a second time and
+/// disagreeing.
+pub fn mapping_block_end(content: &str) -> Option<usize> {
+    let rest = content.strip_prefix("---")?;
+    // The opening fence has to be a line of its own.
+    if !rest.starts_with('\n') && !rest.starts_with("\r\n") {
+        return None;
+    }
+    let end = rest.find("\n---")?;
+    let block = &rest[..end];
+    if block.trim().is_empty() {
+        return None;
+    }
+    let docs = MarkedYaml::load_from_str(block).ok()?;
+    matches!(docs.first()?.data, YamlData::Mapping(_)).then_some("---".len() + end + "\n---".len())
+}
+
 /// Extract the YAML frontmatter block — the text between the opening `---` and the
 /// next `\n---`, or `None` when there is no well-formed block. Callable on the raw
 /// content (for metadata) or the masked copy (for the edge scan). The two usually

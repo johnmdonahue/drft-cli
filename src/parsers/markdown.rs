@@ -1,4 +1,4 @@
-use super::{Link, ParseResult, Parser, slug};
+use super::{Link, ParseResult, Parser, frontmatter, slug};
 use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks and images.
@@ -30,19 +30,20 @@ impl Parser for MarkdownParser {
 }
 
 /// Blank a leading YAML frontmatter block, preserving every newline so line
-/// numbers are unchanged. `None` when the file opens with no well-formed block.
+/// numbers are unchanged. `None` when the file opens with no such block.
 ///
 /// Without this, a single-key block reads as a **setext heading**: `purpose: x`
 /// followed by the closing `---` is a paragraph underlined by dashes, so the
 /// document publishes `#purpose-x` as an address it does not answer to — a
 /// fabricated anchor that also silently accepts any link written to it.
+///
+/// The boundary comes from the frontmatter parser rather than being re-derived
+/// here. Guessing it a second time is how the two disagree, and the failure is
+/// not symmetric: masking a document that merely opens with a `---` thematic
+/// break deletes its headings **and its links** from the graph, which reaches
+/// staleness and `drft impact`, not just this parser's anchors.
 fn mask_frontmatter(content: &str) -> Option<String> {
-    let rest = content.strip_prefix("---")?;
-    // The opening fence has to be a line of its own.
-    if !rest.starts_with('\n') && !rest.starts_with("\r\n") {
-        return None;
-    }
-    let close = 3 + rest.find("\n---")? + "\n---".len();
+    let close = frontmatter::mapping_block_end(content)?;
     let masked = content
         .char_indices()
         .map(|(i, ch)| {
@@ -161,67 +162,104 @@ fn extract(content: &str) -> (Vec<Link>, Vec<String>) {
 /// back-compat anchor kept after a heading rename are the usual sources. Values
 /// keep their case: GitHub prefixes the rendered id but matches the fragment as
 /// written, so `#FAQ` and `#faq` are different addresses.
+///
+/// Attributes are tokenized rather than searched for by name. Searching finds
+/// `name=` inside a quoted value and mints it as an attribute, and takes the
+/// first `>` as the tag end even when it sits inside a value — so
+/// `<a title="a > b" id="x">` would lose a real address.
 fn html_anchor_ids(html: &str) -> Vec<String> {
-    let lower = html.to_ascii_lowercase();
     let mut ids = Vec::new();
-    let mut search = 0;
+    let bytes = html.as_bytes();
+    let mut i = 0;
 
-    while let Some(found) = lower[search..].find("<a") {
-        let after_name = search + found + "<a".len();
-        search = after_name;
-        // `<abbr>` is not `<a>`: the tag name has to end here.
-        if !lower[after_name..].starts_with([' ', '\t', '\n', '\r', '/', '>']) {
+    while i < bytes.len() {
+        // `<a` has to be the whole tag name: `<abbr>` is a different element.
+        if bytes[i] != b'<'
+            || !html[i + 1..].starts_with(['a', 'A'])
+            || !html[i + 2..].starts_with([' ', '\t', '\n', '\r', '/', '>'])
+        {
+            i += 1;
             continue;
         }
-        let Some(close) = lower[after_name..].find('>') else {
-            break;
-        };
-        let end = after_name + close;
-        for key in ["id", "name"] {
-            if let Some(id) = attribute(&html[after_name..end], &lower[after_name..end], key) {
-                ids.push(id);
+        i += 2;
+        while let Some((name, value, next)) = attribute(html, i) {
+            i = next;
+            if value.is_empty() {
+                continue;
+            }
+            if name.eq_ignore_ascii_case("id") || name.eq_ignore_ascii_case("name") {
+                ids.push(value);
             }
         }
-        search = end;
     }
 
     ids
 }
 
-/// The value of attribute `key` in a tag's attribute text, or `None`.
-///
-/// `raw` and `lower` are the same span, cased and lowercased; the name is matched
-/// against `lower` and the value read from `raw`. The name has to be whole —
-/// preceded by whitespace or the span's start — so `data-id=` does not answer to
-/// `id`.
-fn attribute(raw: &str, lower: &str, key: &str) -> Option<String> {
-    let mut search = 0;
-    while let Some(found) = lower[search..].find(key) {
-        let at = search + found;
-        search = at + key.len();
-        let whole = at == 0 || lower.as_bytes()[at - 1].is_ascii_whitespace();
-        let Some(rest) = lower[search..].trim_start().strip_prefix('=') else {
-            continue;
-        };
-        if !whole {
-            continue;
-        }
-        let value = &raw[raw.len() - rest.len()..].trim_start();
-        let mut chars = value.chars();
-        return match chars.next()? {
-            quote @ ('"' | '\'') => {
-                let end = value[1..].find(quote)?;
-                Some(value[1..1 + end].to_string())
-            }
-            _ => {
-                let end = value
-                    .find(|c: char| c.is_whitespace() || c == '>' || c == '/')
-                    .unwrap_or(value.len());
-                (end > 0).then(|| value[..end].to_string())
-            }
-        };
+/// The next attribute in a tag body starting at `from`, as `(name, value, next)`.
+/// `None` at the tag's `>` or at the end of the input, which is what ends the
+/// caller's loop.
+fn attribute(html: &str, from: usize) -> Option<(&str, String, usize)> {
+    let bytes = html.as_bytes();
+    let mut i = from;
+
+    while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b'/') {
+        i += 1;
     }
-    None
+    if i >= bytes.len() || bytes[i] == b'>' {
+        return None;
+    }
+
+    let name_start = i;
+    while i < bytes.len()
+        && !bytes[i].is_ascii_whitespace()
+        && !matches!(bytes[i], b'=' | b'>' | b'/')
+    {
+        i += 1;
+    }
+    let name = &html[name_start..i];
+
+    // A bare attribute (`<a hidden>`) has no value; the caller skips it.
+    let mut after_name = i;
+    while after_name < bytes.len() && bytes[after_name].is_ascii_whitespace() {
+        after_name += 1;
+    }
+    if after_name >= bytes.len() || bytes[after_name] != b'=' {
+        return Some((name, String::new(), i));
+    }
+    i = after_name + 1;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i >= bytes.len() {
+        return Some((name, String::new(), i));
+    }
+
+    let value_start;
+    let value_end;
+    match bytes[i] {
+        quote @ (b'"' | b'\'') => {
+            value_start = i + 1;
+            match html[value_start..].find(quote as char) {
+                Some(offset) => {
+                    value_end = value_start + offset;
+                    i = value_end + 1;
+                }
+                // An unterminated quote runs to the end of the chunk; taking the
+                // rest as a value would mint an address out of prose.
+                None => return None,
+            }
+        }
+        _ => {
+            value_start = i;
+            while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'>' {
+                i += 1;
+            }
+            value_end = i;
+        }
+    }
+
+    Some((name, html[value_start..value_end].to_string(), i))
 }
 
 /// Byte offsets of every `\n` in `content`, ascending — a reusable index for
@@ -318,6 +356,62 @@ mod tests {
         // `<abbr>` is not `<a>`, and `data-id` is not `id`.
         assert!(anchors("<abbr id=\"x\">a</abbr>\n").is_empty());
         assert!(anchors("<a data-id=\"x\"></a>\n").is_empty());
+    }
+
+    #[test]
+    fn a_quoted_angle_bracket_does_not_end_the_tag() {
+        // Searching for the first `>` would truncate the tag and lose a real
+        // address, turning every link to it into a false positive.
+        assert_eq!(
+            anchors("<a title=\"a > b\" id=\"kept\"></a>\n"),
+            vec!["kept"]
+        );
+    }
+
+    #[test]
+    fn an_attribute_value_is_not_rescanned_for_attribute_names() {
+        // `name=` inside a quoted value is text, not an attribute.
+        assert_eq!(
+            anchors("<a title=\"name=x\" id=\"only\"></a>\n"),
+            vec!["only"]
+        );
+    }
+
+    #[test]
+    fn a_bare_attribute_and_an_empty_value_are_skipped() {
+        assert_eq!(
+            anchors("<a hidden id=\"after-bare\"></a>\n"),
+            vec!["after-bare"]
+        );
+        assert!(
+            anchors("<a id=\"\"></a>\n").is_empty(),
+            "empty is not an address"
+        );
+    }
+
+    #[test]
+    fn a_malformed_tag_mints_nothing() {
+        // The parser's own tag grammar rejects it before the scan, and the scan
+        // bails on an unterminated quote rather than taking prose as a value.
+        assert!(anchors("<a id=\"unclosed name=\"real\"></a>\n").is_empty());
+        assert!(anchors("<a id=\"never closed\n").is_empty());
+    }
+
+    #[test]
+    fn a_leading_thematic_break_is_not_frontmatter() {
+        // Masking a document that merely opens with `---` deletes its headings
+        // *and* its links from the graph, which reaches far past this parser.
+        let parser = MarkdownParser { file_filter: None };
+        let content = "---\n\n# First\n\nSee [a](t.md).\n\n---\n\n# Second\n";
+        let result = parser.parse("hr.md", content);
+        assert_eq!(result.anchors, vec!["first", "second"]);
+        assert_eq!(result.links[0].target, "t.md");
+        assert_eq!(result.links[0].line, Some(5));
+    }
+
+    #[test]
+    fn a_rule_above_a_setext_title_is_not_frontmatter() {
+        assert_eq!(anchors("---\nMy Title\n---\n\nBody\n"), vec!["my-title"]);
     }
 
     #[test]
