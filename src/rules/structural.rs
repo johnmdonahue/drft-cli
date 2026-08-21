@@ -133,25 +133,35 @@ mod tests {
         // one and a bare one that would resolve from the graph root. Because every
         // occurrence keeps its own `raw`, the cause finds the second — the first
         // is unambiguously relative by intent and names no cause on its own.
+        //
+        // The edge is built through `link_edges` rather than hand-rolled, so this
+        // guards the aggregation as well as the rule: a first-occurrence-wins
+        // builder would drop the bare spelling and the cause with it.
         let mut fs = Graph::labeled("fs");
         fs.set_node("docs/guide.md", fs_node());
         fs.set_node("config.md", fs_node());
-        let mut meta = Metadata::new();
-        meta.insert(
-            "occurrences".into(),
-            json!([
-                { "line": 3, "raw": "./config.md" },
-                { "line": 5, "raw": "config.md" },
-            ]),
-        );
-        fs.add_edge(Edge::with_metadata("docs/guide.md", "docs/config.md", meta));
-        let composed = compose(&GraphSet::new(vec![fs]));
+        let links = [
+            crate::parsers::Link {
+                target: "./config.md".into(),
+                line: Some(3),
+            },
+            crate::parsers::Link {
+                target: "config.md".into(),
+                line: Some(5),
+            },
+        ];
+        let mut markdown = Graph::labeled("markdown");
+        for edge in crate::builders::link_edges("docs/guide.md", &links) {
+            markdown.add_edge(edge);
+        }
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
 
         let findings = evaluate(&composed);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
-            .expect("target does not exist");
+            .expect("docs/config.md does not exist");
+        assert_eq!(f.lines, vec![3, 5]);
         let cause = f.cause.as_deref().expect("expected a cause");
         assert!(
             cause.contains("`config.md` resolves from the graph root"),

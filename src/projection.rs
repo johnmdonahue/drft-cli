@@ -121,24 +121,37 @@ fn push_fields(lines: &mut Vec<String>, obj: &Map<String, Value>, indent: usize)
                 lines.push(format!("{pad}  - {{}}"));
                 continue;
             }
-            for (i, (k, v)) in entry.iter().enumerate() {
-                let marker = if i == 0 { "- " } else { "  " };
-                lines.push(format!("{pad}  {marker}{k}: {}", render_value(v)));
+            // Render the entry as its own object so a nested list of objects
+            // descends too, then hang the marker on the first line by replacing
+            // the last two spaces of its indent. `filter_fields` narrows at any
+            // depth, so stopping here would print exactly the long JSON line the
+            // sub-block shape exists to avoid.
+            let mut entry_lines = Vec::new();
+            push_fields(&mut entry_lines, entry, indent + 4);
+            if let Some(first) = entry_lines.first_mut() {
+                first.replace_range(indent + 2..indent + 4, "- ");
             }
+            lines.extend(entry_lines);
         }
     }
 }
 
-/// The entries of an array whose every element is an object, with at least one
-/// carrying a field. Anything else — a scalar, a mixed array, an array of empty
-/// objects — returns `None` so the caller falls back to rendering the value whole.
+/// The entries of a non-empty array whose every element is an object. A scalar, a
+/// mixed array, or an empty array returns `None`, so the caller falls back to
+/// rendering the value whole.
+///
+/// Entries that carry no fields are admitted. Requiring one non-empty entry would
+/// make an entry's rendering depend on whether a *sibling* declared anything —
+/// the same list shape printing as sub-blocks or as inline JSON according to its
+/// contents — and there is nothing left to protect against, since a keyless entry
+/// renders as `- {}` rather than vanishing.
 fn object_entries(value: &Value) -> Option<Vec<&Map<String, Value>>> {
     let entries: Vec<&Map<String, Value>> = value
         .as_array()?
         .iter()
         .map(Value::as_object)
         .collect::<Option<Vec<_>>>()?;
-    entries.iter().any(|e| !e.is_empty()).then_some(entries)
+    (!entries.is_empty()).then_some(entries)
 }
 
 /// Join per-entry blocks into the final text: one blank line between blocks and a
@@ -273,6 +286,49 @@ mod tests {
                 "        link: owners.md#security-console",
                 "      - line: 77",
                 "        link: owners.md#ngwaf-edge",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_all_empty_list_still_renders_as_entries() {
+        // The shape must not depend on whether a sibling entry declared a field.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "slots": [{}, {}] } })),
+        );
+        assert_eq!(
+            lines,
+            vec!["  @frontmatter", "    slots", "      - {}", "      - {}"]
+        );
+    }
+
+    #[test]
+    fn a_nested_list_descends_as_far_as_the_filter_does() {
+        // `filter_fields` narrows at any depth, so the renderer has to reach the
+        // same depth: stopping one level down would print the long JSON line the
+        // sub-block shape exists to avoid.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "teams": [
+                { "name": "alpha", "members": [
+                    { "name": "Ana", "role": "lead" },
+                    { "name": "Bo" },
+                ] },
+            ] } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @frontmatter",
+                "    teams",
+                "      - members",
+                "          - name: Ana",
+                "            role: lead",
+                "          - name: Bo",
+                "        name: alpha",
             ]
         );
     }

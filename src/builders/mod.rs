@@ -224,6 +224,25 @@ mod tests {
     }
 
     #[test]
+    fn two_spellings_both_moved_by_resolution_keep_both_raws() {
+        // The aggregation the `unresolved-edge` wrong-base cause rides on: two
+        // spellings resolving to one target, each differing from it, must both
+        // survive so a rule scanning the occurrences can reach the second. A
+        // first-occurrence-wins aggregation would keep only `./config.md`.
+        let links = vec![link("./config.md", Some(3)), link("config.md", Some(5))];
+        let edges = link_edges("docs/guide.md", &links);
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].target, "docs/config.md");
+        assert_eq!(
+            edges[0].metadata["occurrences"],
+            json!([
+                { "line": 3, "raw": "./config.md" },
+                { "line": 5, "raw": "config.md" },
+            ])
+        );
+    }
+
+    #[test]
     fn omits_occurrences_when_nothing_is_known() {
         // A parser that cannot locate its link contributes no facts, so the edge
         // keeps the bare no-metadata shape.
