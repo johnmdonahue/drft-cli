@@ -248,15 +248,11 @@ fn attribute(html: &str, from: usize) -> Option<(&str, String, usize)> {
     match bytes[i] {
         quote @ (b'"' | b'\'') => {
             value_start = i + 1;
-            match html[value_start..].find(quote as char) {
-                Some(offset) => {
-                    value_end = value_start + offset;
-                    i = value_end + 1;
-                }
-                // An unterminated quote runs to the end of the chunk; taking the
-                // rest as a value would mint an address out of prose.
-                None => return None,
-            }
+            // An unterminated quote runs to the end of the chunk; taking the rest
+            // as a value would mint an address out of prose, so the tag is
+            // abandoned instead.
+            value_end = value_start + html[value_start..].find(quote as char)?;
+            i = value_end + 1;
         }
         _ => {
             value_start = i;

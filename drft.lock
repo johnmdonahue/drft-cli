@@ -225,7 +225,7 @@ target_hash = "b3:d1b6f37e2efe0ac232d228624e8be281e1e8ef5ed997a3b84d23d9a525866c
 
 [[node.edge]]
 target = "src/parsers/markdown.rs"
-target_hash = "b3:5cccff428d78c4982b68930ad7c58f8a11241125dad0f187e32b1965cca2d854"
+target_hash = "b3:18002cb9940bf73b27fe61d9c3e3b79c7eafcdc583113a46d5e10636b025f3f0"
 
 [[node]]
 path = "docs/reading.md"
@@ -380,7 +380,7 @@ hash = "b3:43e7c3afac8f6c0df08827c8a3676a01c7d9fee024a6d555f42be8c819396d22"
 
 [[node]]
 path = "src/parsers/markdown.rs"
-hash = "b3:5cccff428d78c4982b68930ad7c58f8a11241125dad0f187e32b1965cca2d854"
+hash = "b3:18002cb9940bf73b27fe61d9c3e3b79c7eafcdc583113a46d5e10636b025f3f0"
 
 [[node]]
 path = "src/parsers/mod.rs"
