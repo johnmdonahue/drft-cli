@@ -1,3 +1,4 @@
+use crate::hints::Hint;
 use anyhow::{Context, Result};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
@@ -132,6 +133,10 @@ pub struct Config {
     rule_ignore: Option<GlobSet>,
     /// Directory containing the `drft.toml` this config was loaded from.
     pub config_dir: Option<std::path::PathBuf>,
+    /// Advisories raised while loading — a misspelled rule name, say. Carried on
+    /// the config rather than printed at the point of discovery so the caller
+    /// decides where they land: stderr in text, the result document in JSON.
+    pub hints: Vec<Hint>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,7 +147,7 @@ struct RawConfig {
     rules: Option<RawRules>,
 }
 
-/// Names of all built-in rules (for unknown-rule warnings).
+/// Names of all built-in rules (for the `unknown-rule` hint).
 const BUILTIN_RULES: &[&str] = &[
     "stale-node",
     "stale-edge",
@@ -177,6 +182,7 @@ impl Config {
             rules: HashMap::new(),
             rule_ignore: None,
             config_dir: None,
+            hints: Vec::new(),
         }
     }
 
@@ -265,7 +271,17 @@ impl Config {
                     }
                 };
                 if !BUILTIN_RULES.contains(&name.as_str()) {
-                    eprintln!("warn: unknown rule \"{name}\" in drft.toml (ignored)");
+                    config.hints.push(
+                        Hint::new(
+                            "unknown-rule",
+                            "not a built-in rule, so this severity configures nothing",
+                        )
+                        .at(format!("rules.{name}"))
+                        .with_next(format!(
+                            "correct the spelling or remove it — built-in rules are {}",
+                            BUILTIN_RULES.join(", ")
+                        )),
+                    );
                 }
                 config.rules.insert(name, rule_config);
             }

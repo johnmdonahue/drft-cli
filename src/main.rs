@@ -4,6 +4,7 @@ use drft::compose;
 use drft::config;
 use drft::edges;
 use drft::graphs;
+use drft::hints::{Hint, Hints};
 use drft::impact;
 use drft::lock;
 use drft::nodes;
@@ -27,6 +28,92 @@ fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
         ColorChoice::Never => false,
         ColorChoice::Auto => std::io::IsTerminal::is_terminal(&std::io::stdout()),
     }
+}
+
+/// Hints ride stderr, so the terminal check is on stderr rather than stdout — a
+/// piped result with an attached terminal still gets color. Unlike [`use_color`]
+/// this ignores `--format`: what it governs is always a text hint, never JSON.
+fn use_color_stderr(choice: ColorChoice) -> bool {
+    match choice {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => std::io::IsTerminal::is_terminal(&std::io::stderr()),
+    }
+}
+
+/// Rendered bytes at which a projection is worth flagging — roughly 16k tokens,
+/// where reading the graph starts competing for context with the task the
+/// reading was meant to serve.
+///
+/// Measured after rendering, so it is exact and costs nothing; estimating a
+/// projection's size *before* building it is a different problem.
+const LARGE_PROJECTION_BYTES: usize = 64 * 1024;
+
+/// Flag a projection large enough to crowd its reader. Reports both numbers:
+/// a byte count alone is opaque, and a node count alone does not say how much
+/// output it became.
+fn large_projection_hint(count: usize, bytes: usize) -> Option<Hint> {
+    (bytes >= LARGE_PROJECTION_BYTES).then(|| {
+        Hint::new(
+            "large-projection",
+            format!("{count} nodes rendered to {}KB of output", bytes / 1024),
+        )
+        .with_next(
+            "narrow it with a selector, or with --namespace / --field to project \
+             fewer keys per node",
+        )
+    })
+}
+
+/// Attach the run's hints to a result document under `hints`. The key is always
+/// present, empty included, so a consumer can read `.hints[]` without a guard.
+fn attach_hints(document: &mut serde_json::Value, hints: &Hints) -> Result<()> {
+    if let Some(obj) = document.as_object_mut() {
+        obj.insert("hints".to_string(), serde_json::to_value(hints)?);
+    }
+    Ok(())
+}
+
+/// Print a JSON result document carrying the run's hints, raising the
+/// large-projection hint when the rendered document is big enough to warrant it.
+///
+/// The size is measured on the document as it would print, hints included — the
+/// bytes a reader actually pays for. Adding the large-projection hint grows the
+/// document a little past what was measured, which is why the threshold is a
+/// rough budget rather than a promise.
+fn print_json_document(
+    mut document: serde_json::Value,
+    count: usize,
+    hints: &mut Hints,
+) -> Result<()> {
+    attach_hints(&mut document, hints)?;
+    let rendered = serde_json::to_string_pretty(&document)?;
+    match large_projection_hint(count, rendered.len()) {
+        Some(hint) => {
+            hints.push(hint);
+            attach_hints(&mut document, hints)?;
+            println!("{}", serde_json::to_string_pretty(&document)?);
+        }
+        None => println!("{rendered}"),
+    }
+    Ok(())
+}
+
+/// Print a text projection, raising the large-projection hint on the rendered
+/// size. The hint itself lands on stderr after the command returns, so the
+/// result reads first and a pipe carries only the projection.
+fn print_text_projection(text: &str, count: usize, hints: &mut Hints) {
+    if let Some(hint) = large_projection_hint(count, text.len()) {
+        hints.push(hint);
+    }
+    print!("{text}");
+}
+
+/// Load the config, folding its load-time advisories into the run's hints.
+fn load_config(graph_root: &Path, hints: &mut Hints) -> Result<Config> {
+    let mut config = Config::load(graph_root)?;
+    hints.extend(std::mem::take(&mut config.hints));
+    Ok(config)
 }
 
 fn main() {
@@ -75,27 +162,59 @@ fn try_main() -> Result<i32> {
         None => std::env::current_dir()?,
     };
 
-    match &cli.command {
+    // One collector for the run. Commands fill it; JSON output carries it inside
+    // the result document, text output flushes it to stderr below.
+    let mut hints = Hints::default();
+
+    let result = match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { paths, all } => run_lock(&root, paths, *all),
+        Commands::Lock { paths, all } => run_lock(&root, paths, *all, &mut hints),
         Commands::Impact {
             paths,
             depth,
             direction,
-        } => run_impact(&root, cli.format, paths, *depth, *direction),
-        Commands::Graph { raw } => run_graph(&root, *raw, cli.format),
+        } => run_impact(&root, cli.format, paths, *depth, *direction, &mut hints),
+        Commands::Graph { raw } => run_graph(&root, *raw, cli.format, &mut hints),
         Commands::Nodes {
             selectors,
             namespaces,
             fields,
-        } => run_nodes(&root, cli.format, selectors, namespaces, fields),
+        } => run_nodes(&root, cli.format, selectors, namespaces, fields, &mut hints),
         Commands::Edges {
             selectors,
             namespaces,
             fields,
-        } => run_edges(&root, cli.format, selectors, namespaces, fields),
-        Commands::Check => run_check(&root, cli.format, cli.color),
+        } => run_edges(&root, cli.format, selectors, namespaces, fields, &mut hints),
+        Commands::Check => run_check(&root, cli.format, cli.color, &mut hints),
+    };
+
+    // Hints reach a reader one of two ways: inside the JSON result document, or
+    // on stderr. Stderr is the text-mode channel, emitted after the result so
+    // stdout carries only the projection and the answer reads before the advice.
+    // It also carries the error path, where an advisory about the run is often
+    // what explains the failure.
+    //
+    // `drft graph --format json` is the exception that stays on stderr: its root
+    // is exactly `graph`, a JGF document rather than drft's own envelope, and a
+    // sibling key the format does not define would cost the translatability the
+    // format was chosen for.
+    let embedded_in_document =
+        matches!(cli.format, OutputFormat::Json) && !matches!(cli.command, Commands::Graph { .. });
+    if !embedded_in_document && !hints.is_empty() {
+        let colorize = use_color_stderr(cli.color);
+        for hint in hints.as_slice() {
+            eprintln!(
+                "{}",
+                if colorize {
+                    hint.format_text_color()
+                } else {
+                    hint.format_text()
+                }
+            );
+        }
     }
+
+    result
 }
 
 fn run_init(root: &Path) -> Result<i32> {
@@ -149,7 +268,7 @@ files = ["**/*.md"]
 /// over when a command substitution matches nothing, so inferring "every node"
 /// from an empty argument list would turn a scoped invocation into a whole-graph
 /// assertion silently, in a file that outlives the session.
-fn run_lock(root: &Path, paths: &[String], all: bool) -> Result<i32> {
+fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Result<i32> {
     // Both guards are pure argv, so they answer before any graph work.
     if paths.is_empty() && !all {
         anyhow::bail!(
@@ -168,7 +287,7 @@ fn run_lock(root: &Path, paths: &[String], all: bool) -> Result<i32> {
     }
 
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
@@ -178,7 +297,7 @@ fn run_lock(root: &Path, paths: &[String], all: bool) -> Result<i32> {
         return Ok(0);
     }
 
-    let mut existing = lock::read(&graph_root)?.unwrap_or_default();
+    let mut existing = lock::read(&graph_root, hints)?.unwrap_or_default();
 
     // Resolve every path before writing any of them. A typo in the third of five
     // must not leave the first two locked: a partial lock claims some files were
@@ -330,39 +449,44 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
     (!key.is_empty()).then_some(key)
 }
 
-fn run_graph(root: &Path, raw: bool, format: OutputFormat) -> Result<i32> {
+fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let set = graphs::build_set(&graph_root, &config)?;
 
     // `--raw` dumps the per-graph fragment set — a JSON structure with no text
     // projection — so it is JSON-only and ignores `--format`. The composed views
     // below honor it.
     if raw {
-        println!("{}", serde_json::to_string_pretty(&set)?);
+        let count = set.graphs.iter().map(|g| g.nodes.len()).sum();
+        let rendered = serde_json::to_string_pretty(&set)?;
+        if let Some(hint) = large_projection_hint(count, rendered.len()) {
+            hints.push(hint);
+        }
+        println!("{rendered}");
         return Ok(0);
     }
 
     let composed = compose::compose(&set);
+    let node_count = composed.nodes.len();
     match format {
         OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&composed.into_document())?
-            );
+            let rendered = serde_json::to_string_pretty(&composed.into_document())?;
+            if let Some(hint) = large_projection_hint(node_count, rendered.len()) {
+                hints.push(hint);
+            }
+            println!("{rendered}");
         }
         OutputFormat::Text => {
             // The whole composed graph as text: every node's metadata, then every
             // edge. `# nodes` / `# edges` headers keep the two sections legible
             // for a model reading the graph without parsing JSON. Reuses the same
             // per-node/per-edge rendering as `drft nodes` and `drft edges`.
-            let keys = resolve_selectors(&composed, root, &graph_root, &[])?;
+            let keys = resolve_selectors(&composed, root, &graph_root, &[], hints)?;
             let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
             let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
-            print!(
-                "{}",
-                projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)])
-            );
+            let text = projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)]);
+            print_text_projection(&text, node_count, hints);
         }
     }
     Ok(0)
@@ -377,16 +501,17 @@ fn run_nodes(
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
+    hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
 
     // Validate namespaces up front: a typo must error, not read as an empty
     // answer. Normalize to the `@<graph>` keys the projection matches on.
     let requested_ns = resolve_namespaces(&config, namespaces)?;
 
-    let keys = resolve_selectors(&composed, root, &graph_root, selectors)?;
+    let keys = resolve_selectors(&composed, root, &graph_root, selectors, hints)?;
     let projected = nodes::project(&composed, &keys, &requested_ns, fields);
 
     match format {
@@ -395,12 +520,12 @@ fn run_nodes(
                 "total": projected.len(),
                 "nodes": projected,
             });
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            print_json_document(output, projected.len(), hints)?;
         }
         OutputFormat::Text => {
             // One compact block per node — id, indented namespaces, fields — so a
             // model can read it for grounding without parsing JSON.
-            print!("{}", nodes::format_text(&projected));
+            print_text_projection(&nodes::format_text(&projected), projected.len(), hints);
         }
     }
 
@@ -417,9 +542,10 @@ fn run_edges(
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
+    hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
 
     let requested_ns = resolve_namespaces(&config, namespaces)?;
@@ -429,7 +555,13 @@ fn run_edges(
     let sources = if selectors.is_empty() {
         None
     } else {
-        Some(resolve_selectors(&composed, root, &graph_root, selectors)?)
+        Some(resolve_selectors(
+            &composed,
+            root,
+            &graph_root,
+            selectors,
+            hints,
+        )?)
     };
     let projected = edges::project(&composed, sources.as_deref(), &requested_ns, fields);
 
@@ -439,11 +571,11 @@ fn run_edges(
                 "total": projected.len(),
                 "edges": projected,
             });
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            print_json_document(output, projected.len(), hints)?;
         }
         OutputFormat::Text => {
             // One compact block per edge — `source → target`, then its metadata.
-            print!("{}", edges::format_text(&projected));
+            print_text_projection(&edges::format_text(&projected), projected.len(), hints);
         }
     }
 
@@ -489,6 +621,7 @@ fn resolve_selectors(
     root: &Path,
     graph_root: &Path,
     selectors: &[String],
+    hints: &mut Hints,
 ) -> Result<Vec<String>> {
     if selectors.is_empty() {
         return Ok(composed.nodes.keys().cloned().collect());
@@ -496,7 +629,9 @@ fn resolve_selectors(
 
     let mut keys = std::collections::BTreeSet::new();
     for selector in selectors {
-        keys.extend(resolve_selector(composed, root, graph_root, selector)?);
+        keys.extend(resolve_selector(
+            composed, root, graph_root, selector, hints,
+        )?);
     }
     Ok(keys.into_iter().collect())
 }
@@ -515,9 +650,24 @@ fn resolve_selector(
     root: &Path,
     graph_root: &Path,
     selector: &str,
+    hints: &mut Hints,
 ) -> Result<Vec<String>> {
     if has_glob_meta(selector) {
-        return glob_match_keys(composed, selector);
+        let matched = glob_match_keys(composed, selector)?;
+        // A pattern that matches nothing is a legitimate query result, so it stays
+        // an empty answer rather than an error — but an empty answer reads exactly
+        // like a clean one, which is what the hint is for.
+        if matched.is_empty() {
+            hints.push(
+                Hint::new("zero-match-selector", "matched no nodes")
+                    .at(selector)
+                    .with_next(
+                        "check the pattern against node keys — `*` stops at a path \
+                         separator, `**` crosses it",
+                    ),
+            );
+        }
+        return Ok(matched);
     }
 
     let mut matched: Vec<String> = Vec::new();
@@ -561,6 +711,18 @@ fn resolve_selector(
     if matched.is_empty() && !names_dir {
         return Err(not_found_error(composed.nodes.keys(), selector));
     }
+    // A real directory with nothing below it in the graph: a true empty result,
+    // and the one case above that does not error. Say so rather than let it pass
+    // for a clean projection of nothing.
+    if matched.is_empty() {
+        hints.push(
+            Hint::new(
+                "zero-match-selector",
+                "is a directory with no files in the graph",
+            )
+            .at(selector),
+        );
+    }
     Ok(matched)
 }
 
@@ -592,9 +754,10 @@ fn run_impact(
     paths: &[String],
     depth: Depth,
     direction: Direction,
+    hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
 
     let seeds: Vec<String> = paths
@@ -616,21 +779,25 @@ fn run_impact(
                 "total": impacted.len(),
                 "impacted": impacted,
             });
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            print_json_document(output, impacted.len(), hints)?;
         }
         OutputFormat::Text => {
             if impacted.is_empty() {
                 println!("no dependents found");
             } else {
-                for i in &impacted {
-                    println!(
-                        "{} (via {}, depth {}, radius {})",
-                        i.location(),
-                        i.via,
-                        i.depth,
-                        i.impact_radius
-                    );
-                }
+                let text = impacted
+                    .iter()
+                    .map(|i| {
+                        format!(
+                            "{} (via {}, depth {}, radius {})\n",
+                            i.location(),
+                            i.via,
+                            i.depth,
+                            i.impact_radius
+                        )
+                    })
+                    .collect::<String>();
+                print_text_projection(&text, impacted.len(), hints);
             }
         }
     }
@@ -640,12 +807,17 @@ fn run_impact(
 
 /// Check the composed graph against the lockfile, reporting drift and structural
 /// findings. Errors exit 1, warnings exit 0.
-fn run_check(root: &Path, format: OutputFormat, color: ColorChoice) -> Result<i32> {
+fn run_check(
+    root: &Path,
+    format: OutputFormat,
+    color: ColorChoice,
+    hints: &mut Hints,
+) -> Result<i32> {
     let graph_root = find_graph_root(root);
-    let config = Config::load(&graph_root)?;
+    let config = load_config(&graph_root, hints)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
-    let lock = lock::read(&graph_root)?;
+    let lock = lock::read(&graph_root, hints)?;
 
     let findings = rules::check::run(&composed, lock.as_ref(), &config);
 
@@ -669,10 +841,13 @@ fn run_check(root: &Path, format: OutputFormat, color: ColorChoice) -> Result<i3
                 .iter()
                 .filter(|f| f.severity == RuleSeverity::Warn)
                 .count();
-            let output = serde_json::json!({
+            // Findings, not a projection, so no size hint — `check` reports what
+            // the graph says rather than handing back a slice of it.
+            let mut output = serde_json::json!({
                 "diagnostics": findings,
                 "summary": { "errors": errors, "warnings": warnings },
             });
+            attach_hints(&mut output, hints)?;
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
     }

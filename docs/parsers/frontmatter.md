@@ -47,11 +47,11 @@ The last one catches people out: a path written against the graph root resolves 
 
 ```
 warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.rs (no defining node)
-  hint: `predicated/artifact/src/lib.rs` resolves from the graph root, but paths resolve
-        relative to the declaring file (did you mean `../predicated/artifact/src/lib.rs`?)
+  cause: `predicated/artifact/src/lib.rs` resolves from the graph root, but paths resolve
+         relative to the declaring file (did you mean `../predicated/artifact/src/lib.rs`?)
 ```
 
-The hint is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
+The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
 
 Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
 

@@ -2,12 +2,16 @@ use crate::config::RuleSeverity;
 use serde::Serialize;
 
 /// A v0.8 check finding over the composed graph. Serializes to the diagnostic
-/// shape `{name, severity, subject, target?, lines?, _graphs, message}`: `subject`
-/// is the implicated path (the source node for edge-level findings), `target` is
-/// the edge's destination on edge-level findings (absent on node-level ones),
-/// `lines` is the source line(s) where an edge finding's link appears (absent
-/// otherwise), and `_graphs` carries the same provenance key the node or edge
-/// does, so a consumer never has to parse anything.
+/// shape `{name, severity, subject, target?, lines?, _graphs, message, cause?}`:
+/// `subject` is the implicated path (the source node for edge-level findings),
+/// `target` is the edge's destination on edge-level findings (absent on
+/// node-level ones), `lines` is the source line(s) where an edge finding's link
+/// appears (absent otherwise), `_graphs` carries the same provenance key the node
+/// or edge does, so a consumer never has to parse anything, and `cause` names the
+/// likely reason when the finding is correct but reads as the wrong problem.
+///
+/// A finding is about an item in the graph. A statement about the *run* — an
+/// unknown rule name, an oversized projection — is a [`crate::hints::Hint`].
 #[derive(Debug, Clone, Serialize)]
 pub struct Finding {
     pub name: String,
@@ -24,7 +28,7 @@ pub struct Finding {
     /// the finding is correct but reads as the wrong problem — a path that fails
     /// to resolve looks like a typo when the base is what's wrong.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hint: Option<String>,
+    pub cause: Option<String>,
 }
 
 impl Finding {
@@ -44,13 +48,13 @@ impl Finding {
             lines: Vec::new(),
             graphs,
             message: message.into(),
-            hint: None,
+            cause: None,
         }
     }
 
     /// Attach a cause line rendered beneath the finding.
-    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
-        self.hint = Some(hint.into());
+    pub fn with_cause(mut self, cause: impl Into<String>) -> Self {
+        self.cause = Some(cause.into());
         self
     }
 
@@ -106,8 +110,8 @@ impl Finding {
             self.subject_display(),
             self.message
         );
-        match &self.hint {
-            Some(hint) => format!("{head}\n  hint: {hint}"),
+        match &self.cause {
+            Some(cause) => format!("{head}\n  cause: {cause}"),
             None => head,
         }
     }
@@ -128,8 +132,8 @@ impl Finding {
             self.subject_display(),
             self.message
         );
-        match &self.hint {
-            Some(hint) => format!("{head}\n  {bold}hint{reset}: {hint}"),
+        match &self.cause {
+            Some(cause) => format!("{head}\n  {bold}cause{reset}: {cause}"),
             None => head,
         }
     }

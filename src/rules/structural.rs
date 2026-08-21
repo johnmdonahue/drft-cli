@@ -30,8 +30,8 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
             )
             .with_target(&edge.target)
             .with_lines(edge.lines());
-            if let Some(hint) = wrong_base_hint(graph, edge) {
-                finding = finding.with_hint(hint);
+            if let Some(cause) = wrong_base_cause(graph, edge) {
+                finding = finding.with_cause(cause);
             }
             findings.push(finding);
         }
@@ -70,7 +70,7 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
 /// are unambiguously relative by intent, so a root file of the same name is a
 /// coincidence rather than the mistake. That leaves the bare-path case, where a
 /// hit is all but certainly a wrong base.
-fn wrong_base_hint(graph: &Graph, edge: &crate::model::Edge) -> Option<String> {
+fn wrong_base_cause(graph: &Graph, edge: &crate::model::Edge) -> Option<String> {
     let raw = edge.raw_links().into_iter().find(|raw| {
         !(raw.starts_with("./") || raw.starts_with("../") || raw.starts_with('/'))
             && graph.nodes.get(*raw).is_some_and(Node::is_resolved)
@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_base_hint_names_the_cause() {
+    fn wrong_base_cause_names_the_cause() {
         // The #72 case: a repo-relative path in a doc one level down. The target
         // reported is a path nobody wrote, so the finding reads as a typo.
         let composed = graph_with_raw_edge(
@@ -138,20 +138,23 @@ mod tests {
             "predicated/artifact/src/lib.rs",
         );
         let findings = evaluate(&composed);
-        let hint = findings
+        let cause = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
-            .and_then(|f| f.hint.as_deref())
-            .expect("expected a hint");
-        assert!(hint.contains("resolves from the graph root"), "got: {hint}");
+            .and_then(|f| f.cause.as_deref())
+            .expect("expected a cause");
         assert!(
-            hint.contains("../predicated/artifact/src/lib.rs"),
-            "suggestion missing: {hint}"
+            cause.contains("resolves from the graph root"),
+            "got: {cause}"
+        );
+        assert!(
+            cause.contains("../predicated/artifact/src/lib.rs"),
+            "suggestion missing: {cause}"
         );
     }
 
     #[test]
-    fn no_hint_when_root_path_also_missing() {
+    fn no_cause_when_root_path_also_missing() {
         // An ordinary typo: nothing resolves either way, so there is no cause to
         // name and the finding stands on its own.
         let composed = graph_with_raw_edge(
@@ -165,13 +168,13 @@ mod tests {
             .iter()
             .find(|f| f.name == "unresolved-edge")
             .unwrap();
-        assert!(f.hint.is_none(), "got: {:?}", f.hint);
+        assert!(f.cause.is_none(), "got: {:?}", f.cause);
     }
 
     #[test]
-    fn no_hint_for_explicitly_relative_paths() {
+    fn no_cause_for_explicitly_relative_paths() {
         // `./x.md` is relative by intent. A root `x.md` of the same name is a
-        // coincidence, not a wrong base — hinting here would be noise.
+        // coincidence, not a wrong base — naming a cause here would be noise.
         let composed = graph_with_raw_edge(
             &["docs/taxonomy.md", "x.md"],
             "docs/taxonomy.md",
@@ -183,7 +186,7 @@ mod tests {
             .iter()
             .find(|f| f.name == "unresolved-edge")
             .unwrap();
-        assert!(f.hint.is_none(), "got: {:?}", f.hint);
+        assert!(f.cause.is_none(), "got: {:?}", f.cause);
     }
 
     #[test]

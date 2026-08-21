@@ -106,14 +106,60 @@ docs/guide.md → docs/config.md
 `drft graph --format text` renders the whole graph as a `# nodes` section
 followed by a `# edges` section — the node and edge blocks above, under headers.
 
-`--format json` returns a structured document instead: `{ total, nodes: [...] }`
-for `nodes`, `{ total, edges: [...] }` for `edges`, and the composed JGF for
-`graph`. `drft graph` honors `--format` like the others (text by default); pass
-`--format json` for the JGF, or `--raw` for the unmerged set of per-graph
-fragments, which is JSON only.
+`--format json` returns a structured document instead: `{ total, nodes: [...],
+hints: [...] }` for `nodes`, `{ total, edges: [...], hints: [...] }` for `edges`,
+and the composed JGF for `graph`. `drft graph` honors `--format` like the others
+(text by default); pass `--format json` for the JGF, or `--raw` for the unmerged
+set of per-graph fragments, which is JSON only.
 
 For the full flag list, run `drft nodes --help`, `drft edges --help`, or
 `drft graph --help`.
+
+## Hints
+
+Every command carries a `hints` channel: advisories about the **run** rather than
+about anything in the result. A finding says a file drifted; a hint says the
+selector you passed matched nothing, or the projection you asked for is large
+enough to crowd out the task it was meant to ground.
+
+Each hint is `{name, locus?, message, next?}` — structured rather than prose, so
+a reader can act on one by `name` or ignore it. `locus` is what the hint points
+at when there is something to point at, and it is not always a path: a selector,
+a config key like `rules.stale-nodes`, sometimes nothing.
+
+```json
+{
+  "total": 0,
+  "nodes": [],
+  "hints": [
+    {
+      "name": "zero-match-selector",
+      "locus": "docs/*.rs",
+      "message": "matched no nodes",
+      "next": "check the pattern against node keys — `*` stops at a path separator, `**` crosses it"
+    }
+  ]
+}
+```
+
+In JSON the channel is a document key, always present so `.hints[]` reads without
+a guard. In text it goes to stderr, after the result, so a pipe carries only the
+projection. `drft graph --format json` is the exception: its root is exactly
+`graph`, a JGF document rather than drft's own envelope, so its hints stay on
+stderr in both formats.
+
+**Hints never change an exit code, and never replace a guard.** A hint annotates
+output and lets it stand — so anything that has to stop a caller is an error
+instead. `drft nodes docs/typo.md` fails rather than hinting, and `drft lock`
+with no arguments refuses rather than locking everything, because a collapsed
+`$(...)` that reads as success is the failure those guards exist for.
+
+| Hint                  | Says                                                              |
+| --------------------- | ----------------------------------------------------------------- |
+| `zero-match-selector` | A selector resolved to nothing — an empty answer, not a clean one |
+| `large-projection`    | The rendered output is big enough to crowd a reader's context     |
+| `unknown-rule`        | A `drft.toml` rule name is not built in, so it configures nothing |
+| `unparseable-lock`    | `drft.lock` could not be read, so every node reads as unlocked    |
 
 ## Grounding an agent
 
