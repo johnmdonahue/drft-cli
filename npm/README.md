@@ -14,7 +14,7 @@ npm install drft-cli
 
 ```bash
 npx drft check
-npx drft lock
+npx drft lock --all
 npx drft graph
 npx drft impact setup.md
 ```

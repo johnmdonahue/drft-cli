@@ -77,7 +77,7 @@ fn try_main() -> Result<i32> {
 
     match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { paths } => run_lock(&root, paths),
+        Commands::Lock { paths, all } => run_lock(&root, paths, *all),
         Commands::Impact {
             paths,
             depth,
@@ -138,19 +138,42 @@ files = ["**/*.md"]
 
 /// Snapshot the composed graph into `drft.lock`: node content hashes and each
 /// node's outbound edge target hashes. With paths, lock only those nodes (their
-/// bytes and their outbound edge targets), merging into the existing lockfile.
+/// bytes and their outbound edge targets), merging into the existing lockfile;
+/// with `--all`, lock every node.
 ///
 /// A lock is an assertion that the locked state was reviewed, so the scoped form
 /// exists to make that assertion narrow enough to be true — lock what you read,
 /// not whatever happens to be stale.
-fn run_lock(root: &Path, paths: &[String]) -> Result<i32> {
+///
+/// The whole-graph lock has to be named. Zero paths is also what the shell hands
+/// over when a command substitution matches nothing, so inferring "every node"
+/// from an empty argument list would turn a scoped invocation into a whole-graph
+/// assertion silently, in a file that outlives the session.
+fn run_lock(root: &Path, paths: &[String], all: bool) -> Result<i32> {
+    // Both guards are pure argv, so they answer before any graph work.
+    if paths.is_empty() && !all {
+        anyhow::bail!(
+            "no paths given — name the paths you reviewed (`drft lock <path>...`), \
+             or pass `--all` to lock every node. An empty argument list is also \
+             what a shell substitution that matched nothing produces, so it is \
+             not read as the whole graph."
+        );
+    }
+    if !paths.is_empty() && all {
+        anyhow::bail!(
+            "`--all` locks every node, so it cannot be combined with paths — \
+             drop `--all` to lock only the paths you named, or drop the paths \
+             to lock the whole graph."
+        );
+    }
+
     let graph_root = find_graph_root(root);
     let config = Config::load(&graph_root)?;
     let set = graphs::build_set(&graph_root, &config)?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
 
-    if paths.is_empty() {
+    if all {
         lock::write(&graph_root, &snapshot)?;
         return Ok(0);
     }

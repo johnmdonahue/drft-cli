@@ -24,7 +24,7 @@ The binary is called `drft`.
 ```bash
 drft init                 # create a drft.toml
 drft check                # validate the graph
-drft lock                 # snapshot file hashes
+drft lock --all           # snapshot every file's hash as the baseline
 drft check                # now detects staleness too
 ```
 
@@ -56,13 +56,16 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft check`  | Compare the graph against the lockfile for drift               |
 | `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking          |
 
-`drft lock` with no argument snapshots the whole graph. Given paths — `drft lock
-src/lib.rs docs/guide.md` — it locks only those nodes and their outbound edges,
+`drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges,
 merging into the existing lockfile. A lock asserts the locked state was reviewed,
 so scope it to what you actually read: a bulk lock also clears staleness you
 never looked at, including someone else's unfinished work. Paths all resolve
 before anything is written, so a typo fails the command rather than leaving a
 partial lock behind.
+
+The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors
+(exit 2), so a scoped invocation whose shell expansion came back empty fails
+instead of widening to every node.
 
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 

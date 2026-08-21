@@ -45,6 +45,11 @@ selector projects every edge leaving that subtree.
 Selector expansion is a reader affordance only. Writers like `drft lock` stay
 exact-path-only, so a subtree or glob never fans out into a write.
 
+The empty selector divides on the same line. A reader with no selector returns
+everything, because the cost is a large read. `drft lock` with no paths errors
+instead, and names the whole graph as `--all`, because the cost there is a
+durable claim that every node was reviewed.
+
 An exact path that matches nothing is a likely typo: the command errors (exit 2)
 with a suggestion. A glob that matches nothing is a legitimate empty result
 (exit 0) — it answers which files match, and none do.

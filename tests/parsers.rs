@@ -20,7 +20,7 @@ fn frontmatter_sources_create_edges() {
     fs::write(data.join("notes.md"), "# Notes").unwrap();
 
     drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "lock"])
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
         .output()
         .unwrap();
 

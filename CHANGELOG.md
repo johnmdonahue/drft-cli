@@ -2,6 +2,12 @@
 
 All notable changes to drft are documented here.
 
+## Unreleased
+
+### Breaking changes
+
+- **The whole-graph lock is `drft lock --all`** (#104). `drft lock` with no paths is a usage error (exit 2) naming both remedies, where it previously snapshotted every node. Zero paths is what a shell hands over when a command substitution matches nothing, so `drft lock $(cmd)` on an empty `cmd` turned a scoped invocation into a whole-graph one — silently, at exit 0, writing a claim that every node had been reviewed into a file that outlives the session. **This breaks any script, hook, or habit that relied on the bare form**: pass `--all` to snapshot the whole graph, which is the right call when regenerating a baseline and the wrong one otherwise. `--all` combined with paths is also an error, since the two state different scopes. There is no short form — spelling out the call that asserts whole-graph review is the point, and a long flag is greppable, so a hook or CI check can forbid `--all` while leaving scoped locks alone. `drft nodes` and `drft edges` keep their zero-selector default: for a reader the cost is a large read, not a durable claim.
+
 ## 0.15.0 (2026-08-19)
 
 Finishes the read verbs of the #90 query surface. `drft edges` projects the graph's edges, and `drft graph` gains a text rendering of the whole composed graph — so an agent can read nodes, edges, or the entire graph without parsing JSON.
