@@ -127,7 +127,7 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        // Two independent buffers, one per job. The edge scan runs on a *masked*
+        // Two independent parses over one block, one per job. The edge scan runs on a *masked*
         // copy — `strip_code` blanks code spans so a `path.md` written in prose
         // can't be mistaken for a link target. Metadata runs on the *raw*
         // frontmatter, so a code span in a value survives as the prose it is.
@@ -146,7 +146,7 @@ impl Parser for FrontmatterParser {
 impl FrontmatterParser {
     /// Extract frontmatter link edges from the *masked* frontmatter block, where
     /// code spans are blanked so a `path.md` written in prose is never a link
-    /// target. An absent or malformed masked block yields no links.
+    /// target. An absent or malformed block yields no links.
     fn extract_links(&self, content: &str) -> Vec<Link> {
         // The boundary is the shared one; only the masking is this job's own.
         // Finding the block in a masked copy of the *whole file* let a code span
@@ -207,6 +207,10 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block))] {
         if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
             && let Some(root) = docs.first()
+            // `parsed_block` already gated on one of these parsing as a mapping,
+            // but not necessarily *this* one. Checking here keeps the return type
+            // honest without resting on an argument about what blanking can do.
+            && matches!(root.data, YamlData::Mapping(_))
         {
             return Some(to_json(root));
         }
@@ -215,7 +219,7 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
 }
 
 /// The frontmatter block this parser recognizes: where it ends in `content`, and
-/// its parsed mapping.
+/// its raw text.
 ///
 /// One selector, so the offset the markdown parser masks and the metadata this
 /// parser contributes can never describe different spans. They did: this looked
