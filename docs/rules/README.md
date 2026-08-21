@@ -48,13 +48,18 @@ the linking file stale. A doc citing `` `src/` `` reads as an inventory of that
 tree and is not one. Link the file that carries what the prose claims —
 `src/lib.rs` over `src/` — when you want the promise tracked.
 
-`unresolved-edge` carries a `hint` when the link text would resolve from the
+`unresolved-edge` carries a `cause` when the link text would resolve from the
 graph root but not from the declaring file. Links resolve relative to the file
 that declares them, so a root-relative path fails against a target nobody wrote
-and reads as a typo; the hint names the base as the cause and suggests the
-rewrite. It is withheld for paths written `./`, `../`, or `/`, which are relative
-by intent. The hint renders as an indented line under the finding in text output
-and as a `hint` field in JSON.
+and reads as a typo; the `cause` names the base and suggests the rewrite. It is
+withheld for paths written `./`, `../`, or `/`, which are relative by intent. It
+renders as an indented line under the finding in text output and as a `cause`
+field in JSON.
+
+A finding is about an item in the graph. A statement about the _run_ that
+produced it — an unknown rule name, a selector that matched nothing — is a
+[hint](../reading.md#hints) instead, carried on the result document rather than
+in `diagnostics`.
 
 Staleness is computed locally — per node and per edge, with no recursive
 propagation — so dependency cycles can't loop or produce ambiguous staleness. A

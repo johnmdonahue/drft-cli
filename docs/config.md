@@ -108,6 +108,7 @@ not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
 
 Any other key in a `[rules.<name>]` table is a config error. An unknown rule
 _name_ only warns, since both fields default and a misspelled rule would
-otherwise configure nothing in silence.
+otherwise configure nothing in silence. The warning is an `unknown-rule`
+[hint](reading.md#hints), carrying the config key as its locus.
 
 See [rules](rules/README.md) for the full set.

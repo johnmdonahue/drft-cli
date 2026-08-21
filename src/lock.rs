@@ -4,10 +4,11 @@
 //! staleness.
 //!
 //! The on-disk form (`drft.lock`) is deterministic TOML with no timestamps and
-//! no version field. A parse failure warns and points at `drft lock --all` rather
+//! no version field. A parse failure raises a hint pointing at `drft lock --all` rather
 //! than failing the command — an unparseable lockfile has no baseline to preserve,
 //! which is the one case the whole-graph lock is the right call.
 
+use crate::hints::{Hint, Hints};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -145,8 +146,9 @@ struct EdgeToml {
 }
 
 /// Read `drft.lock` from `root`. Returns `Ok(None)` when the file is absent or
-/// cannot be parsed (a parse failure warns and points at `drft lock --all`).
-pub fn read(root: &Path) -> Result<Option<Lock>> {
+/// cannot be parsed; a parse failure raises a hint pointing at `drft lock --all`
+/// rather than failing, so `hints` collects it for the caller to emit.
+pub fn read(root: &Path, hints: &mut Hints) -> Result<Option<Lock>> {
     let path = root.join(LOCK_FILE);
     if !path.exists() {
         return Ok(None);
@@ -156,8 +158,13 @@ pub fn read(root: &Path) -> Result<Option<Lock>> {
     match Lock::from_toml(&content) {
         Ok(lock) => Ok(Some(lock)),
         Err(e) => {
-            eprintln!(
-                "warn: could not parse {LOCK_FILE} ({e}) — run `drft lock --all` to regenerate"
+            hints.push(
+                Hint::new(
+                    "unparseable-lock",
+                    format!("could not be parsed ({e}), so every node reads as unlocked"),
+                )
+                .at(LOCK_FILE)
+                .with_next("run `drft lock --all` to regenerate the baseline"),
             );
             Ok(None)
         }
@@ -273,19 +280,30 @@ mod tests {
         let fs = fs_fragment(&[("a.md", "b3:a")]);
         let lock = Lock::from_composed(&compose(&GraphSet::new(vec![fs])));
         write(dir.path(), &lock).unwrap();
-        assert_eq!(read(dir.path()).unwrap().unwrap(), lock);
+        assert_eq!(
+            read(dir.path(), &mut Hints::default()).unwrap().unwrap(),
+            lock
+        );
     }
 
     #[test]
     fn read_missing_is_none() {
         let dir = TempDir::new().unwrap();
-        assert!(read(dir.path()).unwrap().is_none());
+        let mut hints = Hints::default();
+        assert!(read(dir.path(), &mut hints).unwrap().is_none());
+        // Absent is the ordinary pre-lock state, not something to advise about.
+        assert!(hints.is_empty());
     }
 
     #[test]
-    fn unparseable_lock_warns_and_returns_none() {
+    fn unparseable_lock_hints_and_returns_none() {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join(LOCK_FILE), "this is not valid toml {{{").unwrap();
-        assert!(read(dir.path()).unwrap().is_none());
+        let mut hints = Hints::default();
+        assert!(read(dir.path(), &mut hints).unwrap().is_none());
+        let hint = hints.as_slice().first().expect("expected a hint");
+        assert_eq!(hint.name, "unparseable-lock");
+        assert_eq!(hint.locus.as_deref(), Some(LOCK_FILE));
+        assert!(hint.next.as_deref().unwrap().contains("--all"));
     }
 }

@@ -7,6 +7,7 @@ pub mod config;
 pub mod diagnostic;
 pub mod edges;
 pub mod graphs;
+pub mod hints;
 pub mod impact;
 pub mod lock;
 pub mod model;
