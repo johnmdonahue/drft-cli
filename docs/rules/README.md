@@ -68,20 +68,34 @@ rather than the edge, so a source citing two anchors of one target implicates
 only the wrong one.
 
 Matching is exact, and deliberately so: drft slugs the **heading** and compares
-the fragment byte-for-byte, never slugging the citing side. Normalizing the
+the fragment to the result, never slugging the citing side. Normalizing the
 fragment would accept `#OBS 92` for an `obs-92` anchor, which a browser sends as
 `#OBS%2092` and does not find — and certifying a link that 404s for a reader is
-the one thing sub-file addressing must not do. A fragment that matches an anchor
-once case is ignored carries a `cause` naming the anchor it meant; browsers do
-fall back to a case-insensitive match, so such a link works today and is fragile
-rather than broken.
+the one thing sub-file addressing must not do.
+
+The one transformation drft does apply is percent-decoding, because a browser
+applies it too: `#caf%C3%A9` resolves to a `café` anchor, and a permalink copied
+from the address bar is encoded for any non-ASCII anchor. Decoding accepts
+exactly what the platform accepts and loosens nothing — `#OBS%2092` still decodes
+to `OBS 92` and still misses.
+
+Id matching is case-sensitive, so a fragment differing from an anchor only in
+case is broken rather than untidy. It carries a `cause` naming the anchor it
+meant, which makes the fix obvious without excusing it.
 
 A fragment is only checked against a target some parser read. A link into a `.rs`
-file, or into a markdown file outside the graph's `files` scope, has **unknown**
-fragments rather than broken ones, and drft says nothing. A file that was read
+file, into a symlink, or into a markdown file outside the graph's `files` scope
+has **unknown** fragments rather than broken ones, and drft says nothing. Only a
+graph whose parser publishes anchors is authoritative about them, so a file
+writing `anchors:` in its own frontmatter claims nothing. A file that was read
 and defines no headings is the opposite case: every fragment into it is broken.
 An unresolvable target reports `unresolved-edge` alone — the fragment is the
 lesser half of the same mistake.
+
+**Anchor-only links are not checked.** `[see](#section)` names no file, so it
+produces no edge and the rule never sees it — which is the most common broken
+fragment in a long document, and the gap worth knowing about. Write the path
+(`[see](./this-file.md#section)`) to have it checked.
 
 A finding is about an item in the graph. A statement about the _run_ that
 produced it — an unknown rule name, a selector that matched nothing — is a

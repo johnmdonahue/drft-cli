@@ -77,27 +77,35 @@ impl Node {
         self.metadata.contains_key(FS_NAMESPACE)
     }
 
-    /// The `#fragment` addresses this node answers to, across contributing
-    /// graphs. The namespace is not hardcoded — a graph declaring
-    /// `parser = "markdown"` may carry any name — so any graph publishing an
-    /// `anchors` list contributes.
+    /// The `#fragment` addresses this node answers to, as published by the
+    /// namespaces in `authoritative`.
     ///
-    /// `None` means no graph published one: nothing read this node as a document
-    /// with addressable positions, so its fragments are **unknown** rather than
-    /// broken. An empty `Some` means a parser read it and it defines no
-    /// addresses, which makes every fragment into it broken. Callers must keep
+    /// The namespace is not hardcoded — a graph declaring `parser = "markdown"`
+    /// may carry any name — but neither is it open: node metadata under
+    /// `@frontmatter` is the **author's** YAML, so a file writing
+    /// `anchors: [invented]` in its frontmatter would otherwise mint addresses it
+    /// does not answer to and silently certify links to them. The caller passes
+    /// the namespaces whose parser actually publishes anchors.
+    ///
+    /// `None` means none of them published a list: nothing read this node as a
+    /// document with addressable positions, so its fragments are **unknown**
+    /// rather than broken. An empty `Some` means a parser read it and it defines
+    /// no addresses, which makes every fragment into it broken. Callers must keep
     /// those apart.
-    pub fn anchors(&self) -> Option<Vec<&str>> {
+    pub fn anchors(&self, authoritative: &[String]) -> Option<Vec<&str>> {
         let mut anchors: Option<Vec<&str>> = None;
-        for (key, value) in &self.metadata {
-            if !key.starts_with('@') {
+        for namespace in authoritative {
+            let Some(published) = self
+                .metadata
+                .get(namespace)
+                .and_then(|block| block.get("anchors"))
+                .and_then(Value::as_array)
+            else {
                 continue;
-            }
-            if let Some(published) = value.get("anchors").and_then(Value::as_array) {
-                anchors
-                    .get_or_insert_with(Vec::new)
-                    .extend(published.iter().filter_map(Value::as_str));
-            }
+            };
+            anchors
+                .get_or_insert_with(Vec::new)
+                .extend(published.iter().filter_map(Value::as_str));
         }
         anchors
     }
@@ -348,18 +356,33 @@ mod tests {
 
     #[test]
     fn node_anchors_separate_unknown_from_empty() {
+        let md = [namespace("markdown")];
         let unread = Node::new(meta(json!({ "@fs": { "type": "file" } })));
-        assert!(unread.anchors().is_none(), "no parser read it: unknown");
+        assert!(unread.anchors(&md).is_none(), "no parser read it: unknown");
 
         let read = Node::new(meta(json!({
             "@fs": { "type": "file" },
             "@markdown": { "anchors": [] }
         })));
-        assert_eq!(read.anchors(), Some(Vec::new()), "read, defines nothing");
+        assert_eq!(read.anchors(&md), Some(Vec::new()), "read, defines nothing");
 
         // The graph name is configurable, so the namespace is not hardcoded.
         let named = Node::new(meta(json!({ "@docs": { "anchors": ["obs-92"] } })));
-        assert_eq!(named.anchors(), Some(vec!["obs-92"]));
+        assert_eq!(named.anchors(&[namespace("docs")]), Some(vec!["obs-92"]));
+    }
+
+    #[test]
+    fn node_anchors_ignore_an_unauthoritative_namespace() {
+        // Frontmatter metadata is the author's YAML. A file claiming its own
+        // addresses would otherwise certify every link written to them.
+        let claimed = Node::new(meta(json!({
+            "@fs": { "type": "file" },
+            "@frontmatter": { "anchors": ["invented"] }
+        })));
+        assert!(
+            claimed.anchors(&[namespace("markdown")]).is_none(),
+            "an unread file stays unknown however its frontmatter is written"
+        );
     }
 
     #[test]

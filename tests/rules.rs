@@ -129,3 +129,47 @@ fn a_fragment_into_an_unread_target_is_not_flagged() {
         "a non-markdown target's fragments are unknown, got: {stdout}"
     );
 }
+
+/// The addresses a file answers to come from more than its headings, and a
+/// fragment is compared the way a browser compares it: a raw `<a id>`/`<a name>`
+/// is an address, and a percent-encoded fragment is decoded first.
+#[test]
+fn anchors_and_fragments_match_what_a_browser_resolves() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("target.md"),
+        "---\npurpose: a single-key block\n---\n\n\
+         # Target\n\n\
+         <a id=\"faq\"></a>\n\n\
+         ## Café\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("cite.md"),
+        "# Cite\n\n\
+         - [html](./target.md#faq)\n\
+         - [encoded](./target.md#caf%C3%A9)\n\
+         - [frontmatter](./target.md#purpose-a-single-key-block)\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        !stdout.contains("#faq"),
+        "a raw <a id> is an address GitHub resolves, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("caf%C3%A9"),
+        "a percent-encoded fragment decodes before matching, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("cite.md:5 → target.md#purpose-a-single-key-block"),
+        "frontmatter is masked, so its closing --- is not a setext heading, got: {stdout}"
+    );
+}

@@ -163,6 +163,11 @@ const BUILTIN_RULES: &[&str] = &[
 /// a parser) and is intentionally absent — `parser = "fs"` is rejected.
 const KNOWN_PARSERS: &[&str] = &["markdown", "frontmatter"];
 
+/// Parsers that publish the `#fragment` addresses a file answers to. Metadata
+/// from any other graph — frontmatter especially, which is the author's own
+/// YAML — is not a claim about what a file can be cited by.
+const PARSERS_WITH_ANCHORS: &[&str] = &["markdown"];
+
 /// Parsers that accept `keys`. Markdown has no keyed structure to scope.
 const PARSERS_WITH_KEYS: &[&str] = &["frontmatter"];
 
@@ -185,6 +190,16 @@ impl Config {
             config_dir: None,
             hints: Vec::new(),
         }
+    }
+
+    /// The `@<graph>` namespaces whose parser publishes anchors — the ones a
+    /// fragment may be checked against.
+    pub fn anchor_namespaces(&self) -> Vec<String> {
+        self.graphs
+            .iter()
+            .filter(|(_, graph)| PARSERS_WITH_ANCHORS.contains(&graph.parser.as_str()))
+            .map(|(name, _)| crate::model::namespace(name))
+            .collect()
     }
 
     pub fn load(root: &Path) -> Result<Self> {

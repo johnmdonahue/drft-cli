@@ -66,16 +66,29 @@ Images follow the same resolution rules as inline links -- the graph builder str
 ## Anchors
 
 The parser also records the `#fragment` addresses each file answers to, as
-`anchors` in its `markdown` node metadata: the GitHub slug of every heading, in
-document order, with GitHub's `-1` disambiguator when a slug repeats. Read them
-with `drft nodes <path> --field anchors`.
+`anchors` in its `markdown` node metadata, in document order. Read them with
+`drft nodes <path> --field anchors`.
+
+Two things define an address, because a reader's platform resolves both:
+
+- **A heading**, through the GitHub slug of its rendered text, with GitHub's `-1`
+  suffix when a slug repeats. The suffix is re-checked rather than appended, so a
+  document holding `a`, `a`, and a literal `a-1` yields `a`, `a-1`, `a-1-1`.
+- **A raw `<a id="…">` or `<a name="…">`**, verbatim and case-sensitive. This is
+  how a hand-rolled table of contents and a back-compat anchor kept after a
+  heading rename stay addressable.
+
+YAML frontmatter is masked before parsing, so a single-key block's closing `---`
+is not read as a setext heading.
 
 The slug downcases the heading's rendered text, drops every character that is not
-a letter, digit, underscore, hyphen, or space, then turns spaces into hyphens.
-Punctuation is **removed rather than replaced**, so a character between two
-spaces leaves both behind: `## Sizing — notes` answers to `#sizing--notes`, with
-two hyphens. A `{#custom}` attribute is not honored, because GitHub ignores it
-too and an anchor resolving only in drft would 404 for a reader.
+a letter, digit, combining mark, underscore, hyphen, or space, then turns spaces
+into hyphens. Punctuation is **removed rather than replaced**, so a character
+between two spaces leaves both behind: `## Sizing — notes` answers to
+`#sizing--notes`, with two hyphens. Rendered text excludes image alt text and
+inline HTML, which are not part of an element's text content. A `{#custom}`
+attribute is not honored, because GitHub ignores it too and an anchor resolving
+only in drft would 404 for a reader.
 
 A file the parser read defines an `anchors` list even when it has no headings, so
 an empty list is a fact rather than a silence. Anchors are what

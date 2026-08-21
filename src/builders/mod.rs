@@ -1,6 +1,7 @@
 //! Builders turn a source's `(path, bytes)` records into graph nodes and edges.
 //! v0.8 ships the `fs` node builder plus two text builders (parsers):
-//! `markdown` (edges) and `frontmatter` (edges + metadata).
+//! `markdown` (edges + the anchors a file answers to) and `frontmatter`
+//! (edges + metadata).
 
 pub mod frontmatter;
 pub mod fs;

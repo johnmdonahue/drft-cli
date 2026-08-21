@@ -14,8 +14,10 @@ use crate::model::{Graph, Node};
 use crate::rules::{edge_provenance, provenance};
 use crate::util::is_uri;
 
-/// Evaluate structural findings for `graph`.
-pub fn evaluate(graph: &Graph) -> Vec<Finding> {
+/// Evaluate structural findings for `graph`. `anchor_namespaces` names the
+/// graphs whose parser publishes the addresses a fragment may be checked
+/// against; with none, `unresolved-fragment` cannot fire.
+pub fn evaluate(graph: &Graph, anchor_namespaces: &[String]) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     // unresolved-edge: a non-URI edge target with no defining node.
@@ -55,7 +57,7 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
         };
         // `None` means nothing read the target as a document with addressable
         // positions, so its fragments are unknown, not broken.
-        let Some(anchors) = target.anchors() else {
+        let Some(anchors) = target.anchors(anchor_namespaces) else {
             continue;
         };
 
@@ -73,7 +75,13 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
             else {
                 continue;
             };
-            if anchors.contains(&fragment) {
+            // A browser percent-decodes the fragment before looking for an id,
+            // and GitHub's own copied permalink is percent-encoded for any
+            // non-ASCII anchor. Decoding accepts exactly what the platform
+            // accepts; it is not the loosening that slugging the fragment would
+            // be, since `#OBS%2092` still decodes to `OBS 92` and still misses.
+            let decoded = percent_decode(fragment);
+            if anchors.contains(&fragment) || anchors.iter().any(|a| *a == decoded) {
                 continue;
             }
             let lines = missing.entry(fragment).or_default();
@@ -123,20 +131,40 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
     findings
 }
 
+/// Percent-decode a fragment, resolving `%XX` byte escapes as UTF-8. Invalid
+/// escapes and invalid UTF-8 leave the text as written, which then simply fails
+/// to match — a fragment drft cannot decode is not one it should guess at.
+fn percent_decode(fragment: &str) -> String {
+    let bytes = fragment.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(hex) = fragment.get(i + 1..i + 3)
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
+        {
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| fragment.to_string())
+}
+
 /// A fragment that matches an anchor once case is ignored is almost certainly a
 /// typo, so name the anchor it meant.
 ///
-/// Browsers fall back to an ASCII-case-insensitive match when no id matches
-/// exactly, so this link is not broken for a reader today — it is fragile across
-/// renderers and trivially fixable, which makes it worth surfacing rather than
-/// silently resolving. Resolution stays exact: matching case-insensitively here
-/// would normalize the citing side, and the whole point of running one slug
-/// function over the heading alone is to never accept more than the platform
-/// does.
+/// Id matching is case-sensitive, so this link is broken rather than merely
+/// untidy — the cause exists to make the fix obvious, not to excuse it.
+/// Resolution stays exact: matching case-insensitively here would accept an
+/// address the platform does not resolve.
 fn case_mismatch_cause(anchors: &[&str], fragment: &str) -> Option<String> {
+    let lowered = fragment.to_lowercase();
     let anchor = anchors
         .iter()
-        .find(|anchor| anchor.eq_ignore_ascii_case(fragment))?;
+        .find(|anchor| anchor.to_lowercase() == lowered)?;
     Some(format!(
         "`#{fragment}` differs only in case from `#{anchor}`, which the target defines"
     ))
@@ -191,7 +219,7 @@ mod tests {
         fs.add_edge(Edge::new("index.md", "gone.md"));
         let composed = compose(&GraphSet::new(vec![fs]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         assert!(names(&findings).contains(&("unresolved-edge", "index.md")));
     }
 
@@ -236,7 +264,7 @@ mod tests {
         }
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -260,7 +288,7 @@ mod tests {
             "docs/predicated/artifact/src/lib.rs",
             "predicated/artifact/src/lib.rs",
         );
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let cause = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -286,7 +314,7 @@ mod tests {
             "docs/typo.rs",
             "typo.rs",
         );
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -304,7 +332,7 @@ mod tests {
             "docs/x.md",
             "./x.md",
         );
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -341,7 +369,7 @@ mod tests {
             json!([{ "line": 3, "link": "owners.md#security-console" }]),
         );
         assert!(
-            !names(&evaluate(&composed))
+            !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
                 .iter()
                 .any(|(name, _)| *name == "unresolved-fragment")
         );
@@ -359,7 +387,7 @@ mod tests {
                 { "line": 7, "link": "owners.md#no-such-team" },
             ]),
         );
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-fragment")
@@ -378,7 +406,7 @@ mod tests {
                 { "line": 9, "link": "owners.md#typo" },
             ]),
         );
-        let findings: Vec<_> = evaluate(&composed)
+        let findings: Vec<_> = evaluate(&composed, &[crate::model::namespace("markdown")])
             .into_iter()
             .filter(|f| f.name == "unresolved-fragment")
             .collect();
@@ -392,7 +420,7 @@ mod tests {
             &["ngwaf-edge"],
             json!([{ "line": 5, "link": "owners.md#NGWAF-Edge" }]),
         );
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-fragment")
@@ -402,10 +430,76 @@ mod tests {
     }
 
     #[test]
+    fn a_percent_encoded_fragment_resolves() {
+        // A browser percent-decodes before matching, and GitHub's own copied
+        // permalink is encoded for a non-ASCII anchor.
+        let composed = graph_with_fragments(
+            &["café"],
+            json!([{ "line": 3, "link": "owners.md#caf%C3%A9" }]),
+        );
+        assert!(
+            !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
+                .iter()
+                .any(|(name, _)| *name == "unresolved-fragment")
+        );
+    }
+
+    #[test]
+    fn decoding_does_not_accept_what_the_platform_rejects() {
+        // `#OBS%2092` decodes to `OBS 92`, which is still not `obs-92`. Decoding
+        // is not the loosening that slugging the citing side would be.
+        let composed = graph_with_fragments(
+            &["obs-92"],
+            json!([{ "line": 3, "link": "owners.md#OBS%2092" }]),
+        );
+        assert!(
+            names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
+                .iter()
+                .any(|(name, _)| *name == "unresolved-fragment")
+        );
+    }
+
+    #[test]
+    fn frontmatter_cannot_claim_anchors_a_file_does_not_have() {
+        // Node metadata under `@frontmatter` is the author's own YAML. Only a
+        // graph whose parser publishes anchors is authoritative about them.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("work-items.md", fs_node());
+        fs.set_node("owners.md", fs_node());
+        let mut frontmatter = Graph::labeled("frontmatter");
+        frontmatter.set_node(
+            "owners.md",
+            Node::new(
+                json!({ "anchors": ["invented"] })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        );
+        let mut markdown = Graph::labeled("markdown");
+        let mut meta = Metadata::new();
+        meta.insert(
+            "occurrences".into(),
+            json!([{ "line": 3, "link": "owners.md#invented" }]),
+        );
+        markdown.add_edge(Edge::with_metadata("work-items.md", "owners.md", meta));
+        let composed = compose(&GraphSet::new(vec![fs, frontmatter, markdown]));
+
+        // `owners.md` was never read as markdown, so its fragments stay unknown
+        // however its frontmatter is written — no finding, and no false clearance.
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
+        assert!(
+            !names(&findings)
+                .iter()
+                .any(|(n, _)| *n == "unresolved-fragment")
+        );
+    }
+
+    #[test]
     fn a_bare_hash_is_the_top_of_the_page() {
         let composed = graph_with_fragments(&["a"], json!([{ "line": 2, "link": "owners.md#" }]));
         assert!(
-            !names(&evaluate(&composed))
+            !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
                 .iter()
                 .any(|(name, _)| *name == "unresolved-fragment")
         );
@@ -427,7 +521,7 @@ mod tests {
         markdown.add_edge(Edge::with_metadata("guide.md", "src/lib.rs", meta));
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
         assert!(
-            !names(&evaluate(&composed))
+            !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
                 .iter()
                 .any(|(name, _)| *name == "unresolved-fragment")
         );
@@ -439,7 +533,7 @@ mod tests {
         // defines no addresses, so the fragment is broken rather than unknown.
         let composed =
             graph_with_fragments(&[], json!([{ "line": 4, "link": "owners.md#anything" }]));
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         assert!(
             findings.iter().any(|f| f.name == "unresolved-fragment"),
             "got {:?}",
@@ -462,7 +556,7 @@ mod tests {
         markdown.add_edge(Edge::with_metadata("guide.md", "gone.md", meta));
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let found = names(&findings);
         assert!(
             found.contains(&("unresolved-edge", "guide.md")),
@@ -482,7 +576,7 @@ mod tests {
         fs.set_node("index.md", fs_node());
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -504,7 +598,7 @@ mod tests {
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
 
         assert!(
-            !names(&evaluate(&composed))
+            !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
                 .iter()
                 .any(|(name, _)| *name == "unresolved-edge")
         );
@@ -519,7 +613,7 @@ mod tests {
         fs.add_edge(Edge::new("a.md", "b.md"));
         let composed = compose(&GraphSet::new(vec![fs]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let n = names(&findings);
         assert!(n.contains(&("detached-node", "lonely.md")), "got {n:?}");
         assert!(!n.contains(&("detached-node", "a.md")));
@@ -537,7 +631,7 @@ mod tests {
         fs.set_node("lonely.md", fs_node());
         let composed = compose(&GraphSet::new(vec![fs]));
 
-        let findings = evaluate(&composed);
+        let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let n = names(&findings);
         assert!(
             !n.contains(&("detached-node", "guides")),

@@ -33,12 +33,12 @@ drft check                # now detects staleness too
 drft builds a **set of independent graphs** and merges them by path:
 
 - **`fs`** — walks the tree under the root (minus `ignore` and `.gitignore`), typing each file, symlink, and directory as a node and hashing the ones with content. This is the identity space.
-- **`markdown`** — link edges from `[text](path)` body links.
+- **`markdown`** — link edges from `[text](path)` body links, plus the `#fragment` anchors each file answers to.
 - **`frontmatter`** — edges from frontmatter link-target values, plus the parsed frontmatter block as node metadata. Paths resolve relative to the declaring file, as its markdown links do. Set `keys = ["sources"]` to scope edges to named keys instead of every path-shaped value.
 
 Composition merges the set into one graph, and `drft check` reads it to emit drift findings:
 
-- **Broken links** — edges to a target with no defining node (`unresolved-edge`)
+- **Broken links** — edges to a target with no defining node (`unresolved-edge`), and links whose `#fragment` names no anchor the target defines (`unresolved-fragment`)
 - **Staleness** — a node's content, or a dependency's, changed since the last lock (`stale-node`, `stale-edge`)
 - **Structure** — edges added or removed since lock, or a node with no connections (`new-edge`, `removed-edge`, `removed-node`, `detached-node`)
 

@@ -4,8 +4,10 @@ use serde::Serialize;
 /// A v0.8 check finding over the composed graph. Serializes to the diagnostic
 /// shape `{name, severity, subject, target?, lines?, _graphs, message, cause?}`:
 /// `subject` is the implicated path (the source node for edge-level findings),
-/// `target` is the edge's destination on edge-level findings (absent on
-/// node-level ones), `lines` is the source line(s) where an edge finding's link
+/// `target` is what the link points at on edge-level findings (absent on
+/// node-level ones) — usually the destination node's path, but
+/// `unresolved-fragment` reports `path#fragment`, so a consumer must not assume
+/// it is a node id, `lines` is the source line(s) where an edge finding's link
 /// appears (absent otherwise), `_graphs` carries the same provenance key the node
 /// or edge does, so a consumer never has to parse anything, and `cause` names the
 /// likely reason when the finding is correct but reads as the wrong problem.
