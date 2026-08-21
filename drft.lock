@@ -157,7 +157,7 @@ target_hash = "b3:202ad759d688b9521352cd639cd04706131d9e8b00b6362c6dd1f49283e902
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:09c7c7ccbcfe7acbcd4a2946af493aeba9eca41ec4419f70e474893f97825664"
+target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
 
 [[node.edge]]
 target = "docs/reading.md"
@@ -181,11 +181,11 @@ hash = "b3:202ad759d688b9521352cd639cd04706131d9e8b00b6362c6dd1f49283e90201"
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:09c7c7ccbcfe7acbcd4a2946af493aeba9eca41ec4419f70e474893f97825664"
+target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
 
 [[node.edge]]
 target = "docs/parsers/markdown.md"
-target_hash = "b3:3c45c124a1e046a85453b0bbac4e989ba0b55d89e0e86f10f6d4cc006d32f041"
+target_hash = "b3:3f462d3841e40b0b6e9eb79ebe63f8289695e9f51ba0dae761b639c5a58b6a84"
 
 [[node.edge]]
 target = "src/parsers/mod.rs"
@@ -193,7 +193,7 @@ target_hash = "b3:520ad18b8bb4fab4f1efce2913a0c59f2ab443f64178cd37cad77840b7f0b1
 
 [[node]]
 path = "docs/parsers/frontmatter.md"
-hash = "b3:09c7c7ccbcfe7acbcd4a2946af493aeba9eca41ec4419f70e474893f97825664"
+hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -201,15 +201,15 @@ target_hash = "b3:ba380aa56e9ff7a5cb6186ac81b46b93c01ca693f72e95e8156f79bc932b4f
 
 [[node.edge]]
 target = "docs/parsers/markdown.md"
-target_hash = "b3:3c45c124a1e046a85453b0bbac4e989ba0b55d89e0e86f10f6d4cc006d32f041"
+target_hash = "b3:3f462d3841e40b0b6e9eb79ebe63f8289695e9f51ba0dae761b639c5a58b6a84"
 
 [[node.edge]]
 target = "src/parsers/frontmatter.rs"
-target_hash = "b3:3e4d0a4120ff6bf7d9361a87a278361598af51b8865527e9c3a6e86a0cff9721"
+target_hash = "b3:5743cdf7ba72bb239915cf9475d5703097a264ab8c093e9cdd743625c30cfa7c"
 
 [[node]]
 path = "docs/parsers/markdown.md"
-hash = "b3:3c45c124a1e046a85453b0bbac4e989ba0b55d89e0e86f10f6d4cc006d32f041"
+hash = "b3:3f462d3841e40b0b6e9eb79ebe63f8289695e9f51ba0dae761b639c5a58b6a84"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -217,7 +217,7 @@ target_hash = "b3:ba380aa56e9ff7a5cb6186ac81b46b93c01ca693f72e95e8156f79bc932b4f
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:09c7c7ccbcfe7acbcd4a2946af493aeba9eca41ec4419f70e474893f97825664"
+target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
 
 [[node.edge]]
 target = "docs/rules/README.md"
@@ -225,7 +225,7 @@ target_hash = "b3:d1b6f37e2efe0ac232d228624e8be281e1e8ef5ed997a3b84d23d9a525866c
 
 [[node.edge]]
 target = "src/parsers/markdown.rs"
-target_hash = "b3:96b3936ff8dfcd3ba6f9b1e2f7d03f3a62b286d21c95b22ad4b6ceda1943b5ed"
+target_hash = "b3:5cccff428d78c4982b68930ad7c58f8a11241125dad0f187e32b1965cca2d854"
 
 [[node]]
 path = "docs/reading.md"
@@ -376,11 +376,11 @@ hash = "b3:bd63f170e88bb37482e7384aa3becb20cea1d7dfcf2be4b4ab79a8e636329920"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
-hash = "b3:3e4d0a4120ff6bf7d9361a87a278361598af51b8865527e9c3a6e86a0cff9721"
+hash = "b3:5743cdf7ba72bb239915cf9475d5703097a264ab8c093e9cdd743625c30cfa7c"
 
 [[node]]
 path = "src/parsers/markdown.rs"
-hash = "b3:96b3936ff8dfcd3ba6f9b1e2f7d03f3a62b286d21c95b22ad4b6ceda1943b5ed"
+hash = "b3:5cccff428d78c4982b68930ad7c58f8a11241125dad0f187e32b1965cca2d854"
 
 [[node]]
 path = "src/parsers/mod.rs"

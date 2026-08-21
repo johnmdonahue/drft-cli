@@ -217,18 +217,40 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
 /// what this one claims, rather than guessing at the boundary a second time and
 /// disagreeing.
 pub fn mapping_block_end(content: &str) -> Option<usize> {
-    let rest = content.strip_prefix("---")?;
-    // The opening fence has to be a line of its own.
-    if !rest.starts_with('\n') && !rest.starts_with("\r\n") {
-        return None;
-    }
-    let end = rest.find("\n---")?;
-    let block = &rest[..end];
-    if block.trim().is_empty() {
-        return None;
-    }
-    let docs = MarkedYaml::load_from_str(block).ok()?;
-    matches!(docs.first()?.data, YamlData::Mapping(_)).then_some("---".len() + end + "\n---".len())
+    let block = frontmatter_block(content)?;
+    // The boundary always comes from the raw content, so the offset indexes the
+    // string the caller holds. `strip_code` rebuilds lines — dropping `\r`, adding
+    // a trailing newline — so an offset taken from its output would not. It is
+    // applied to the block text alone and only to decide whether the block parses,
+    // which is the same raw-then-masked order `extract_metadata` uses: a code span
+    // can hide a `:` that would otherwise break the mapping.
+    (is_mapping(block) || is_mapping(&strip_code(block)))
+        .then_some("---".len() + block.len() + "\n---".len())
+}
+
+/// Whether `block` parses as a YAML **mapping** — the shape that separates
+/// frontmatter from a document opening with a `---` thematic break.
+///
+/// A mapping is required rather than any valid YAML, and the reason is that YAML
+/// and markdown collide on two constructs. A block carrying only comments parses
+/// to no document at all — but `# First` is a YAML comment *and* a markdown ATX
+/// heading, so accepting it would read `---\n\n# First\n\n---` as frontmatter and
+/// delete the most ordinary heading in markdown, along with any link beneath it.
+/// A block parsing to a bare scalar is ambiguous the same way:
+/// `---\nMy Title\n---` is equally a rule above a setext heading.
+///
+/// So both are left as content. The cost is that comment-only frontmatter, which
+/// other tools do recognize, has its text read as prose; the alternative is
+/// deleting real content, and only one of those is recoverable by reading the
+/// page.
+fn is_mapping(block: &str) -> bool {
+    MarkedYaml::load_from_str(block)
+        .ok()
+        .and_then(|docs| {
+            docs.first()
+                .map(|doc| matches!(doc.data, YamlData::Mapping(_)))
+        })
+        .unwrap_or(false)
 }
 
 /// Extract the YAML frontmatter block — the text between the opening `---` and the
@@ -242,6 +264,12 @@ pub fn mapping_block_end(content: &str) -> Option<usize> {
 /// line within the file.
 fn frontmatter_block(stripped: &str) -> Option<&str> {
     let rest = stripped.strip_prefix("---")?;
+    // The opening fence has to be a line of its own. `---key: v` is not
+    // frontmatter under any convention that writes it, and reading it as one
+    // invents metadata out of a document's first paragraph.
+    if !rest.starts_with('\n') && !rest.starts_with("\r\n") {
+        return None;
+    }
     let end = rest.find("\n---")?;
     let yaml_str = &rest[..end];
     if yaml_str.trim().is_empty() {
@@ -353,6 +381,37 @@ mod tests {
             keys: None,
         };
         parser.parse("test.md", content)
+    }
+
+    #[test]
+    fn an_opening_fence_must_own_its_line() {
+        // `---key: v` is a paragraph, not frontmatter; reading it as one invents
+        // metadata out of a document's first line.
+        let result = parse("---key: v\n---\n\n# Body\n");
+        assert!(result.metadata.is_none());
+    }
+
+    #[test]
+    fn mapping_block_end_agrees_with_what_this_parser_extracts() {
+        // The markdown parser masks whatever this returns, so a disagreement
+        // publishes an address the file does not answer to — or deletes content
+        // that was never frontmatter.
+        let frontmatter = "---\ntitle: Doc\n---\n\n# Body\n";
+        assert_eq!(
+            mapping_block_end(frontmatter),
+            Some("---\ntitle: Doc\n---".len())
+        );
+        assert!(parse(frontmatter).metadata.is_some());
+
+        // A code span hiding a `:`: this parser recovers via the masked copy, so
+        // the boundary has to as well.
+        let masked_only = "---\npurpose: use `a: b` here\n---\n\n# Body\n";
+        assert!(mapping_block_end(masked_only).is_some());
+        assert!(parse(masked_only).metadata.is_some());
+
+        // A thematic break above a setext title is not frontmatter either way.
+        assert!(mapping_block_end("---\nJust A Title\n---\n\nBody\n").is_none());
+        assert!(mapping_block_end("---\n\n# First\n\n---\n\n# Second\n").is_none());
     }
 
     #[test]

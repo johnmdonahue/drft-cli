@@ -182,12 +182,20 @@ fn html_anchor_ids(html: &str) -> Vec<String> {
             continue;
         }
         i += 2;
+        // HTML keeps the first of a repeated attribute, so a second `id` names an
+        // address the page does not have.
+        let (mut seen_id, mut seen_name) = (false, false);
         while let Some((name, value, next)) = attribute(html, i) {
             i = next;
             if value.is_empty() {
                 continue;
             }
-            if name.eq_ignore_ascii_case("id") || name.eq_ignore_ascii_case("name") {
+            let taken = match () {
+                _ if name.eq_ignore_ascii_case("id") => &mut seen_id,
+                _ if name.eq_ignore_ascii_case("name") => &mut seen_name,
+                _ => continue,
+            };
+            if !std::mem::replace(taken, true) {
                 ids.push(value);
             }
         }
@@ -395,6 +403,35 @@ mod tests {
         // bails on an unterminated quote rather than taking prose as a value.
         assert!(anchors("<a id=\"unclosed name=\"real\"></a>\n").is_empty());
         assert!(anchors("<a id=\"never closed\n").is_empty());
+    }
+
+    #[test]
+    fn a_repeated_attribute_names_one_address() {
+        // HTML keeps the first, so a second `id` is an address the page lacks.
+        assert_eq!(
+            anchors("<a id=\"first\" id=\"second\" name=\"nm\" name=\"nm2\"></a>\n"),
+            vec!["first", "nm"]
+        );
+    }
+
+    #[test]
+    fn a_code_span_in_frontmatter_does_not_leak_an_anchor() {
+        // A backtick span can hide a `:` that breaks the mapping. The frontmatter
+        // parser falls back to a code-masked parse, and the mask has to agree or
+        // the fabricated-anchor bug comes back for exactly this file.
+        let content = "---\npurpose: use `a: b` here\n---\n\n# Real\n";
+        assert_eq!(anchors(content), vec!["real"]);
+    }
+
+    #[test]
+    fn a_comment_only_block_is_read_as_content() {
+        // A YAML comment and a markdown ATX heading are the same syntax, so
+        // accepting a comment-only block would delete `# First` from any document
+        // that opens with a thematic break above a heading.
+        assert_eq!(
+            anchors("---\n# just a comment\n---\n\n# Real\n"),
+            vec!["just-a-comment", "real"]
+        );
     }
 
     #[test]

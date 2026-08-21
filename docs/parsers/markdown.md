@@ -79,10 +79,10 @@ Two things define an address, because a reader's platform resolves both:
   heading rename stay addressable.
 
 YAML frontmatter is masked before parsing, so a single-key block's closing `---`
-is not read as a setext heading. The block has to parse as a YAML mapping to be
-masked — the same block the [frontmatter parser](frontmatter.md) consumes — so a
-document that merely opens with a `---` thematic break keeps its headings and its
-links.
+is not read as a setext heading. Where the block ends is the
+[frontmatter parser](frontmatter.md)'s call, not this one's: it has to parse as a
+YAML mapping, so a document that merely opens with a `---` thematic break keeps
+its headings and its links.
 
 The slug downcases the heading's rendered text, drops every character that is not
 a letter, digit, combining mark, underscore, hyphen, or space, then turns spaces
