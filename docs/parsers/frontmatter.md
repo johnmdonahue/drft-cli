@@ -76,6 +76,10 @@ Omitting `keys` keeps shape detection over the entire block. Prefer `keys` where
 
 The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
 
+A block counts as frontmatter only when it parses as a YAML **mapping**, and one selector decides where it ends — for this parser's metadata, for its edges, and for the [markdown parser](markdown.md)'s mask. Code spans are blanked within that block, not used to find it: a backtick opened in frontmatter and closed in the body would otherwise move the boundary, and the two directions of that were a link lifted out of body prose and a declared `sources:` entry silently producing no edge. So a file opening with a `---` thematic break rather than frontmatter keeps its first heading and its links.
+
+A mapping is required rather than any valid YAML because YAML and markdown collide: `# First` is a YAML comment _and_ a markdown heading, so treating a comment-only block as frontmatter would delete the most ordinary heading in markdown from any document that opens with a rule. A block parsing to a bare scalar is ambiguous the same way — `---`, `My Title`, `---` is equally a rule above a setext heading. Both are read as content, which costs comment-only frontmatter its metadata and is the recoverable direction to be wrong in.
+
 ## Configuration
 
 Declare a graph that uses the frontmatter parser:

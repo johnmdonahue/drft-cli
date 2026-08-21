@@ -31,15 +31,16 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule              | When                                                           |
-| ----------------- | -------------------------------------------------------------- |
-| `stale-node`      | A node's current hash differs from its locked hash             |
-| `stale-edge`      | An edge's locked target hash differs from the target's         |
-| `new-edge`        | A current edge has no locked target hash                       |
-| `removed-edge`    | The lockfile has an edge absent from the graph                 |
-| `removed-node`    | The lockfile has a node absent from the graph                  |
-| `unresolved-edge` | An edge target has no defining node (URIs excepted)            |
-| `detached-node`   | A node has no inbound or outbound edges (directories excepted) |
+| Rule                  | When                                                           |
+| --------------------- | -------------------------------------------------------------- |
+| `stale-node`          | A node's current hash differs from its locked hash             |
+| `stale-edge`          | An edge's locked target hash differs from the target's         |
+| `new-edge`            | A current edge has no locked target hash                       |
+| `removed-edge`        | The lockfile has an edge absent from the graph                 |
+| `removed-node`        | The lockfile has a node absent from the graph                  |
+| `unresolved-edge`     | An edge target has no defining node (URIs excepted)            |
+| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines        |
+| `detached-node`       | A node has no inbound or outbound edges (directories excepted) |
 
 **A link to a directory tracks the directory, not its contents.** Directories are
 nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories
@@ -57,6 +58,44 @@ check runs per link occurrence, so a target cited from several places carries th
 cause when any one of those links is bare — the finding names every line, and the
 cause describes the bare one. It renders as an indented line under the finding in
 text output and as a `cause` field in JSON.
+
+`unresolved-fragment` checks the other half of a link. A markdown parser
+publishes the `#fragment` addresses each file it reads answers to — the GitHub
+slug of every heading, in document order, with GitHub's `-1` disambiguator on a
+repeat — and a link carrying a fragment its target does not define is a broken
+reference that the file existing does not save. The finding names the citing line
+rather than the edge, so a source citing two anchors of one target implicates
+only the wrong one.
+
+Matching is exact, and deliberately so: drft slugs the **heading** and compares
+the fragment to the result, never slugging the citing side. Normalizing the
+fragment would accept `#OBS 92` for an `obs-92` anchor, which a browser sends as
+`#OBS%2092` and does not find — and certifying a link that 404s for a reader is
+the one thing sub-file addressing must not do.
+
+The one transformation drft does apply is percent-decoding, because a browser
+applies it too: `#caf%C3%A9` resolves to a `café` anchor, and a permalink copied
+from the address bar is encoded for any non-ASCII anchor. Decoding accepts
+exactly what the platform accepts and loosens nothing — `#OBS%2092` still decodes
+to `OBS 92` and still misses.
+
+Id matching is case-sensitive, so a fragment differing from an anchor only in
+case is broken rather than untidy. It carries a `cause` naming the anchor it
+meant, which makes the fix obvious without excusing it.
+
+A fragment is only checked against a target some parser read. A link into a `.rs`
+file, into a symlink, or into a markdown file outside the graph's `files` scope
+has **unknown** fragments rather than broken ones, and drft says nothing. Only a
+graph whose parser publishes anchors is authoritative about them, so a file
+writing `anchors:` in its own frontmatter claims nothing. A file that was read
+and defines no headings is the opposite case: every fragment into it is broken.
+An unresolvable target reports `unresolved-edge` alone — the fragment is the
+lesser half of the same mistake.
+
+**Anchor-only links are not checked.** `[see](#section)` names no file, so it
+produces no edge and the rule never sees it — which is the most common broken
+fragment in a long document, and the gap worth knowing about. Write the path
+(`[see](./this-file.md#section)`) to have it checked.
 
 A finding is about an item in the graph. A statement about the _run_ that
 produced it — an unknown rule name, a selector that matched nothing — is a

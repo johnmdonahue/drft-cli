@@ -19,7 +19,7 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
     if let Some(lock) = lock {
         findings.extend(staleness::evaluate(graph, lock));
     }
-    findings.extend(structural::evaluate(graph));
+    findings.extend(structural::evaluate(graph, &config.anchor_namespaces()));
 
     findings.retain_mut(|finding| {
         // Default severity is warn unless config overrides the rule.
@@ -38,10 +38,13 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
         true
     });
 
+    // Lines before message, so several findings on one subject read in the order
+    // a reader would walk the file rather than in fragment byte order.
     findings.sort_by(|a, b| {
         a.name
             .cmp(&b.name)
             .then_with(|| a.subject.cmp(&b.subject))
+            .then_with(|| a.lines.cmp(&b.lines))
             .then_with(|| a.message.cmp(&b.message))
     });
     findings

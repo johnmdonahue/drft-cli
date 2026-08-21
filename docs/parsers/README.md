@@ -7,10 +7,12 @@ sources:
 # Parsers
 
 A parser interprets the files a graph's `files` globs select, emitting links that
-become edges. The frontmatter parser also emits the parsed frontmatter block as
-metadata on the file's node. A graph names its parser with `parser = "..."`.
+become edges. Each parser also emits node metadata about the file it read: the
+markdown parser the `#fragment` anchors that file answers to, the frontmatter
+parser the parsed frontmatter block. A graph names its parser with
+`parser = "..."`.
 
-| Parser                        | Emits                                      |
-| ----------------------------- | ------------------------------------------ |
-| [markdown](markdown.md)       | edges (inline, reference, autolink, image) |
-| [frontmatter](frontmatter.md) | edges (link-target values) + node metadata |
+| Parser                        | Emits                                                        |
+| ----------------------------- | ------------------------------------------------------------ |
+| [markdown](markdown.md)       | edges (inline, reference, autolink, image) + heading anchors |
+| [frontmatter](frontmatter.md) | edges (link-target values) + node metadata                   |

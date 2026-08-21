@@ -4,6 +4,7 @@
 
 pub mod frontmatter;
 pub mod markdown;
+pub mod slug;
 
 /// One link discovered by a parser: its raw target string as it appears in the
 /// source, plus the 1-based source line where it occurs (`None` when the parser
@@ -15,10 +16,14 @@ pub struct Link {
     pub line: Option<usize>,
 }
 
-/// Combined output from parsing a single file: links + optional metadata.
+/// Combined output from parsing a single file: links, the anchors it defines,
+/// and optional metadata.
 #[derive(Debug, Clone, Default)]
 pub struct ParseResult {
     pub links: Vec<Link>,
+    /// The `#fragment` addresses this file answers to, in document order. Empty
+    /// for a parser that defines no addressable sub-file positions.
+    pub anchors: Vec<String>,
     /// Structured metadata extracted from the file.
     pub metadata: Option<serde_json::Value>,
 }

@@ -61,3 +61,115 @@ fn ignore_glob_suppresses_diagnostics() {
         "other.md should still be flagged, got: {stdout}"
     );
 }
+
+/// A link's `#fragment` is checked against the anchors its target defines: an
+/// anchor that exists is quiet, one that does not fires `unresolved-fragment` on
+/// the line that cites it, and a case-only mismatch names the anchor it meant.
+#[test]
+fn fragments_are_checked_against_the_targets_anchors() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("owners.md"),
+        "# Owners\n\n## security-console\n\nAna.\n\n## ngwaf-edge\n\nBo.\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("work-items.md"),
+        "# Work\n\n\
+         - [W-01](./owners.md#security-console)\n\
+         - [W-02](./owners.md#NGWAF-Edge)\n\
+         - [W-03](./owners.md#no-such-team)\n\
+         - [W-04](./owners.md)\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        !stdout.contains("#security-console"),
+        "an anchor the target defines is quiet, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("work-items.md:5 → owners.md#no-such-team"),
+        "a missing anchor fires on its own line, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("work-items.md:4 → owners.md#NGWAF-Edge")
+            && stdout.contains("differs only in case from `#ngwaf-edge`"),
+        "a case-only mismatch names the anchor it meant, got: {stdout}"
+    );
+}
+
+/// A fragment into a target no parser read as a document is unknown, not broken:
+/// nothing published an anchor list for it, so drft cannot say the anchor is
+/// missing and does not guess.
+#[test]
+fn a_fragment_into_an_unread_target_is_not_flagged() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("lib.rs"), "pub fn go() {}\n").unwrap();
+    fs::write(
+        dir.path().join("guide.md"),
+        "# Guide\n\nSee [go](lib.rs#L1).\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("unresolved-fragment"),
+        "a non-markdown target's fragments are unknown, got: {stdout}"
+    );
+}
+
+/// The addresses a file answers to come from more than its headings, and a
+/// fragment is compared the way a browser compares it: a raw `<a id>`/`<a name>`
+/// is an address, and a percent-encoded fragment is decoded first.
+#[test]
+fn anchors_and_fragments_match_what_a_browser_resolves() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("target.md"),
+        "---\npurpose: a single-key block\n---\n\n\
+         # Target\n\n\
+         <a id=\"faq\"></a>\n\n\
+         ## Café\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("cite.md"),
+        "# Cite\n\n\
+         - [html](./target.md#faq)\n\
+         - [encoded](./target.md#caf%C3%A9)\n\
+         - [frontmatter](./target.md#purpose-a-single-key-block)\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        !stdout.contains("#faq"),
+        "a raw <a id> is an address GitHub resolves, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("caf%C3%A9"),
+        "a percent-encoded fragment decodes before matching, got: {stdout}"
+    );
+    assert!(
+        stdout.contains("cite.md:5 → target.md#purpose-a-single-key-block"),
+        "frontmatter is masked, so its closing --- is not a setext heading, got: {stdout}"
+    );
+}
