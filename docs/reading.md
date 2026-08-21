@@ -65,9 +65,14 @@ Two repeatable flags narrow what comes back, shared by `nodes` and `edges`:
   appearing empty. An unknown namespace is a typo — it errors, listing the
   declared graphs.
 - `--field <name>` restricts the returned metadata to named keys and lists only
-  the nodes that declare them. Frontmatter is open-ended and drft does not own its
-  schema, so a wholly unmatched field is a legitimate empty result, not an error —
-  it answers which files declare that field.
+  the entries that declare them. A field names what it is wherever it is
+  declared: the filter also descends into a list of objects, narrowing each entry
+  to the named keys, so `--field role` reaches an authored `authors:` list and
+  `--field line` reaches an edge's link occurrences without naming the array they
+  live in. An entry that keeps nothing drops out, so a node declaring the field
+  only inside a list still survives the filter. Frontmatter is open-ended and drft
+  does not own its schema, so a wholly unmatched field is a legitimate empty
+  result, not an error — it answers which files declare that field.
 
 ```
 $ drft nodes docs/guide.md --namespace frontmatter --field purpose
@@ -108,9 +113,13 @@ docs/guide.md → docs/config.md
 ```
 
 Each entry in `occurrences` is one link the author wrote, so a target cited from
-several places keeps each line paired with the spelling on that line. Narrow to
-one of those facts with `--field line`, which reaches into the entries without
-naming the array.
+several places keeps each line paired with the spelling on that line. `--field
+line` narrows to one of those facts.
+
+Any list of objects renders this way, in `nodes` and `graph` as well as `edges`:
+one `-`-marked sub-block per entry, so an authored `authors:` list reads as
+entries rather than as one line of JSON. An entry with no fields renders as
+`- {}`.
 
 `drft graph --format text` renders the whole graph as a `# nodes` section
 followed by a `# edges` section — the node and edge blocks above, under headers.

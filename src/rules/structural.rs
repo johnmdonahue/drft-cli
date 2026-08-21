@@ -128,6 +128,39 @@ mod tests {
     }
 
     #[test]
+    fn wrong_base_cause_reaches_a_later_spelling() {
+        // Two spellings resolve to the same missing target: an explicitly relative
+        // one and a bare one that would resolve from the graph root. Because every
+        // occurrence keeps its own `raw`, the cause finds the second — the first
+        // is unambiguously relative by intent and names no cause on its own.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("docs/guide.md", fs_node());
+        fs.set_node("config.md", fs_node());
+        let mut meta = Metadata::new();
+        meta.insert(
+            "occurrences".into(),
+            json!([
+                { "line": 3, "raw": "./config.md" },
+                { "line": 5, "raw": "config.md" },
+            ]),
+        );
+        fs.add_edge(Edge::with_metadata("docs/guide.md", "docs/config.md", meta));
+        let composed = compose(&GraphSet::new(vec![fs]));
+
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-edge")
+            .expect("target does not exist");
+        let cause = f.cause.as_deref().expect("expected a cause");
+        assert!(
+            cause.contains("`config.md` resolves from the graph root"),
+            "got: {cause}"
+        );
+        assert!(cause.contains("../config.md"), "got: {cause}");
+    }
+
+    #[test]
     fn wrong_base_cause_names_the_cause() {
         // The #72 case: a repo-relative path in a doc one level down. The target
         // reported is a path nobody wrote, so the finding reads as a typo.
