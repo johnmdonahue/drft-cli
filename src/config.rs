@@ -574,4 +574,32 @@ mod tests {
         fs::write(dir.path().join("drft.toml"), "not valid toml {{{{").unwrap();
         assert!(Config::load(dir.path()).is_err());
     }
+
+    #[test]
+    fn unknown_rule_name_becomes_a_hint_on_the_config() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\nstale-nodes = \"error\"\n",
+        )
+        .unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        // The rule still lands in the map — it configures nothing, which is
+        // exactly why the silence needs a hint rather than an error.
+        assert!(config.rules.contains_key("stale-nodes"));
+        let hint = config.hints.first().expect("expected a hint");
+        assert_eq!(hint.name, "unknown-rule");
+        assert_eq!(hint.locus.as_deref(), Some("rules.stale-nodes"));
+    }
+
+    #[test]
+    fn a_valid_config_raises_no_hints() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("drft.toml"),
+            "[rules]\nstale-node = \"error\"\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).unwrap().hints.is_empty());
+    }
 }

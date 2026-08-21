@@ -92,14 +92,23 @@ impl Hint {
     }
 }
 
-/// The hints accumulated over one run, in the order they were raised.
+/// The hints accumulated over one run, in the order they were raised, and
+/// whether they have already reached the reader.
 ///
 /// Threaded explicitly rather than kept in a global: a hint is part of what a
 /// command produced, and the places that raise one (config load, lockfile read,
 /// selector resolution, rendering) are few enough to pass a collector to.
+///
+/// `delivered` is what keeps a hint from being lost. A command that prints a
+/// result document embeds its hints there; one that prints nothing — `init`,
+/// `lock`, or any command that errored before rendering — has no document to
+/// embed them in, and the caller has to notice and route them somewhere else.
+/// Tracking delivery on the collector rather than inferring it from the command
+/// means a command added later cannot silently drop them.
 #[derive(Debug, Clone, Default)]
 pub struct Hints {
     items: Vec<Hint>,
+    delivered: bool,
 }
 
 impl Hints {
@@ -117,6 +126,16 @@ impl Hints {
 
     pub fn as_slice(&self) -> &[Hint] {
         &self.items
+    }
+
+    /// Whether these hints already reached the reader inside a result document.
+    pub fn delivered(&self) -> bool {
+        self.delivered
+    }
+
+    /// Record that a result document carried them.
+    pub fn mark_delivered(&mut self) {
+        self.delivered = true;
     }
 }
 
@@ -165,6 +184,32 @@ mod tests {
     fn text_omits_locus_when_absent() {
         let text = Hint::new("large-projection", "412 nodes, 180KB").format_text();
         assert_eq!(text, "hint[large-projection]: 412 nodes, 180KB");
+    }
+
+    #[test]
+    fn color_rendering_carries_the_same_content() {
+        let hint = Hint::new("large-projection", "412 nodes")
+            .at("docs/")
+            .with_next("narrow it");
+        let colored = hint.format_text_color();
+        // Same facts, wrapped in escapes — the plain form is the contract.
+        for fragment in ["large-projection", "docs/", "412 nodes", "narrow it"] {
+            assert!(
+                colored.contains(fragment),
+                "missing {fragment}: {colored:?}"
+            );
+        }
+        assert!(colored.contains("\x1b["), "expected escapes: {colored:?}");
+        assert!(!hint.format_text().contains("\x1b["));
+    }
+
+    #[test]
+    fn delivery_is_recorded_not_assumed() {
+        let mut hints = Hints::default();
+        hints.push(Hint::new("a", "one"));
+        assert!(!hints.delivered());
+        hints.mark_delivered();
+        assert!(hints.delivered());
     }
 
     #[test]

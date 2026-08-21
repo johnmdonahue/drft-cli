@@ -16,8 +16,9 @@ cargo run -- check -C examples/simple
 - Run `cargo fmt` before committing
 - Run `dprint fmt` before committing (formats markdown and TOML; CI runs `dprint check`)
 - Run `cargo clippy -- -D warnings` (must pass cleanly)
-- Write diagnostics to stdout, errors to stderr. Run-level advisories are
-  `hints`: a document key under `--format json`, stderr in text output
+- Write diagnostics to stdout, errors to stderr. Run-level advisories are `hints`:
+  a key on the JSON result document, or — for a command that prints no document —
+  a JSON envelope on stderr; text output puts them on stderr after the result
 - Exit codes: 0 clean, 1 violations, 2 usage error
 
 ## Testing

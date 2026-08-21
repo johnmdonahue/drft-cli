@@ -49,28 +49,39 @@ fn use_color_stderr(choice: ColorChoice) -> bool {
 /// projection's size *before* building it is a different problem.
 const LARGE_PROJECTION_BYTES: usize = 64 * 1024;
 
+/// The move that narrows a read verb: it takes a selector and both filters.
+const NARROW_WITH_SELECTOR: &str =
+    "narrow it with a selector, or with --namespace / --field to project fewer keys per node";
+
+/// The move for the whole-graph verbs, which take neither — `drft graph` and
+/// `drft impact` have no selector to scope, so pointing at one would be a `next`
+/// the reader cannot act on.
+const NARROW_WITH_READ_VERB: &str = "read a slice instead — `drft nodes <selector>` or `drft edges <selector>` \
+     project the same graph scoped to what you need";
+
 /// Flag a projection large enough to crowd its reader. Reports both numbers:
 /// a byte count alone is opaque, and a node count alone does not say how much
-/// output it became.
-fn large_projection_hint(count: usize, bytes: usize) -> Option<Hint> {
+/// output it became. `next` varies by command — the flags that narrow a read
+/// verb do not exist on `graph` or `impact`.
+fn large_projection_hint(count: usize, bytes: usize, next: &str) -> Option<Hint> {
     (bytes >= LARGE_PROJECTION_BYTES).then(|| {
         Hint::new(
             "large-projection",
             format!("{count} nodes rendered to {}KB of output", bytes / 1024),
         )
-        .with_next(
-            "narrow it with a selector, or with --namespace / --field to project \
-             fewer keys per node",
-        )
+        .with_next(next)
     })
 }
 
-/// Attach the run's hints to a result document under `hints`. The key is always
-/// present, empty included, so a consumer can read `.hints[]` without a guard.
-fn attach_hints(document: &mut serde_json::Value, hints: &Hints) -> Result<()> {
-    if let Some(obj) = document.as_object_mut() {
-        obj.insert("hints".to_string(), serde_json::to_value(hints)?);
-    }
+/// Attach the run's hints to a result document under `hints`, and record that
+/// they reached the reader. The key is always present, empty included, so a
+/// consumer can read `.hints[]` without a guard.
+fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<()> {
+    let obj = document
+        .as_object_mut()
+        .context("a result document must be a JSON object to carry hints")?;
+    obj.insert("hints".to_string(), serde_json::to_value(&*hints)?);
+    hints.mark_delivered();
     Ok(())
 }
 
@@ -84,11 +95,12 @@ fn attach_hints(document: &mut serde_json::Value, hints: &Hints) -> Result<()> {
 fn print_json_document(
     mut document: serde_json::Value,
     count: usize,
+    next: &str,
     hints: &mut Hints,
 ) -> Result<()> {
     attach_hints(&mut document, hints)?;
     let rendered = serde_json::to_string_pretty(&document)?;
-    match large_projection_hint(count, rendered.len()) {
+    match large_projection_hint(count, rendered.len(), next) {
         Some(hint) => {
             hints.push(hint);
             attach_hints(&mut document, hints)?;
@@ -102,8 +114,8 @@ fn print_json_document(
 /// Print a text projection, raising the large-projection hint on the rendered
 /// size. The hint itself lands on stderr after the command returns, so the
 /// result reads first and a pipe carries only the projection.
-fn print_text_projection(text: &str, count: usize, hints: &mut Hints) {
-    if let Some(hint) = large_projection_hint(count, text.len()) {
+fn print_text_projection(text: &str, count: usize, next: &str, hints: &mut Hints) {
+    if let Some(hint) = large_projection_hint(count, text.len(), next) {
         hints.push(hint);
     }
     print!("{text}");
@@ -117,7 +129,11 @@ fn load_config(graph_root: &Path, hints: &mut Hints) -> Result<Config> {
 }
 
 fn main() {
-    let code = match try_main() {
+    // Owned here rather than in `try_main` so the error envelope below can carry
+    // whatever was raised before the failure — a run-level advisory is often what
+    // explains it.
+    let mut hints = Hints::default();
+    let code = match try_main(&mut hints) {
         Ok(code) => code,
         Err(e) => {
             // A parse/usage error happens before clap resolves `--format`, so
@@ -126,6 +142,7 @@ fn main() {
                 let err = serde_json::json!({
                     "error": format!("{e:#}"),
                     "exit_code": 2,
+                    "hints": &hints,
                 });
                 eprintln!("{}", serde_json::to_string(&err).unwrap());
             } else {
@@ -153,7 +170,7 @@ fn wants_json_output() -> bool {
     false
 }
 
-fn try_main() -> Result<i32> {
+fn try_main(hints: &mut Hints) -> Result<i32> {
     let cli = Cli::parse();
 
     let root = match &cli.directory {
@@ -162,55 +179,60 @@ fn try_main() -> Result<i32> {
         None => std::env::current_dir()?,
     };
 
-    // One collector for the run. Commands fill it; JSON output carries it inside
-    // the result document, text output flushes it to stderr below.
-    let mut hints = Hints::default();
-
     let result = match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { paths, all } => run_lock(&root, paths, *all, &mut hints),
+        Commands::Lock { paths, all } => run_lock(&root, paths, *all, hints),
         Commands::Impact {
             paths,
             depth,
             direction,
-        } => run_impact(&root, cli.format, paths, *depth, *direction, &mut hints),
-        Commands::Graph { raw } => run_graph(&root, *raw, cli.format, &mut hints),
+        } => run_impact(&root, cli.format, paths, *depth, *direction, hints),
+        Commands::Graph { raw } => run_graph(&root, *raw, cli.format, hints),
         Commands::Nodes {
             selectors,
             namespaces,
             fields,
-        } => run_nodes(&root, cli.format, selectors, namespaces, fields, &mut hints),
+        } => run_nodes(&root, cli.format, selectors, namespaces, fields, hints),
         Commands::Edges {
             selectors,
             namespaces,
             fields,
-        } => run_edges(&root, cli.format, selectors, namespaces, fields, &mut hints),
-        Commands::Check => run_check(&root, cli.format, cli.color, &mut hints),
+        } => run_edges(&root, cli.format, selectors, namespaces, fields, hints),
+        Commands::Check => run_check(&root, cli.format, cli.color, hints),
     };
 
-    // Hints reach a reader one of two ways: inside the JSON result document, or
-    // on stderr. Stderr is the text-mode channel, emitted after the result so
-    // stdout carries only the projection and the answer reads before the advice.
-    // It also carries the error path, where an advisory about the run is often
-    // what explains the failure.
+    // A hint that reached nobody is worse than no hint, so delivery is tracked
+    // rather than inferred: a command that printed a result document embedded its
+    // hints there and is done. Everything else has to route them somewhere.
     //
-    // `drft graph --format json` is the exception that stays on stderr: its root
-    // is exactly `graph`, a JGF document rather than drft's own envelope, and a
-    // sibling key the format does not define would cost the translatability the
-    // format was chosen for.
-    let embedded_in_document =
-        matches!(cli.format, OutputFormat::Json) && !matches!(cli.command, Commands::Graph { .. });
-    if !embedded_in_document && !hints.is_empty() {
-        let colorize = use_color_stderr(cli.color);
-        for hint in hints.as_slice() {
-            eprintln!(
-                "{}",
-                if colorize {
-                    hint.format_text_color()
-                } else {
-                    hint.format_text()
+    // Three commands land here. `init` and `lock` print no document at all;
+    // `drft graph --format json` prints one whose root is exactly `graph`, a JGF
+    // document rather than drft's own envelope, where a sibling key would cost
+    // the translatability the format was chosen for.
+    //
+    // In JSON that leaves a stderr envelope, matching the shape the error path
+    // already uses, so a consumer parsing stderr as JSON keeps working. The error
+    // path itself is left alone: `main` folds the hints into its envelope, and
+    // emitting here would print them twice.
+    if !hints.is_empty() && !hints.delivered() && result.is_ok() {
+        match cli.format {
+            OutputFormat::Json => {
+                let envelope = serde_json::json!({ "hints": &*hints });
+                eprintln!("{}", serde_json::to_string(&envelope)?);
+            }
+            OutputFormat::Text => {
+                let colorize = use_color_stderr(cli.color);
+                for hint in hints.as_slice() {
+                    eprintln!(
+                        "{}",
+                        if colorize {
+                            hint.format_text_color()
+                        } else {
+                            hint.format_text()
+                        }
+                    );
                 }
-            );
+            }
         }
     }
 
@@ -458,9 +480,17 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
     // projection — so it is JSON-only and ignores `--format`. The composed views
     // below honor it.
     if raw {
-        let count = set.graphs.iter().map(|g| g.nodes.len()).sum();
+        // Distinct paths, not a per-fragment sum: the same file appears in every
+        // graph that matched it, and counting it twice would make the same hint
+        // name mean something different here than everywhere else.
+        let count = set
+            .graphs
+            .iter()
+            .flat_map(|g| g.nodes.keys())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         let rendered = serde_json::to_string_pretty(&set)?;
-        if let Some(hint) = large_projection_hint(count, rendered.len()) {
+        if let Some(hint) = large_projection_hint(count, rendered.len(), NARROW_WITH_READ_VERB) {
             hints.push(hint);
         }
         println!("{rendered}");
@@ -472,7 +502,9 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
     match format {
         OutputFormat::Json => {
             let rendered = serde_json::to_string_pretty(&composed.into_document())?;
-            if let Some(hint) = large_projection_hint(node_count, rendered.len()) {
+            if let Some(hint) =
+                large_projection_hint(node_count, rendered.len(), NARROW_WITH_READ_VERB)
+            {
                 hints.push(hint);
             }
             println!("{rendered}");
@@ -486,7 +518,7 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
             let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
             let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
             let text = projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)]);
-            print_text_projection(&text, node_count, hints);
+            print_text_projection(&text, node_count, NARROW_WITH_READ_VERB, hints);
         }
     }
     Ok(0)
@@ -520,12 +552,17 @@ fn run_nodes(
                 "total": projected.len(),
                 "nodes": projected,
             });
-            print_json_document(output, projected.len(), hints)?;
+            print_json_document(output, projected.len(), NARROW_WITH_SELECTOR, hints)?;
         }
         OutputFormat::Text => {
             // One compact block per node — id, indented namespaces, fields — so a
             // model can read it for grounding without parsing JSON.
-            print_text_projection(&nodes::format_text(&projected), projected.len(), hints);
+            print_text_projection(
+                &nodes::format_text(&projected),
+                projected.len(),
+                NARROW_WITH_SELECTOR,
+                hints,
+            );
         }
     }
 
@@ -571,11 +608,16 @@ fn run_edges(
                 "total": projected.len(),
                 "edges": projected,
             });
-            print_json_document(output, projected.len(), hints)?;
+            print_json_document(output, projected.len(), NARROW_WITH_SELECTOR, hints)?;
         }
         OutputFormat::Text => {
             // One compact block per edge — `source → target`, then its metadata.
-            print_text_projection(&edges::format_text(&projected), projected.len(), hints);
+            print_text_projection(
+                &edges::format_text(&projected),
+                projected.len(),
+                NARROW_WITH_SELECTOR,
+                hints,
+            );
         }
     }
 
@@ -628,7 +670,13 @@ fn resolve_selectors(
     }
 
     let mut keys = std::collections::BTreeSet::new();
+    // Selectors dedupe, so their hints do too — a repeated selector is one
+    // mistake, and saying it twice reads as two.
+    let mut seen = std::collections::BTreeSet::new();
     for selector in selectors {
+        if !seen.insert(selector) {
+            continue;
+        }
         keys.extend(resolve_selector(
             composed, root, graph_root, selector, hints,
         )?);
@@ -779,7 +827,7 @@ fn run_impact(
                 "total": impacted.len(),
                 "impacted": impacted,
             });
-            print_json_document(output, impacted.len(), hints)?;
+            print_json_document(output, impacted.len(), NARROW_WITH_READ_VERB, hints)?;
         }
         OutputFormat::Text => {
             if impacted.is_empty() {
@@ -797,7 +845,7 @@ fn run_impact(
                         )
                     })
                     .collect::<String>();
-                print_text_projection(&text, impacted.len(), hints);
+                print_text_projection(&text, impacted.len(), NARROW_WITH_READ_VERB, hints);
             }
         }
     }

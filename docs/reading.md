@@ -142,11 +142,18 @@ a config key like `rules.stale-nodes`, sometimes nothing.
 }
 ```
 
-In JSON the channel is a document key, always present so `.hints[]` reads without
-a guard. In text it goes to stderr, after the result, so a pipe carries only the
-projection. `drft graph --format json` is the exception: its root is exactly
-`graph`, a JGF document rather than drft's own envelope, so its hints stay on
-stderr in both formats.
+In text, hints go to stderr after the result, so a pipe carries only the
+projection.
+
+In JSON they are a key on the result document, always present so `.hints[]` reads
+without a guard — for `nodes`, `edges`, `impact`, and `check`. Three cases have no
+such document to carry them: `init` and `lock` print no result at all, and
+`drft graph --format json` prints a JGF document whose root is exactly `graph`, a
+format rather than drft's own envelope, where a sibling key would cost the
+translatability the format was chosen for. Those take a `{"hints": [...]}`
+envelope on stderr instead, the same shape the error envelope uses, so a consumer
+parsing stderr as JSON keeps working. Hints raised before a failure join that
+error envelope rather than vanishing.
 
 **Hints never change an exit code, and never replace a guard.** A hint annotates
 output and lets it stand — so anything that has to stop a caller is an error

@@ -105,7 +105,7 @@ drft grounds an agent in a codebase's structure without making it open every fil
 - `drft edges <path>` returns what a file links to; `drft impact <path>` returns what depends on it, sorted by review priority.
 - `drft graph` renders the whole composed graph as compact text, so a model reads the structure in one call without parsing JSON.
 
-Every command also emits `--format json` with actionable `fix` fields in each diagnostic, and a `hints` channel carrying advisories about the run itself — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground. See [Reading the graph](docs/reading.md) for the selector grammar, the `--namespace` / `--field` filters, and the hint set.
+Every command also emits `--format json` — `drft impact` carries an actionable `fix` on each entry, naming the review the change asks for — and a `hints` channel carrying advisories about the run itself — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground. See [Reading the graph](docs/reading.md) for the selector grammar, the `--namespace` / `--field` filters, and the hint set.
 
 This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and `.claude/settings.json` for the hook configuration.
 
