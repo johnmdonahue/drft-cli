@@ -157,7 +157,7 @@ target_hash = "b3:202ad759d688b9521352cd639cd04706131d9e8b00b6362c6dd1f49283e902
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
+target_hash = "b3:fe2591d2802ee4d2dad650f202952348cda27afd5b73f57e6d208bb8be1571fb"
 
 [[node.edge]]
 target = "docs/reading.md"
@@ -181,7 +181,7 @@ hash = "b3:202ad759d688b9521352cd639cd04706131d9e8b00b6362c6dd1f49283e90201"
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
+target_hash = "b3:fe2591d2802ee4d2dad650f202952348cda27afd5b73f57e6d208bb8be1571fb"
 
 [[node.edge]]
 target = "docs/parsers/markdown.md"
@@ -193,7 +193,7 @@ target_hash = "b3:520ad18b8bb4fab4f1efce2913a0c59f2ab443f64178cd37cad77840b7f0b1
 
 [[node]]
 path = "docs/parsers/frontmatter.md"
-hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
+hash = "b3:fe2591d2802ee4d2dad650f202952348cda27afd5b73f57e6d208bb8be1571fb"
 
 [[node.edge]]
 target = "docs/config.md"
@@ -205,7 +205,7 @@ target_hash = "b3:3f462d3841e40b0b6e9eb79ebe63f8289695e9f51ba0dae761b639c5a58b6a
 
 [[node.edge]]
 target = "src/parsers/frontmatter.rs"
-target_hash = "b3:99e160bf6479d2eb5e558d6c4d3221f96eb25aa9e046581500ae52bd9755cd00"
+target_hash = "b3:6426321395379e9d3d4e30878af59bbf445ce1055e50c7df5394340dc637ba82"
 
 [[node]]
 path = "docs/parsers/markdown.md"
@@ -217,7 +217,7 @@ target_hash = "b3:ba380aa56e9ff7a5cb6186ac81b46b93c01ca693f72e95e8156f79bc932b4f
 
 [[node.edge]]
 target = "docs/parsers/frontmatter.md"
-target_hash = "b3:808bf7247bc6b2fcb039f44176c6bd96023c6d9461d8d672e3d67db3414e5fc0"
+target_hash = "b3:fe2591d2802ee4d2dad650f202952348cda27afd5b73f57e6d208bb8be1571fb"
 
 [[node.edge]]
 target = "docs/rules/README.md"
@@ -376,7 +376,7 @@ hash = "b3:bd63f170e88bb37482e7384aa3becb20cea1d7dfcf2be4b4ab79a8e636329920"
 
 [[node]]
 path = "src/parsers/frontmatter.rs"
-hash = "b3:99e160bf6479d2eb5e558d6c4d3221f96eb25aa9e046581500ae52bd9755cd00"
+hash = "b3:6426321395379e9d3d4e30878af59bbf445ce1055e50c7df5394340dc637ba82"
 
 [[node]]
 path = "src/parsers/markdown.rs"

@@ -131,8 +131,8 @@ impl Parser for FrontmatterParser {
         // copy — `strip_code` blanks code spans so a `path.md` written in prose
         // can't be mistaken for a link target. Metadata runs on the *raw*
         // frontmatter, so a code span in a value survives as the prose it is.
-        // Neither gates the other: a stray backtick that blanks the closing `---`
-        // in the masked copy must not also erase the metadata, and vice versa.
+        // Both read the same block — one boundary, decided by `parsed_block` —
+        // and differ only in whether spans are blanked within it.
         ParseResult {
             links: self.extract_links(content),
             // Frontmatter defines no addressable sub-file positions; anchors come
@@ -148,11 +148,19 @@ impl FrontmatterParser {
     /// code spans are blanked so a `path.md` written in prose is never a link
     /// target. An absent or malformed masked block yields no links.
     fn extract_links(&self, content: &str) -> Vec<Link> {
-        // `stripped` is owned and outlives the borrowed marked AST below.
-        let stripped = strip_code(content);
-        let Some(yaml_str) = frontmatter_block(&stripped) else {
+        // The boundary is the shared one; only the masking is this job's own.
+        // Finding the block in a masked copy of the *whole file* let a code span
+        // crossing the closing fence move the boundary — lifting a link out of
+        // body prose in one direction, and silently dropping every declared
+        // `sources:` edge in the other, on a file whose metadata still reported
+        // them. `strip_code` blanks whole spans, newlines included, so a moved
+        // boundary also misreports the lines it does find.
+        let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };
+        // `stripped` is owned and outlives the borrowed marked AST below.
+        let stripped = strip_code(block);
+        let yaml_str = stripped.as_str();
         // Malformed YAML contributes nothing — drft is not a YAML linter.
         let Ok(docs) = MarkedYaml::load_from_str(yaml_str) else {
             return Vec::new();
@@ -195,7 +203,15 @@ impl FrontmatterParser {
 ///
 /// The masking applies to the block, not to the file — see [`parsed_block`].
 fn extract_metadata(content: &str) -> Option<serde_json::Value> {
-    parsed_block(content).map(|(_, metadata)| metadata)
+    let (_, block) = parsed_block(content)?;
+    for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block))] {
+        if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
+            && let Some(root) = docs.first()
+        {
+            return Some(to_json(root));
+        }
+    }
+    None
 }
 
 /// The frontmatter block this parser recognizes: where it ends in `content`, and
@@ -212,19 +228,39 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
 /// Masking is applied to the block text instead, which serves the reason it
 /// exists — a code span can hide a `:` that would otherwise break the mapping —
 /// without letting a span decide where the block ends.
-fn parsed_block(content: &str) -> Option<(usize, serde_json::Value)> {
+fn parsed_block(content: &str) -> Option<(usize, &str)> {
     let block = frontmatter_block(content)?;
     let end = "---".len() + block.len() + "\n---".len();
-    // Raw first, so a code span survives as the prose it is.
-    for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block))] {
-        if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
-            && let Some(root) = docs.first()
-            && matches!(root.data, YamlData::Mapping(_))
-        {
-            return Some((end, to_json(root)));
-        }
-    }
-    None
+    // Raw first, so a code span survives as the prose it is; then the same block
+    // with spans blanked, since one can hide a `:` that breaks the mapping.
+    let parses = is_mapping(block) || is_mapping(&strip_code(block));
+    parses.then_some((end, block))
+}
+
+/// Whether `block` parses as a YAML **mapping** — the shape that separates
+/// frontmatter from a document opening with a `---` thematic break.
+///
+/// A mapping is required rather than any valid YAML because YAML and markdown
+/// collide on two constructs, and accepting either would delete real content:
+///
+/// - A comment-only block parses to no document at all. But `# First` is a YAML
+///   comment *and* a markdown ATX heading, so treating one as frontmatter reads
+///   `---\n\n# First\n\n---` as a block and deletes the most ordinary heading in
+///   markdown, along with any link beneath it.
+/// - A block parsing to a bare scalar is ambiguous the same way:
+///   `---\nMy Title\n---` is equally a rule above a setext heading.
+///
+/// Both are left as content. The cost is that comment-only frontmatter has its
+/// text read as prose; the alternative deletes a document's headings and edges,
+/// and only one of those is recoverable by reading the page.
+fn is_mapping(block: &str) -> bool {
+    MarkedYaml::load_from_str(block)
+        .ok()
+        .and_then(|docs| {
+            docs.first()
+                .map(|doc| matches!(doc.data, YamlData::Mapping(_)))
+        })
+        .unwrap_or(false)
 }
 
 /// The byte offset just past a leading YAML frontmatter block, or `None` when the
@@ -241,14 +277,14 @@ pub fn mapping_block_end(content: &str) -> Option<usize> {
 }
 
 /// Extract the YAML frontmatter block — the text between the opening `---` and the
-/// next `\n---`, or `None` when there is no well-formed block. Callable on the raw
-/// content (for metadata) or the masked copy (for the edge scan). The two usually
-/// agree on the block, but need not: `strip_code` blanks a whole span, newlines
-/// included, so a `\n---` hidden inside a code span survives in the raw content but
-/// not the masked copy, and the two then find different boundaries — one reason
-/// metadata and the edge scan run as independent buffers. The slice keeps the
-/// newline after the opening fence, so a node's line within the block equals its
-/// line within the file.
+/// next `\n---`, or `None` when there is no well-formed block.
+///
+/// Called on the **raw** content only, through [`parsed_block`]. Calling it on a
+/// `strip_code` copy of the whole file finds a different boundary whenever a span
+/// crosses the closing fence, because blanking the span takes the fence with it —
+/// which is how the edge scan came to read a block nothing else agreed on. The
+/// slice keeps the newline after the opening fence, so a node's line within the
+/// block equals its line within the file.
 fn frontmatter_block(stripped: &str) -> Option<&str> {
     let rest = stripped.strip_prefix("---")?;
     // The opening fence has to be a line of its own. `---key: v` is not
@@ -589,22 +625,54 @@ mod tests {
     }
 
     #[test]
-    fn metadata_survives_when_a_stray_backtick_breaks_the_masked_block() {
-        // An unclosed backtick in a value pairs with one in the body, so the mask
-        // blanks everything between — including the closing `---` — and the edge
-        // scan finds no block. Metadata reads the raw frontmatter on its own buffer,
-        // so it is still captured. (The masked edge scan finds nothing, unchanged.)
+    fn a_stray_backtick_keeps_both_the_metadata_and_the_edges() {
+        // An unclosed backtick in a value pairs with one in the body. Finding the
+        // block in a masked copy of the whole file blanked everything between —
+        // the closing `---` included — so the edge scan found no block and the
+        // declared `sources:` entry produced nothing, on a file whose metadata
+        // reported that same entry. The boundary comes from the raw content now,
+        // so both agree.
         let content =
             "---\npurpose: a `widget\nsources:\n  - b.md\n---\n\n# Body with a `code span`\n";
         let result = parse(content);
-        let meta = result
-            .metadata
-            .expect("metadata comes from the raw block, not the masked one");
+        let meta = result.metadata.expect("metadata comes from the raw block");
         assert_eq!(meta["purpose"], "a `widget");
+        assert_eq!(
+            result.links.len(),
+            1,
+            "the declared source is still an edge"
+        );
+        assert_eq!(result.links[0].target, "b.md");
+        assert_eq!(
+            result.links[0].line,
+            Some(4),
+            "and its line is file-accurate"
+        );
+    }
+
+    #[test]
+    fn a_span_crossing_the_fence_neither_drops_nor_invents_an_edge() {
+        // Direction one: a span that swallows the closing fence used to pull body
+        // prose into the block, so a `deps:` line below it became a declared
+        // source — with a line number off by the newlines the mask ate.
+        let lifted = "---\na: `x\n---\ny`\ndeps: ./t.md\n---\n\n# Body\n";
+        let result = parse(lifted);
         assert!(
             result.links.is_empty(),
-            "the masked edge scan finds no block"
+            "body prose is not a declared source"
         );
+        assert!(
+            result.metadata.is_none(),
+            "and the block is not frontmatter"
+        );
+
+        // Direction two: one backtick inside a properly quoted string, plus an
+        // ordinary code span in the body, silently deleted every declared edge.
+        let dropped =
+            "---\nsources:\n  - ./t.md\nnote: \"has a ` backtick\"\n---\n\n# B\n\nA `code` span.\n";
+        let result = parse(dropped);
+        assert_eq!(result.links.len(), 1, "the declared source survives");
+        assert_eq!(result.links[0].target, "./t.md");
     }
 
     #[test]
