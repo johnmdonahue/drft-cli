@@ -99,9 +99,18 @@ An edge block is `source → target`, then the same indented metadata:
 $ drft edges docs/guide.md
 docs/guide.md → docs/config.md
   @markdown
-    lines: [12]
-    raw: config.md
+    occurrences
+      - line: 12
+        raw: config.md
+      - line: 40
+        link: docs/config.md#ignore
+        raw: config.md
 ```
+
+Each entry in `occurrences` is one link the author wrote, so a target cited from
+several places keeps each line paired with the spelling on that line. Narrow to
+one of those facts with `--field line`, which reaches into the entries without
+naming the array.
 
 `drft graph --format text` renders the whole graph as a `# nodes` section
 followed by a `# edges` section — the node and edge blocks above, under headers.

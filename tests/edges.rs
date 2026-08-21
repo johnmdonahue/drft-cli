@@ -123,24 +123,30 @@ fn namespace_filters_edge_set_and_metadata() {
     );
 }
 
-/// `--field` narrows the returned metadata to named keys within the namespace.
+/// `--field` narrows the returned metadata to named keys within the namespace,
+/// reaching into each link occurrence without the caller naming the array.
 #[test]
 fn field_narrows_metadata_within_namespace() {
     let dir = fixture();
     let v = edges_json(
         dir.path(),
-        &["docs/a.md", "--namespace", "markdown", "--field", "lines"],
+        &["docs/a.md", "--namespace", "markdown", "--field", "line"],
     );
-    // The markdown edge to b.md, with only `lines` (not `raw`).
+    // The markdown edge to b.md, each occurrence carrying only `line` (not `raw`).
     let edge = v["edges"]
         .as_array()
         .unwrap()
         .iter()
         .find(|e| e["target"] == "docs/b.md")
         .expect("markdown edge to docs/b.md");
-    let md = &edge["metadata"]["@markdown"];
-    assert!(md.get("lines").is_some());
-    assert!(md.get("raw").is_none(), "field narrows to lines only");
+    let occurrences = edge["metadata"]["@markdown"]["occurrences"]
+        .as_array()
+        .expect("occurrences survive the narrowing");
+    assert!(!occurrences.is_empty());
+    for occurrence in occurrences {
+        assert!(occurrence.get("line").is_some());
+        assert!(occurrence.get("raw").is_none(), "narrowed to line only");
+    }
 }
 
 /// An unknown namespace is a typo: it errors (exit 2) and lists the declared graphs.
@@ -217,7 +223,7 @@ fn text_format_is_source_arrow_target() {
             "--namespace",
             "frontmatter",
             "--field",
-            "lines",
+            "line",
         ])
         .output()
         .unwrap();
@@ -225,7 +231,7 @@ fn text_format_is_source_arrow_target() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         stdout,
-        "docs/a.md → index.md\n  @frontmatter\n    lines: [3]\n"
+        "docs/a.md → index.md\n  @frontmatter\n    occurrences\n      - line: 3\n"
     );
 }
 

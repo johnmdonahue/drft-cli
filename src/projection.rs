@@ -30,17 +30,42 @@ pub fn filter_metadata(
             let Some(obj) = value.as_object() else {
                 continue;
             };
-            let filtered: Map<String, Value> = obj
-                .iter()
-                .filter(|(k, _)| fields.iter().any(|f| f == *k))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let filtered = filter_fields(obj, fields);
             if filtered.is_empty() {
                 continue;
             }
             Value::Object(filtered)
         };
         out.insert(ns.clone(), block);
+    }
+    out
+}
+
+/// Narrow one namespace block to `fields`. A key whose own name matches is kept
+/// whole. A key holding an array of objects — an edge's `occurrences` — is kept
+/// with each entry narrowed the same way, so `--field line` reaches the
+/// per-occurrence facts without the caller naming the array it lives in. An entry
+/// that keeps nothing drops out, and a key whose entries all drop out goes with
+/// them.
+fn filter_fields(block: &Map<String, Value>, fields: &[String]) -> Map<String, Value> {
+    let mut out = Map::new();
+    for (key, value) in block {
+        if fields.iter().any(|f| f == key) {
+            out.insert(key.clone(), value.clone());
+            continue;
+        }
+        let Some(entries) = object_entries(value) else {
+            continue;
+        };
+        let narrowed: Vec<Value> = entries
+            .into_iter()
+            .map(|entry| filter_fields(entry, fields))
+            .filter(|entry| !entry.is_empty())
+            .map(Value::Object)
+            .collect();
+        if !narrowed.is_empty() {
+            out.insert(key.clone(), Value::Array(narrowed));
+        }
     }
     out
 }
@@ -65,14 +90,46 @@ pub fn push_metadata_lines(lines: &mut Vec<String>, metadata: &Map<String, Value
     for (ns, value) in metadata {
         lines.push(format!("  {ns}"));
         match value.as_object() {
-            Some(obj) => {
-                for (k, v) in obj {
-                    lines.push(format!("    {k}: {}", render_value(v)));
-                }
-            }
+            Some(obj) => push_fields(lines, obj, 4),
             None => lines.push(format!("    {}", render_value(value))),
         }
     }
+}
+
+/// Render one object's fields at `indent` spaces, one `key: value` per line.
+///
+/// A field holding an array of objects — an edge's `occurrences` — renders as a
+/// bare header line followed by a `- `-marked sub-block per entry, so each entry's
+/// fields keep their own lines. Rendering it through [`render_value`] instead
+/// would collapse the whole array onto one long JSON line, which is the opposite
+/// of what the text shape is for.
+fn push_fields(lines: &mut Vec<String>, obj: &Map<String, Value>, indent: usize) {
+    let pad = " ".repeat(indent);
+    for (key, value) in obj {
+        let Some(entries) = object_entries(value) else {
+            lines.push(format!("{pad}{key}: {}", render_value(value)));
+            continue;
+        };
+        lines.push(format!("{pad}{key}"));
+        for entry in entries {
+            for (i, (k, v)) in entry.iter().enumerate() {
+                let marker = if i == 0 { "- " } else { "  " };
+                lines.push(format!("{pad}  {marker}{k}: {}", render_value(v)));
+            }
+        }
+    }
+}
+
+/// The entries of an array whose every element is an object, with at least one
+/// carrying a field. Anything else — a scalar, a mixed array, an array of empty
+/// objects — returns `None` so the caller falls back to rendering the value whole.
+fn object_entries(value: &Value) -> Option<Vec<&Map<String, Value>>> {
+    let entries: Vec<&Map<String, Value>> = value
+        .as_array()?
+        .iter()
+        .map(Value::as_object)
+        .collect::<Option<Vec<_>>>()?;
+    entries.iter().any(|e| !e.is_empty()).then_some(entries)
 }
 
 /// Join per-entry blocks into the final text: one blank line between blocks and a
@@ -147,6 +204,77 @@ mod tests {
         }));
         let out = filter_metadata(&m, &["@markdown".into()], &["lines".into()]);
         assert_eq!(out, obj(json!({ "@markdown": { "lines": [4] } })));
+    }
+
+    #[test]
+    fn filter_reaches_into_occurrence_entries() {
+        // `--field line` narrows each occurrence without the caller naming the
+        // array it lives in.
+        let m = obj(json!({
+            "@markdown": { "occurrences": [
+                { "line": 53, "link": "b.md#x", "raw": "./b.md" },
+                { "line": 77, "link": "b.md#y", "raw": "./b.md" },
+            ] },
+            "_graphs": ["@markdown"],
+        }));
+        let out = filter_metadata(&m, &[], &["line".into()]);
+        assert_eq!(
+            out["@markdown"],
+            json!({ "occurrences": [{ "line": 53 }, { "line": 77 }] })
+        );
+    }
+
+    #[test]
+    fn filter_keeps_a_named_array_whole() {
+        let m = obj(json!({ "@markdown": { "occurrences": [{ "line": 4 }] } }));
+        let out = filter_metadata(&m, &[], &["occurrences".into()]);
+        assert_eq!(out["@markdown"], json!({ "occurrences": [{ "line": 4 }] }));
+    }
+
+    #[test]
+    fn filter_drops_a_block_matching_at_neither_level() {
+        let m = obj(json!({ "@markdown": { "occurrences": [{ "line": 4 }] } }));
+        assert!(filter_metadata(&m, &[], &["purpose".into()]).is_empty());
+    }
+
+    #[test]
+    fn occurrences_render_one_entry_per_sub_block() {
+        // The array must not collapse onto one JSON line — the text shape exists
+        // so a reader can see which line cites which anchor.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@markdown": { "occurrences": [
+                { "line": 53, "link": "owners.md#security-console" },
+                { "line": 77, "link": "owners.md#ngwaf-edge" },
+            ] } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @markdown",
+                "    occurrences",
+                "      - line: 53",
+                "        link: owners.md#security-console",
+                "      - line: 77",
+                "        link: owners.md#ngwaf-edge",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_plain_array_still_renders_inline() {
+        // Only an array of objects gets the sub-block treatment; a scalar array
+        // keeps the one-line-per-field shape.
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@frontmatter": { "tags": ["graph", "core"] } })),
+        );
+        assert_eq!(
+            lines,
+            vec!["  @frontmatter", "    tags: [\"graph\",\"core\"]"]
+        );
     }
 
     #[test]

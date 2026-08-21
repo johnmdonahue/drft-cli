@@ -122,7 +122,7 @@ mod tests {
             fs.set_node(*f, fs_node());
         }
         let mut meta = Metadata::new();
-        meta.insert("raw".into(), json!(raw));
+        meta.insert("occurrences".into(), json!([{ "raw": raw }]));
         fs.add_edge(Edge::with_metadata(source, target, meta));
         compose(&GraphSet::new(vec![fs]))
     }
@@ -194,7 +194,7 @@ mod tests {
         // A markdown link to a missing target on line 3 — the finding points there.
         let mut markdown = Graph::labeled("markdown");
         let mut meta = Metadata::new();
-        meta.insert("lines".into(), json!([3]));
+        meta.insert("occurrences".into(), json!([{ "line": 3 }]));
         markdown.add_edge(Edge::with_metadata("index.md", "gone.md", meta));
         let mut fs = Graph::labeled("fs");
         fs.set_node("index.md", fs_node());
