@@ -54,7 +54,9 @@ fn graph_emits_composed_jgf() {
         meta["@fs"]["hash"].as_str().unwrap().starts_with("b3:"),
         "fs node should be auto-hashed"
     );
-    assert_eq!(meta["_graphs"], serde_json::json!(["@fs"]));
+    // The markdown graph reads the file too, publishing the anchors it defines.
+    assert_eq!(meta["_graphs"], serde_json::json!(["@fs", "@markdown"]));
+    assert!(meta["@markdown"]["anchors"].is_array());
 
     // No markdown/frontmatter edges yet — fs is node-only (no symlinks here).
     assert!(graph["edges"].as_array().unwrap().is_empty());
@@ -167,7 +169,10 @@ fn graph_frontmatter_metadata_and_edge_dedup() {
     // @frontmatter metadata nests on the node, with merged _graphs provenance.
     let meta = &v["graph"]["nodes"]["doc.md"]["metadata"];
     assert_eq!(meta["@frontmatter"]["title"], "Doc");
-    assert_eq!(meta["_graphs"], serde_json::json!(["@frontmatter", "@fs"]));
+    assert_eq!(
+        meta["_graphs"],
+        serde_json::json!(["@frontmatter", "@fs", "@markdown"])
+    );
 
     // The shared edge is deduped: one edge, both graphs in _graphs.
     let edges = v["graph"]["edges"].as_array().unwrap();
@@ -213,11 +218,18 @@ fn graph_raw_emits_the_set() {
     assert!(fs_graph["nodes"]["doc.md"]["metadata"]["type"] == "file");
     assert!(fs_graph["nodes"]["doc.md"]["metadata"].get("@fs").is_none());
 
-    // frontmatter carries the bare metadata block; markdown is edge-only.
+    // Each text graph carries its own bare metadata block: frontmatter the
+    // parsed block, markdown the anchors the file defines.
     let frontmatter = graphs.iter().find(|g| g["label"] == "frontmatter").unwrap();
     let markdown = graphs.iter().find(|g| g["label"] == "markdown").unwrap();
     assert_eq!(frontmatter["nodes"]["doc.md"]["metadata"]["title"], "Doc");
-    assert!(markdown["nodes"].as_object().unwrap().is_empty());
+    assert!(markdown["nodes"]["doc.md"]["metadata"]["anchors"].is_array());
+    assert!(
+        markdown["nodes"]["doc.md"]["metadata"]
+            .get("@markdown")
+            .is_none(),
+        "raw fragments carry bare keys; the sigil arrives at compose"
+    );
 }
 
 /// `--raw` is JSON-only: it emits the fragment set even under the default text

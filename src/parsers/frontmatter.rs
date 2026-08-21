@@ -134,6 +134,9 @@ impl Parser for FrontmatterParser {
         // in the masked copy must not also erase the metadata, and vice versa.
         ParseResult {
             links: self.extract_links(content),
+            // Frontmatter defines no addressable sub-file positions; anchors come
+            // from the markdown body's headings.
+            anchors: Vec::new(),
             metadata: extract_metadata(content),
         }
     }

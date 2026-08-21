@@ -155,6 +155,7 @@ const BUILTIN_RULES: &[&str] = &[
     "removed-edge",
     "removed-node",
     "unresolved-edge",
+    "unresolved-fragment",
     "detached-node",
 ];
 

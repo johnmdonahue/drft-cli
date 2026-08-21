@@ -1,10 +1,13 @@
 //! Structural rules: findings derived from graph shape alone, no lockfile.
 //!
 //! Findings: `unresolved-edge` (an edge target with no `@fs` block — no defining
-//! node) and `detached-node` (a node with no inbound or outbound edges). URI
+//! node), `unresolved-fragment` (a link's `#fragment` names no anchor the target
+//! defines), and `detached-node` (a node with no inbound or outbound edges). URI
 //! targets are intentional external references, not unresolved.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+use serde_json::Value;
 
 use crate::diagnostic::Finding;
 use crate::model::{Graph, Node};
@@ -37,6 +40,64 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
         }
     }
 
+    // unresolved-fragment: a link carries a `#fragment` the target does not
+    // define. Reported per fragment rather than per edge, because a source citing
+    // two anchors of one target is one edge with two claims and only one of them
+    // may be wrong.
+    for edge in &graph.edges {
+        if is_uri(&edge.target) {
+            continue;
+        }
+        // An unresolvable target is already reported as `unresolved-edge`; the
+        // fragment is the lesser half of the same mistake.
+        let Some(target) = graph.nodes.get(&edge.target).filter(|n| n.is_resolved()) else {
+            continue;
+        };
+        // `None` means nothing read the target as a document with addressable
+        // positions, so its fragments are unknown, not broken.
+        let Some(anchors) = target.anchors() else {
+            continue;
+        };
+
+        let mut missing: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
+        for occurrence in edge.occurrences() {
+            let Some(link) = occurrence.get("link").and_then(Value::as_str) else {
+                continue;
+            };
+            // A bare `#` is a link to the top of the page, which every document
+            // answers to.
+            let Some(fragment) = link
+                .split_once('#')
+                .map(|(_, f)| f)
+                .filter(|f| !f.is_empty())
+            else {
+                continue;
+            };
+            if anchors.contains(&fragment) {
+                continue;
+            }
+            let lines = missing.entry(fragment).or_default();
+            if let Some(line) = occurrence.get("line").and_then(Value::as_u64) {
+                lines.insert(line as usize);
+            }
+        }
+
+        for (fragment, lines) in missing {
+            let mut finding = Finding::warn(
+                "unresolved-fragment",
+                &edge.source,
+                edge_provenance(edge),
+                "no matching anchor",
+            )
+            .with_target(format!("{}#{fragment}", edge.target))
+            .with_lines(lines.into_iter().collect());
+            if let Some(cause) = case_mismatch_cause(&anchors, fragment) {
+                finding = finding.with_cause(cause);
+            }
+            findings.push(finding);
+        }
+    }
+
     // detached-node: a file touched by no edge in either direction. Directories
     // are structural scaffolding — links point at the files inside them, not at
     // the directory — so a link-less directory is normal, not orphaned content.
@@ -60,6 +121,25 @@ pub fn evaluate(graph: &Graph) -> Vec<Finding> {
     }
 
     findings
+}
+
+/// A fragment that matches an anchor once case is ignored is almost certainly a
+/// typo, so name the anchor it meant.
+///
+/// Browsers fall back to an ASCII-case-insensitive match when no id matches
+/// exactly, so this link is not broken for a reader today — it is fragile across
+/// renderers and trivially fixable, which makes it worth surfacing rather than
+/// silently resolving. Resolution stays exact: matching case-insensitively here
+/// would normalize the citing side, and the whole point of running one slug
+/// function over the heading alone is to never accept more than the platform
+/// does.
+fn case_mismatch_cause(anchors: &[&str], fragment: &str) -> Option<String> {
+    let anchor = anchors
+        .iter()
+        .find(|anchor| anchor.eq_ignore_ascii_case(fragment))?;
+    Some(format!(
+        "`#{fragment}` differs only in case from `#{anchor}`, which the target defines"
+    ))
 }
 
 /// A path written against the graph root when links resolve against the
@@ -230,6 +310,165 @@ mod tests {
             .find(|f| f.name == "unresolved-edge")
             .unwrap();
         assert!(f.cause.is_none(), "got: {:?}", f.cause);
+    }
+
+    /// Compose a graph where `source` links `target` with the given fragments,
+    /// and `target` defines `anchors`.
+    fn graph_with_fragments(target_anchors: &[&str], occurrences: serde_json::Value) -> Graph {
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("work-items.md", fs_node());
+        fs.set_node("owners.md", fs_node());
+        let mut markdown = Graph::labeled("markdown");
+        markdown.set_node(
+            "owners.md",
+            Node::new(
+                json!({ "anchors": target_anchors })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        );
+        let mut meta = Metadata::new();
+        meta.insert("occurrences".into(), occurrences);
+        markdown.add_edge(Edge::with_metadata("work-items.md", "owners.md", meta));
+        compose(&GraphSet::new(vec![fs, markdown]))
+    }
+
+    #[test]
+    fn a_fragment_the_target_defines_is_quiet() {
+        let composed = graph_with_fragments(
+            &["security-console"],
+            json!([{ "line": 3, "link": "owners.md#security-console" }]),
+        );
+        assert!(
+            !names(&evaluate(&composed))
+                .iter()
+                .any(|(name, _)| *name == "unresolved-fragment")
+        );
+    }
+
+    #[test]
+    fn a_fragment_the_target_does_not_define_fires_on_its_own_line() {
+        // The defect per-occurrence metadata was built for: one edge, two
+        // anchors, only one of them wrong. The finding names the wrong one's line
+        // and leaves the other alone.
+        let composed = graph_with_fragments(
+            &["security-console"],
+            json!([
+                { "line": 3, "link": "owners.md#security-console" },
+                { "line": 7, "link": "owners.md#no-such-team" },
+            ]),
+        );
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-fragment")
+            .expect("expected a finding");
+        assert_eq!(f.target.as_deref(), Some("owners.md#no-such-team"));
+        assert_eq!(f.lines, vec![7], "line 3 is fine and is not implicated");
+        assert!(f.cause.is_none(), "nothing near it in case");
+    }
+
+    #[test]
+    fn one_fragment_cited_from_several_lines_is_one_finding() {
+        let composed = graph_with_fragments(
+            &["security-console"],
+            json!([
+                { "line": 3, "link": "owners.md#typo" },
+                { "line": 9, "link": "owners.md#typo" },
+            ]),
+        );
+        let findings: Vec<_> = evaluate(&composed)
+            .into_iter()
+            .filter(|f| f.name == "unresolved-fragment")
+            .collect();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].lines, vec![3, 9]);
+    }
+
+    #[test]
+    fn a_case_mismatch_names_the_anchor_it_meant() {
+        let composed = graph_with_fragments(
+            &["ngwaf-edge"],
+            json!([{ "line": 5, "link": "owners.md#NGWAF-Edge" }]),
+        );
+        let findings = evaluate(&composed);
+        let f = findings
+            .iter()
+            .find(|f| f.name == "unresolved-fragment")
+            .expect("resolution is exact, so a case mismatch still fires");
+        let cause = f.cause.as_deref().expect("expected a cause");
+        assert!(cause.contains("`#ngwaf-edge`"), "got: {cause}");
+    }
+
+    #[test]
+    fn a_bare_hash_is_the_top_of_the_page() {
+        let composed = graph_with_fragments(&["a"], json!([{ "line": 2, "link": "owners.md#" }]));
+        assert!(
+            !names(&evaluate(&composed))
+                .iter()
+                .any(|(name, _)| *name == "unresolved-fragment")
+        );
+    }
+
+    #[test]
+    fn a_target_no_parser_read_has_unknown_fragments() {
+        // No graph published an `anchors` list for `src/lib.rs`, so a fragment
+        // into it is unknown rather than broken.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("guide.md", fs_node());
+        fs.set_node("src/lib.rs", fs_node());
+        let mut markdown = Graph::labeled("markdown");
+        let mut meta = Metadata::new();
+        meta.insert(
+            "occurrences".into(),
+            json!([{ "line": 4, "link": "src/lib.rs#L20" }]),
+        );
+        markdown.add_edge(Edge::with_metadata("guide.md", "src/lib.rs", meta));
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
+        assert!(
+            !names(&evaluate(&composed))
+                .iter()
+                .any(|(name, _)| *name == "unresolved-fragment")
+        );
+    }
+
+    #[test]
+    fn a_read_target_defining_nothing_makes_every_fragment_broken() {
+        // The other half of the `None`/empty distinction: a parser read it and it
+        // defines no addresses, so the fragment is broken rather than unknown.
+        let composed =
+            graph_with_fragments(&[], json!([{ "line": 4, "link": "owners.md#anything" }]));
+        let findings = evaluate(&composed);
+        assert!(
+            findings.iter().any(|f| f.name == "unresolved-fragment"),
+            "got {:?}",
+            names(&findings)
+        );
+    }
+
+    #[test]
+    fn an_unresolvable_target_reports_only_the_edge() {
+        // The fragment is the lesser half of the same mistake; reporting both
+        // would double-count one broken link.
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("guide.md", fs_node());
+        let mut markdown = Graph::labeled("markdown");
+        let mut meta = Metadata::new();
+        meta.insert(
+            "occurrences".into(),
+            json!([{ "line": 4, "link": "gone.md#section" }]),
+        );
+        markdown.add_edge(Edge::with_metadata("guide.md", "gone.md", meta));
+        let composed = compose(&GraphSet::new(vec![fs, markdown]));
+
+        let findings = evaluate(&composed);
+        let found = names(&findings);
+        assert!(
+            found.contains(&("unresolved-edge", "guide.md")),
+            "got {found:?}"
+        );
+        assert!(!found.iter().any(|(name, _)| *name == "unresolved-fragment"));
     }
 
     #[test]

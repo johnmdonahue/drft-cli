@@ -31,15 +31,16 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule              | When                                                           |
-| ----------------- | -------------------------------------------------------------- |
-| `stale-node`      | A node's current hash differs from its locked hash             |
-| `stale-edge`      | An edge's locked target hash differs from the target's         |
-| `new-edge`        | A current edge has no locked target hash                       |
-| `removed-edge`    | The lockfile has an edge absent from the graph                 |
-| `removed-node`    | The lockfile has a node absent from the graph                  |
-| `unresolved-edge` | An edge target has no defining node (URIs excepted)            |
-| `detached-node`   | A node has no inbound or outbound edges (directories excepted) |
+| Rule                  | When                                                           |
+| --------------------- | -------------------------------------------------------------- |
+| `stale-node`          | A node's current hash differs from its locked hash             |
+| `stale-edge`          | An edge's locked target hash differs from the target's         |
+| `new-edge`            | A current edge has no locked target hash                       |
+| `removed-edge`        | The lockfile has an edge absent from the graph                 |
+| `removed-node`        | The lockfile has a node absent from the graph                  |
+| `unresolved-edge`     | An edge target has no defining node (URIs excepted)            |
+| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines        |
+| `detached-node`       | A node has no inbound or outbound edges (directories excepted) |
 
 **A link to a directory tracks the directory, not its contents.** Directories are
 nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories
@@ -57,6 +58,30 @@ check runs per link occurrence, so a target cited from several places carries th
 cause when any one of those links is bare — the finding names every line, and the
 cause describes the bare one. It renders as an indented line under the finding in
 text output and as a `cause` field in JSON.
+
+`unresolved-fragment` checks the other half of a link. A markdown parser
+publishes the `#fragment` addresses each file it reads answers to — the GitHub
+slug of every heading, in document order, with GitHub's `-1` disambiguator on a
+repeat — and a link carrying a fragment its target does not define is a broken
+reference that the file existing does not save. The finding names the citing line
+rather than the edge, so a source citing two anchors of one target implicates
+only the wrong one.
+
+Matching is exact, and deliberately so: drft slugs the **heading** and compares
+the fragment byte-for-byte, never slugging the citing side. Normalizing the
+fragment would accept `#OBS 92` for an `obs-92` anchor, which a browser sends as
+`#OBS%2092` and does not find — and certifying a link that 404s for a reader is
+the one thing sub-file addressing must not do. A fragment that matches an anchor
+once case is ignored carries a `cause` naming the anchor it meant; browsers do
+fall back to a case-insensitive match, so such a link works today and is fragile
+rather than broken.
+
+A fragment is only checked against a target some parser read. A link into a `.rs`
+file, or into a markdown file outside the graph's `files` scope, has **unknown**
+fragments rather than broken ones, and drft says nothing. A file that was read
+and defines no headings is the opposite case: every fragment into it is broken.
+An unresolvable target reports `unresolved-edge` alone — the fragment is the
+lesser half of the same mistake.
 
 A finding is about an item in the graph. A statement about the _run_ that
 produced it — an unknown rule name, a selector that matched nothing — is a

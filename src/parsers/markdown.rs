@@ -1,4 +1,4 @@
-use super::{Link, ParseResult, Parser};
+use super::{Link, ParseResult, Parser, slug};
 use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks and images.
@@ -16,27 +16,58 @@ impl Parser for MarkdownParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
+        let (links, headings) = extract(content);
         ParseResult {
-            links: extract_markdown_links(content),
+            links,
+            anchors: slug::anchors(headings.iter().map(String::as_str)),
             metadata: None,
         }
     }
 }
 
-fn extract_markdown_links(content: &str) -> Vec<Link> {
+/// Walk the document once, collecting link targets and heading text.
+///
+/// Heading text is the *rendered* text — the concatenated text and code-span
+/// content between a heading's start and end — because that is what GitHub
+/// slugs. Inline HTML is excluded for the same reason, so an `<a id>` written
+/// beside a heading does not leak into the anchor it would override. A link
+/// inside a heading contributes both an edge and its text.
+fn extract(content: &str) -> (Vec<Link>, Vec<String>) {
     let newlines = newline_offsets(content);
     let mut links = Vec::new();
+    let mut headings = Vec::new();
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     // The offset iterator yields each event's byte range so we can locate links.
     let parser = CmarkParser::new_ext(content, options).into_offset_iter();
 
     let mut in_code_block = false;
+    // `Some` while inside a heading, accumulating its rendered text.
+    let mut heading: Option<String> = None;
 
     for (event, range) in parser {
         match event {
             Event::Start(Tag::CodeBlock(_)) => in_code_block = true,
             Event::End(TagEnd::CodeBlock) => in_code_block = false,
+            // The `id` on `Tag::Heading` carries a `{#custom}` attribute, which
+            // GitHub ignores in favor of the slug. Honoring it here would mint an
+            // anchor that resolves in drft and 404s for a reader.
+            Event::Start(Tag::Heading { .. }) => heading = Some(String::new()),
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(text) = heading.take() {
+                    headings.push(text);
+                }
+            }
+            Event::Text(text) | Event::Code(text) => {
+                if let Some(buffer) = &mut heading {
+                    buffer.push_str(&text);
+                }
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                if let Some(buffer) = &mut heading {
+                    buffer.push(' ');
+                }
+            }
             Event::Start(Tag::Link {
                 link_type,
                 dest_url,
@@ -66,7 +97,7 @@ fn extract_markdown_links(content: &str) -> Vec<Link> {
         }
     }
 
-    links
+    (links, headings)
 }
 
 /// Byte offsets of every `\n` in `content`, ascending — a reusable index for
@@ -97,6 +128,67 @@ mod tests {
             .into_iter()
             .map(|l| l.target)
             .collect()
+    }
+
+    fn anchors(content: &str) -> Vec<String> {
+        let parser = MarkdownParser { file_filter: None };
+        parser.parse("test.md", content).anchors
+    }
+
+    #[test]
+    fn collects_anchors_from_atx_and_setext_headings() {
+        assert_eq!(
+            anchors("# Title\n\n## OBS-92\n\nSetext\n------\n"),
+            vec!["title", "obs-92", "setext"]
+        );
+    }
+
+    #[test]
+    fn a_hash_inside_a_code_fence_is_not_a_heading() {
+        let content = "# Real\n\n```sh\n# not a heading\n```\n";
+        assert_eq!(anchors(content), vec!["real"]);
+    }
+
+    #[test]
+    fn heading_text_is_the_rendered_text() {
+        // Emphasis markers and code-span backticks are not part of what GitHub
+        // slugs; the text inside them is.
+        assert_eq!(anchors("## The **fs** graph\n"), vec!["the-fs-graph"]);
+        assert_eq!(anchors("## The `fs` graph\n"), vec!["the-fs-graph"]);
+    }
+
+    #[test]
+    fn a_link_in_a_heading_contributes_its_text_and_its_edge() {
+        let parser = MarkdownParser { file_filter: None };
+        let result = parser.parse("t.md", "## See [config](config.md)\n");
+        assert_eq!(result.anchors, vec!["see-config"]);
+        assert_eq!(result.links[0].target, "config.md");
+    }
+
+    #[test]
+    fn inline_html_in_a_heading_is_not_part_of_the_slug() {
+        // GitHub slugs the rendered text, so an `<a id>` beside a heading does not
+        // leak into the anchor. (It would *override* it on GitHub — a separate
+        // feature, deliberately not honored yet.)
+        assert_eq!(anchors("## <a id=\"obs-92\"></a>OBS-92\n"), vec!["obs-92"]);
+    }
+
+    #[test]
+    fn a_repeated_heading_takes_the_disambiguator() {
+        assert_eq!(
+            anchors("## Notes\n\ntext\n\n## Notes\n"),
+            vec!["notes", "notes-1"]
+        );
+    }
+
+    #[test]
+    fn a_curly_id_attribute_is_ignored() {
+        // GitHub ignores `{#custom}`, so honoring it would mint a tool-only anchor
+        // that 404s for a reader.
+        // The braces are literal text to a parser without heading attributes
+        // enabled, so they slug like any other punctuation — which is what a
+        // reader on GitHub gets too.
+        assert_eq!(anchors("## OBS-92 {#custom}\n"), vec!["obs-92-custom"]);
     }
 
     #[test]

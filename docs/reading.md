@@ -96,7 +96,14 @@ docs/guide.md
   @fs
     hash: b3:…
     type: file
+  @markdown
+    anchors: ["the-walk","scoping"]
 ```
+
+`anchors` are the `#fragment` addresses that file answers to — one per heading,
+in the flavor a reader's platform resolves. They are what makes a link's fragment
+checkable, and `drft nodes <path> --field anchors` is how to see what a file can
+be cited by.
 
 An edge block is `source → target`, then the same indented metadata:
 

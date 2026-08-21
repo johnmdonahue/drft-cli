@@ -76,6 +76,31 @@ impl Node {
     pub fn is_resolved(&self) -> bool {
         self.metadata.contains_key(FS_NAMESPACE)
     }
+
+    /// The `#fragment` addresses this node answers to, across contributing
+    /// graphs. The namespace is not hardcoded — a graph declaring
+    /// `parser = "markdown"` may carry any name — so any graph publishing an
+    /// `anchors` list contributes.
+    ///
+    /// `None` means no graph published one: nothing read this node as a document
+    /// with addressable positions, so its fragments are **unknown** rather than
+    /// broken. An empty `Some` means a parser read it and it defines no
+    /// addresses, which makes every fragment into it broken. Callers must keep
+    /// those apart.
+    pub fn anchors(&self) -> Option<Vec<&str>> {
+        let mut anchors: Option<Vec<&str>> = None;
+        for (key, value) in &self.metadata {
+            if !key.starts_with('@') {
+                continue;
+            }
+            if let Some(published) = value.get("anchors").and_then(Value::as_array) {
+                anchors
+                    .get_or_insert_with(Vec::new)
+                    .extend(published.iter().filter_map(Value::as_str));
+            }
+        }
+        anchors
+    }
 }
 
 /// A directed edge from `source` to `target` (both node-identity paths).
@@ -319,6 +344,22 @@ mod tests {
         assert_eq!(edge.lines(), vec![2, 5, 9], "unioned, sorted, deduped");
         assert_eq!(edge.raw_links(), vec!["./b.md"]);
         assert!(Edge::new("a.md", "b.md").lines().is_empty());
+    }
+
+    #[test]
+    fn node_anchors_separate_unknown_from_empty() {
+        let unread = Node::new(meta(json!({ "@fs": { "type": "file" } })));
+        assert!(unread.anchors().is_none(), "no parser read it: unknown");
+
+        let read = Node::new(meta(json!({
+            "@fs": { "type": "file" },
+            "@markdown": { "anchors": [] }
+        })));
+        assert_eq!(read.anchors(), Some(Vec::new()), "read, defines nothing");
+
+        // The graph name is configurable, so the namespace is not hardcoded.
+        let named = Node::new(meta(json!({ "@docs": { "anchors": ["obs-92"] } })));
+        assert_eq!(named.anchors(), Some(vec!["obs-92"]));
     }
 
     #[test]
