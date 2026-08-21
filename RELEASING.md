@@ -21,9 +21,9 @@ Cargo.toml CHANGELOG.md` before committing — those two are the only nodes the
 release touches, so the lock stays scoped to what the release actually changed.
 
 `main` also requires branches to be up to date before merging, so a release
-branch that falls behind needs `git merge origin/main` (and another lock, named
-to the files the merge left stale, if it pulls in tracked changes) before it can
-land.
+branch that falls behind needs `git merge origin/main` before it can land. If
+that merge pulls in tracked changes, run `drft check` and lock the files it
+reports.
 
 ## What happens automatically
 

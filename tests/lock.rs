@@ -418,3 +418,60 @@ fn lock_all_with_paths_is_a_usage_error() {
         "neither scope should have been written, got: {stdout}"
     );
 }
+
+/// The refusal reaches a JSON consumer as an envelope, not as bare stderr prose.
+/// The `--format` scan that produces it runs before clap parses, so it is easy to
+/// break without noticing from the text path alone.
+#[test]
+fn lock_with_no_paths_errors_as_a_json_envelope() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "lock",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let parsed: serde_json::Value =
+        serde_json::from_str(stderr.trim()).unwrap_or_else(|e| panic!("not JSON ({e}): {stderr}"));
+    assert_eq!(parsed["exit_code"], 2);
+    assert!(
+        parsed["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("--all")),
+        "the envelope should name the remedy, got: {parsed}"
+    );
+}
+
+/// `--all` has no short form. Spelling out the call that asserts whole-graph
+/// review is the point, and a long flag is greppable — so a hook or CI check can
+/// forbid `--all` while leaving scoped locks alone.
+#[test]
+fn lock_all_has_no_short_form() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# a").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "-a"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "-a must not be an alias for --all"
+    );
+    assert!(
+        !dir.path().join("drft.lock").exists(),
+        "-a must not have locked anything"
+    );
+}

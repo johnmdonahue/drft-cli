@@ -4,8 +4,9 @@
 //! staleness.
 //!
 //! The on-disk form (`drft.lock`) is deterministic TOML with no timestamps and
-//! no version field. A parse failure warns and points at `drft lock` rather than
-//! failing the command.
+//! no version field. A parse failure warns and points at `drft lock --all` rather
+//! than failing the command — an unparseable lockfile has no baseline to preserve,
+//! which is the one case the whole-graph lock is the right call.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -116,7 +117,7 @@ impl Lock {
 }
 
 // `deny_unknown_fields` rejects foreign shapes (e.g. an older lockfile format)
-// so they surface as a parse failure that points at `drft lock`, rather than
+// so they surface as a parse failure that points at `drft lock --all`, rather than
 // silently deserializing into an empty lock.
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -144,7 +145,7 @@ struct EdgeToml {
 }
 
 /// Read `drft.lock` from `root`. Returns `Ok(None)` when the file is absent or
-/// cannot be parsed (a parse failure warns and points at `drft lock`).
+/// cannot be parsed (a parse failure warns and points at `drft lock --all`).
 pub fn read(root: &Path) -> Result<Option<Lock>> {
     let path = root.join(LOCK_FILE);
     if !path.exists() {
@@ -155,7 +156,9 @@ pub fn read(root: &Path) -> Result<Option<Lock>> {
     match Lock::from_toml(&content) {
         Ok(lock) => Ok(Some(lock)),
         Err(e) => {
-            eprintln!("warn: could not parse {LOCK_FILE} ({e}) — run `drft lock` to regenerate");
+            eprintln!(
+                "warn: could not parse {LOCK_FILE} ({e}) — run `drft lock --all` to regenerate"
+            );
             Ok(None)
         }
     }

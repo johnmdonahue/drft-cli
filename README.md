@@ -24,7 +24,7 @@ The binary is called `drft`.
 ```bash
 drft init                 # create a drft.toml
 drft check                # validate the graph
-drft lock                 # snapshot file hashes
+drft lock --all           # snapshot every file's hash as the baseline
 drft check                # now detects staleness too
 ```
 
@@ -63,11 +63,9 @@ never looked at, including someone else's unfinished work. Paths all resolve
 before anything is written, so a typo fails the command rather than leaving a
 partial lock behind.
 
-The whole-graph lock is `drft lock --all`, and it has to be named: `drft lock`
-with no paths errors (exit 2). Zero paths is also what a shell hands over when a
-command substitution matches nothing, so without the flag a scoped invocation
-whose expansion came back empty would snapshot the whole graph at exit 0, with
-nothing in the output to say it had.
+The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors
+(exit 2), so a scoped invocation whose shell expansion came back empty fails
+instead of widening to every node.
 
 All commands support `--format json`. Run `drft --help` for the full flag reference.
 

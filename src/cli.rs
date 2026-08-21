@@ -34,9 +34,7 @@ pub enum Commands {
         /// Lock these paths and their outbound edges (at least one required, or --all)
         paths: Vec<String>,
 
-        /// Lock every node in the graph. Required to be explicit: a lock asserts
-        /// the locked state was reviewed, and zero paths is also what a shell
-        /// hands over when a command substitution matches nothing.
+        /// Lock every node in the graph
         #[arg(long)]
         all: bool,
     },
