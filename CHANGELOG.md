@@ -2,7 +2,9 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.16.0 (2026-08-20)
+
+Gives every command a run-level layer. A `hints` channel says what happened to _this invocation_ — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground — where findings only ever describe the graph. And `drft lock` stops reading zero paths as every path, so a command substitution that matched nothing can't write a whole-graph review claim.
 
 ### Breaking changes
 
