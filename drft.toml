@@ -7,6 +7,8 @@
 ignore = [
   "Cargo.lock",
   "examples/**",
+  ".dx",
+  ".claude/rules/dx.md",
 ]
 
 [graphs.markdown]

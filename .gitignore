@@ -1,6 +1,5 @@
 /target
 .scratch/
-.handoff/
 .claude/*
 !.claude/settings.json
 *.swp
