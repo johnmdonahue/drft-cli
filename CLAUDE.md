@@ -6,7 +6,7 @@ A drift checker for linked files, built for LLMs and humans working in the same 
 
 This repo runs drft on itself. A PreToolUse hook runs `drft impact <file> --format json` before every `.md` and `.rs` file edit.
 
-`drft.toml` is not tracked. It is maintained outside the working tree and symlinked in, so a fresh clone has no config and the commands below need one supplied before they run. Nothing tracked may link to it — the path resolves on a maintainer's machine and nowhere else. `drft.lock` is an ordinary tracked file and does travel.
+drft runs here as a local authoring aid, not as repo tooling. Neither `drft.toml` nor `drft.lock` is tracked, so a fresh clone has no graph and the commands below need a config supplied before they run, and nothing tracked may link to either — those paths resolve on a maintainer's machine and nowhere else. CI does not run `drft check`. The hook is where drift gets caught, at the moment of the edit rather than at the gate.
 
 ### Before you start: map the blast radius
 
