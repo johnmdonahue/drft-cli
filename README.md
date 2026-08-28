@@ -107,7 +107,7 @@ drft grounds an agent in a codebase's structure without making it open every fil
 
 Every command also emits `--format json` — `drft impact` carries an actionable `fix` on each entry, naming the review the change asks for — and a `hints` channel carrying advisories about the run itself — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground. See [Reading the graph](docs/reading.md) for the selector grammar, the `--namespace` / `--field` filters, and the hint set.
 
-This repo dogfoods the pattern with Claude Code hooks. See [CLAUDE.md](CLAUDE.md) for the agent instructions and `.claude/settings.json` for the hook configuration.
+This repo runs drft on itself, as a local authoring aid rather than a CI gate: an agent maps a change's blast radius with `drft impact` before editing, then reviews what `drft check` reports and locks only what it read. Nothing about that is harness-specific, and no hook configuration ships here — the commands above are the whole interface.
 
 ## Docs
 
