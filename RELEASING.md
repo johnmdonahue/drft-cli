@@ -4,26 +4,23 @@
 
 1. **Bump version** in `Cargo.toml`
 2. **Update CHANGELOG.md** with the new version and date
-3. **Run `drft lock Cargo.toml CHANGELOG.md`** — see [the release commit is drift](#the-release-commit-is-drift) below
-4. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
-5. **Merge** after CI passes
-6. **Tag on main**: `git checkout main && git pull && git tag v0.x.x`
-7. **Push tag**: `git push origin v0.x.x`
+3. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
+4. **Merge** after CI passes
+5. **Tag on main**: `git checkout main && git pull && git tag v0.x.x`
+6. **Push tag**: `git push origin v0.x.x`
 
 That's it. Everything else is automated.
 
-### The release commit is drift
-
-`check` is a required status check on `main`, and it runs `cargo run -- check`.
-Both `Cargo.toml` and `CHANGELOG.md` are nodes in drft's own graph, so steps 1
-and 2 make them stale and CI fails on the release commit itself. Run `drft lock
-Cargo.toml CHANGELOG.md` before committing — those two are the only nodes the
-release touches, so the lock stays scoped to what the release actually changed.
-
 `main` also requires branches to be up to date before merging, so a release
-branch that falls behind needs `git merge origin/main` before it can land. If
-that merge pulls in tracked changes, run `drft check` and lock the files it
-reports.
+branch that falls behind needs `git merge origin/main` before it can land.
+
+### drft does not gate the release
+
+Neither the config nor the lockfile is tracked, so CI has no graph to check and a
+release commit cannot fail on drift. Bumping `Cargo.toml` and `CHANGELOG.md` still
+makes them stale in a maintainer's local graph — `drft lock Cargo.toml CHANGELOG.md`
+clears that, and it is bookkeeping on one machine rather than a step the release
+depends on.
 
 ## What happens automatically
 
