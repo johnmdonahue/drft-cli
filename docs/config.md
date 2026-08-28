@@ -11,6 +11,28 @@ sources:
 The directory containing `drft.toml` is the graph root; nested `drft.toml` files
 found while walking are ordinary files on disk, not graph boundaries.
 
+## Committing the config and lockfile
+
+drft has no setup mode and no flag for this. Whether `drft.toml` and `drft.lock`
+are tracked is your decision, expressed the ordinary way — by what your
+`.gitignore` says and whether your CI runs `drft check`. The two shapes it
+produces:
+
+**Tracked.** The graph and its reviewed baseline are shared, `drft check` in CI
+gates on drift, and staleness is a claim the repository makes to everyone who
+clones it. This is the right default for a team that has adopted drft together.
+
+**Untracked.** A clone gets no graph, nothing gates, and staleness is a fact
+about one working tree. Use it to run drft on a repository whose owners have not
+adopted it, or when drft is an authoring aid you reach for while writing rather
+than a check the project enforces. This repository is the second case; its
+`.gitignore` names both files with a comment saying so.
+
+Untracked has one consequence worth stating: because drft honors the committed
+`.gitignore`, a `drft.toml` ignored there is also outside its own graph. That is
+usually what you want — nothing links to the config by path — but it means
+`drft nodes` will not list it.
+
 ## ignore
 
 ```toml

@@ -13,7 +13,7 @@ the composed graph to emit findings.
 
 ## Reference
 
-- [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`
+- [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`, and whether to commit the config and lockfile at all
 - [Parsers](parsers/README.md) — how parsers extract links and metadata
 - [Rules](rules/README.md) — the drift and structural findings `drft check` emits
 - [Reading the graph](reading.md) — the `nodes`, `edges`, and `graph` read verbs, the `hints` advisory channel, and grounding an agent on graph metadata

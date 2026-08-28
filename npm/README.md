@@ -1,6 +1,6 @@
 # drft
 
-A structural integrity checker for linked file systems.
+A drift checker for linked files, built for LLMs and humans working in the same repo.
 
 This is the npm distribution of [drft](https://github.com/johnmdonahue/drft-cli). It downloads the prebuilt binary for your platform.
 
