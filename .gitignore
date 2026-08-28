@@ -11,5 +11,16 @@
 # and staleness is a fact about a maintainer's working tree rather than a claim
 # this repository makes. Ignored here rather than in a personal exclude file
 # because the choice is deliberate and worth stating where anyone can read it.
-drft.toml
-drft.lock
+#
+# Anchored to the root on purpose. Unanchored, these match at any depth and
+# would silently swallow the per-example configs under examples/ — `git add`
+# declines an ignored path with no error, so a new example would just never
+# arrive.
+/drft.toml
+/drft.lock
+
+# Each project under examples/ is its own graph and ships its own config, which
+# has to be tracked. Re-included explicitly because a machine-wide ignore of the
+# bare name would otherwise swallow them: the ones already tracked survive, and
+# a newly added example would not.
+!examples/*/drft.toml
