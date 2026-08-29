@@ -43,7 +43,11 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
             "unlocked-node",
             path,
             provenance(&node.metadata),
-            "no lock entry, so drift in this file is not checked",
+            // Not "drift is not checked": a node with no entry of its own can
+            // still be the target of a locked edge, whose recorded target hash
+            // catches the same edit as `stale-edge` on the source. Claiming the
+            // file is unchecked would contradict that finding in the same output.
+            "no lock entry, so this file has no baseline of its own",
         ));
     }
 

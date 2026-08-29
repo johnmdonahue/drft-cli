@@ -3,6 +3,7 @@ purpose: the drift and structural findings drft check emits
 sources:
   - ../../src/rules/staleness.rs
   - ../../src/rules/structural.rs
+  - ../../src/rules/check.rs
   - ../../src/config.rs
 ---
 
@@ -31,16 +32,16 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule                  | When                                                           |
-| --------------------- | -------------------------------------------------------------- |
-| `stale-node`          | A node's current hash differs from its locked hash             |
-| `stale-edge`          | An edge's locked target hash differs from the target's         |
-| `new-edge`            | A current edge has no locked target hash                       |
-| `removed-edge`        | The lockfile has an edge absent from the graph                 |
-| `removed-node`        | The lockfile has a node absent from the graph                  |
-| `unresolved-edge`     | An edge target has no defining node (URIs excepted)            |
-| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines        |
-| `detached-node`       | A node has no inbound or outbound edges (directories excepted) |
+| Rule                  | When                                                            |
+| --------------------- | --------------------------------------------------------------- |
+| `stale-node`          | A node's current hash differs from its locked hash              |
+| `stale-edge`          | An edge's locked target hash differs from the target's          |
+| `new-edge`            | A current edge has no locked target hash                        |
+| `removed-edge`        | The lockfile has an edge absent from the graph                  |
+| `removed-node`        | The lockfile has a node absent from the graph                   |
+| `unresolved-edge`     | An edge target has no defining node (URIs excepted)             |
+| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines         |
+| `detached-node`       | A node has no inbound or outbound edges (directories excepted)  |
 | `unlocked-node`       | A lockable node has no lock entry, so its drift is unchecked    |
 | `no-baseline`         | The lockfile is absent or has no entries, so nothing is checked |
 
@@ -49,6 +50,11 @@ staleness by comparing the graph against the lockfile, so with no lockfile — o
 with no entries — there is nothing to compare against and every staleness rule
 becomes a no-op. That used to be indistinguishable from a clean run: no findings,
 exit 0, either way. `no-baseline` states it once, at the run rather than per node.
+
+It fires on three states, which are one fact — no usable baseline: the lockfile is
+absent, it carries no entries, or it could not be parsed. The last also raises the
+`unparseable-lock` hint, which is what names the cause; the finding reports the
+consequence.
 
 It is a rule and not a hint because hints never change an exit code. At its default
 `warn` a first `check` in a new repo stays quiet, and a repo that wants a missing
@@ -67,6 +73,21 @@ are absent from a correct lockfile by design, and are never reported. An unlocke
 node subsumes its outbound `new-edge` findings, the way a stale node subsumes its
 `stale-edge` findings — the node having no baseline is the single fact behind every
 one of them.
+
+**In a repo that locks only what it reads**, every file never named to `drft lock`
+reports this, which in a source tree means most of it. That is accurate rather than
+noisy — those files genuinely have no baseline — but it is not always what a repo
+wants to see on every run. Narrow it the way any rule is narrowed, with a severity
+of `off` or an `ignore` glob:
+
+```toml
+[rules.unlocked-node]
+ignore = ["src/**", "tests/**"]
+```
+
+A node with no entry of its own can still be the target of a locked edge, whose
+recorded target hash catches an edit to it. `unlocked-node` reports the absent
+baseline, not an absence of checking.
 
 **A link to a directory tracks the directory, not its contents.** Directories are
 nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories

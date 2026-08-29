@@ -205,7 +205,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
     // rather than inferred: a command that printed a result document embedded its
     // hints there and is done. Everything else has to route them somewhere.
     //
-    // Three commands land here. `init` and `lock` print no document at all;
+    // Two commands land here. `init` prints no document at all;
     // `drft graph --format json` prints one whose root is exactly `graph`, a JGF
     // document rather than drft's own envelope, where a sibling key would cost
     // the translatability the format was chosen for.
@@ -334,12 +334,23 @@ fn run_lock(
     // whose loss no rule reports. Absent is the ordinary pre-lock state and is
     // fine; unreadable is not something a scoped lock can preserve, so it refuses.
     let read = lock::read(&graph_root, hints)?;
-    if read.is_none() && lock::exists(&graph_root) {
+    let unusable = match &read {
+        // Could not be parsed. `read` already raised `unparseable-lock`.
+        None => lock::exists(&graph_root),
+        // Parsed, but covers nothing while the graph has something to cover. A
+        // zero-byte file is valid TOML and deserializes to an empty baseline, so
+        // a truncated write, a merge resolved to nothing, or `: > drft.lock` all
+        // land here rather than in the parse-failure arm above — and a scoped
+        // lock over one would replace the baseline just as destructively.
+        Some(lock) => lock.nodes.is_empty() && !snapshot.nodes.is_empty(),
+    };
+    if unusable {
         anyhow::bail!(
-            "drft.lock exists but could not be parsed, so locking named paths \
-             would replace the whole baseline with just those paths. Restore the \
-             file from version control, or run `drft lock --all` to rebuild it \
-             from the current tree — which asserts every node was reviewed."
+            "drft.lock exists but carries no usable baseline, so locking named \
+             paths would replace it with just those paths and drop the rest \
+             without saying so. Restore the file from version control, or run \
+             `drft lock --all` to rebuild it from the current tree — which \
+             asserts every node was reviewed."
         );
     }
     let mut existing = read.unwrap_or_default();
@@ -372,33 +383,45 @@ fn run_lock(
                 locked.push(node);
             }
             None => {
-                if composed
-                    .nodes
-                    .get(&node)
-                    .and_then(drft::model::Node::fs_type)
-                    == Some("directory")
+                // Dropping the entry happens first and unconditionally. A path
+                // that used to be a file and is now a directory still has a stale
+                // entry to clear, and that is the reviewed-deletion case naming it
+                // exists for — skipping the drop left a `removed-edge` finding
+                // that nothing short of a whole-graph lock could clear.
+                let was_dropped = existing.nodes.remove(&node).is_some();
+                if was_dropped {
+                    dropped.push(node.clone());
+                }
+                if !was_dropped
+                    && composed
+                        .nodes
+                        .get(&node)
+                        .and_then(drft::model::Node::fs_type)
+                        == Some("directory")
                 {
-                    let beneath = composed
+                    // Count what could have been locked. Sub-directories carry no
+                    // hash and no outbound edge, so they are never lock entries,
+                    // and reporting them as "not locked" would count things that
+                    // cannot be. Say what this run did rather than assert a state:
+                    // a descendant locked by an earlier run is still locked, and
+                    // this run simply did not touch it.
+                    let prefix = format!("{node}/");
+                    let beneath = snapshot
                         .nodes
                         .keys()
-                        .filter(|k| k.starts_with(&format!("{node}/")))
+                        .filter(|k| k.starts_with(&prefix))
                         .count();
                     hints.push(
                         Hint::new(
                             "directory-lock",
                             format!(
-                                "is a directory, which carries no content to snapshot — the {beneath} {} beneath it {} not locked",
+                                "is a directory, which carries no content to snapshot — this run locked none of the {beneath} lockable {} beneath it",
                                 if beneath == 1 { "node" } else { "nodes" },
-                                if beneath == 1 { "was" } else { "were" },
                             ),
                         )
                         .at(&node)
                         .with_next("name the files you reviewed, or pass `--all`"),
                     );
-                    continue;
-                }
-                if existing.nodes.remove(&node).is_some() {
-                    dropped.push(node);
                 }
             }
         }
@@ -453,14 +476,22 @@ fn report_lock(
                     plural(dropped.len(), "entry", "entries")
                 ));
             }
-            println!("{line}");
             for node in locked {
-                println!("  locked  {node}");
+                line.push_str(&format!("\n  locked  {node}"));
             }
             for node in dropped {
-                println!("  dropped {node}");
+                line.push_str(&format!("\n  dropped {node}"));
             }
-            Ok(())
+            // A closed reader is not this command's failure. `println!` panics on
+            // a broken pipe, so `drft lock --all | head` would abort with exit 101
+            // where it used to print nothing and exit 0. The read verbs panic the
+            // same way on their own output — that is #121, and it is not widened
+            // here by giving `lock` something to print.
+            use std::io::Write;
+            match writeln!(std::io::stdout(), "{line}") {
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+                other => other.map_err(Into::into),
+            }
         }
     }
 }
@@ -482,15 +513,10 @@ fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
     let add_md = Path::new(path).extension().is_none();
     let mut candidates = Vec::new();
     if let Some(key) = graph_key(root, graph_root, path) {
-        // The exact key comes first. Offering `{key}.md` ahead of it meant that
-        // with both `docs/` and `docs.md` present, `drft lock docs` snapshotted
-        // `docs.md` — a durable "this was reviewed" claim against a file the
-        // caller never named, written silently. A path the caller spelled out
-        // and that exists is never a worse answer than one invented from it.
-        candidates.push(key.clone());
         if add_md {
             candidates.push(format!("{key}.md"));
         }
+        candidates.push(key);
     }
     if add_md {
         candidates.push(format!("{path}.md"));
@@ -563,7 +589,21 @@ fn resolve_lock_node(
     graph_root: &Path,
     path: &str,
 ) -> Result<String> {
-    for candidate in node_candidates(root, graph_root, path) {
+    // A writer resolves the exact path before any candidate invented from it.
+    //
+    // The shared candidate list offers `{key}.md` for a bare name, and offering it
+    // first meant that with both `docs/` and `docs.md` present, `drft lock docs`
+    // snapshotted `docs.md` — a durable "this was reviewed" claim against a file
+    // the caller never named, written silently. That ordering is harmless for a
+    // reader, which only ever produces a projection, so it is corrected here
+    // rather than in the shared helper: moving it there would change what
+    // `drft impact docs` seeds on, which is a different question nobody asked.
+    let exact = graph_key(root, graph_root, path);
+    let ordered = exact
+        .iter()
+        .cloned()
+        .chain(node_candidates(root, graph_root, path));
+    for candidate in ordered {
         if composed.nodes.contains_key(&candidate) || existing.nodes.contains_key(&candidate) {
             return Ok(candidate);
         }

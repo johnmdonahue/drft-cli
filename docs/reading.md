@@ -174,8 +174,8 @@ In text, hints go to stderr after the result, so a pipe carries only the
 projection.
 
 In JSON they are a key on the result document, always present so `.hints[]` reads
-without a guard — for `nodes`, `edges`, `impact`, and `check`. Three cases have no
-such document to carry them: `init` prints no result at all, and
+without a guard — for `nodes`, `edges`, `impact`, `check`, and `lock`. Two cases
+have no such document to carry them: `init` prints no result at all, and
 `drft graph --format json` prints a JGF document whose root is exactly `graph`, a
 format rather than drft's own envelope, where a sibling key would cost the
 translatability the format was chosen for. Those take a `{"hints": [...]}`

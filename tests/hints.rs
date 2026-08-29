@@ -285,7 +285,7 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("could not be parsed"),
+            stderr.contains("no usable baseline"),
             "{format:?} refused without saying why: stderr={stderr:?}"
         );
     }

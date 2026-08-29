@@ -370,3 +370,71 @@ fn an_unlocked_node_subsumes_its_new_edges() {
         "the unlocked node subsumes them: stdout={stdout:?}"
     );
 }
+
+/// A graph with nothing lockable in it stays quiet. A tree of directories alone
+/// is consistent with having no lockfile, so `no-baseline` would be reporting an
+/// absence that covers nothing.
+#[test]
+fn a_graph_with_nothing_lockable_reports_no_baseline_nothing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\nignore = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(dir.path().join("empty")).unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("no-baseline"),
+        "nothing could have been locked: stdout={stdout:?}"
+    );
+}
+
+/// An unlocked node that is the target of a locked edge does not claim its drift
+/// is unchecked. The source's recorded target hash still catches the edit, and
+/// `stale-edge` reports it in the same run — a message saying the file is
+/// unchecked would contradict the finding printed beside it.
+#[test]
+fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    let lock = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(lock.status.success());
+
+    // Drop setup.md's own entry, leaving index.md's locked edge to it intact.
+    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let mut parts = lockfile.split("[[node]]");
+    let head = parts.next().unwrap().to_string();
+    let kept: Vec<&str> = parts
+        .filter(|block| !block.trim_start().starts_with("path = \"setup.md\""))
+        .collect();
+    fs::write(
+        dir.path().join("drft.lock"),
+        format!("{head}[[node]]{}", kept.join("[[node]]")),
+    )
+    .unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup CHANGED").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("stale-edge"), "stdout={stdout:?}");
+    assert!(stdout.contains("unlocked-node"), "stdout={stdout:?}");
+    assert!(
+        !stdout.contains("drift in this file is not checked"),
+        "the edit was caught by stale-edge in the same run: stdout={stdout:?}"
+    );
+}

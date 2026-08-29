@@ -284,8 +284,8 @@ fn scoped_lock_of_a_directory_reports_zero_and_hints() {
     );
 }
 
-/// Every spelling of a directory reports zero. `docs`, `docs/` and a path from a
-/// subdirectory all resolve to the same node, and each used to exit 0 in silence.
+/// Every spelling of a directory reports zero. Each resolves to the same node and
+/// each used to exit 0 in silence.
 #[test]
 fn every_directory_spelling_reports_zero() {
     for spelling in ["sub", "sub/", "./sub"] {
@@ -396,7 +396,11 @@ fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
     lock_all(dir.path());
 
     fs::write(dir.path().join("docs.md"), "# Sibling CHANGED").unwrap();
-    assert!(check(dir.path()).contains("docs.md"));
+    // The assertion has to name the finding, not the path. `index.md` links
+    // `docs.md`, so the path appears in a `stale-edge` line whether or not
+    // `docs.md` was wrongly locked — an assertion on the bare path passes with
+    // the fix reverted, which makes it no test at all.
+    assert!(check(dir.path()).contains("stale-node]: docs.md"));
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "docs"])
@@ -404,9 +408,10 @@ fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
         .unwrap();
     assert!(output.status.success());
 
+    let after = check(dir.path());
     assert!(
-        check(dir.path()).contains("docs.md"),
-        "locking the directory `docs` must not snapshot the file `docs.md`"
+        after.contains("stale-node]: docs.md"),
+        "locking the directory `docs` must not snapshot the file `docs.md`: {after}"
     );
 }
 
@@ -609,4 +614,93 @@ fn lock_all_has_no_short_form() {
         !dir.path().join("drft.lock").exists(),
         "-a must not have locked anything"
     );
+}
+
+/// A path that used to be a file and is now a directory can still have its stale
+/// entry dropped by naming it. That is the reviewed-deletion case a scoped lock
+/// exists for, and the directory hint must not displace it.
+#[test]
+fn locking_a_path_that_became_a_directory_drops_its_entry() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("notes"), "# Notes\n[i](index.md)\n").unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+    lock_all(dir.path());
+
+    fs::remove_file(dir.path().join("notes")).unwrap();
+    fs::create_dir(dir.path().join("notes")).unwrap();
+    fs::write(dir.path().join("notes").join("x.md"), "# Inner").unwrap();
+    assert!(check(dir.path()).contains("removed-edge"));
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "notes"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("dropped 1 entry"), "stdout={stdout:?}");
+    assert!(stdout.contains("dropped notes"), "stdout={stdout:?}");
+
+    let after = check(dir.path());
+    assert!(
+        !after.contains("removed-edge"),
+        "naming the converted path must clear its finding: {after}"
+    );
+}
+
+/// A lockfile that exists but carries no entries is refused by a scoped lock.
+///
+/// A zero-byte file is valid TOML and deserializes to an empty baseline, so a
+/// truncated write lands here rather than in the parse-failure path — and a
+/// scoped lock over one used to replace the baseline with just the named paths.
+#[test]
+fn a_scoped_lock_refuses_an_empty_baseline() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    for name in ["a.md", "b.md", "c.md"] {
+        fs::write(dir.path().join(name), "# Note").unwrap();
+    }
+    lock_all(dir.path());
+    fs::write(dir.path().join("drft.lock"), "").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "an empty baseline must be refused, not replaced"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        "",
+        "the lockfile was rewritten anyway"
+    );
+}
+
+/// A closed reader is not the command's failure. `drft lock --all | head` must not
+/// abort: `println!` panics on a broken pipe, which would exit 101 where the
+/// silent command used to exit 0.
+#[test]
+fn lock_output_survives_a_closed_pipe() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    for i in 0..40 {
+        fs::write(dir.path().join(format!("n{i}.md")), "# Note").unwrap();
+    }
+
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "{} -C {} lock --all | head -1",
+            env!("CARGO_BIN_EXE_drft"),
+            dir.path().to_str().unwrap()
+        ))
+        .status()
+        .unwrap();
+    assert!(status.success(), "piping lock output must not abort");
 }

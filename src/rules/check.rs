@@ -35,11 +35,16 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
             // Say nothing when there is nothing a baseline could have covered: a
             // graph of directories alone is consistent with an empty lockfile.
             if !Lock::from_composed(graph).nodes.is_empty() {
+                // The message says what is true of the run rather than guessing
+                // why. `lock` is `None` for a file that is absent and for one that
+                // could not be parsed — the latter carries plenty of entries, so
+                // "no lock entries" would be false, while `unparseable-lock` on
+                // the same run says something different and correct.
                 findings.push(Finding::warn(
                     "no-baseline",
                     "drft.lock",
                     Vec::new(),
-                    "no lock entries, so no file is checked for drift",
+                    "no usable baseline, so no file is checked for drift",
                 ));
             }
         }
