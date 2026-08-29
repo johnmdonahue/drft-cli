@@ -72,7 +72,9 @@ directory and an unreferenced escaping symlink carry no hash and no outbound edg
 are absent from a correct lockfile by design, and are never reported. An unlocked
 node subsumes its outbound `new-edge` findings, the way a stale node subsumes its
 `stale-edge` findings — the node having no baseline is the single fact behind every
-one of them.
+one of them. The subsumption is applied after severity and ignore globs, so
+silencing `unlocked-node` restores the `new-edge` findings it was standing in for
+rather than dropping both.
 
 **In a repo that locks only what it reads**, every file never named to `drft lock`
 reports this, which in a source tree means most of it. That is accurate rather than
@@ -85,10 +87,10 @@ of `off` or an `ignore` glob:
 ignore = ["src/**", "tests/**"]
 ```
 
-Narrowing it this way reinstates exactly the blindness the rule exists to report:
-an ignored path with no lock entry is unchecked and now says nothing about it.
-That is a reasonable trade for a tree you do not track, and a bad one for a tree
-you do, so scope the glob to the former.
+Narrowing it this way gives up what the rule reports — an ignored path with no lock
+entry no longer says so — while leaving the `new-edge` findings that predate it in
+place. That is a reasonable trade for a tree you do not track, and a bad one for a
+tree you do, so scope the glob to the former.
 
 A node with no entry of its own can still be the target of a locked edge, whose
 recorded target hash catches an edit to it. `unlocked-node` reports the absent

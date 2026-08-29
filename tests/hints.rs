@@ -5,7 +5,9 @@ use tempfile::TempDir;
 
 /// Every JSON *result document* carries a `hints` key, empty included, so a
 /// consumer can read `.hints[]` without first testing whether the key exists.
-/// `graph` and `lock` are excluded on purpose and covered separately below.
+/// `graph` is excluded on purpose and covered separately below: its JSON root is
+/// a JGF document, where a sibling key would cost the translatability the format
+/// was chosen for. `lock` prints a result document and so belongs here.
 #[test]
 fn json_documents_always_carry_a_hints_key() {
     let dir = TempDir::new().unwrap();
@@ -17,6 +19,7 @@ fn json_documents_always_carry_a_hints_key() {
         vec!["edges"],
         vec!["check"],
         vec!["impact", "index.md"],
+        vec!["lock", "index.md"],
     ] {
         let mut args = vec!["-C", dir.path().to_str().unwrap(), "--format", "json"];
         args.extend(command.iter().copied());
@@ -285,7 +288,7 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("no usable baseline"),
+            stderr.contains("could not be parsed"),
             "{format:?} refused without saying why: stderr={stderr:?}"
         );
     }

@@ -68,6 +68,24 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
         true
     });
 
+    // An unlocked node subsumes its outbound `new-edge` findings: the node having
+    // no baseline is the one fact behind every one of them.
+    //
+    // Decided here rather than where the findings are derived, and only over what
+    // survived the filter above. Subsuming earlier meant that silencing
+    // `unlocked-node` — with `off`, or with the `ignore` glob the rules reference
+    // recommends for a source tree — also dropped the `new-edge` findings it was
+    // standing in for, so a node configured to be quieter went completely dark and
+    // lost coverage that predates this rule.
+    let subsumed: std::collections::HashSet<String> = findings
+        .iter()
+        .filter(|f| f.name == "unlocked-node")
+        .map(|f| f.subject.clone())
+        .collect();
+    if !subsumed.is_empty() {
+        findings.retain(|f| f.name != "new-edge" || !subsumed.contains(&f.subject));
+    }
+
     // Lines before message, so several findings on one subject read in the order
     // a reader would walk the file rather than in fragment byte order.
     findings.sort_by(|a, b| {

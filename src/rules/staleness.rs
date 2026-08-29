@@ -5,9 +5,11 @@
 //!
 //! Findings: `stale-node`, `stale-edge`, `new-edge`, `removed-edge`,
 //! `removed-node`, `unlocked-node`. A stale node subsumes its outbound
-//! `stale-edge` findings; a removed node subsumes its `removed-edge` findings;
-//! an unlocked node subsumes its outbound `new-edge` findings, because the node
-//! having no baseline at all is the fact that explains every one of them.
+//! `stale-edge` findings and a removed node subsumes its `removed-edge` findings,
+//! both decided here. An unlocked node subsumes its outbound `new-edge` findings
+//! too, but that one is decided in [`super::check`] after severity and ignore
+//! globs are applied — silencing the subsuming rule must not silence what it
+//! subsumes.
 
 use std::collections::HashSet;
 
@@ -30,7 +32,6 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
     // design — a rule with its own idea of the predicate would report every one
     // of them as a defect the moment it landed.
     let lockable = Lock::from_composed(graph);
-    let mut unlocked: HashSet<&str> = HashSet::new();
     for path in lockable.nodes.keys() {
         if lock.nodes.contains_key(path) {
             continue;
@@ -38,7 +39,6 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
         let Some((path, node)) = graph.nodes.get_key_value(path) else {
             continue;
         };
-        unlocked.insert(path.as_str());
         findings.push(Finding::warn(
             "unlocked-node",
             path,
@@ -112,13 +112,6 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
             }
             // new-edge: a current edge has no locked target hash.
             None => {
-                // An unlocked source subsumes its outbound new-edge findings, the
-                // way a stale or removed node subsumes its own. Every edge out of
-                // a node with no lock entry is unlocked for one reason, and naming
-                // that reason once beats repeating its consequence per edge.
-                if unlocked.contains(edge.source.as_str()) {
-                    continue;
-                }
                 findings.push(
                     Finding::warn(
                         "new-edge",

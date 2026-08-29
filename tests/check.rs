@@ -442,14 +442,58 @@ fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("stale-edge"), "stdout={stdout:?}");
     assert!(stdout.contains("unlocked-node"), "stdout={stdout:?}");
-    // Assert against the message the rule actually emits. A string that appears
-    // nowhere but in the assertion can never fail.
+    // Assert against the message the rule actually emits. An assertion on the
+    // absence of a phrase that appears nowhere else can never fail.
     assert!(
         stdout.contains("no baseline of its own"),
         "stdout={stdout:?}"
     );
-    assert!(
-        !stdout.contains("not checked"),
-        "the edit was caught by stale-edge in the same run: stdout={stdout:?}"
+}
+
+/// Silencing `unlocked-node` restores the `new-edge` findings it stands in for.
+///
+/// The subsumption is applied after severity and ignore globs, so a node
+/// configured to be quieter does not go dark: it reports what it reported before
+/// the rule existed, with the line numbers `new-edge` carries. Subsuming before
+/// the filter dropped both findings and lost coverage that predates this rule.
+#[test]
+fn silencing_unlocked_node_restores_the_new_edges_it_subsumes() {
+    let dir = TempDir::new().unwrap();
+    let config = MD_CONFIG.to_string();
+    fs::write(dir.path().join("drft.toml"), &config).unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let lock = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(lock.status.success());
+    fs::write(dir.path().join("new.md"), "[a](a.md) and [b](b.md)").unwrap();
+
+    let run = |dir: &std::path::Path| {
+        let out = drft_bin()
+            .args(["-C", dir.to_str().unwrap(), "check"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    let subsumed = run(dir.path());
+    assert!(subsumed.contains("unlocked-node"), "{subsumed}");
+    assert!(!subsumed.contains("new-edge"), "{subsumed}");
+
+    fs::write(
+        dir.path().join("drft.toml"),
+        format!("{config}\n[rules]\nunlocked-node = \"off\"\n"),
+    )
+    .unwrap();
+
+    let silenced = run(dir.path());
+    assert!(!silenced.contains("unlocked-node"), "{silenced}");
+    assert_eq!(
+        silenced.matches("new-edge").count(),
+        2,
+        "both edges must be reported once the subsuming rule is off: {silenced}"
     );
 }

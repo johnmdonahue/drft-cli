@@ -652,18 +652,18 @@ fn locking_a_path_that_became_a_directory_drops_its_entry() {
     );
 }
 
-/// A lockfile that exists but carries no entries is refused by a scoped lock.
+/// A lockfile that parses to zero entries is not refused — there is nothing in it
+/// to lose, so a scoped lock merges into it exactly as it would in a repo that had
+/// never been locked. `no-baseline` is what reports the empty baseline, at
+/// `check`, where it can be promoted to an error.
 ///
-/// A zero-byte file is valid TOML and deserializes to an empty baseline, so a
-/// truncated write lands here rather than in the parse-failure path — and a
-/// scoped lock over one used to replace the baseline with just the named paths.
+/// The sequence this protects: a scoped lock clearing the last reviewed deletion
+/// empties the file, and the next scoped lock must still work.
 #[test]
-fn a_scoped_lock_refuses_an_empty_baseline() {
+fn a_scoped_lock_merges_into_an_empty_baseline() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
-    for name in ["a.md", "b.md", "c.md"] {
-        fs::write(dir.path().join(name), "# Note").unwrap();
-    }
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
     lock_all(dir.path());
     fs::write(dir.path().join("drft.lock"), "").unwrap();
 
@@ -672,13 +672,38 @@ fn a_scoped_lock_refuses_an_empty_baseline() {
         .output()
         .unwrap();
     assert!(
-        !output.status.success(),
-        "an empty baseline must be refused, not replaced"
+        output.status.success(),
+        "an empty baseline has nothing to lose: stderr={:?}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
-        "",
-        "the lockfile was rewritten anyway"
+    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    assert!(
+        lockfile.contains("path = \"a.md\""),
+        "lockfile={lockfile:?}"
+    );
+}
+
+/// `drft lock --all` rewrites the lockfile even when the tree no longer has
+/// anything to record. It is the rebuild: afterwards the file reflects the tree.
+/// Skipping the write left stale entries reported as `removed-node` and
+/// unclearable by the one command whose job is to rewrite the file.
+#[test]
+fn lock_all_rebuilds_even_when_nothing_is_lockable() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "ignore = [\"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    lock_all(dir.path());
+    fs::remove_file(dir.path().join("a.md")).unwrap();
+
+    lock_all(dir.path());
+    let after = check(dir.path());
+    assert!(
+        !after.contains("removed-node"),
+        "a rebuild must clear entries for files that are gone: {after}"
     );
 }
 

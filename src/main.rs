@@ -85,19 +85,13 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
     Ok(())
 }
 
-/// Print a JSON result document carrying the run's hints, raising the
-/// large-projection hint when the rendered document is big enough to warrant it.
-///
-/// The size is measured on the document as it would print, hints included — the
-/// bytes a reader actually pays for. Adding the large-projection hint grows the
-/// document a little past what was measured, which is why the threshold is a
-/// rough budget rather than a promise.
 /// Write a line to stdout, treating a closed reader as success rather than as this
 /// command's failure.
 ///
 /// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
-/// Every command whose document goes through here is covered. The text projection
-/// path is not, and that is #121.
+/// Only callers of this function are covered, which today means `lock` in both
+/// formats. `check` and the text projections still print with `println!` and still
+/// abort — that is #121, and it predates this.
 fn write_stdout_line(line: &str) -> Result<()> {
     use std::io::Write;
     match writeln!(std::io::stdout(), "{line}") {
@@ -106,6 +100,13 @@ fn write_stdout_line(line: &str) -> Result<()> {
     }
 }
 
+/// Print a JSON result document carrying the run's hints, raising the
+/// large-projection hint when the rendered document is big enough to warrant it.
+///
+/// The size is measured on the document as it would print, hints included — the
+/// bytes a reader actually pays for. Adding the large-projection hint grows the
+/// document a little past what was measured, which is why the threshold is a
+/// rough budget rather than a promise.
 fn print_json_document(
     mut document: serde_json::Value,
     count: usize,
@@ -336,11 +337,16 @@ fn run_lock(
 
     if all {
         let locked: Vec<String> = snapshot.nodes.keys().cloned().collect();
-        // Skip the write when there is nothing to baseline, for the same reason
-        // the scoped path does. A `node = []` lockfile is a baseline covering
-        // nothing, and the guard below then reads drft's own output as corruption
-        // and tells the caller to restore it from version control.
-        if !snapshot.nodes.is_empty() {
+        // `--all` is the rebuild: afterwards the file reflects the tree. So it
+        // writes whenever there is something to record, and also whenever a
+        // lockfile already exists — otherwise deleting every lockable file left
+        // the old entries standing, reported as `removed-node`, and unclearable
+        // by the one command whose job is to rewrite the file.
+        //
+        // The only case it skips is a repo with nothing to baseline and no
+        // lockfile yet, where writing would create a `node = []` file asserting
+        // coverage of nothing.
+        if !snapshot.nodes.is_empty() || lock::exists(&graph_root) {
             lock::write(&graph_root, &snapshot)?;
         }
         report_lock(format, &locked, &[], hints)?;
@@ -354,23 +360,29 @@ fn run_lock(
     // whose loss no rule reports. Absent is the ordinary pre-lock state and is
     // fine; unreadable is not something a scoped lock can preserve, so it refuses.
     let read = lock::read(&graph_root, hints)?;
-    let unusable = match &read {
-        // Could not be parsed. `read` already raised `unparseable-lock`.
-        None => lock::exists(&graph_root),
-        // Parsed, but covers nothing while the graph has something to cover. A
-        // zero-byte file is valid TOML and deserializes to an empty baseline, so
-        // a truncated write, a merge resolved to nothing, or `: > drft.lock` all
-        // land here rather than in the parse-failure arm above — and a scoped
-        // lock over one would replace the baseline just as destructively.
-        Some(lock) => lock.nodes.is_empty() && !snapshot.nodes.is_empty(),
-    };
-    if unusable {
+
+    // Refuse only when the file holds entries drft cannot read.
+    //
+    // `read` collapses "absent" and "unparseable" into `None`, and the second is
+    // the destructive one: the bytes carry a baseline, so defaulting to an empty
+    // one and writing would overwrite entries that are still recoverable from the
+    // file or from version control.
+    //
+    // A lockfile that parses to zero entries is not that case and is not refused.
+    // There is nothing in it to lose, so a scoped lock over one cannot destroy
+    // anything — it merges into an empty map, exactly as it does in a repo that
+    // has never been locked. Refusing there blocked a legitimate sequence: a
+    // scoped lock that clears the last reviewed deletion empties the file, and the
+    // next scoped lock then hit a guard complaining about drft's own valid output.
+    // `no-baseline` is what reports an empty baseline, at `check`, where a finding
+    // can be promoted to an error.
+    if read.is_none() && lock::exists(&graph_root) {
         anyhow::bail!(
-            "drft.lock exists but carries no usable baseline, so locking named \
-             paths would replace it with just those paths and drop the rest \
-             without saying so. Restore the file from version control, or run \
-             `drft lock --all` to rebuild it from the current tree — which \
-             asserts every node was reviewed."
+            "drft.lock exists but could not be parsed, so locking named paths \
+             would replace a baseline drft cannot read with just those paths, \
+             dropping the rest without saying so. Restore the file from version \
+             control, or run `drft lock --all` to rebuild it from the current \
+             tree — which asserts every node was reviewed."
         );
     }
     let mut existing = read.unwrap_or_default();
@@ -477,7 +489,7 @@ fn report_lock(
         OutputFormat::Json => print_json_document(
             serde_json::json!({ "locked": locked, "dropped": dropped }),
             locked.len() + dropped.len(),
-            "name fewer paths",
+            "redirect stdout — drft.lock records the same set",
             hints,
         ),
         OutputFormat::Text => {
@@ -624,6 +636,7 @@ fn resolve_lock_node(
             // byte-identical to what the caller typed.
             if let Some(exact) = &exact
                 && exact != &candidate
+                && format!("{exact}.md") != candidate
             {
                 hints.push(
                     Hint::new(
