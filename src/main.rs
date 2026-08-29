@@ -92,6 +92,20 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
 /// bytes a reader actually pays for. Adding the large-projection hint grows the
 /// document a little past what was measured, which is why the threshold is a
 /// rough budget rather than a promise.
+/// Write a line to stdout, treating a closed reader as success rather than as this
+/// command's failure.
+///
+/// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
+/// Every command whose document goes through here is covered. The text projection
+/// path is not, and that is #121.
+fn write_stdout_line(line: &str) -> Result<()> {
+    use std::io::Write;
+    match writeln!(std::io::stdout(), "{line}") {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => other.map_err(Into::into),
+    }
+}
+
 fn print_json_document(
     mut document: serde_json::Value,
     count: usize,
@@ -104,9 +118,9 @@ fn print_json_document(
         Some(hint) => {
             hints.push(hint);
             attach_hints(&mut document, hints)?;
-            println!("{}", serde_json::to_string_pretty(&document)?);
+            write_stdout_line(&serde_json::to_string_pretty(&document)?)?;
         }
-        None => println!("{rendered}"),
+        None => write_stdout_line(&rendered)?,
     }
     Ok(())
 }
@@ -322,7 +336,13 @@ fn run_lock(
 
     if all {
         let locked: Vec<String> = snapshot.nodes.keys().cloned().collect();
-        lock::write(&graph_root, &snapshot)?;
+        // Skip the write when there is nothing to baseline, for the same reason
+        // the scoped path does. A `node = []` lockfile is a baseline covering
+        // nothing, and the guard below then reads drft's own output as corruption
+        // and tells the caller to restore it from version control.
+        if !snapshot.nodes.is_empty() {
+            lock::write(&graph_root, &snapshot)?;
+        }
         report_lock(format, &locked, &[], hints)?;
         return Ok(0);
     }
@@ -362,7 +382,7 @@ fn run_lock(
     // lockfile — so a deleted node can be named to clear its `removed-node` finding.
     let nodes = paths
         .iter()
-        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p))
+        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p, hints))
         .collect::<Result<Vec<_>>>()?;
 
     // Make the lockfile reflect each named path's current state: re-snapshot a node
@@ -482,16 +502,7 @@ fn report_lock(
             for node in dropped {
                 line.push_str(&format!("\n  dropped {node}"));
             }
-            // A closed reader is not this command's failure. `println!` panics on
-            // a broken pipe, so `drft lock --all | head` would abort with exit 101
-            // where it used to print nothing and exit 0. The read verbs panic the
-            // same way on their own output — that is #121, and it is not widened
-            // here by giving `lock` something to print.
-            use std::io::Write;
-            match writeln!(std::io::stdout(), "{line}") {
-                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
-                other => other.map_err(Into::into),
-            }
+            write_stdout_line(&line)
         }
     }
 }
@@ -588,6 +599,7 @@ fn resolve_lock_node(
     root: &Path,
     graph_root: &Path,
     path: &str,
+    hints: &mut Hints,
 ) -> Result<String> {
     // A writer resolves the exact path before any candidate invented from it.
     //
@@ -605,6 +617,23 @@ fn resolve_lock_node(
         .chain(node_candidates(root, graph_root, path));
     for candidate in ordered {
         if composed.nodes.contains_key(&candidate) || existing.nodes.contains_key(&candidate) {
+            // Say so when the resolved node is not the one the argument names
+            // from where it was typed. Run from `docs/` with no `docs/README.md`,
+            // `drft lock README.md` falls through to the root `README.md` — and
+            // reporting the locked key alone cannot show it, because the key is
+            // byte-identical to what the caller typed.
+            if let Some(exact) = &exact
+                && exact != &candidate
+            {
+                hints.push(
+                    Hint::new(
+                        "resolved-elsewhere",
+                        format!("does not name a node from here; locked `{candidate}` instead"),
+                    )
+                    .at(path)
+                    .with_next("name the node's path from the graph root to be sure"),
+                );
+            }
             return Ok(candidate);
         }
     }

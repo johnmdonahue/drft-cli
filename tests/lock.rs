@@ -682,25 +682,91 @@ fn a_scoped_lock_refuses_an_empty_baseline() {
     );
 }
 
-/// A closed reader is not the command's failure. `drft lock --all | head` must not
-/// abort: `println!` panics on a broken pipe, which would exit 101 where the
-/// silent command used to exit 0.
+/// A closed reader is not the command's failure, in either format.
+///
+/// `println!` panics on a broken pipe, so `drft lock --all | head` would abort
+/// with exit 101 where the previously silent command exited 0. Two things make
+/// this test real rather than decorative: the output has to exceed the pipe
+/// buffer (64KB) or no SIGPIPE is ever delivered, and the exit code checked has
+/// to be drft's own — a shell pipeline reports the exit of `head`, which is 0 no
+/// matter how the writer died.
 #[test]
 fn lock_output_survives_a_closed_pipe() {
+    for format in [vec![], vec!["--format", "json"]] {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        // Enough nodes that either rendering comfortably exceeds the pipe buffer.
+        for i in 0..8000 {
+            fs::write(dir.path().join(format!("n{i}.md")), "# Note").unwrap();
+        }
+
+        let mut args = vec!["-C", dir.path().to_str().unwrap()];
+        args.extend(format.iter().copied());
+        args.extend(["lock", "--all"]);
+
+        let mut child = drft_bin()
+            .args(&args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        // Close the read end while the writer is still producing.
+        drop(child.stdout.take());
+        let output = child.wait_with_output().unwrap();
+
+        assert!(
+            output.status.success(),
+            "{format:?} aborted on a closed pipe: status={:?} stderr={:?}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+/// A bare name that names no node from where it was typed says so.
+///
+/// Run from `docs/` with no `docs/README.md`, `drft lock README.md` falls through
+/// to the root `README.md`. Reporting the locked key cannot show that on its own,
+/// because the key is byte-identical to what the caller typed.
+#[test]
+fn a_lock_path_resolving_elsewhere_says_so() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
-    for i in 0..40 {
-        fs::write(dir.path().join(format!("n{i}.md")), "# Note").unwrap();
-    }
+    fs::create_dir(dir.path().join("docs")).unwrap();
+    fs::write(dir.path().join("README.md"), "# Root").unwrap();
+    fs::write(
+        dir.path().join("docs").join("a.md"),
+        "# A\n[r](../README.md)",
+    )
+    .unwrap();
+    lock_all(dir.path());
 
-    let status = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!(
-            "{} -C {} lock --all | head -1",
-            env!("CARGO_BIN_EXE_drft"),
-            dir.path().to_str().unwrap()
-        ))
-        .status()
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().join("docs").to_str().unwrap(),
+            "lock",
+            "README.md",
+        ])
+        .output()
         .unwrap();
-    assert!(status.success(), "piping lock output must not abort");
+    assert!(output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("resolved-elsewhere"),
+        "the climb to the graph root must be reported: stderr={stderr:?}"
+    );
+
+    // The exact spelling stays quiet — the hint fires on a surprise, not on use.
+    let quiet = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "README.md"])
+        .output()
+        .unwrap();
+    let quiet_err = String::from_utf8_lossy(&quiet.stderr);
+    assert!(
+        !quiet_err.contains("resolved-elsewhere"),
+        "an exact path is not a surprise: stderr={quiet_err:?}"
+    );
 }

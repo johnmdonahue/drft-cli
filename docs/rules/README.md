@@ -42,7 +42,7 @@ derives the drift findings by joining the graph to the lockfile;
 | `unresolved-edge`     | An edge target has no defining node (URIs excepted)             |
 | `unresolved-fragment` | A link's `#fragment` names no anchor its target defines         |
 | `detached-node`       | A node has no inbound or outbound edges (directories excepted)  |
-| `unlocked-node`       | A lockable node has no lock entry, so its drift is unchecked    |
+| `unlocked-node`       | A lockable node has no lock entry, so it has no baseline        |
 | `no-baseline`         | The lockfile is absent or has no entries, so nothing is checked |
 
 **A baseline that does not exist is reported, not assumed.** `drft check` derives
@@ -84,6 +84,11 @@ of `off` or an `ignore` glob:
 [rules.unlocked-node]
 ignore = ["src/**", "tests/**"]
 ```
+
+Narrowing it this way reinstates exactly the blindness the rule exists to report:
+an ignored path with no lock entry is unchecked and now says nothing about it.
+That is a reasonable trade for a tree you do not track, and a bad one for a tree
+you do, so scope the glob to the former.
 
 A node with no entry of its own can still be the target of a locked edge, whose
 recorded target hash catches an edit to it. `unlocked-node` reports the absent

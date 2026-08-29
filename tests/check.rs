@@ -377,17 +377,26 @@ fn an_unlocked_node_subsumes_its_new_edges() {
 #[test]
 fn a_graph_with_nothing_lockable_reports_no_baseline_nothing() {
     let dir = TempDir::new().unwrap();
+    // Top-level `ignore`, not a graph key — `[graphs.*]` denies unknown fields, so
+    // an `ignore` inside one is a config error that exits 2 with empty stdout, and
+    // an assertion on absent output would pass without testing anything.
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\nignore = [\"**/*.md\"]\n",
+        "ignore = [\"**/*.md\", \"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
     fs::create_dir(dir.path().join("empty")).unwrap();
+    fs::write(dir.path().join("empty").join("a.md"), "# A").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
+    assert!(
+        output.status.success(),
+        "config must be valid or this asserts nothing: stderr={:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("no-baseline"),
@@ -433,8 +442,14 @@ fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("stale-edge"), "stdout={stdout:?}");
     assert!(stdout.contains("unlocked-node"), "stdout={stdout:?}");
+    // Assert against the message the rule actually emits. A string that appears
+    // nowhere but in the assertion can never fail.
     assert!(
-        !stdout.contains("drift in this file is not checked"),
+        stdout.contains("no baseline of its own"),
+        "stdout={stdout:?}"
+    );
+    assert!(
+        !stdout.contains("not checked"),
         "the edit was caught by stale-edge in the same run: stdout={stdout:?}"
     );
 }
