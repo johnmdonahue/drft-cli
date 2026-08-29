@@ -50,7 +50,7 @@ npm uses **trusted publishing** (OIDC) — no token needed. Configure at https:/
 # Edit Cargo.toml: version = "0.3.0"
 # Edit CHANGELOG.md: add ## 0.3.0 section
 git checkout -b release/v0.3.0
-drft lock Cargo.toml CHANGELOG.md # both are tracked nodes; CI runs drft check
+drft lock Cargo.toml CHANGELOG.md # local bookkeeping only — see above
 git commit -am "Release v0.3.0"
 git push -u origin release/v0.3.0
 gh pr create --title "Release v0.3.0"
