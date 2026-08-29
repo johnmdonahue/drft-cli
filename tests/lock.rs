@@ -348,14 +348,22 @@ fn lock_reports_what_it_wrote() {
         .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
         .output()
         .unwrap();
+    // `--all` reports the count alone: it resolves nothing, so a per-node listing
+    // would be a copy of `drft.lock` and, on a large graph, thousands of lines.
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.starts_with("locked 3 nodes"), "stdout={stdout:?}");
-    for name in ["index.md", "setup.md", "drft.toml"] {
-        assert!(
-            stdout.contains(name),
-            "{name} missing from stdout={stdout:?}"
-        );
-    }
+    assert_eq!(stdout, "locked 3 nodes\n", "stdout={stdout:?}");
+
+    // A scoped lock names what it locked, which is how a resolution the caller did
+    // not expect becomes visible at the moment it happens.
+    let scoped = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "index.md"])
+        .output()
+        .unwrap();
+    let scoped_out = String::from_utf8_lossy(&scoped.stdout);
+    assert_eq!(
+        scoped_out, "locked 1 node\n  locked  index.md\n",
+        "stdout={scoped_out:?}"
+    );
 
     let output = drft_bin()
         .args([
@@ -906,5 +914,37 @@ fn a_rebuild_over_an_unreadable_lockfile_says_its_drops_are_unlisted() {
     assert!(
         !stderr.contains("unparseable-lock"),
         "a successful rebuild must not warn about the file it just replaced: {stderr:?}"
+    );
+}
+
+/// A locked path that carries no content to snapshot, and is not a directory,
+/// says why rather than reporting a silent success.
+///
+/// An escaping symlink is a node in the graph but has no hash and no outbound
+/// edge, so it is never a lock entry — the same `locked 0 nodes` a directory used
+/// to give with no explanation.
+#[test]
+fn locking_a_path_with_nothing_to_snapshot_says_why() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+    let outside = TempDir::new().unwrap();
+    let target = outside.path().join("elsewhere.md");
+    fs::write(&target, "# Elsewhere").unwrap();
+    std::os::unix::fs::symlink(&target, dir.path().join("escaping.md")).unwrap();
+    lock_all(dir.path());
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "escaping.md"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("locked 0 nodes"), "stdout={stdout:?}");
+    assert!(
+        stderr.contains("nothing-to-lock"),
+        "a zero-node lock must say why: stderr={stderr:?}"
     );
 }

@@ -52,14 +52,19 @@ becomes a no-op. That used to be indistinguishable from a clean run: no findings
 exit 0, either way. `no-baseline` states it once, at the run rather than per node.
 
 It fires on three states, which are one fact — no usable baseline: the lockfile is
-absent, it carries no entries, or it could not be parsed. It stays quiet when
-nothing in the graph could have been locked in the first place, since an absent
-baseline over a tree of directories alone covers everything there is to cover.
+absent, it carries no entries, or it could not be parsed. An unparseable lockfile
+also raises the `unparseable-lock` hint, which names the cause; the finding reports
+the consequence. `no-baseline` stays quiet when nothing in the graph could have
+been locked in the first place, since an absent baseline over a tree of directories
+alone covers everything there is to cover.
 
-An **empty** lockfile still runs the staleness rules, where an absent one does
-not. Absent is the ordinary state of a repo that has never locked, and one finding
-per file would bury it; empty means a baseline was established and then emptied, so
-every lockable node really is unlocked and `unlocked-node` says so per node. The last also raises the
+**An empty lockfile still runs the staleness rules. An absent or unparseable one
+does not.** Absent is the ordinary state of a repo that has never locked, and one
+finding per file would bury it. Unparseable means the baseline may be intact and
+merely unreadable, so reporting every node as unlocked would assert something drft
+cannot know. Empty means a baseline was established and then emptied — every
+lockable node really is unlocked, and `unlocked-node` says so per node, which is
+what keeps a promoted rule gating in the state where it matters most. The last also raises the
 `unparseable-lock` hint, which is what names the cause; the finding reports the
 consequence.
 

@@ -385,7 +385,7 @@ fn run_lock(
         if !snapshot.nodes.is_empty() || lock::exists(&graph_root) {
             lock::write(&graph_root, &snapshot)?;
         }
-        report_lock(format, &locked, &dropped, hints)?;
+        report_lock(format, all, &locked, &dropped, hints)?;
         return Ok(0);
     }
 
@@ -471,9 +471,11 @@ fn run_lock(
                     .get(&node)
                     .and_then(drft::model::Node::fs_type);
                 // A node that is in the graph but carries nothing to snapshot —
-                // an escaping symlink, an unreadable file — reaches the same
-                // silent `locked 0 nodes` a directory used to. Same shape, same
-                // remedy: say why, rather than let success stand for nothing.
+                // an escaping symlink, or a file drft could not read that has no
+                // entry yet — reaches the same silent `locked 0 nodes` a directory
+                // used to. Same shape, same remedy: say why, rather than let
+                // success stand for nothing. One that *does* have an entry takes
+                // the drop above and is reported as a drop instead.
                 if !was_dropped && fs_type.is_some() && fs_type != Some("directory") {
                     hints.push(
                         Hint::new(
@@ -484,7 +486,7 @@ fn run_lock(
                         .with_next("name a file whose content drft can hash"),
                     );
                 }
-                if !was_dropped && fs_type == Some("directory") {
+                if fs_type == Some("directory") {
                     // Count what could have been locked. Sub-directories carry no
                     // hash and no outbound edge, so they are never lock entries,
                     // and reporting them as "not locked" would count things that
@@ -521,7 +523,7 @@ fn run_lock(
     if !locked.is_empty() || !dropped.is_empty() {
         lock::write(&graph_root, &existing)?;
     }
-    report_lock(format, &locked, &dropped, hints)?;
+    report_lock(format, all, &locked, &dropped, hints)?;
     Ok(0)
 }
 
@@ -535,6 +537,7 @@ fn run_lock(
 /// rather than at the next `check`.
 fn report_lock(
     format: OutputFormat,
+    all: bool,
     locked: &[String],
     dropped: &[String],
     hints: &mut Hints,
@@ -562,8 +565,18 @@ fn report_lock(
                     plural(dropped.len(), "entry", "entries")
                 ));
             }
-            for node in locked {
-                line.push_str(&format!("\n  locked  {node}"));
+            // Name the nodes for a scoped lock, count them for `--all`.
+            //
+            // The names are here so a resolution the caller did not expect — a
+            // bare name matching a file in another directory — is visible at the
+            // moment it happens. `--all` resolves nothing, so its listing would be
+            // a copy of `drft.lock` and, on a large graph, thousands of lines of
+            // it. `dropped` is always named: it is never long, and an entry
+            // leaving the baseline is the half worth reading.
+            if !all {
+                for node in locked {
+                    line.push_str(&format!("\n  locked  {node}"));
+                }
             }
             for node in dropped {
                 line.push_str(&format!("\n  dropped {node}"));

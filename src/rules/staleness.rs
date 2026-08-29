@@ -111,18 +111,16 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                 }
             }
             // new-edge: a current edge has no locked target hash.
-            None => {
-                findings.push(
-                    Finding::warn(
-                        "new-edge",
-                        &edge.source,
-                        edge_provenance(edge),
-                        "not locked",
-                    )
-                    .with_target(&edge.target)
-                    .with_lines(edge.lines()),
-                );
-            }
+            None => findings.push(
+                Finding::warn(
+                    "new-edge",
+                    &edge.source,
+                    edge_provenance(edge),
+                    "not locked",
+                )
+                .with_target(&edge.target)
+                .with_lines(edge.lines()),
+            ),
         }
     }
 
