@@ -4,7 +4,8 @@
 //!
 //! Built-in rules are always on at their default `warn` severity; config can
 //! promote a rule to `error`, silence it with `off`, or `ignore` subjects by
-//! glob. Staleness rules run only when a lockfile is present.
+//! glob. Staleness rules run only against a usable baseline; when there is none,
+//! `no-baseline` says so once instead.
 
 use crate::config::{Config, RuleSeverity};
 use crate::diagnostic::Finding;
@@ -12,10 +13,48 @@ use crate::lock::Lock;
 use crate::model::Graph;
 use crate::rules::{staleness, structural};
 
-/// Evaluate all v0.8 rules and apply config. Staleness rules run only with a
-/// lockfile; structural rules always run.
+/// Evaluate all v0.8 rules and apply config. Staleness rules run only against a
+/// usable baseline; structural rules always run.
 pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
+
+    // A baseline that does not exist and a baseline with no entries are the same
+    // fact: nothing to compare against. Both used to leave `check` silent, so a
+    // clean run and an absent baseline were indistinguishable — exit 0 either way,
+    // no finding either way.
+    //
+    // This is a finding rather than a hint on purpose. Hints never change an exit
+    // code, so a hint-only answer leaves an automated caller exactly as blind as
+    // it was. As a rule it defaults to `warn` — the first `check` of a new repo
+    // stays quiet — and a repo that wants the missing baseline to fail its run
+    // promotes it to `error` like any other rule.
+    // Say nothing when there is nothing a baseline could have covered: a graph of
+    // directories alone is consistent with having no lockfile.
+    let anything_to_cover = !Lock::from_composed(graph).nodes.is_empty();
+    let empty_baseline = lock.is_some_and(|lock| lock.nodes.is_empty());
+    if anything_to_cover && (lock.is_none() || empty_baseline) {
+        // The message says what is true of the run rather than guessing why.
+        // `lock` is `None` for a file that is absent and for one that could not be
+        // parsed — the latter carries plenty of entries, so "no lock entries"
+        // would be false, while `unparseable-lock` on the same run says something
+        // different and correct.
+        findings.push(Finding::warn(
+            "no-baseline",
+            "drft.lock",
+            Vec::new(),
+            "no usable baseline, so no file is checked for drift",
+        ));
+    }
+
+    // An empty lockfile still runs the staleness rules; an absent one does not.
+    //
+    // For the message the two are one fact. For the gate they are not. Absent is
+    // the ordinary state of a repo that has never locked, and reporting one
+    // finding per file there would bury the quick start. Empty means a baseline
+    // was established and then emptied — every lockable node really is unlocked,
+    // and that is the state worth failing on. Skipping the rules there disarmed
+    // them all: a repo gating on `new-edge` stopped failing, and `unlocked-node`
+    // fired zero times in the one state where it is true of every node.
     if let Some(lock) = lock {
         findings.extend(staleness::evaluate(graph, lock));
     }
@@ -37,6 +76,42 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
         finding.severity = severity;
         true
     });
+
+    // An unlocked node subsumes its outbound `new-edge` findings: the node having
+    // no baseline is the one fact behind every one of them.
+    //
+    // Decided here rather than where the findings are derived, and only over what
+    // survived the filter above. Subsuming earlier meant that silencing
+    // `unlocked-node` — with `off`, or with the `ignore` glob the rules reference
+    // recommends for a source tree — also dropped the `new-edge` findings it was
+    // standing in for, so a node configured to be quieter went completely dark and
+    // lost coverage that predates this rule.
+    // Subsuming must not weaken the run. A `warn` `unlocked-node` standing in for
+    // an `error` `new-edge` would turn exit 1 into exit 0 — a repo gating CI on
+    // `new-edge` would stop failing without anything saying so, which is the shape
+    // of failure this whole change exists to remove. So a finding is only
+    // subsumed by one at least as severe as itself.
+    let subsuming: std::collections::HashMap<String, RuleSeverity> = findings
+        .iter()
+        .filter(|f| f.name == "unlocked-node")
+        .map(|f| (f.subject.clone(), f.severity))
+        .collect();
+    if !subsuming.is_empty() {
+        // Only Warn and Error can reach here — the filter above dropped every Off
+        // finding — but the Off arm is written out rather than assumed, so the
+        // rule stays true if that filter ever moves.
+        let at_least_as_severe = |standing: RuleSeverity, subsumed: RuleSeverity| match standing {
+            RuleSeverity::Error => true,
+            RuleSeverity::Warn => subsumed != RuleSeverity::Error,
+            RuleSeverity::Off => false,
+        };
+        findings.retain(|f| {
+            f.name != "new-edge"
+                || !subsuming
+                    .get(&f.subject)
+                    .is_some_and(|standing| at_least_as_severe(*standing, f.severity))
+        });
+    }
 
     // Lines before message, so several findings on one subject read in the order
     // a reader would walk the file rather than in fragment byte order.

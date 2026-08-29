@@ -5,7 +5,9 @@ use tempfile::TempDir;
 
 /// Every JSON *result document* carries a `hints` key, empty included, so a
 /// consumer can read `.hints[]` without first testing whether the key exists.
-/// `graph` and `lock` are excluded on purpose and covered separately below.
+/// `graph` is excluded on purpose and covered separately below: its JSON root is
+/// a JGF document, where a sibling key would cost the translatability the format
+/// was chosen for. `lock` prints a result document and so belongs here.
 #[test]
 fn json_documents_always_carry_a_hints_key() {
     let dir = TempDir::new().unwrap();
@@ -17,6 +19,7 @@ fn json_documents_always_carry_a_hints_key() {
         vec!["edges"],
         vec!["check"],
         vec!["impact", "index.md"],
+        vec!["lock", "index.md"],
     ] {
         let mut args = vec!["-C", dir.path().to_str().unwrap(), "--format", "json"];
         args.extend(command.iter().copied());
@@ -244,11 +247,14 @@ fn unparseable_lock_hints_and_check_still_runs() {
 /// must still reach the reader — in JSON, as an envelope on stderr, the shape
 /// the error path already uses.
 ///
-/// The case that matters: an unparseable lockfile reads as absent, so a scoped
-/// lock rewrites the file with only the named paths. Losing the baseline in
-/// silence is the failure; the hint is the only thing standing between the two.
+/// The case that matters: an unparseable lockfile used to read as absent, so a
+/// scoped lock replaced the whole file with only the paths named — every other
+/// entry gone, and the nodes behind them left as unlocked leaves whose loss no
+/// rule reports. A hint cannot mitigate that, because the destruction happens
+/// anyway. A scoped lock cannot preserve a baseline it cannot read, so it refuses,
+/// and the assertion that matters is that the file is still there afterward.
 #[test]
-fn lock_hints_reach_stderr_when_there_is_no_document() {
+fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
     for format in [vec![], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
@@ -261,20 +267,33 @@ fn lock_hints_reach_stderr_when_there_is_no_document() {
             .output()
             .unwrap();
         assert!(baseline.status.success());
-        fs::write(dir.path().join("drft.lock"), "not valid toml {{{").unwrap();
+
+        let corrupt = "not valid toml {{{";
+        fs::write(dir.path().join("drft.lock"), corrupt).unwrap();
 
         let mut args = vec!["-C", dir.path().to_str().unwrap()];
         args.extend(format.iter().copied());
         args.extend(["lock", "a.md"]);
         let output = drft_bin().args(&args).output().unwrap();
 
+        assert!(
+            !output.status.success(),
+            "{format:?} should refuse rather than truncate the baseline"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+            corrupt,
+            "{format:?} rewrote a lockfile it could not read"
+        );
+
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("unparseable-lock"),
-            "{format:?} lost the hint entirely: stderr={stderr:?}"
+            stderr.contains("could not be parsed"),
+            "{format:?} refused without saying why: stderr={stderr:?}"
         );
         if !format.is_empty() {
-            // JSON in, JSON out: a consumer parsing stderr keeps working.
+            // JSON in, JSON out: hints raised before a failure ride the error
+            // envelope on stderr, so a consumer parsing stderr keeps working.
             let v: serde_json::Value =
                 serde_json::from_str(stderr.trim()).expect("stderr is a JSON envelope");
             assert_eq!(v["hints"][0]["name"], "unparseable-lock");

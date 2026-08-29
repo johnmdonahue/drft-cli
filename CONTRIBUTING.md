@@ -78,13 +78,13 @@ The substrate is a **set of independent graphs**; composition is a projection ov
 - **[`src/builders/`](src/builders/mod.rs)** — turn bytes into a per-graph JGF fragment. `fs` types each entry — file, symlink, or directory — and emits symlink edges; `markdown`/`frontmatter` are text builders that wrap the parsers in [`src/parsers/`](src/parsers/mod.rs).
 - **[`src/graphs/`](src/graphs/mod.rs)** — wire each graph and auto-hash. Hashing is drft's job, done once per node at this seam — sources and builders never hash.
 - **[`src/compose.rs`](src/compose.rs)** — merge the set by path, nest metadata under `@<graph>`, stamp `_graphs` provenance, dedup edges. The only module that knows about more than one graph.
-- **[`src/rules/`](src/rules/check.rs)** — findings over the composed graph. `staleness.rs` joins the lockfile; `structural.rs` reads shape; `check.rs` applies config and severity.
+- **[`src/rules/`](src/rules/check.rs)** — findings over the composed graph. `staleness.rs` joins the lockfile; `structural.rs` reads shape; `check.rs` applies config and severity, and owns the findings about the run itself rather than about a node — the ones that have to fire when there is no lockfile to join.
 
 Core types live in [`src/model.rs`](src/model.rs); path/URI/hash helpers in [`src/util.rs`](src/util.rs); the lockfile in [`src/lock.rs`](src/lock.rs).
 
 ## Adding a rule
 
-1. Add the finding to `src/rules/staleness.rs` (lock-derived) or `src/rules/structural.rs` (shape-derived); return `Finding`s.
+1. Add the finding to `src/rules/staleness.rs` (lock-derived) or `src/rules/structural.rs` (shape-derived); return `Finding`s. A finding about the run rather than about a node — one that has to fire when there is no lockfile to join — belongs in `check.rs` instead, because `staleness.rs` only runs against a usable baseline.
 2. Add the rule name to `BUILTIN_RULES` in [`src/config.rs`](src/config.rs) so configured severities don't warn as unknown.
 3. Add unit tests in the rule module and an integration test in `tests/`.
 4. Document it in the [rules reference](docs/rules/README.md).

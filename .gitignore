@@ -24,3 +24,9 @@
 # bare name would otherwise swallow them: the ones already tracked survive, and
 # a newly added example would not.
 !examples/*/drft.toml
+
+# An example's lockfile is not. Each example's README walks a reader through
+# `drft lock --all` against it, so running the docs writes one — a generated
+# artifact of trying the tool, which should no more be committed than the root
+# lockfile is. The root entry is anchored, so it does not reach these.
+examples/*/drft.lock

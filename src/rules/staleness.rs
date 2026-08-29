@@ -4,8 +4,12 @@
 //! dependency cycle can't loop or produce ambiguous staleness.
 //!
 //! Findings: `stale-node`, `stale-edge`, `new-edge`, `removed-edge`,
-//! `removed-node`. A stale node subsumes its outbound `stale-edge` findings; a
-//! removed node subsumes its `removed-edge` findings.
+//! `removed-node`, `unlocked-node`. A stale node subsumes its outbound
+//! `stale-edge` findings and a removed node subsumes its `removed-edge` findings,
+//! both decided here. An unlocked node subsumes its outbound `new-edge` findings
+//! too, but that one is decided in [`super::check`] after severity and ignore
+//! globs are applied — silencing the subsuming rule must not silence what it
+//! subsumes.
 
 use std::collections::HashSet;
 
@@ -18,6 +22,34 @@ use crate::rules::{edge_provenance, provenance, short_hash};
 pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut stale_nodes: HashSet<&str> = HashSet::new();
+
+    // unlocked-node: a node that *could* be locked has no entry in the lockfile,
+    // so every rule below compares it against nothing and reports nothing.
+    //
+    // Which nodes could be locked is asked of `Lock::from_composed` rather than
+    // re-derived here. A directory and an unreferenced escaping symlink carry no
+    // hash and no outbound edge, so they are absent from a correct lockfile by
+    // design — a rule with its own idea of the predicate would report every one
+    // of them as a defect the moment it landed.
+    let lockable = Lock::from_composed(graph);
+    for path in lockable.nodes.keys() {
+        if lock.nodes.contains_key(path) {
+            continue;
+        }
+        let Some((path, node)) = graph.nodes.get_key_value(path) else {
+            continue;
+        };
+        findings.push(Finding::warn(
+            "unlocked-node",
+            path,
+            provenance(&node.metadata),
+            // Not "drift is not checked": a node with no entry of its own can
+            // still be the target of a locked edge, whose recorded target hash
+            // catches the same edit as `stale-edge` on the source. Claiming the
+            // file is unchecked would contradict that finding in the same output.
+            "no lock entry, so this file has no baseline of its own",
+        ));
+    }
 
     // stale-node: a node's current hash differs from its locked hash.
     for (path, node) in &graph.nodes {

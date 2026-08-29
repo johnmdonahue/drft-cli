@@ -85,6 +85,22 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
     Ok(())
 }
 
+/// Write a line to stdout, treating a closed reader as success rather than as this
+/// command's failure.
+///
+/// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
+/// Only callers of this function are covered: `lock` in both formats, and every
+/// JSON result document, since `print_json_document` routes through here. `check`
+/// and the text projections still print with `println!` and still abort — that is
+/// #121, and it predates this.
+fn write_stdout_line(line: &str) -> Result<()> {
+    use std::io::Write;
+    match writeln!(std::io::stdout(), "{line}") {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => other.map_err(Into::into),
+    }
+}
+
 /// Print a JSON result document carrying the run's hints, raising the
 /// large-projection hint when the rendered document is big enough to warrant it.
 ///
@@ -104,9 +120,9 @@ fn print_json_document(
         Some(hint) => {
             hints.push(hint);
             attach_hints(&mut document, hints)?;
-            println!("{}", serde_json::to_string_pretty(&document)?);
+            write_stdout_line(&serde_json::to_string_pretty(&document)?)?;
         }
-        None => println!("{rendered}"),
+        None => write_stdout_line(&rendered)?,
     }
     Ok(())
 }
@@ -181,7 +197,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
 
     let result = match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { paths, all } => run_lock(&root, paths, *all, hints),
+        Commands::Lock { paths, all } => run_lock(&root, cli.format, paths, *all, hints),
         Commands::Impact {
             paths,
             depth,
@@ -205,7 +221,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
     // rather than inferred: a command that printed a result document embedded its
     // hints there and is done. Everything else has to route them somewhere.
     //
-    // Three commands land here. `init` and `lock` print no document at all;
+    // Two commands land here. `init` prints no document at all;
     // `drft graph --format json` prints one whose root is exactly `graph`, a JGF
     // document rather than drft's own envelope, where a sibling key would cost
     // the translatability the format was chosen for.
@@ -290,7 +306,13 @@ files = ["**/*.md"]
 /// over when a command substitution matches nothing, so inferring "every node"
 /// from an empty argument list would turn a scoped invocation into a whole-graph
 /// assertion silently, in a file that outlives the session.
-fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Result<i32> {
+fn run_lock(
+    root: &Path,
+    format: OutputFormat,
+    paths: &[String],
+    all: bool,
+    hints: &mut Hints,
+) -> Result<i32> {
     // Both guards are pure argv, so they answer before any graph work.
     if paths.is_empty() && !all {
         anyhow::bail!(
@@ -315,11 +337,91 @@ fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Resu
     let snapshot = lock::Lock::from_composed(&composed);
 
     if all {
-        lock::write(&graph_root, &snapshot)?;
+        let locked: Vec<String> = snapshot.nodes.keys().cloned().collect();
+        // Report what the rebuild removes, not just what it writes. `--all` used
+        // to answer `dropped: []` unconditionally because it never read the file
+        // it was replacing — so widening an `ignore` pattern and rebuilding took
+        // entries out of the baseline and said nothing, which is the one silent
+        // route to lost coverage this change would otherwise have left standing.
+        // Read quietly: this is a rebuild, so `unparseable-lock`'s advice to run
+        // `drft lock --all` would reach the caller attached to the successful run
+        // of that very command.
+        let previous = lock::read_quiet(&graph_root);
+        let dropped: Vec<String> = previous
+            .as_ref()
+            .map(|existing| {
+                existing
+                    .nodes
+                    .keys()
+                    .filter(|path| !snapshot.nodes.contains_key(*path))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        // An empty `dropped` must mean "nothing was dropped", not "I could not
+        // tell". A rebuild over a lockfile drft cannot read discards whatever it
+        // held, and reporting `[]` for that is the silent loss this report exists
+        // to remove — so say the list is incomplete rather than let it read as
+        // complete.
+        if previous.is_none() && lock::exists(&graph_root) {
+            hints.push(
+                Hint::new(
+                    "replaced-unreadable-lock",
+                    "could not be read, so the entries this rebuild discarded are not listed",
+                )
+                .at("drft.lock")
+                .with_next("compare against the previous lockfile in version control"),
+            );
+        }
+        // `--all` is the rebuild: afterwards the file reflects the tree. So it
+        // writes whenever there is something to record, and also whenever a
+        // lockfile already exists — otherwise deleting every lockable file left
+        // the old entries standing, reported as `removed-node`, and unclearable
+        // by the one command whose job is to rewrite the file.
+        //
+        // The only case it skips is a repo with nothing to baseline and no
+        // lockfile yet, where writing would create a `node = []` file asserting
+        // coverage of nothing.
+        if !snapshot.nodes.is_empty() || lock::exists(&graph_root) {
+            lock::write(&graph_root, &snapshot)?;
+        }
+        report_lock(format, all, &locked, &dropped, hints)?;
         return Ok(0);
     }
 
-    let mut existing = lock::read(&graph_root, hints)?.unwrap_or_default();
+    // `read` returns `None` for a lockfile that is absent and for one that cannot
+    // be parsed. Defaulting both to an empty baseline meant a scoped lock over a
+    // corrupt lockfile silently replaced the whole file with only the paths named:
+    // every other entry was gone, and the nodes behind them became unlocked leaves
+    // whose loss no rule reports. Absent is the ordinary pre-lock state and is
+    // fine; unreadable is not something a scoped lock can preserve, so it refuses.
+    let read = lock::read(&graph_root, hints)?;
+
+    // Refuse only when the file holds entries drft cannot read.
+    //
+    // `read` collapses "absent" and "unparseable" into `None`, and the second is
+    // the destructive one: the bytes carry a baseline, so defaulting to an empty
+    // one and writing would overwrite entries that are still recoverable from the
+    // file or from version control.
+    //
+    // A lockfile that parses to zero entries is not that case and is not refused.
+    // There is nothing in it to lose, so a scoped lock over one cannot destroy
+    // anything — it merges into an empty map, exactly as it does in a repo that
+    // has never been locked. Refusing there blocked a legitimate sequence: a
+    // scoped lock that clears the last reviewed deletion empties the file, and the
+    // next scoped lock then hit a guard complaining about drft's own valid output.
+    // `no-baseline` is what reports an empty baseline, at `check`, where a finding
+    // can be promoted to an error.
+    if read.is_none() && lock::exists(&graph_root) {
+        anyhow::bail!(
+            "drft.lock exists but could not be parsed, so locking named paths \
+             would replace a baseline drft cannot read with just those paths, \
+             dropping the rest without saying so. Restore the file from version \
+             control, or run `drft lock --all` to rebuild it from the current \
+             tree — which asserts every node was reviewed."
+        );
+    }
+    let mut existing = read.unwrap_or_default();
 
     // Resolve every path before writing any of them. A typo in the third of five
     // must not leave the first two locked: a partial lock claims some files were
@@ -328,25 +430,160 @@ fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Resu
     // lockfile — so a deleted node can be named to clear its `removed-node` finding.
     let nodes = paths
         .iter()
-        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p))
+        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p, hints))
         .collect::<Result<Vec<_>>>()?;
 
     // Make the lockfile reflect each named path's current state: re-snapshot a node
     // that carries content, and drop the entry for anything that no longer does —
     // a deleted file, or a path that has become a hash-less directory. Dropping the
     // entry for a reviewed deletion is how a `removed-node` finding is cleared.
+    //
+    // A directory resolves to a real node but never carries a lock entry, so it
+    // reaches the `None` arm and removes a key that was never there. That used to
+    // be the whole of `drft lock <dir>`: exit 0, no output, nothing written. Say
+    // so rather than letting silence read as success.
+    let mut locked = Vec::new();
+    let mut dropped = Vec::new();
     for node in nodes {
         match snapshot.nodes.get(&node) {
             Some(entry) => {
-                existing.nodes.insert(node, entry.clone());
+                existing.nodes.insert(node.clone(), entry.clone());
+                // Two spellings of one path are one lock. A shell substitution
+                // that concatenates two diffs will name the same file twice, and
+                // a count that says `locked 2 nodes` for one file is exactly the
+                // kind of untrustworthy number this report exists to replace.
+                if !locked.contains(&node) {
+                    locked.push(node);
+                }
             }
             None => {
-                existing.nodes.remove(&node);
+                // Dropping the entry happens first and unconditionally. A path
+                // that used to be a file and is now a directory still has a stale
+                // entry to clear, and that is the reviewed-deletion case naming it
+                // exists for — skipping the drop left a `removed-edge` finding
+                // that nothing short of a whole-graph lock could clear.
+                let was_dropped = existing.nodes.remove(&node).is_some();
+                if was_dropped {
+                    dropped.push(node.clone());
+                }
+                let fs_type = composed
+                    .nodes
+                    .get(&node)
+                    .and_then(drft::model::Node::fs_type);
+                // A node that is in the graph but carries nothing to snapshot —
+                // an escaping symlink, or a file drft could not read that has no
+                // entry yet — reaches the same silent `locked 0 nodes` a directory
+                // used to. Same shape, same remedy: say why, rather than let
+                // success stand for nothing. One that *does* have an entry takes
+                // the drop above and is reported as a drop instead.
+                if !was_dropped && fs_type.is_some() && fs_type != Some("directory") {
+                    hints.push(
+                        Hint::new(
+                            "nothing-to-lock",
+                            "carries no content to snapshot, so it has no lock entry",
+                        )
+                        .at(&node)
+                        .with_next("name a file whose content drft can hash"),
+                    );
+                }
+                if fs_type == Some("directory") {
+                    // Count what could have been locked. Sub-directories carry no
+                    // hash and no outbound edge, so they are never lock entries,
+                    // and reporting them as "not locked" would count things that
+                    // cannot be. Say what this run did rather than assert a state:
+                    // a descendant locked by an earlier run is still locked, and
+                    // this run simply did not touch it.
+                    let prefix = format!("{node}/");
+                    let beneath = snapshot
+                        .nodes
+                        .keys()
+                        .filter(|k| k.starts_with(&prefix))
+                        .count();
+                    hints.push(
+                        Hint::new(
+                            "directory-lock",
+                            format!(
+                                "is a directory, which carries no content to snapshot — this run locked none of the {beneath} lockable {} beneath it",
+                                if beneath == 1 { "node" } else { "nodes" },
+                            ),
+                        )
+                        .at(&node)
+                        .with_next("name the files you reviewed, or pass `--all`"),
+                    );
+                }
             }
         }
     }
-    lock::write(&graph_root, &existing)?;
+
+    // Write only when something changed. Writing unconditionally meant that
+    // `drft lock <dir>` in a repo that had never been locked created a valid,
+    // parseable, zero-entry lockfile — a baseline covering nothing, produced by a
+    // command that reported success, which made every staleness rule a no-op while
+    // the file's presence made it look established.
+    if !locked.is_empty() || !dropped.is_empty() {
+        lock::write(&graph_root, &existing)?;
+    }
+    report_lock(format, all, &locked, &dropped, hints)?;
     Ok(0)
+}
+
+/// Report what a lock actually wrote.
+///
+/// `lock` printed nothing at all until this landed, so a caller could not tell a
+/// lock that covered five files from one that covered none without reading
+/// `drft.lock` by hand. The count is what makes the difference observable; naming
+/// the nodes is what makes a resolution the caller did not expect — a bare name
+/// that matched a file in another directory — visible at the moment it happens
+/// rather than at the next `check`.
+fn report_lock(
+    format: OutputFormat,
+    all: bool,
+    locked: &[String],
+    dropped: &[String],
+    hints: &mut Hints,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => print_json_document(
+            serde_json::json!({ "locked": locked, "dropped": dropped }),
+            locked.len() + dropped.len(),
+            "redirect stdout — drft.lock records the same set",
+            hints,
+        ),
+        OutputFormat::Text => {
+            fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
+                if n == 1 { one } else { many }
+            }
+            let mut line = format!(
+                "locked {} {}",
+                locked.len(),
+                plural(locked.len(), "node", "nodes")
+            );
+            if !dropped.is_empty() {
+                line.push_str(&format!(
+                    ", dropped {} {}",
+                    dropped.len(),
+                    plural(dropped.len(), "entry", "entries")
+                ));
+            }
+            // Name the nodes for a scoped lock, count them for `--all`.
+            //
+            // The names are here so a resolution the caller did not expect — a
+            // bare name matching a file in another directory — is visible at the
+            // moment it happens. `--all` resolves nothing, so its listing would be
+            // a copy of `drft.lock` and, on a large graph, thousands of lines of
+            // it. `dropped` is always named: it is never long, and an entry
+            // leaving the baseline is the half worth reading.
+            if !all {
+                for node in locked {
+                    line.push_str(&format!("\n  locked  {node}"));
+                }
+            }
+            for node in dropped {
+                line.push_str(&format!("\n  dropped {node}"));
+            }
+            write_stdout_line(&line)
+        }
+    }
 }
 
 /// Candidate node keys for a user-supplied path, most-specific first.
@@ -441,9 +678,42 @@ fn resolve_lock_node(
     root: &Path,
     graph_root: &Path,
     path: &str,
+    hints: &mut Hints,
 ) -> Result<String> {
-    for candidate in node_candidates(root, graph_root, path) {
+    // A writer resolves the exact path before any candidate invented from it.
+    //
+    // The shared candidate list offers `{key}.md` for a bare name, and offering it
+    // first meant that with both `docs/` and `docs.md` present, `drft lock docs`
+    // snapshotted `docs.md` — a durable "this was reviewed" claim against a file
+    // the caller never named, written silently. That ordering is harmless for a
+    // reader, which only ever produces a projection, so it is corrected here
+    // rather than in the shared helper: moving it there would change what
+    // `drft impact docs` seeds on, which is a different question nobody asked.
+    let exact = graph_key(root, graph_root, path);
+    let ordered = exact
+        .iter()
+        .cloned()
+        .chain(node_candidates(root, graph_root, path));
+    for candidate in ordered {
         if composed.nodes.contains_key(&candidate) || existing.nodes.contains_key(&candidate) {
+            // Say so when the resolved node is not the one the argument names
+            // from where it was typed. Run from `docs/` with no `docs/README.md`,
+            // `drft lock README.md` falls through to the root `README.md` — and
+            // reporting the locked key alone cannot show it, because the key is
+            // byte-identical to what the caller typed.
+            if let Some(exact) = &exact
+                && exact != &candidate
+                && format!("{exact}.md") != candidate
+            {
+                hints.push(
+                    Hint::new(
+                        "resolved-elsewhere",
+                        format!("names no node from here; resolves to `{candidate}`"),
+                    )
+                    .at(path)
+                    .with_next("name the path from the graph root to be sure of the target"),
+                );
+            }
             return Ok(candidate);
         }
     }

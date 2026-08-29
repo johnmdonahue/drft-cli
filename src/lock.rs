@@ -145,6 +145,26 @@ struct EdgeToml {
     target_hash: Option<String>,
 }
 
+/// Whether `root` carries a lockfile at all. `read` collapses "absent" and
+/// "unparseable" into `Ok(None)`, so a caller that needs to tell a repo which has
+/// never been locked from one whose baseline is corrupt asks this separately.
+pub fn exists(root: &Path) -> bool {
+    root.join(LOCK_FILE).exists()
+}
+
+/// Read `drft.lock` without raising a hint about it.
+///
+/// `drft lock --all` reads the outgoing baseline only to report which entries the
+/// rebuild removes. It is about to replace the file, so `unparseable-lock`'s
+/// advice — *run `drft lock --all` to regenerate the baseline* — would reach the
+/// caller as a corruption warning attached to the successful run of that very
+/// command.
+pub fn read_quiet(root: &Path) -> Option<Lock> {
+    let path = root.join(LOCK_FILE);
+    let content = std::fs::read_to_string(path).ok()?;
+    Lock::from_toml(&content).ok()
+}
+
 /// Read `drft.lock` from `root`. Returns `Ok(None)` when the file is absent or
 /// cannot be parsed; a parse failure raises a hint pointing at `drft lock --all`
 /// rather than failing, so `hints` collects it for the caller to emit.

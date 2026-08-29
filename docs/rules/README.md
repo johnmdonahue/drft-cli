@@ -3,6 +3,7 @@ purpose: the drift and structural findings drft check emits
 sources:
   - ../../src/rules/staleness.rs
   - ../../src/rules/structural.rs
+  - ../../src/rules/check.rs
   - ../../src/config.rs
 ---
 
@@ -31,16 +32,81 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule                  | When                                                           |
-| --------------------- | -------------------------------------------------------------- |
-| `stale-node`          | A node's current hash differs from its locked hash             |
-| `stale-edge`          | An edge's locked target hash differs from the target's         |
-| `new-edge`            | A current edge has no locked target hash                       |
-| `removed-edge`        | The lockfile has an edge absent from the graph                 |
-| `removed-node`        | The lockfile has a node absent from the graph                  |
-| `unresolved-edge`     | An edge target has no defining node (URIs excepted)            |
-| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines        |
-| `detached-node`       | A node has no inbound or outbound edges (directories excepted) |
+| Rule                  | When                                                            |
+| --------------------- | --------------------------------------------------------------- |
+| `stale-node`          | A node's current hash differs from its locked hash              |
+| `stale-edge`          | An edge's locked target hash differs from the target's          |
+| `new-edge`            | A current edge has no locked target hash                        |
+| `removed-edge`        | The lockfile has an edge absent from the graph                  |
+| `removed-node`        | The lockfile has a node absent from the graph                   |
+| `unresolved-edge`     | An edge target has no defining node (URIs excepted)             |
+| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines         |
+| `detached-node`       | A node has no inbound or outbound edges (directories excepted)  |
+| `unlocked-node`       | A lockable node has no lock entry, so it has no baseline        |
+| `no-baseline`         | The lockfile is absent or has no entries, so nothing is checked |
+
+**A baseline that does not exist is reported, not assumed.** `drft check` derives
+staleness by comparing the graph against the lockfile, so with no lockfile — or one
+with no entries — there is nothing to compare against and every staleness rule
+becomes a no-op. That used to be indistinguishable from a clean run: no findings,
+exit 0, either way. `no-baseline` states it once, at the run rather than per node.
+
+It fires on three states, which are one fact — no usable baseline: the lockfile is
+absent, it carries no entries, or it could not be parsed. An unparseable lockfile
+also raises the `unparseable-lock` hint, which names the cause; the finding reports
+the consequence. `no-baseline` stays quiet when nothing in the graph could have
+been locked in the first place, since an absent baseline over a tree of directories
+alone covers everything there is to cover.
+
+**An empty lockfile still runs the staleness rules. An absent or unparseable one
+does not.** Absent is the ordinary state of a repo that has never locked, and one
+finding per file would bury it. Unparseable means the baseline may be intact and
+merely unreadable, so reporting every node as unlocked would assert something drft
+cannot know. Empty means a baseline was established and then emptied — every
+lockable node really is unlocked, and `unlocked-node` says so per node, which is
+what keeps a promoted rule gating in the state where it matters most. The last also raises the
+`unparseable-lock` hint, which is what names the cause; the finding reports the
+consequence.
+
+It is a rule and not a hint because hints never change an exit code. At its default
+`warn` a first `check` in a new repo stays quiet, and a repo that wants a missing
+baseline to fail its run promotes it:
+
+```toml
+[rules]
+no-baseline = "error"
+```
+
+**`unlocked-node` covers the partial case**, where a lockfile exists but a given
+node has no entry in it. Which nodes can be locked is asked of the lockfile writer
+rather than derived independently, so the rule and the writer cannot disagree: a
+directory and an unreferenced escaping symlink carry no hash and no outbound edge,
+are absent from a correct lockfile by design, and are never reported. An unlocked
+node subsumes its outbound `new-edge` findings, the way a stale node subsumes its
+`stale-edge` findings — the node having no baseline is the single fact behind every
+one of them. The subsumption is applied after severity and ignore globs, so
+silencing `unlocked-node` restores the `new-edge` findings it was standing in for
+rather than dropping both.
+
+**In a repo that locks only what it reads**, every file never named to `drft lock`
+reports this, which in a source tree means most of it. That is accurate rather than
+noisy — those files genuinely have no baseline — but it is not always what a repo
+wants to see on every run. Narrow it the way any rule is narrowed, with a severity
+of `off` or an `ignore` glob:
+
+```toml
+[rules.unlocked-node]
+ignore = ["src/**", "tests/**"]
+```
+
+Narrowing it this way gives up what the rule reports — an ignored path with no lock
+entry no longer says so — while leaving the `new-edge` findings that predate it in
+place. That is a reasonable trade for a tree you do not track, and a bad one for a
+tree you do, so scope the glob to the former.
+
+A node with no entry of its own can still be the target of a locked edge, whose
+recorded target hash catches an edit to it. `unlocked-node` reports the absent
+baseline, not an absence of checking.
 
 **A link to a directory tracks the directory, not its contents.** Directories are
 nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories

@@ -61,7 +61,9 @@ merging into the existing lockfile. A lock asserts the locked state was reviewed
 so scope it to what you actually read: a bulk lock also clears staleness you
 never looked at, including someone else's unfinished work. Paths all resolve
 before anything is written, so a typo fails the command rather than leaving a
-partial lock behind.
+partial lock behind. The command reports what it wrote — `locked 2 nodes` and the
+names — so a lock that covered nothing is distinguishable from one that covered
+the files you meant.
 
 The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors
 (exit 2), so a scoped invocation whose shell expansion came back empty fails
