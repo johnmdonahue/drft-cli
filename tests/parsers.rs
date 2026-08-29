@@ -117,6 +117,142 @@ fn frontmatter_line_survives_a_multiline_code_span() {
     );
 }
 
+/// The shift is one line per newline the span swallowed, not one line. A fix that
+/// restores only the span's first newline reports the right line for a two-line
+/// span and the wrong one for anything taller, and passes a suite that only ever
+/// asks about two.
+#[test]
+fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    // The span opens on line 2 and closes on line 5, so `./target.md` is line 7.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nnote: \"a span like `one\n  two\n  three\n  four` wrapping four lines\"\nsources:\n  - ./target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![7],
+        "a four-line span shifts by three lines, not by one"
+    );
+}
+
+/// Blanking a span's newlines is also what lets some blocks parse at all: fusing
+/// the lines hides a construct that would otherwise break the mapping. The edge
+/// scan keeps that mask as a fallback, so a block reaching frontmatter only
+/// through it still yields its declared edges.
+///
+/// Without the fallback this file's `sources:` entry produces no edge, no
+/// `stale-edge`, and `drft impact target.md` reports no dependents — while the
+/// file still plainly declares it. Under a config gating on `stale-edge` that
+/// turns a failing check into a passing one.
+///
+/// The line reported here comes from the fused mask and is not the entry's own.
+/// Correcting it is a separate defect about what the mask does to YAML, not about
+/// what it does to line structure.
+#[test]
+fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nstatus `ok\nfine` note: value\nsources:\n  - ./target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    assert!(
+        !frontmatter_edge_lines(dir.path(), "doc.md", "target.md").is_empty(),
+        "a declared `sources` entry must still yield an edge when the block \
+         reaches frontmatter only through the line-collapsing mask"
+    );
+}
+
+/// The same mask decides whether a block *is* frontmatter, for this parser's
+/// metadata and for the markdown parser's mask. Masking with newlines kept there
+/// drops such a block out of frontmatter entirely, and the markdown parser then
+/// reads it as body: a setext heading slugged from the frontmatter text, and any
+/// link inside it lifted into the graph.
+#[test]
+fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(dir.path().join("decoy.md"), "# Decoy\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nstatus `ok\nfine` note: \"see [d](./decoy.md)\"\nsources: \"./target.md\"\n---\n\n# Heading\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let metadata = &json["nodes"][0]["metadata"];
+
+    assert!(
+        metadata.get("@frontmatter").is_some(),
+        "the block should still be frontmatter, got: {metadata}"
+    );
+    assert_eq!(
+        metadata["@markdown"]["anchors"],
+        serde_json::json!(["heading"]),
+        "only the body heading defines an anchor; slugging the frontmatter text \
+         publishes an address the file does not answer to"
+    );
+    assert!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "decoy.md").is_empty(),
+        "a link inside frontmatter is not a body link"
+    );
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let targets: Vec<&str> = json["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["target"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        targets,
+        vec!["target.md"],
+        "the declared source is the only edge; `decoy.md` sits inside frontmatter"
+    );
+}
+
 /// `keys` scoping drops path-shaped values under other keys while keeping the
 /// finding that reports a typo'd source. That combination is the point: the
 /// rule-level `ignore` workaround silences both, so it cannot express this.

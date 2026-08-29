@@ -32,11 +32,33 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
+/// Whether a mask keeps the newlines inside a code span.
+///
+/// The two callers want different answers, and conflating them moves a parse
+/// gate. [`FrontmatterParser::extract_links`] wants `Keep`, so a value's line in
+/// the masked copy is its line in the source. [`parsed_block`] and
+/// [`extract_metadata`] use the mask as a YAML *recovery* device — a span can
+/// hide a `:` that breaks the mapping — and fusing the lines of a span is part of
+/// what makes some of those blocks parse at all. Masking with `Keep` there would
+/// silently drop a declared `sources:` edge, un-mask the block for the markdown
+/// parser, and change what `drft check` exits with.
+#[derive(Clone, Copy)]
+enum Newlines {
+    Keep,
+    Blank,
+}
+
 /// Strip all code content (fenced blocks and inline backtick spans), replacing
-/// each character with a space and each newline with a newline. Offsets and line
-/// structure both survive, so a node's line in the masked copy is its line in the
-/// source.
-fn strip_code(content: &str) -> String {
+/// each character with a space. A span's newlines survive under
+/// [`Newlines::Keep`] and are blanked with everything else under
+/// [`Newlines::Blank`].
+///
+/// The masked copy is the same length in lines as its input under `Keep`. It is
+/// not byte-for-byte positional: the fenced pass rebuilds the text line by line,
+/// so a `\r` is dropped and a multi-byte character in a fenced line becomes one
+/// space per byte. Nothing reads offsets out of this — only `MarkedYaml`'s line
+/// and column — so line structure is the property that has to hold.
+fn strip_code(content: &str, newlines: Newlines) -> String {
     // First strip fenced code blocks (``` and ~~~)
     let mut result = String::with_capacity(content.len());
     let mut in_code_block = false;
@@ -88,14 +110,18 @@ fn strip_code(content: &str) -> String {
                 j += 1;
             }
             if let Some(close_start) = found {
-                // Blank the entire span — backticks, content, and closing backticks
-                // — but keep its newlines. A span crossing a line boundary that
-                // came back as spaces shortened the block by a line, so every
-                // node below it carried a line number one too high, and that
-                // number reaches `drft edges`, `drft impact`, and every finding.
+                // Blank the entire span — backticks, content, and closing
+                // backticks. Under `Keep` its newlines survive: a span crossing a
+                // line boundary that came back as spaces shortened the block by a
+                // line, so every node below it resolved one line too high per
+                // newline swallowed, and that number reaches `drft edges`, `drft
+                // impact`, and every finding.
                 let total = close_start + ticks - i;
                 for c in &chars[i..i + total] {
-                    cleaned.push(if *c == '\n' { '\n' } else { ' ' });
+                    cleaned.push(match (newlines, c) {
+                        (Newlines::Keep, '\n') => '\n',
+                        _ => ' ',
+                    });
                 }
                 i += total;
             } else {
@@ -163,34 +189,43 @@ impl FrontmatterParser {
         let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };
-        // `stripped` is owned and outlives the borrowed marked AST below.
-        let stripped = strip_code(block);
-        let yaml_str = stripped.as_str();
-        // Malformed YAML contributes nothing — drft is not a YAML linter.
-        let Ok(docs) = MarkedYaml::load_from_str(yaml_str) else {
-            return Vec::new();
-        };
-        let Some(root) = docs.first() else {
-            return Vec::new();
-        };
+        // Two masks, in order. `Keep` leaves a span's newlines alone, so every
+        // value reports its own line. A block that does not parse that way falls
+        // back to `Blank`, because fusing a span's lines is part of what lets
+        // some blocks parse at all — and dropping a declared edge to gain a line
+        // number trades a silent failure for a cosmetic one. The fallback path
+        // is where a line can still be wrong; that is #132's, not this one's.
+        // Malformed YAML contributes nothing either way — drft is not a YAML
+        // linter.
+        for newlines in [Newlines::Keep, Newlines::Blank] {
+            // `stripped` is owned and outlives the borrowed marked AST below.
+            let stripped = strip_code(block, newlines);
+            let Ok(docs) = MarkedYaml::load_from_str(stripped.as_str()) else {
+                continue;
+            };
+            let Some(root) = docs.first() else {
+                continue;
+            };
 
-        let mut candidates = Vec::new();
-        match &self.keys {
-            Some(keys) => {
-                let wanted: std::collections::HashSet<&str> =
-                    keys.iter().map(String::as_str).collect();
-                collect_scoped(root, &wanted, &mut candidates);
+            let mut candidates = Vec::new();
+            match &self.keys {
+                Some(keys) => {
+                    let wanted: std::collections::HashSet<&str> =
+                        keys.iter().map(String::as_str).collect();
+                    collect_scoped(root, &wanted, &mut candidates);
+                }
+                None => collect_links(root, &mut candidates),
             }
-            None => collect_links(root, &mut candidates),
+            return candidates
+                .into_iter()
+                .filter(|(value, _)| is_link_candidate(value))
+                .map(|(target, line)| Link {
+                    target,
+                    line: Some(line),
+                })
+                .collect();
         }
-        candidates
-            .into_iter()
-            .filter(|(value, _)| is_link_candidate(value))
-            .map(|(target, line)| Link {
-                target,
-                line: Some(line),
-            })
-            .collect()
+        Vec::new()
     }
 }
 
@@ -209,7 +244,10 @@ impl FrontmatterParser {
 /// The masking applies to the block, not to the file — see [`parsed_block`].
 fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     let (_, block) = parsed_block(content)?;
-    for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block))] {
+    for candidate in [
+        Cow::Borrowed(block),
+        Cow::Owned(strip_code(block, Newlines::Blank)),
+    ] {
         if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
             && let Some(root) = docs.first()
             // `parsed_block` already gated on one of these parsing as a mapping,
@@ -242,7 +280,7 @@ fn parsed_block(content: &str) -> Option<(usize, &str)> {
     let end = "---".len() + block.len() + "\n---".len();
     // Raw first, so a code span survives as the prose it is; then the same block
     // with spans blanked, since one can hide a `:` that breaks the mapping.
-    let parses = is_mapping(block) || is_mapping(&strip_code(block));
+    let parses = is_mapping(block) || is_mapping(&strip_code(block, Newlines::Blank));
     parses.then_some((end, block))
 }
 
