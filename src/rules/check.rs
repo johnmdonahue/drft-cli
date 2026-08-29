@@ -77,13 +77,28 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
     // recommends for a source tree — also dropped the `new-edge` findings it was
     // standing in for, so a node configured to be quieter went completely dark and
     // lost coverage that predates this rule.
-    let subsumed: std::collections::HashSet<String> = findings
+    // Subsuming must not weaken the run. A `warn` `unlocked-node` standing in for
+    // an `error` `new-edge` would turn exit 1 into exit 0 — a repo gating CI on
+    // `new-edge` would stop failing without anything saying so, which is the shape
+    // of failure this whole change exists to remove. So a finding is only
+    // subsumed by one at least as severe as itself.
+    let subsuming: std::collections::HashMap<String, RuleSeverity> = findings
         .iter()
         .filter(|f| f.name == "unlocked-node")
-        .map(|f| f.subject.clone())
+        .map(|f| (f.subject.clone(), f.severity))
         .collect();
-    if !subsumed.is_empty() {
-        findings.retain(|f| f.name != "new-edge" || !subsumed.contains(&f.subject));
+    if !subsuming.is_empty() {
+        let at_least_as_severe = |standing: RuleSeverity, subsumed: RuleSeverity| match standing {
+            RuleSeverity::Error => true,
+            RuleSeverity::Warn => subsumed != RuleSeverity::Error,
+            RuleSeverity::Off => false,
+        };
+        findings.retain(|f| {
+            f.name != "new-edge"
+                || !subsuming
+                    .get(&f.subject)
+                    .is_some_and(|standing| at_least_as_severe(*standing, f.severity))
+        });
     }
 
     // Lines before message, so several findings on one subject read in the order

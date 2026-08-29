@@ -202,7 +202,7 @@ with no arguments refuses rather than locking everything, because a collapsed
 | `unknown-rule`        | A `drft.toml` rule name is not built in, so it configures nothing |
 | `unparseable-lock`    | `drft.lock` could not be read, so every node reads as unlocked    |
 | `directory-lock`      | A locked path is a directory, which carries no content to lock    |
-| `resolved-elsewhere`  | A locked path named no node from here, so a fallback matched      |
+| `resolved-elsewhere`  | A locked path names no node from here, so a fallback resolved it  |
 
 ## Grounding an agent
 

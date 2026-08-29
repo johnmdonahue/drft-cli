@@ -89,9 +89,10 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
 /// command's failure.
 ///
 /// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
-/// Only callers of this function are covered, which today means `lock` in both
-/// formats. `check` and the text projections still print with `println!` and still
-/// abort — that is #121, and it predates this.
+/// Only callers of this function are covered: `lock` in both formats, and every
+/// JSON result document, since `print_json_document` routes through here. `check`
+/// and the text projections still print with `println!` and still abort — that is
+/// #121, and it predates this.
 fn write_stdout_line(line: &str) -> Result<()> {
     use std::io::Write;
     match writeln!(std::io::stdout(), "{line}") {
@@ -337,6 +338,23 @@ fn run_lock(
 
     if all {
         let locked: Vec<String> = snapshot.nodes.keys().cloned().collect();
+        // Report what the rebuild removes, not just what it writes. `--all` used
+        // to answer `dropped: []` unconditionally because it never read the file
+        // it was replacing — so widening an `ignore` pattern and rebuilding took
+        // entries out of the baseline and said nothing, which is the one silent
+        // route to lost coverage this change would otherwise have left standing.
+        // A lockfile that cannot be read reports nothing here; `unparseable-lock`
+        // is what covers that.
+        let dropped: Vec<String> = lock::read(&graph_root, hints)?
+            .map(|existing| {
+                existing
+                    .nodes
+                    .keys()
+                    .filter(|path| !snapshot.nodes.contains_key(*path))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
         // `--all` is the rebuild: afterwards the file reflects the tree. So it
         // writes whenever there is something to record, and also whenever a
         // lockfile already exists — otherwise deleting every lockable file left
@@ -349,7 +367,7 @@ fn run_lock(
         if !snapshot.nodes.is_empty() || lock::exists(&graph_root) {
             lock::write(&graph_root, &snapshot)?;
         }
-        report_lock(format, &locked, &[], hints)?;
+        report_lock(format, &locked, &dropped, hints)?;
         return Ok(0);
     }
 
@@ -412,7 +430,13 @@ fn run_lock(
         match snapshot.nodes.get(&node) {
             Some(entry) => {
                 existing.nodes.insert(node.clone(), entry.clone());
-                locked.push(node);
+                // Two spellings of one path are one lock. A shell substitution
+                // that concatenates two diffs will name the same file twice, and
+                // a count that says `locked 2 nodes` for one file is exactly the
+                // kind of untrustworthy number this report exists to replace.
+                if !locked.contains(&node) {
+                    locked.push(node);
+                }
             }
             None => {
                 // Dropping the entry happens first and unconditionally. A path
@@ -641,10 +665,10 @@ fn resolve_lock_node(
                 hints.push(
                     Hint::new(
                         "resolved-elsewhere",
-                        format!("does not name a node from here; locked `{candidate}` instead"),
+                        format!("names no node from here; resolves to `{candidate}`"),
                     )
                     .at(path)
-                    .with_next("name the node's path from the graph root to be sure"),
+                    .with_next("name the path from the graph root to be sure of the target"),
                 );
             }
             return Ok(candidate);

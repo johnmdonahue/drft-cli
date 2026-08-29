@@ -780,7 +780,7 @@ fn a_lock_path_resolving_elsewhere_says_so() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("resolved-elsewhere"),
+        stderr.contains("hint[resolved-elsewhere]:"),
         "the climb to the graph root must be reported: stderr={stderr:?}"
     );
 
@@ -793,5 +793,88 @@ fn a_lock_path_resolving_elsewhere_says_so() {
     assert!(
         !quiet_err.contains("resolved-elsewhere"),
         "an exact path is not a surprise: stderr={quiet_err:?}"
+    );
+
+    // Nor does the documented `.md` convenience. `drft lock guide` for `guide.md`
+    // is the feature working, not a resolution that crossed to another directory.
+    let convenience = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "README"])
+        .output()
+        .unwrap();
+    assert!(convenience.status.success());
+    let convenience_err = String::from_utf8_lossy(&convenience.stderr);
+    assert!(
+        !convenience_err.contains("resolved-elsewhere"),
+        "the .md fallback is documented, not a surprise: stderr={convenience_err:?}"
+    );
+}
+
+/// `drft lock --all` reports the entries its rebuild removes.
+///
+/// It never read the file it was replacing, so it answered `dropped: []` however
+/// much it dropped. Widening an `ignore` pattern and rebuilding therefore took
+/// entries out of the baseline in silence — the one remaining route to losing
+/// coverage without being told.
+#[test]
+fn lock_all_reports_the_entries_it_drops() {
+    let dir = TempDir::new().unwrap();
+    let base =
+        "ignore = [\"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n";
+    fs::write(dir.path().join("drft.toml"), base).unwrap();
+    for name in ["a.md", "b.md", "c.md"] {
+        fs::write(dir.path().join(name), "# Note").unwrap();
+    }
+    lock_all(dir.path());
+
+    fs::write(
+        dir.path().join("drft.toml"),
+        "ignore = [\"drft.toml\", \"b.md\", \"c.md\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "lock",
+            "--all",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let dropped: Vec<&str> = v["dropped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap())
+        .collect();
+    assert_eq!(
+        dropped,
+        vec!["b.md", "c.md"],
+        "the rebuild removed two entries and must say so: {stdout}"
+    );
+}
+
+/// Naming one path twice is one lock. A shell substitution concatenating two
+/// diffs will do it, and a count that over-reports is the untrustworthy number
+/// this report exists to replace.
+#[test]
+fn duplicate_paths_are_locked_once() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    lock_all(dir.path());
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md", "./a.md"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("locked 1 node\n"),
+        "one path named twice is one lock: stdout={stdout:?}"
     );
 }

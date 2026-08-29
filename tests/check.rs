@@ -497,3 +497,37 @@ fn silencing_unlocked_node_restores_the_new_edges_it_subsumes() {
         "both edges must be reported once the subsuming rule is off: {silenced}"
     );
 }
+
+/// Subsuming must not weaken the run. A `warn` `unlocked-node` standing in for an
+/// `error` `new-edge` would turn exit 1 into exit 0 — a repo gating CI on
+/// `new-edge` would stop failing with nothing saying so.
+#[test]
+fn subsumption_does_not_downgrade_a_more_severe_finding() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        format!("{MD_CONFIG}\n[rules]\nnew-edge = \"error\"\n"),
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+
+    let lock = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(lock.status.success());
+    fs::write(dir.path().join("new.md"), "[a](a.md)\n[b](b.md)\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an error-severity new-edge must still fail the run: {stdout}"
+    );
+    assert!(stdout.contains("error[new-edge]"), "{stdout}");
+}
