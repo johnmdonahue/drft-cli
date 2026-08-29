@@ -291,6 +291,13 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
             stderr.contains("could not be parsed"),
             "{format:?} refused without saying why: stderr={stderr:?}"
         );
+        if !format.is_empty() {
+            // JSON in, JSON out: hints raised before a failure ride the error
+            // envelope on stderr, so a consumer parsing stderr keeps working.
+            let v: serde_json::Value =
+                serde_json::from_str(stderr.trim()).expect("stderr is a JSON envelope");
+            assert_eq!(v["hints"][0]["name"], "unparseable-lock");
+        }
     }
 }
 

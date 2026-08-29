@@ -531,3 +531,71 @@ fn subsumption_does_not_downgrade_a_more_severe_finding() {
     );
     assert!(stdout.contains("error[new-edge]"), "{stdout}");
 }
+
+/// Both new rule names are registered as built-in, so configuring them takes
+/// effect and does not warn as unknown.
+///
+/// Without this, dropping a name from the registry gives a false
+/// `hint[unknown-rule]: … configures nothing` on a rule that does configure
+/// something — and the severity still applies, so the output contradicts itself.
+#[test]
+fn the_new_rule_names_are_built_in() {
+    for rule in ["unlocked-node", "no-baseline"] {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            format!("{MD_CONFIG}\n[rules]\n{rule} = \"off\"\n"),
+        )
+        .unwrap();
+        fs::write(dir.path().join("index.md"), "# Index").unwrap();
+
+        let output = drft_bin()
+            .args(["-C", dir.path().to_str().unwrap(), "check"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !stderr.contains("unknown-rule") && !stdout.contains("unknown-rule"),
+            "{rule} is built in and must not warn as unknown: stderr={stderr:?} stdout={stdout:?}"
+        );
+    }
+}
+
+/// An empty lockfile still gates. Every lockable node is genuinely unlocked, so
+/// promoting either rule to `error` fails the run — skipping the staleness rules
+/// there disarmed them all, including `new-edge`, which fires on a bare `main`.
+#[test]
+fn an_empty_lockfile_still_gates() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        format!("{MD_CONFIG}\n[rules]\nunlocked-node = \"error\"\n"),
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
+    fs::write(dir.path().join("b.md"), "# B").unwrap();
+    fs::write(dir.path().join("drft.lock"), "node = []\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an emptied baseline leaves every node unlocked: {stdout}"
+    );
+    assert!(stdout.contains("error[unlocked-node]: a.md"), "{stdout}");
+
+    // An absent lockfile is the ordinary pre-lock state and stays quiet.
+    fs::remove_file(dir.path().join("drft.lock")).unwrap();
+    let absent = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let absent_out = String::from_utf8_lossy(&absent.stdout);
+    assert_eq!(absent.status.code(), Some(0), "{absent_out}");
+    assert!(!absent_out.contains("unlocked-node"), "{absent_out}");
+}

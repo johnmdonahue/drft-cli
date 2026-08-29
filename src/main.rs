@@ -343,9 +343,12 @@ fn run_lock(
         // it was replacing — so widening an `ignore` pattern and rebuilding took
         // entries out of the baseline and said nothing, which is the one silent
         // route to lost coverage this change would otherwise have left standing.
-        // A lockfile that cannot be read reports nothing here; `unparseable-lock`
-        // is what covers that.
-        let dropped: Vec<String> = lock::read(&graph_root, hints)?
+        // Read quietly: this is a rebuild, so `unparseable-lock`'s advice to run
+        // `drft lock --all` would reach the caller attached to the successful run
+        // of that very command.
+        let previous = lock::read_quiet(&graph_root);
+        let dropped: Vec<String> = previous
+            .as_ref()
             .map(|existing| {
                 existing
                     .nodes
@@ -355,6 +358,21 @@ fn run_lock(
                     .collect()
             })
             .unwrap_or_default();
+        // An empty `dropped` must mean "nothing was dropped", not "I could not
+        // tell". A rebuild over a lockfile drft cannot read discards whatever it
+        // held, and reporting `[]` for that is the silent loss this report exists
+        // to remove — so say the list is incomplete rather than let it read as
+        // complete.
+        if previous.is_none() && lock::exists(&graph_root) {
+            hints.push(
+                Hint::new(
+                    "replaced-unreadable-lock",
+                    "could not be read, so the entries this rebuild discarded are not listed",
+                )
+                .at("drft.lock")
+                .with_next("compare against the previous lockfile in version control"),
+            );
+        }
         // `--all` is the rebuild: afterwards the file reflects the tree. So it
         // writes whenever there is something to record, and also whenever a
         // lockfile already exists — otherwise deleting every lockable file left
@@ -448,13 +466,25 @@ fn run_lock(
                 if was_dropped {
                     dropped.push(node.clone());
                 }
-                if !was_dropped
-                    && composed
-                        .nodes
-                        .get(&node)
-                        .and_then(drft::model::Node::fs_type)
-                        == Some("directory")
-                {
+                let fs_type = composed
+                    .nodes
+                    .get(&node)
+                    .and_then(drft::model::Node::fs_type);
+                // A node that is in the graph but carries nothing to snapshot —
+                // an escaping symlink, an unreadable file — reaches the same
+                // silent `locked 0 nodes` a directory used to. Same shape, same
+                // remedy: say why, rather than let success stand for nothing.
+                if !was_dropped && fs_type.is_some() && fs_type != Some("directory") {
+                    hints.push(
+                        Hint::new(
+                            "nothing-to-lock",
+                            "carries no content to snapshot, so it has no lock entry",
+                        )
+                        .at(&node)
+                        .with_next("name a file whose content drft can hash"),
+                    );
+                }
+                if !was_dropped && fs_type == Some("directory") {
                     // Count what could have been locked. Sub-directories carry no
                     // hash and no outbound edge, so they are never lock entries,
                     // and reporting them as "not locked" would count things that

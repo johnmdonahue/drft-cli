@@ -878,3 +878,33 @@ fn duplicate_paths_are_locked_once() {
         "one path named twice is one lock: stdout={stdout:?}"
     );
 }
+
+/// A rebuild over a lockfile drft cannot read says its drop list is incomplete.
+///
+/// `--all` replaces the file regardless, which is correct — it is the rebuild.
+/// But it cannot know what the unreadable bytes held, and reporting `dropped: []`
+/// there would read as "nothing was dropped" when the truth is "I could not tell".
+#[test]
+fn a_rebuild_over_an_unreadable_lockfile_says_its_drops_are_unlisted() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    lock_all(dir.path());
+    fs::write(dir.path().join("drft.lock"), "not valid toml {{{").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("replaced-unreadable-lock"),
+        "an unlisted drop set must say so: stderr={stderr:?}"
+    );
+    // The rebuild is what fixes the file, so it must not also advise running it.
+    assert!(
+        !stderr.contains("unparseable-lock"),
+        "a successful rebuild must not warn about the file it just replaced: {stderr:?}"
+    );
+}

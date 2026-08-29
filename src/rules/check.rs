@@ -28,26 +28,35 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
     // it was. As a rule it defaults to `warn` — the first `check` of a new repo
     // stays quiet — and a repo that wants the missing baseline to fail its run
     // promotes it to `error` like any other rule.
-    let usable = lock.filter(|lock| !lock.nodes.is_empty());
-    match usable {
-        Some(lock) => findings.extend(staleness::evaluate(graph, lock)),
-        None => {
-            // Say nothing when there is nothing a baseline could have covered: a
-            // graph of directories alone is consistent with an empty lockfile.
-            if !Lock::from_composed(graph).nodes.is_empty() {
-                // The message says what is true of the run rather than guessing
-                // why. `lock` is `None` for a file that is absent and for one that
-                // could not be parsed — the latter carries plenty of entries, so
-                // "no lock entries" would be false, while `unparseable-lock` on
-                // the same run says something different and correct.
-                findings.push(Finding::warn(
-                    "no-baseline",
-                    "drft.lock",
-                    Vec::new(),
-                    "no usable baseline, so no file is checked for drift",
-                ));
-            }
-        }
+    // Say nothing when there is nothing a baseline could have covered: a graph of
+    // directories alone is consistent with having no lockfile.
+    let anything_to_cover = !Lock::from_composed(graph).nodes.is_empty();
+    let empty_baseline = lock.is_some_and(|lock| lock.nodes.is_empty());
+    if anything_to_cover && (lock.is_none() || empty_baseline) {
+        // The message says what is true of the run rather than guessing why.
+        // `lock` is `None` for a file that is absent and for one that could not be
+        // parsed — the latter carries plenty of entries, so "no lock entries"
+        // would be false, while `unparseable-lock` on the same run says something
+        // different and correct.
+        findings.push(Finding::warn(
+            "no-baseline",
+            "drft.lock",
+            Vec::new(),
+            "no usable baseline, so no file is checked for drift",
+        ));
+    }
+
+    // An empty lockfile still runs the staleness rules; an absent one does not.
+    //
+    // For the message the two are one fact. For the gate they are not. Absent is
+    // the ordinary state of a repo that has never locked, and reporting one
+    // finding per file there would bury the quick start. Empty means a baseline
+    // was established and then emptied — every lockable node really is unlocked,
+    // and that is the state worth failing on. Skipping the rules there disarmed
+    // them all: a repo gating on `new-edge` stopped failing, and `unlocked-node`
+    // fired zero times in the one state where it is true of every node.
+    if let Some(lock) = lock {
+        findings.extend(staleness::evaluate(graph, lock));
     }
     findings.extend(structural::evaluate(graph, &config.anchor_namespaces()));
 
@@ -88,6 +97,9 @@ pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> 
         .map(|f| (f.subject.clone(), f.severity))
         .collect();
     if !subsuming.is_empty() {
+        // Only Warn and Error can reach here — the filter above dropped every Off
+        // finding — but the Off arm is written out rather than assumed, so the
+        // rule stays true if that filter ever moves.
         let at_least_as_severe = |standing: RuleSeverity, subsumed: RuleSeverity| match standing {
             RuleSeverity::Error => true,
             RuleSeverity::Warn => subsumed != RuleSeverity::Error,
