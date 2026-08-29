@@ -32,7 +32,7 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
-/// A code-masked copy of a block, with the source line each masked line began on.
+/// A code-masked copy of a block, with the source lines its columns came from.
 ///
 /// The mask blanks a code span to spaces, newlines included, because fusing a
 /// span's lines is part of what lets a block parse: a span can hide a `:` that
