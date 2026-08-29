@@ -157,6 +157,8 @@ const BUILTIN_RULES: &[&str] = &[
     "unresolved-edge",
     "unresolved-fragment",
     "detached-node",
+    "unlocked-node",
+    "no-baseline",
 ];
 
 /// Parsers a graph may declare. `fs` is the implicit base graph (a provider, not

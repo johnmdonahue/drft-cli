@@ -2,6 +2,32 @@
 
 All notable changes to drft are documented here.
 
+## Unreleased
+
+Makes a lock's coverage observable. Every way of ending up with a baseline that does not cover what you think it covers was silent — a directory lock that wrote nothing, a lockfile that had gone missing, a node with no entry, a bare name that matched a different file — and each returned exit 0. The run now says what it locked, and `check` says when there is nothing to check against.
+
+### Breaking changes
+
+- **`drft lock` prints a result document** (#120, #125). Text reports `locked 2 nodes`, `locked 1 node, dropped 1 entry`, or `locked 0 nodes`, followed by the node names; JSON emits `{locked, dropped}`. It previously printed nothing at all, which is what made a lock covering nothing indistinguishable from one covering the files you meant. **This breaks any consumer asserting `drft lock` is silent**, and moves `lock`'s hints from the stderr `{"hints": […]}` envelope into the result document, where every other command already carries them. No alias, per no-backwards-compat.
+
+- **An unlocked node subsumes its outbound `new-edge` findings** (#120). Adding a new file that links two locked files previously reported one `new-edge` per link; it now reports one `unlocked-node` naming the file. The node having no baseline is the single fact behind every one of those edges, and this is the subsumption `stale-node` and `removed-node` already apply to their own edge findings. The trade is real: `new-edge` carried line numbers and the subsuming finding does not.
+
+- **A scoped lock over an unparseable lockfile fails instead of proceeding** (#120). `drft.lock` that cannot be parsed reads as absent, so `drft lock <path>` used to replace the entire baseline with just the paths named — every other entry gone, and the nodes behind them left as unlocked leaves whose loss no rule reported. A hint said the file was unreadable while the destruction happened anyway. The command now refuses and names both remedies. `drft lock --all` is unaffected, since it rebuilds the baseline by design.
+
+### New
+
+- **`no-baseline` reports a lockfile that is absent or empty** (#120). Staleness is derived by comparing the graph against the lockfile, so with no lockfile — or one with no entries — there is nothing to compare against and every staleness rule becomes a no-op. That was indistinguishable from a clean run: no findings, exit 0, either way. It is a rule rather than a hint because hints never change an exit code, and a hint-only answer would leave an automated caller exactly as blind as it was. At its default `warn` a first `check` in a new repo stays quiet; `[rules] no-baseline = "error"` makes a missing baseline fail the run.
+
+- **`unlocked-node` reports a node with no lock entry** (#120). A node absent from the lockfile was compared against nothing and reported nothing, so it was silently exempt from every staleness rule. Which nodes can be locked is asked of the lockfile writer rather than derived independently, so the rule and the writer cannot disagree — a directory and an unreferenced escaping symlink carry no hash and no outbound edge, are absent from a correct lockfile by design, and are never reported.
+
+- **`directory-lock` hint** (#125). A directory named to `drft lock` resolves to the directory node, which carries no hash and no edges and so has nothing to snapshot. The run reports `locked 0 nodes` and names how many nodes beneath it were not locked.
+
+### Fixed
+
+- **A scoped lock no longer snapshots a file the caller did not name** (#127). A bare argument had `.md` appended and that invented candidate was tried *ahead* of the path as spelled, so with both `docs/` and `docs.md` present, `drft lock docs` snapshotted `docs.md` — clearing its `stale-node` finding and writing a durable "this was reviewed" claim against a file nobody opened. The exact path now resolves first. The related case where a bare name falls back to a same-named node at the graph root is now visible in the result document, which names what was locked.
+
+- **A directory lock no longer manufactures an empty baseline** (#125). In a repo that had never been locked, `drft lock <dir>` wrote a valid, parseable, zero-entry lockfile — a baseline covering nothing, produced by a command that reported success, which made every staleness rule a no-op while the file's presence made the baseline look established. A lock that writes nothing now leaves no lockfile behind.
+
 ## 0.16.0 (2026-08-20)
 
 Gives every command a run-level layer. A `hints` channel says what happened to _this invocation_ — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground — where findings only ever describe the graph. And `drft lock` stops reading zero paths as every path, so a command substitution that matched nothing can't write a whole-graph review claim.

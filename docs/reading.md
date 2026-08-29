@@ -43,7 +43,10 @@ itself. `drft edges` matches the selector against edge **sources**, so a directo
 selector projects every edge leaving that subtree.
 
 Selector expansion is a reader affordance only. Writers like `drft lock` stay
-exact-path-only, so a subtree or glob never fans out into a write.
+exact-path-only, so a subtree or glob never fans out into a write. A directory
+named to `drft lock` therefore resolves to the directory node itself, which
+carries no content to snapshot — the command reports `locked 0 nodes` and hints,
+rather than locking the subtree and rather than exiting silently.
 
 The empty selector divides on the same line. A reader with no selector returns
 everything, because the cost is a large read. `drft lock` with no paths errors
@@ -172,13 +175,19 @@ projection.
 
 In JSON they are a key on the result document, always present so `.hints[]` reads
 without a guard — for `nodes`, `edges`, `impact`, and `check`. Three cases have no
-such document to carry them: `init` and `lock` print no result at all, and
+such document to carry them: `init` prints no result at all, and
 `drft graph --format json` prints a JGF document whose root is exactly `graph`, a
 format rather than drft's own envelope, where a sibling key would cost the
 translatability the format was chosen for. Those take a `{"hints": [...]}`
 envelope on stderr instead, the same shape the error envelope uses, so a consumer
 parsing stderr as JSON keeps working. Hints raised before a failure join that
 error envelope rather than vanishing.
+
+`drft lock` prints a result document too, `{locked, dropped}`, naming the nodes it
+wrote and the entries it removed. Reporting the effect is what makes a lock that
+covered nothing distinguishable from one that covered the files you meant — and
+what shows a resolution you did not expect, such as a bare name matching a file in
+another directory, at the moment it happens rather than at the next `check`.
 
 **Hints never change an exit code, and never replace a guard.** A hint annotates
 output and lets it stand — so anything that has to stop a caller is an error
@@ -192,6 +201,7 @@ with no arguments refuses rather than locking everything, because a collapsed
 | `large-projection`    | The rendered output is big enough to crowd a reader's context     |
 | `unknown-rule`        | A `drft.toml` rule name is not built in, so it configures nothing |
 | `unparseable-lock`    | `drft.lock` could not be read, so every node reads as unlocked    |
+| `directory-lock`      | A locked path is a directory, which carries no content to lock    |
 
 ## Grounding an agent
 

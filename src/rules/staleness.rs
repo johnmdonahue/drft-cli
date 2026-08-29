@@ -4,8 +4,10 @@
 //! dependency cycle can't loop or produce ambiguous staleness.
 //!
 //! Findings: `stale-node`, `stale-edge`, `new-edge`, `removed-edge`,
-//! `removed-node`. A stale node subsumes its outbound `stale-edge` findings; a
-//! removed node subsumes its `removed-edge` findings.
+//! `removed-node`, `unlocked-node`. A stale node subsumes its outbound
+//! `stale-edge` findings; a removed node subsumes its `removed-edge` findings;
+//! an unlocked node subsumes its outbound `new-edge` findings, because the node
+//! having no baseline at all is the fact that explains every one of them.
 
 use std::collections::HashSet;
 
@@ -18,6 +20,32 @@ use crate::rules::{edge_provenance, provenance, short_hash};
 pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut stale_nodes: HashSet<&str> = HashSet::new();
+
+    // unlocked-node: a node that *could* be locked has no entry in the lockfile,
+    // so every rule below compares it against nothing and reports nothing.
+    //
+    // Which nodes could be locked is asked of `Lock::from_composed` rather than
+    // re-derived here. A directory and an unreferenced escaping symlink carry no
+    // hash and no outbound edge, so they are absent from a correct lockfile by
+    // design — a rule with its own idea of the predicate would report every one
+    // of them as a defect the moment it landed.
+    let lockable = Lock::from_composed(graph);
+    let mut unlocked: HashSet<&str> = HashSet::new();
+    for path in lockable.nodes.keys() {
+        if lock.nodes.contains_key(path) {
+            continue;
+        }
+        let Some((path, node)) = graph.nodes.get_key_value(path) else {
+            continue;
+        };
+        unlocked.insert(path.as_str());
+        findings.push(Finding::warn(
+            "unlocked-node",
+            path,
+            provenance(&node.metadata),
+            "no lock entry, so drift in this file is not checked",
+        ));
+    }
 
     // stale-node: a node's current hash differs from its locked hash.
     for (path, node) in &graph.nodes {
@@ -79,16 +107,25 @@ pub fn evaluate(graph: &Graph, lock: &Lock) -> Vec<Finding> {
                 }
             }
             // new-edge: a current edge has no locked target hash.
-            None => findings.push(
-                Finding::warn(
-                    "new-edge",
-                    &edge.source,
-                    edge_provenance(edge),
-                    "not locked",
-                )
-                .with_target(&edge.target)
-                .with_lines(edge.lines()),
-            ),
+            None => {
+                // An unlocked source subsumes its outbound new-edge findings, the
+                // way a stale or removed node subsumes its own. Every edge out of
+                // a node with no lock entry is unlocked for one reason, and naming
+                // that reason once beats repeating its consequence per edge.
+                if unlocked.contains(edge.source.as_str()) {
+                    continue;
+                }
+                findings.push(
+                    Finding::warn(
+                        "new-edge",
+                        &edge.source,
+                        edge_provenance(edge),
+                        "not locked",
+                    )
+                    .with_target(&edge.target)
+                    .with_lines(edge.lines()),
+                );
+            }
         }
     }
 

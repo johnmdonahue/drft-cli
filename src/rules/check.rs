@@ -4,7 +4,8 @@
 //!
 //! Built-in rules are always on at their default `warn` severity; config can
 //! promote a rule to `error`, silence it with `off`, or `ignore` subjects by
-//! glob. Staleness rules run only when a lockfile is present.
+//! glob. Staleness rules run only against a usable baseline; when there is none,
+//! `no-baseline` says so once instead.
 
 use crate::config::{Config, RuleSeverity};
 use crate::diagnostic::Finding;
@@ -12,12 +13,36 @@ use crate::lock::Lock;
 use crate::model::Graph;
 use crate::rules::{staleness, structural};
 
-/// Evaluate all v0.8 rules and apply config. Staleness rules run only with a
-/// lockfile; structural rules always run.
+/// Evaluate all v0.8 rules and apply config. Staleness rules run only against a
+/// usable baseline; structural rules always run.
 pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if let Some(lock) = lock {
-        findings.extend(staleness::evaluate(graph, lock));
+
+    // A baseline that does not exist and a baseline with no entries are the same
+    // fact: nothing to compare against. Both used to leave `check` silent, so a
+    // clean run and an absent baseline were indistinguishable — exit 0 either way,
+    // no finding either way.
+    //
+    // This is a finding rather than a hint on purpose. Hints never change an exit
+    // code, so a hint-only answer leaves an automated caller exactly as blind as
+    // it was. As a rule it defaults to `warn` — the first `check` of a new repo
+    // stays quiet — and a repo that wants the missing baseline to fail its run
+    // promotes it to `error` like any other rule.
+    let usable = lock.filter(|lock| !lock.nodes.is_empty());
+    match usable {
+        Some(lock) => findings.extend(staleness::evaluate(graph, lock)),
+        None => {
+            // Say nothing when there is nothing a baseline could have covered: a
+            // graph of directories alone is consistent with an empty lockfile.
+            if !Lock::from_composed(graph).nodes.is_empty() {
+                findings.push(Finding::warn(
+                    "no-baseline",
+                    "drft.lock",
+                    Vec::new(),
+                    "no lock entries, so no file is checked for drift",
+                ));
+            }
+        }
     }
     findings.extend(structural::evaluate(graph, &config.anchor_namespaces()));
 

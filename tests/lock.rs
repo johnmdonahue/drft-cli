@@ -253,25 +253,160 @@ fn scoped_lock_batches_a_live_update_with_a_drop() {
     }
 }
 
-/// Locking a directory is a no-op, not a panic. A directory node carries no hash
-/// and no edges, so it is never a lock entry; naming one has nothing to snapshot.
+/// Locking a directory writes nothing, and says so. A directory node carries no
+/// hash and no edges, so it is never a lock entry and there is nothing to
+/// snapshot — but exiting 0 in silence made that indistinguishable from a lock
+/// that covered the subtree.
 #[test]
-fn scoped_lock_of_a_directory_is_a_noop() {
+fn scoped_lock_of_a_directory_reports_zero_and_hints() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
     lock_all(dir.path());
+    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
         .output()
         .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("locked 0 nodes"), "stdout={stdout:?}");
+    assert!(stderr.contains("directory-lock"), "stderr={stderr:?}");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        before,
+        "a directory lock must not rewrite the baseline"
+    );
+}
+
+/// Every spelling of a directory reports zero. `docs`, `docs/` and a path from a
+/// subdirectory all resolve to the same node, and each used to exit 0 in silence.
+#[test]
+fn every_directory_spelling_reports_zero() {
+    for spelling in ["sub", "sub/", "./sub"] {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
+        fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
+        lock_all(dir.path());
+
+        let output = drft_bin()
+            .args(["-C", dir.path().to_str().unwrap(), "lock", spelling])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{spelling:?} should exit 0");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("locked 0 nodes"),
+            "{spelling:?} was silent: stdout={stdout:?}"
+        );
+    }
+}
+
+/// A directory lock in a repo that has never been locked writes no lockfile.
+///
+/// It used to write one containing `node = []` — a valid, parseable, zero-entry
+/// baseline produced by a command that reported success. Every staleness rule
+/// then compared against nothing while the file's presence made the baseline look
+/// established.
+#[test]
+fn a_directory_lock_does_not_manufacture_an_empty_baseline() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
+    fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
     assert!(
-        output.status.success(),
-        "locking a directory should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
+        !dir.path().join("drft.lock").exists(),
+        "a lock that wrote nothing must not create a lockfile"
+    );
+}
+
+/// `lock` reports what it wrote, in both formats. Without it, a lock covering
+/// five files and one covering none are indistinguishable without reading
+/// `drft.lock` by hand.
+#[test]
+fn lock_reports_what_it_wrote() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
+    fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with("locked 3 nodes"), "stdout={stdout:?}");
+    for name in ["index.md", "setup.md", "drft.toml"] {
+        assert!(
+            stdout.contains(name),
+            "{name} missing from stdout={stdout:?}"
+        );
+    }
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "lock",
+            "index.md",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    assert_eq!(v["locked"].as_array().unwrap().len(), 1);
+    assert_eq!(v["locked"][0], "index.md");
+    assert_eq!(v["dropped"].as_array().unwrap().len(), 0);
+}
+
+/// A bare name resolves to the path the caller spelled before any `.md` variant
+/// invented from it.
+///
+/// With both `docs/` and `docs.md` present, `drft lock docs` used to snapshot
+/// `docs.md` — clearing its `stale-node` finding and writing a durable "this was
+/// reviewed" claim against a file the caller never named, silently.
+#[test]
+fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::create_dir(dir.path().join("docs")).unwrap();
+    fs::write(dir.path().join("docs.md"), "# Sibling").unwrap();
+    fs::write(dir.path().join("docs").join("a.md"), "# A").unwrap();
+    fs::write(
+        dir.path().join("index.md"),
+        "[a](docs/a.md) and [d](docs.md)",
+    )
+    .unwrap();
+    lock_all(dir.path());
+
+    fs::write(dir.path().join("docs.md"), "# Sibling CHANGED").unwrap();
+    assert!(check(dir.path()).contains("docs.md"));
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "docs"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    assert!(
+        check(dir.path()).contains("docs.md"),
+        "locking the directory `docs` must not snapshot the file `docs.md`"
     );
 }
 

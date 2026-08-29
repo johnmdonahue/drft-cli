@@ -5,6 +5,11 @@ use tempfile::TempDir;
 
 /// A clean check emits the `{diagnostics, summary}` envelope with empty
 /// diagnostics and zero counts.
+///
+/// The baseline is established first, deliberately. Without one there is nothing
+/// to compare against, so every staleness rule is a no-op and the envelope comes
+/// back empty for a reason that has nothing to do with the tree being clean —
+/// which is what `no-baseline` now reports.
 #[test]
 fn check_json_envelope_clean() {
     let dir = TempDir::new().unwrap();
@@ -21,6 +26,12 @@ fn check_json_envelope_clean() {
     )
     .unwrap();
 
+    let baseline = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
+        .output()
+        .unwrap();
+    assert!(baseline.status.success());
+
     let output = drft_bin()
         .args([
             "-C",
@@ -34,7 +45,12 @@ fn check_json_envelope_clean() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    assert_eq!(v["diagnostics"].as_array().unwrap().len(), 0);
+    assert_eq!(
+        v["diagnostics"].as_array().unwrap().len(),
+        0,
+        "diagnostics: {}",
+        v["diagnostics"]
+    );
     assert_eq!(v["summary"]["errors"], 0);
     assert_eq!(v["summary"]["warnings"], 0);
     assert!(output.status.success());

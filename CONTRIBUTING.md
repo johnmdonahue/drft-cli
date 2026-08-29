@@ -84,7 +84,7 @@ Core types live in [`src/model.rs`](src/model.rs); path/URI/hash helpers in [`sr
 
 ## Adding a rule
 
-1. Add the finding to `src/rules/staleness.rs` (lock-derived) or `src/rules/structural.rs` (shape-derived); return `Finding`s.
+1. Add the finding to `src/rules/staleness.rs` (lock-derived) or `src/rules/structural.rs` (shape-derived); return `Finding`s. A finding about the run rather than about a node — one that has to fire when there is no lockfile to join — belongs in `check.rs` instead, because `staleness.rs` only runs against a usable baseline.
 2. Add the rule name to `BUILTIN_RULES` in [`src/config.rs`](src/config.rs) so configured severities don't warn as unknown.
 3. Add unit tests in the rule module and an integration test in `tests/`.
 4. Document it in the [rules reference](docs/rules/README.md).

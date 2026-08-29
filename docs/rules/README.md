@@ -41,6 +41,32 @@ derives the drift findings by joining the graph to the lockfile;
 | `unresolved-edge`     | An edge target has no defining node (URIs excepted)            |
 | `unresolved-fragment` | A link's `#fragment` names no anchor its target defines        |
 | `detached-node`       | A node has no inbound or outbound edges (directories excepted) |
+| `unlocked-node`       | A lockable node has no lock entry, so its drift is unchecked    |
+| `no-baseline`         | The lockfile is absent or has no entries, so nothing is checked |
+
+**A baseline that does not exist is reported, not assumed.** `drft check` derives
+staleness by comparing the graph against the lockfile, so with no lockfile — or one
+with no entries — there is nothing to compare against and every staleness rule
+becomes a no-op. That used to be indistinguishable from a clean run: no findings,
+exit 0, either way. `no-baseline` states it once, at the run rather than per node.
+
+It is a rule and not a hint because hints never change an exit code. At its default
+`warn` a first `check` in a new repo stays quiet, and a repo that wants a missing
+baseline to fail its run promotes it:
+
+```toml
+[rules]
+no-baseline = "error"
+```
+
+**`unlocked-node` covers the partial case**, where a lockfile exists but a given
+node has no entry in it. Which nodes can be locked is asked of the lockfile writer
+rather than derived independently, so the rule and the writer cannot disagree: a
+directory and an unreferenced escaping symlink carry no hash and no outbound edge,
+are absent from a correct lockfile by design, and are never reported. An unlocked
+node subsumes its outbound `new-edge` findings, the way a stale node subsumes its
+`stale-edge` findings — the node having no baseline is the single fact behind every
+one of them.
 
 **A link to a directory tracks the directory, not its contents.** Directories are
 nodes, so the edge resolves and `unresolved-edge` stays quiet — but directories

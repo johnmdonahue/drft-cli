@@ -181,7 +181,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
 
     let result = match &cli.command {
         Commands::Init => run_init(&root),
-        Commands::Lock { paths, all } => run_lock(&root, paths, *all, hints),
+        Commands::Lock { paths, all } => run_lock(&root, cli.format, paths, *all, hints),
         Commands::Impact {
             paths,
             depth,
@@ -290,7 +290,13 @@ files = ["**/*.md"]
 /// over when a command substitution matches nothing, so inferring "every node"
 /// from an empty argument list would turn a scoped invocation into a whole-graph
 /// assertion silently, in a file that outlives the session.
-fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Result<i32> {
+fn run_lock(
+    root: &Path,
+    format: OutputFormat,
+    paths: &[String],
+    all: bool,
+    hints: &mut Hints,
+) -> Result<i32> {
     // Both guards are pure argv, so they answer before any graph work.
     if paths.is_empty() && !all {
         anyhow::bail!(
@@ -315,11 +321,28 @@ fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Resu
     let snapshot = lock::Lock::from_composed(&composed);
 
     if all {
+        let locked: Vec<String> = snapshot.nodes.keys().cloned().collect();
         lock::write(&graph_root, &snapshot)?;
+        report_lock(format, &locked, &[], hints)?;
         return Ok(0);
     }
 
-    let mut existing = lock::read(&graph_root, hints)?.unwrap_or_default();
+    // `read` returns `None` for a lockfile that is absent and for one that cannot
+    // be parsed. Defaulting both to an empty baseline meant a scoped lock over a
+    // corrupt lockfile silently replaced the whole file with only the paths named:
+    // every other entry was gone, and the nodes behind them became unlocked leaves
+    // whose loss no rule reports. Absent is the ordinary pre-lock state and is
+    // fine; unreadable is not something a scoped lock can preserve, so it refuses.
+    let read = lock::read(&graph_root, hints)?;
+    if read.is_none() && lock::exists(&graph_root) {
+        anyhow::bail!(
+            "drft.lock exists but could not be parsed, so locking named paths \
+             would replace the whole baseline with just those paths. Restore the \
+             file from version control, or run `drft lock --all` to rebuild it \
+             from the current tree — which asserts every node was reviewed."
+        );
+    }
+    let mut existing = read.unwrap_or_default();
 
     // Resolve every path before writing any of them. A typo in the third of five
     // must not leave the first two locked: a partial lock claims some files were
@@ -335,18 +358,111 @@ fn run_lock(root: &Path, paths: &[String], all: bool, hints: &mut Hints) -> Resu
     // that carries content, and drop the entry for anything that no longer does —
     // a deleted file, or a path that has become a hash-less directory. Dropping the
     // entry for a reviewed deletion is how a `removed-node` finding is cleared.
+    //
+    // A directory resolves to a real node but never carries a lock entry, so it
+    // reaches the `None` arm and removes a key that was never there. That used to
+    // be the whole of `drft lock <dir>`: exit 0, no output, nothing written. Say
+    // so rather than letting silence read as success.
+    let mut locked = Vec::new();
+    let mut dropped = Vec::new();
     for node in nodes {
         match snapshot.nodes.get(&node) {
             Some(entry) => {
-                existing.nodes.insert(node, entry.clone());
+                existing.nodes.insert(node.clone(), entry.clone());
+                locked.push(node);
             }
             None => {
-                existing.nodes.remove(&node);
+                if composed
+                    .nodes
+                    .get(&node)
+                    .and_then(drft::model::Node::fs_type)
+                    == Some("directory")
+                {
+                    let beneath = composed
+                        .nodes
+                        .keys()
+                        .filter(|k| k.starts_with(&format!("{node}/")))
+                        .count();
+                    hints.push(
+                        Hint::new(
+                            "directory-lock",
+                            format!(
+                                "is a directory, which carries no content to snapshot — the {beneath} {} beneath it {} not locked",
+                                if beneath == 1 { "node" } else { "nodes" },
+                                if beneath == 1 { "was" } else { "were" },
+                            ),
+                        )
+                        .at(&node)
+                        .with_next("name the files you reviewed, or pass `--all`"),
+                    );
+                    continue;
+                }
+                if existing.nodes.remove(&node).is_some() {
+                    dropped.push(node);
+                }
             }
         }
     }
-    lock::write(&graph_root, &existing)?;
+
+    // Write only when something changed. Writing unconditionally meant that
+    // `drft lock <dir>` in a repo that had never been locked created a valid,
+    // parseable, zero-entry lockfile — a baseline covering nothing, produced by a
+    // command that reported success, which made every staleness rule a no-op while
+    // the file's presence made it look established.
+    if !locked.is_empty() || !dropped.is_empty() {
+        lock::write(&graph_root, &existing)?;
+    }
+    report_lock(format, &locked, &dropped, hints)?;
     Ok(0)
+}
+
+/// Report what a lock actually wrote.
+///
+/// `lock` printed nothing at all until this landed, so a caller could not tell a
+/// lock that covered five files from one that covered none without reading
+/// `drft.lock` by hand. The count is what makes the difference observable; naming
+/// the nodes is what makes a resolution the caller did not expect — a bare name
+/// that matched a file in another directory — visible at the moment it happens
+/// rather than at the next `check`.
+fn report_lock(
+    format: OutputFormat,
+    locked: &[String],
+    dropped: &[String],
+    hints: &mut Hints,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => print_json_document(
+            serde_json::json!({ "locked": locked, "dropped": dropped }),
+            locked.len() + dropped.len(),
+            "name fewer paths",
+            hints,
+        ),
+        OutputFormat::Text => {
+            fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
+                if n == 1 { one } else { many }
+            }
+            let mut line = format!(
+                "locked {} {}",
+                locked.len(),
+                plural(locked.len(), "node", "nodes")
+            );
+            if !dropped.is_empty() {
+                line.push_str(&format!(
+                    ", dropped {} {}",
+                    dropped.len(),
+                    plural(dropped.len(), "entry", "entries")
+                ));
+            }
+            println!("{line}");
+            for node in locked {
+                println!("  locked  {node}");
+            }
+            for node in dropped {
+                println!("  dropped {node}");
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Candidate node keys for a user-supplied path, most-specific first.
@@ -366,10 +482,15 @@ fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
     let add_md = Path::new(path).extension().is_none();
     let mut candidates = Vec::new();
     if let Some(key) = graph_key(root, graph_root, path) {
+        // The exact key comes first. Offering `{key}.md` ahead of it meant that
+        // with both `docs/` and `docs.md` present, `drft lock docs` snapshotted
+        // `docs.md` — a durable "this was reviewed" claim against a file the
+        // caller never named, written silently. A path the caller spelled out
+        // and that exists is never a worse answer than one invented from it.
+        candidates.push(key.clone());
         if add_md {
             candidates.push(format!("{key}.md"));
         }
-        candidates.push(key);
     }
     if add_md {
         candidates.push(format!("{path}.md"));

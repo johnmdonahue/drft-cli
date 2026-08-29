@@ -145,6 +145,13 @@ struct EdgeToml {
     target_hash: Option<String>,
 }
 
+/// Whether `root` carries a lockfile at all. `read` collapses "absent" and
+/// "unparseable" into `Ok(None)`, so a caller that needs to tell a repo which has
+/// never been locked from one whose baseline is corrupt asks this separately.
+pub fn exists(root: &Path) -> bool {
+    root.join(LOCK_FILE).exists()
+}
+
 /// Read `drft.lock` from `root`. Returns `Ok(None)` when the file is absent or
 /// cannot be parsed; a parse failure raises a hint pointing at `drft lock --all`
 /// rather than failing, so `hints` collects it for the caller to emit.
