@@ -32,8 +32,10 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
-/// Strip all code content (fenced blocks and inline backtick spans),
-/// replacing with spaces to preserve offsets.
+/// Strip all code content (fenced blocks and inline backtick spans), replacing
+/// each character with a space and each newline with a newline. Offsets and line
+/// structure both survive, so a node's line in the masked copy is its line in the
+/// source.
 fn strip_code(content: &str) -> String {
     // First strip fenced code blocks (``` and ~~~)
     let mut result = String::with_capacity(content.len());
@@ -86,10 +88,14 @@ fn strip_code(content: &str) -> String {
                 j += 1;
             }
             if let Some(close_start) = found {
-                // Replace entire span (backticks + content + backticks) with spaces
+                // Blank the entire span — backticks, content, and closing backticks
+                // — but keep its newlines. A span crossing a line boundary that
+                // came back as spaces shortened the block by a line, so every
+                // node below it carried a line number one too high, and that
+                // number reaches `drft edges`, `drft impact`, and every finding.
                 let total = close_start + ticks - i;
-                for _ in 0..total {
-                    cleaned.push(' ');
+                for c in &chars[i..i + total] {
+                    cleaned.push(if *c == '\n' { '\n' } else { ' ' });
                 }
                 i += total;
             } else {
@@ -153,8 +159,7 @@ impl FrontmatterParser {
         // crossing the closing fence move the boundary — lifting a link out of
         // body prose in one direction, and silently dropping every declared
         // `sources:` edge in the other, on a file whose metadata still reported
-        // them. `strip_code` blanks whole spans, newlines included, so a moved
-        // boundary also misreports the lines it does find.
+        // them.
         let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };

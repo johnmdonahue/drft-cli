@@ -1,10 +1,53 @@
 mod common;
 use common::drft_bin;
+use serde_json::Value;
 use std::fs;
+use std::path::Path;
 use tempfile::TempDir;
 
+/// The `@frontmatter` occurrence lines a projection reports for `source`, in
+/// order. Reads the edge itself rather than searching output for a word, so a
+/// pass that stops extracting frontmatter edges fails here instead of passing on
+/// a finding the `fs` graph raises anyway.
+fn frontmatter_edge_lines(dir: &Path, source: &str, target: &str) -> Vec<u64> {
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            source,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "drft edges failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    json["edges"]
+        .as_array()
+        .expect("edges array")
+        .iter()
+        .filter(|e| e["source"] == source && e["target"] == target)
+        .flat_map(|e| {
+            e["metadata"]["@frontmatter"]["occurrences"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .map(|o| o["line"].as_u64().expect("occurrence line"))
+        .collect()
+}
+
 /// Frontmatter link-target values become edges that participate in staleness:
-/// editing the linked file makes the linker's edge stale.
+/// editing the linked file makes the *declaring* file's edge stale.
+///
+/// Both halves are asserted against the edge by name. Asserting that `check`
+/// output contains "stale" passes on `stale-node` for the edited target, which
+/// the `fs` graph raises with no frontmatter edge in the graph at all.
 #[test]
 fn frontmatter_sources_create_edges() {
     let dir = TempDir::new().unwrap();
@@ -18,6 +61,12 @@ fn frontmatter_sources_create_edges() {
     let data = dir.path().join("data");
     fs::create_dir(&data).unwrap();
     fs::write(data.join("notes.md"), "# Notes").unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "analysis.md", "data/notes.md"),
+        vec![3],
+        "the `sources` entry on line 3 should yield a frontmatter edge"
+    );
 
     drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
@@ -36,8 +85,35 @@ fn frontmatter_sources_create_edges() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("stale"),
-        "frontmatter dependency should trigger staleness, got: {stdout}"
+        stdout.contains("stale-edge]: analysis.md:3 \u{2192} data/notes.md"),
+        "editing the target should make the declaring file's edge stale, got: {stdout}"
+    );
+}
+
+/// A code span crossing a line boundary blanks to spaces *and newlines*, so every
+/// entry below it keeps its real line. Blanking the newline too shortened the
+/// masked block by a line and reported everything under the span one line high —
+/// in `drft edges`, in `drft impact`, and in every finding's location.
+#[test]
+fn frontmatter_line_survives_a_multiline_code_span() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    // `./target.md` is on line 5. The span opens on line 2 and closes on line 3.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nnote: \"a span like `one\n  two` wrapping two lines\"\nsources:\n  - ./target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![5],
+        "the entry under a two-line code span should report its own line"
     );
 }
 
