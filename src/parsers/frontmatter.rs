@@ -49,22 +49,29 @@ fn is_link_candidate(value: &str) -> bool {
 /// would move with it.
 struct Masked {
     text: String,
-    /// `lines[n]` is the 1-based source line that masked line `n + 1` begins on.
-    lines: Vec<usize>,
+    /// Per masked line, the source lines its columns came from: `(col, line)`
+    /// pairs meaning "from 1-based column `col` onward, the source line is
+    /// `line`". Every masked line opens with one; a fused line gains one per
+    /// newline the mask swallowed.
+    ///
+    /// Per column rather than per line, because a value can sit *after* a
+    /// multi-line span closes and share a masked line with the span's opening.
+    /// Mapping the whole line to where it began reports the line the span opened
+    /// on, for a value the mask did not touch.
+    lines: Vec<Vec<(usize, usize)>>,
 }
 
 impl Masked {
-    /// The source line a value reported at 1-based `masked` line came from.
-    ///
-    /// A masked line fusing several source lines reports the first of them, which
-    /// is where a value corrupted by that fusing begins. Splitting further would
-    /// mean tracking a source line per column, and the values it would separate
-    /// are the ones the mask has already altered.
-    fn source_line(&self, masked: usize) -> usize {
-        self.lines
-            .get(masked.wrapping_sub(1))
-            .copied()
-            .unwrap_or(masked)
+    /// The source line a value reported at 1-based `line` and `col` came from.
+    fn source_line(&self, line: usize, col: usize) -> usize {
+        let Some(spans) = self.lines.get(line.wrapping_sub(1)) else {
+            return line;
+        };
+        spans
+            .iter()
+            .rev()
+            .find(|(start, _)| *start <= col)
+            .map_or(line, |(_, source)| *source)
     }
 }
 
@@ -103,8 +110,10 @@ fn strip_code(content: &str) -> Masked {
     // source line each masked line begins on. Only this pass fuses lines; the
     // fenced pass above rebuilds the text line for line.
     let mut cleaned = String::with_capacity(result.len());
-    let mut lines = vec![1usize];
+    let mut lines: Vec<Vec<(usize, usize)>> = Vec::new();
+    let mut current = vec![(1usize, 1usize)];
     let mut source_line = 1usize;
+    let mut col = 1usize;
     let chars: Vec<char> = result.chars().collect();
     let mut i = 0;
     while i < chars.len() {
@@ -136,10 +145,14 @@ fn strip_code(content: &str) -> Masked {
                 // masked one — which is exactly the shift the table records.
                 let total = close_start + ticks - i;
                 for c in &chars[i..i + total] {
-                    if *c == '\n' {
-                        source_line += 1;
-                    }
                     cleaned.push(' ');
+                    col += 1;
+                    if *c == '\n' {
+                        // The masked line continues, but everything from the next
+                        // column on came from the following source line.
+                        source_line += 1;
+                        current.push((col, source_line));
+                    }
                 }
                 i += total;
             } else {
@@ -149,13 +162,18 @@ fn strip_code(content: &str) -> Masked {
             }
         } else {
             if chars[i] == '\n' {
+                lines.push(std::mem::take(&mut current));
                 source_line += 1;
-                lines.push(source_line);
+                current = vec![(1, source_line)];
+                col = 1;
+            } else {
+                col += 1;
             }
             cleaned.push(chars[i]);
             i += 1;
         }
     }
+    lines.push(current);
 
     Masked {
         text: cleaned,
@@ -237,10 +255,10 @@ impl FrontmatterParser {
         }
         candidates
             .into_iter()
-            .filter(|(value, _)| is_link_candidate(value))
-            .map(|(target, line)| Link {
+            .filter(|(value, _, _)| is_link_candidate(value))
+            .map(|(target, line, col)| Link {
                 target,
-                line: Some(masked.source_line(line)),
+                line: Some(masked.source_line(line, col)),
             })
             .collect()
     }
@@ -362,11 +380,14 @@ fn frontmatter_block(stripped: &str) -> Option<&str> {
     Some(yaml_str)
 }
 
-/// Collect string leaf *values* (not keys) with their 1-based source line — the
+/// Collect string leaf *values* (not keys) with their 1-based line and column in
+/// the masked copy — the
 /// frontmatter link candidates. Mirrors the metadata walk but keeps only strings.
-fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize)>) {
+fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize, usize)>) {
     match &node.data {
-        YamlData::Value(Scalar::String(s)) => out.push((s.to_string(), node.span.start.line())),
+        YamlData::Value(Scalar::String(s)) => {
+            out.push((s.to_string(), node.span.start.line(), node.span.start.col()))
+        }
         YamlData::Sequence(items) => {
             for item in items {
                 collect_links(item, out);
@@ -390,7 +411,7 @@ fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize)>) {
 fn collect_scoped(
     node: &MarkedYaml,
     keys: &std::collections::HashSet<&str>,
-    out: &mut Vec<(String, usize)>,
+    out: &mut Vec<(String, usize, usize)>,
 ) {
     match &node.data {
         YamlData::Sequence(items) => {

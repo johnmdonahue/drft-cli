@@ -179,6 +179,34 @@ fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     );
 }
 
+/// A value can sit *after* a multi-line span closes, sharing a masked line with
+/// the span's opening. Its own line is where the span closed, not where it opened,
+/// and the mask did not touch it — so a correction that maps a whole masked line
+/// to where it began reports the wrong line for a value that is perfectly intact.
+#[test]
+fn a_value_after_a_span_closes_reports_the_closing_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    // The span opens on line 2 and closes on line 4, where the value also sits.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nnote: `x\ny\nz` ./target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![4],
+        "the value shares a masked line with the span's opening, but sits after \
+         its close"
+    );
+}
+
 /// The mask blanks a span to spaces, and a span *inside* a link value is part of
 /// that value's text — `collect_links` reads the scalar out of the masked copy.
 /// So the mask decides the edge target, not only where the target was found.
