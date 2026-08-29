@@ -146,17 +146,14 @@ fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
 
 /// Blanking a span's newlines is also what lets some blocks parse at all: fusing
 /// the lines hides a construct that would otherwise break the mapping. The edge
-/// scan keeps that mask as a fallback, so a block reaching frontmatter only
-/// through it still yields its declared edges.
+/// scan reads that same mask, so a block reaching frontmatter only through it
+/// still yields its declared edges — and still reports their real lines, because
+/// the correction is a table rather than a second mask.
 ///
-/// Without the fallback this file's `sources:` entry produces no edge, no
-/// `stale-edge`, and `drft impact target.md` reports no dependents — while the
-/// file still plainly declares it. Under a config gating on `stale-edge` that
-/// turns a failing check into a passing one.
-///
-/// The line reported here comes from the fused mask and is not the entry's own.
-/// Correcting it is a separate defect about what the mask does to YAML, not about
-/// what it does to line structure.
+/// Masking this block any other way produces no edge, no `stale-edge`, and
+/// `drft impact target.md` reporting no dependents, while the file still plainly
+/// declares it. Under a config gating on `stale-edge` that turns a failing check
+/// into a passing one.
 #[test]
 fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     let dir = TempDir::new().unwrap();
@@ -172,10 +169,58 @@ fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     )
     .unwrap();
 
-    assert!(
-        !frontmatter_edge_lines(dir.path(), "doc.md", "target.md").is_empty(),
-        "a declared `sources` entry must still yield an edge when the block \
-         reaches frontmatter only through the line-collapsing mask"
+    // The span fuses the block's first two lines, so `./target.md` is line 5 and
+    // an uncorrected mask reports 4.
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![5],
+        "a declared `sources` entry must yield an edge, at its own line, when the \
+         block reaches frontmatter only through the line-collapsing mask"
+    );
+}
+
+/// The mask blanks a span to spaces, and a span *inside* a link value is part of
+/// that value's text — `collect_links` reads the scalar out of the masked copy.
+/// So the mask decides the edge target, not only where the target was found.
+///
+/// Masking with the span's newlines kept would fold them to a single space
+/// instead, changing the target string, the node it resolves to, the lockfile
+/// entry, and — where the two spellings name different files — the exit code. The
+/// blanked width is what pins that: five characters of span become five spaces.
+#[test]
+fn a_code_span_inside_a_link_value_blanks_to_its_own_width() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    // The span is "`a\nb`" — five characters, one of them a newline.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: ./`a\nb`target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let raw = json["edges"][0]["metadata"]["@frontmatter"]["occurrences"][0]["raw"]
+        .as_str()
+        .expect("occurrence raw");
+    assert_eq!(
+        raw, "./     target.md",
+        "the span's five characters blank to five spaces; folding them to one \
+         would move the edge to a different target"
     );
 }
 

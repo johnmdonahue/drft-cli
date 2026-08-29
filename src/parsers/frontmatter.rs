@@ -32,33 +32,45 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
-/// Whether a mask keeps the newlines inside a code span.
+/// A code-masked copy of a block, with the source line each masked line began on.
 ///
-/// The two callers want different answers, and conflating them moves a parse
-/// gate. [`FrontmatterParser::extract_links`] wants `Keep`, so a value's line in
-/// the masked copy is its line in the source. [`parsed_block`] and
-/// [`extract_metadata`] use the mask as a YAML *recovery* device — a span can
-/// hide a `:` that breaks the mapping — and fusing the lines of a span is part of
-/// what makes some of those blocks parse at all. Masking with `Keep` there would
-/// silently drop a declared `sources:` edge, un-mask the block for the markdown
-/// parser, and change what `drft check` exits with.
-#[derive(Clone, Copy)]
-enum Newlines {
-    Keep,
-    Blank,
+/// The mask blanks a code span to spaces, newlines included, because fusing a
+/// span's lines is part of what lets a block parse: a span can hide a `:` that
+/// would otherwise break the mapping. That fusing is also why a masked line
+/// number is not a source line number — the copy is shorter by one line per
+/// newline swallowed, so every value below a span resolved that many lines too
+/// high.
+///
+/// Recording the correspondence fixes the line without touching the text. The
+/// alternative — keeping the newlines so the copy stays the same shape — changes
+/// what the mask *says*, not just where it says it: `collect_links` reads a
+/// scalar's value out of this copy, so a span inside a link value would fold to a
+/// different target string, and the edge, the lockfile entry, and the resolution
+/// would move with it.
+struct Masked {
+    text: String,
+    /// `lines[n]` is the 1-based source line that masked line `n + 1` begins on.
+    lines: Vec<usize>,
 }
 
-/// Strip all code content (fenced blocks and inline backtick spans), replacing
-/// each character with a space. A span's newlines survive under
-/// [`Newlines::Keep`] and are blanked with everything else under
-/// [`Newlines::Blank`].
-///
-/// The masked copy is the same length in lines as its input under `Keep`. It is
-/// not byte-for-byte positional: the fenced pass rebuilds the text line by line,
-/// so a `\r` is dropped and a multi-byte character in a fenced line becomes one
-/// space per byte. Nothing reads offsets out of this — only `MarkedYaml`'s line
-/// and column — so line structure is the property that has to hold.
-fn strip_code(content: &str, newlines: Newlines) -> String {
+impl Masked {
+    /// The source line a value reported at 1-based `masked` line came from.
+    ///
+    /// A masked line fusing several source lines reports the first of them, which
+    /// is where a value corrupted by that fusing begins. Splitting further would
+    /// mean tracking a source line per column, and the values it would separate
+    /// are the ones the mask has already altered.
+    fn source_line(&self, masked: usize) -> usize {
+        self.lines
+            .get(masked.wrapping_sub(1))
+            .copied()
+            .unwrap_or(masked)
+    }
+}
+
+/// Mask fenced blocks and inline backtick spans, replacing every character with a
+/// space, and record where each masked line started in the source.
+fn strip_code(content: &str) -> Masked {
     // First strip fenced code blocks (``` and ~~~)
     let mut result = String::with_capacity(content.len());
     let mut in_code_block = false;
@@ -87,8 +99,12 @@ fn strip_code(content: &str, newlines: Newlines) -> String {
         result.push('\n');
     }
 
-    // Then strip inline code spans (single and double backticks)
+    // Then strip inline code spans (single and double backticks), recording the
+    // source line each masked line begins on. Only this pass fuses lines; the
+    // fenced pass above rebuilds the text line for line.
     let mut cleaned = String::with_capacity(result.len());
+    let mut lines = vec![1usize];
+    let mut source_line = 1usize;
     let chars: Vec<char> = result.chars().collect();
     let mut i = 0;
     while i < chars.len() {
@@ -116,12 +132,14 @@ fn strip_code(content: &str, newlines: Newlines) -> String {
                 // line, so every node below it resolved one line too high per
                 // newline swallowed, and that number reaches `drft edges`, `drft
                 // impact`, and every finding.
+                // A blanked newline advances the source line without ending the
+                // masked one — which is exactly the shift the table records.
                 let total = close_start + ticks - i;
                 for c in &chars[i..i + total] {
-                    cleaned.push(match (newlines, c) {
-                        (Newlines::Keep, '\n') => '\n',
-                        _ => ' ',
-                    });
+                    if *c == '\n' {
+                        source_line += 1;
+                    }
+                    cleaned.push(' ');
                 }
                 i += total;
             } else {
@@ -130,12 +148,19 @@ fn strip_code(content: &str, newlines: Newlines) -> String {
                 i += 1;
             }
         } else {
+            if chars[i] == '\n' {
+                source_line += 1;
+                lines.push(source_line);
+            }
             cleaned.push(chars[i]);
             i += 1;
         }
     }
 
-    cleaned
+    Masked {
+        text: cleaned,
+        lines,
+    }
 }
 
 /// Built-in frontmatter parser. Extracts YAML frontmatter as links and metadata.
@@ -189,43 +214,35 @@ impl FrontmatterParser {
         let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };
-        // Two masks, in order. `Keep` leaves a span's newlines alone, so every
-        // value reports its own line. A block that does not parse that way falls
-        // back to `Blank`, because fusing a span's lines is part of what lets
-        // some blocks parse at all — and dropping a declared edge to gain a line
-        // number trades a silent failure for a cosmetic one. The fallback path
-        // is where a line can still be wrong; that is #132's, not this one's.
-        // Malformed YAML contributes nothing either way — drft is not a YAML
-        // linter.
-        for newlines in [Newlines::Keep, Newlines::Blank] {
-            // `stripped` is owned and outlives the borrowed marked AST below.
-            let stripped = strip_code(block, newlines);
-            let Ok(docs) = MarkedYaml::load_from_str(stripped.as_str()) else {
-                continue;
-            };
-            let Some(root) = docs.first() else {
-                continue;
-            };
+        // One mask, the same one the gate and the metadata fallback use, so a
+        // value's text here is the text they saw. Only the reported line is
+        // corrected, against the table the mask built while fusing.
+        let masked = strip_code(block);
+        // Malformed YAML contributes nothing — drft is not a YAML linter.
+        let Ok(docs) = MarkedYaml::load_from_str(masked.text.as_str()) else {
+            return Vec::new();
+        };
+        let Some(root) = docs.first() else {
+            return Vec::new();
+        };
 
-            let mut candidates = Vec::new();
-            match &self.keys {
-                Some(keys) => {
-                    let wanted: std::collections::HashSet<&str> =
-                        keys.iter().map(String::as_str).collect();
-                    collect_scoped(root, &wanted, &mut candidates);
-                }
-                None => collect_links(root, &mut candidates),
+        let mut candidates = Vec::new();
+        match &self.keys {
+            Some(keys) => {
+                let wanted: std::collections::HashSet<&str> =
+                    keys.iter().map(String::as_str).collect();
+                collect_scoped(root, &wanted, &mut candidates);
             }
-            return candidates
-                .into_iter()
-                .filter(|(value, _)| is_link_candidate(value))
-                .map(|(target, line)| Link {
-                    target,
-                    line: Some(line),
-                })
-                .collect();
+            None => collect_links(root, &mut candidates),
         }
-        Vec::new()
+        candidates
+            .into_iter()
+            .filter(|(value, _)| is_link_candidate(value))
+            .map(|(target, line)| Link {
+                target,
+                line: Some(masked.source_line(line)),
+            })
+            .collect()
     }
 }
 
@@ -244,10 +261,7 @@ impl FrontmatterParser {
 /// The masking applies to the block, not to the file — see [`parsed_block`].
 fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     let (_, block) = parsed_block(content)?;
-    for candidate in [
-        Cow::Borrowed(block),
-        Cow::Owned(strip_code(block, Newlines::Blank)),
-    ] {
+    for candidate in [Cow::Borrowed(block), Cow::Owned(strip_code(block).text)] {
         if let Ok(docs) = MarkedYaml::load_from_str(candidate.as_ref())
             && let Some(root) = docs.first()
             // `parsed_block` already gated on one of these parsing as a mapping,
@@ -280,7 +294,7 @@ fn parsed_block(content: &str) -> Option<(usize, &str)> {
     let end = "---".len() + block.len() + "\n---".len();
     // Raw first, so a code span survives as the prose it is; then the same block
     // with spans blanked, since one can hide a `:` that breaks the mapping.
-    let parses = is_mapping(block) || is_mapping(&strip_code(block, Newlines::Blank));
+    let parses = is_mapping(block) || is_mapping(&strip_code(block).text);
     parses.then_some((end, block))
 }
 
