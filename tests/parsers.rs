@@ -624,3 +624,36 @@ fn only_marks_are_stripped() {
         "a space before the opening fence is not frontmatter, mark or no mark"
     );
 }
+
+/// The mark strip and the line correction compose.
+///
+/// They landed as separate changes reviewed separately against the same base, so
+/// their combination was never read by either review. A mark is removed from the
+/// front of the text before any parser sees it, and removing bytes at offset 0
+/// removes no newline — so a value below a multi-line code span reports the same
+/// line whether or not the file carries a mark.
+#[test]
+fn a_mark_does_not_shift_the_line_a_span_corrects() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    let block =
+        "---\nnote: \"a span `one\n  two` wrapping\"\nsources:\n  - ./target.md\n---\nbody\n";
+    fs::write(dir.path().join("plain.md"), block).unwrap();
+    fs::write(dir.path().join("marked.md"), format!("\u{feff}{block}")).unwrap();
+
+    // `./target.md` is on line 5 of both files.
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "marked.md", "target.md"),
+        vec![5]
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "marked.md", "target.md"),
+        frontmatter_edge_lines(dir.path(), "plain.md", "target.md"),
+        "a mark changes nothing about which line a value is reported on"
+    );
+}
