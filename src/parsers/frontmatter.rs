@@ -32,23 +32,32 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
-/// Whether a character starts a new line **as the YAML parser counts them**.
+/// Whether the character at `i` opens a new line **as the YAML parser counts
+/// them**.
 ///
-/// saphyr breaks on a lone `\r`; `str::lines` does not, splitting on `\n` and
-/// stripping a `\r` only where one immediately precedes a `\n`. The table is
-/// indexed by the parser's line numbers, so it has to agree with the parser — a
-/// carriage return left inside a line desynchronized the two and sent the
-/// correction to the wrong line.
+/// saphyr breaks on `\n` and on a lone `\r`, and counts `\r\n` as one break.
+/// `str::lines` disagrees on the middle case — it splits on `\n` and strips a
+/// `\r` only where one immediately precedes a `\n`. So a carriage return left
+/// inside a line is a break to the parser and was not one to this table, which
+/// desynchronized the two and sent the correction to the wrong line.
 ///
-/// This is not the same question as which line of the *file* a value sits on. A
-/// file's lines are counted by `\n` alone, which is what an editor and `grep -n`
-/// report, so a lone `\r` opens a new row of this table that maps to the same
-/// source line as the row before it.
+/// The lookahead is what makes `\r\n` one break rather than two. `str::lines`
+/// strips exactly one `\r`, so a source line ending in two of them arrives here
+/// as a masked `\r\n` — and testing characters one at a time opened a row for
+/// each, over-counting by one and reintroducing the same defect a line in the
+/// other direction.
 ///
-/// A CRLF file arrives with its `\r` already stripped by the fenced pass, so
-/// nothing is counted twice.
-fn is_break(c: char) -> bool {
-    c == '\n' || c == '\r'
+/// This is not the same question as which line of the *file* a value sits on.
+/// A file's lines are counted by `\n` alone, which is what an editor and
+/// `grep -n` report, so a lone `\r` opens a new row of this table that maps to
+/// the same source line as the row before it.
+fn opens_line(chars: &[char], i: usize) -> bool {
+    match chars[i] {
+        '\n' => true,
+        // A newline behind it will open the row; this one would double it.
+        '\r' => chars.get(i + 1) != Some(&'\n'),
+        _ => false,
+    }
 }
 
 /// A code-masked copy of a block, with the source lines its columns came from.
@@ -209,7 +218,7 @@ fn strip_code(content: &str) -> Masked {
                 i += 1;
             }
         } else {
-            if is_break(chars[i]) {
+            if opens_line(&chars, i) {
                 // A lone `\r` starts a new line for saphyr, so it starts a new
                 // row of this table — but it is not a line break in the file, so
                 // the source line it maps to does not advance.
@@ -436,7 +445,9 @@ fn frontmatter_block(stripped: &str) -> Option<&str> {
 
 /// Collect string leaf *values* (not keys) with their position in the masked copy
 /// — the frontmatter link candidates. The line is 1-based and the column is
-/// 0-based, which is saphyr's convention for each whatever its docs say. Mirrors the metadata walk but keeps only strings.
+/// 0-based, which is saphyr's convention for each whatever its docs say.
+///
+/// Mirrors the metadata walk but keeps only strings.
 fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize, usize)>) {
     match &node.data {
         YamlData::Value(Scalar::String(s)) => {
@@ -615,12 +626,10 @@ mod tests {
     /// A line the table does not hold falls back to the masked line rather than
     /// panicking.
     ///
-    /// Two things land here. saphyr reports line 0 for a scalar carrying a bare
-    /// `!` tag, and there is no zeroth masked line. And saphyr treats a lone `\r`
-    /// as a line break where `str::lines` does not, so a block containing one
-    /// desynchronizes this table from saphyr's line numbering and the lookup can
-    /// run past the end. The fallback keeps that quiet rather than correct — see
-    /// the tracked defect for the lone-`\r` case.
+    /// One thing reaches it: saphyr reports line 0 for a scalar carrying a bare
+    /// `!` tag, and there is no zeroth masked line. Line-terminator disagreements
+    /// do not — `opens_line` matches saphyr break for break, so the table holds a
+    /// row for every line the parser can name.
     #[test]
     fn a_line_the_table_does_not_hold_falls_back() {
         let masked = strip_code("a: b\n");
@@ -646,6 +655,25 @@ mod tests {
             masked.lines,
             vec![vec![(0, 1)], vec![(0, 1)], vec![(0, 2)], vec![(0, 3)]]
         );
+    }
+
+    /// `\r\n` is one line break, not two.
+    ///
+    /// `str::lines` strips exactly one `\r`, so a source line ending in two of
+    /// them arrives at the inline pass as a masked `\r\n` — which saphyr counts
+    /// once. Testing characters one at a time opens a row for each and
+    /// over-counts, which is the same defect as under-counting, one line the
+    /// other way.
+    #[test]
+    fn a_carriage_return_before_a_newline_opens_one_row_not_two() {
+        // Two carriage returns in the source, one surviving `str::lines`.
+        let masked = strip_code("a: one\r\r\nb: two\n");
+        assert_eq!(
+            masked.lines,
+            vec![vec![(0, 1)], vec![(0, 2)], vec![(0, 3)]],
+            "`b` is on source line 2, as it is for a plain CRLF file"
+        );
+        assert_eq!(masked.lines, strip_code("a: one\r\nb: two\n").lines);
     }
 
     /// A backtick with no partner is copied through rather than blanked, and a
