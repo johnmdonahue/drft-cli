@@ -88,9 +88,9 @@ Only values reachable through one of those keys become edges. A matched key hand
 
 `edge_keys` scopes edges only — [metadata](#metadata) always captures the whole block, including the keys you did not declare.
 
-**Omitting it is a supported shape.** A frontmatter graph may exist purely to seed node metadata, with no provenance edges at all, so a graph without `edge_keys` loads and emits none. It raises a `no-edge-keys` hint saying so, because the other reading is a repo that believes it is tracking provenance and is not. Hints are advisory and do not change the exit code.
+**Omitting it is a supported shape.** A frontmatter graph may exist purely to seed node metadata, with no provenance edges at all, so a graph without `edge_keys` loads, emits none, and says nothing about it. `edge_keys = []` is that same state written out — an empty set names nowhere to look — so it behaves identically.
 
-`edge_keys = []` is the same state written out — an empty set names nowhere to look — so it behaves identically and raises the same hint.
+Declaring keys states an expectation the corpus can fail to meet, and that is the state worth reporting. A graph that declares `edge_keys` and finds no value under any of them raises an `edge-keys-matched-nothing` hint: a misspelled key otherwise produces a graph tracking nothing while the config says otherwise, at exit 0 and in silence. A graph whose `files` globs reached no files at all is exempt, so a repository with nothing written yet is not nagged. Hints are advisory and do not change the exit code.
 
 ## Metadata
 

@@ -75,7 +75,7 @@ fn the_init_template_produces_a_graph_that_emits_frontmatter_edges() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        !stderr.contains("no-edge-keys"),
-        "the template should declare edge_keys: {stderr}"
+        !stderr.contains("edge-keys-matched-nothing"),
+        "the template's declared key must match the frontmatter it scaffolds: {stderr}"
     );
 }

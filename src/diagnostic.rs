@@ -80,7 +80,7 @@ impl Finding {
     /// `subject` for a node finding.
     fn subject_display(&self) -> String {
         let subject = if self.lines.is_empty() {
-            self.subject.clone()
+            crate::util::one_line(&self.subject)
         } else {
             let joined = self
                 .lines
@@ -88,7 +88,7 @@ impl Finding {
                 .map(usize::to_string)
                 .collect::<Vec<_>>()
                 .join(",");
-            format!("{}:{joined}", self.subject)
+            format!("{}:{joined}", crate::util::one_line(&self.subject))
         };
         match &self.target {
             Some(target) => format!("{subject} → {}", crate::util::one_line(target)),

@@ -98,17 +98,28 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
         match graph.parser.as_str() {
             "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
             "frontmatter" => {
+                let parser_files = files.clone();
                 let fragment =
                     builders::frontmatter::build(name, &texts, files, graph.edge_keys.clone());
                 // Declaring keys states an expectation the corpus can fail to
-                // meet — a misspelled key, a corpus that never uses it, a `files`
-                // glob that reaches nothing. That produces a graph tracking
-                // nothing while the config says otherwise, and it exits 0.
+                // meet — a misspelled key, or one no file uses. That produces a
+                // graph tracking nothing while the config says otherwise, and it
+                // exits 0.
                 //
                 // Declaring *no* keys is not this state: a frontmatter graph may
                 // exist purely to seed node metadata, and a graph that is as
                 // intended has nothing to report.
-                if !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
+                //
+                // Neither is a graph that reached no files. A repository with
+                // nothing written yet has no corpus to disagree with the config,
+                // and `drft init` scaffolds `edge_keys`, so hinting here would nag
+                // every fresh repository on every command until someone wrote a
+                // first derivation — the same objection that inverted this hint.
+                let read_any = texts.iter().any(|(path, _)| match &parser_files {
+                    Some(set) => set.is_match(path),
+                    None => true,
+                });
+                if read_any && !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
                     hints.push(
                         Hint::new(
                             "edge-keys-matched-nothing",

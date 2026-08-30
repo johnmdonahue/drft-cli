@@ -44,10 +44,17 @@ pub enum LinkPolicy {
 /// identity, and preserved on the occurrence. Non-URI targets are resolved
 /// relative to `source`; URIs pass through unchanged.
 ///
-/// Resolution that yields the empty string keeps the literal instead. `.` and
-/// `sub/..` name the declaring file's own directory, which normalizes to `""` at
-/// the graph root — and an edge to `""` is a node reference the graph does not
-/// contain, which would reach `drft.lock` and the JGF export as a dangling one.
+/// Resolution that yields the empty string becomes `.` — the graph root's own
+/// spelling. `..` from `docs/a.md` and `.` from `a.md` both name the root, which
+/// normalizes to `""`, and an edge to `""` is a node reference the graph does not
+/// contain: it would reach `drft.lock` and the JGF export as a dangling one.
+///
+/// `.` rather than the literal, because the literal collides. `..` from
+/// `docs/a.md` names the root and `../..` names one level above it — two
+/// different places — and both would render as `..`, merging two edges into one
+/// finding. Keeping the resolved spelling also keeps `raw`, which the `base !=
+/// target` guard would drop if the target were the literal it came from. The
+/// root carries no node, so the edge is unresolved either way.
 ///
 /// `raw` is kept only when resolution moved the path. The resolved target alone
 /// cannot distinguish `foo.md` from `./foo.md` — they resolve identically — and
@@ -76,7 +83,7 @@ fn occurrence(source: &str, link: &Link, policy: LinkPolicy) -> Option<(String, 
     } else {
         let resolved = resolve_link(source, base);
         if resolved.is_empty() {
-            base.to_string()
+            ".".to_string()
         } else {
             resolved
         }
@@ -284,5 +291,77 @@ mod tests {
         let edges = link_edges("a.md", &[link("b.md", None)], LinkPolicy::Body);
         assert_eq!(edges.len(), 1);
         assert!(edges[0].metadata.is_empty());
+    }
+
+    // The two policies differ on exactly one input class, and the difference is
+    // load-bearing in both directions: swapping either builder's policy left the
+    // whole suite green until these existed.
+
+    #[test]
+    fn a_body_link_naming_only_a_fragment_is_not_an_edge() {
+        // `[see](#section)` names a position in the file it sits in. It is not a
+        // reference to another document, so there is nothing to draw an edge to.
+        let edges = link_edges("doc.md", &[link("#section", Some(1))], LinkPolicy::Body);
+        assert!(edges.is_empty(), "got: {edges:?}");
+    }
+
+    #[test]
+    fn a_declared_value_naming_only_a_fragment_is_an_edge() {
+        // A frontmatter value cites another document — a provenance claim has no
+        // "this file" form — so `#section` names no document at all. It cannot
+        // resolve, and it must not vanish: the author declared it.
+        let edges = link_edges("doc.md", &[link("#section", Some(1))], LinkPolicy::Declared);
+        assert_eq!(edges.len(), 1, "got: {edges:?}");
+        assert_eq!(edges[0].target, "#section");
+    }
+
+    #[test]
+    fn a_declared_fragment_on_a_document_still_splits() {
+        // Only a value that *begins* with `#` is a whole target. A cross-document
+        // fragment keeps the document as the target and the fragment on the
+        // occurrence, under both policies.
+        for policy in [LinkPolicy::Body, LinkPolicy::Declared] {
+            let edges = link_edges("doc.md", &[link("other.md#section", Some(1))], policy);
+            assert_eq!(edges.len(), 1, "{policy:?}: {edges:?}");
+            assert_eq!(edges[0].target, "other.md", "{policy:?}");
+        }
+    }
+
+    #[test]
+    fn a_target_resolving_to_the_graph_root_is_named_dot() {
+        // `..` from `docs/a.md` and `.` from `a.md` both name the root, which
+        // normalizes to the empty string. An edge to `""` is a node reference the
+        // graph does not contain and would reach the lockfile and the JGF export
+        // as a dangling one.
+        // `sub/..` from `docs/a.md` is deliberately absent: it cancels back to
+        // `docs`, which is a real directory node, so it never reaches this path.
+        for (source, raw) in [("docs/a.md", ".."), ("a.md", "."), ("a.md", "sub/..")] {
+            let edges = link_edges(source, &[link(raw, Some(1))], LinkPolicy::Body);
+            assert_eq!(edges.len(), 1, "{source} → {raw}");
+            assert_eq!(edges[0].target, ".", "{source} → {raw}");
+        }
+    }
+
+    #[test]
+    fn the_root_and_the_level_above_it_stay_distinct() {
+        // Naming the fallback after the literal would merge these: `..` names the
+        // root and `../..` names one level above it, and both would render `..`.
+        // Two places, two edges — and each keeps the literal the author wrote.
+        let edges = link_edges(
+            "docs/a.md",
+            &[link("..", Some(1)), link("../..", Some(3))],
+            LinkPolicy::Body,
+        );
+        let targets: Vec<&str> = edges.iter().map(|e| e.target.as_str()).collect();
+        assert_eq!(targets, vec![".", ".."], "got: {edges:?}");
+        // The literal survives on each occurrence. Naming the fallback after the
+        // literal would set `target == base` and the `base != target` guard would
+        // drop exactly the text the fallback exists to keep.
+        for (edge, expected) in edges.iter().zip(["..", "../.."]) {
+            let raw = edge.metadata["occurrences"][0]["raw"]
+                .as_str()
+                .unwrap_or_else(|| panic!("no raw on {edge:?}"));
+            assert_eq!(raw, expected, "{edge:?}");
+        }
     }
 }

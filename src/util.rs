@@ -217,4 +217,18 @@ mod tests {
     fn hash_has_prefix() {
         assert!(hash_bytes(b"hello").starts_with("b3:"));
     }
+
+    #[test]
+    fn one_line_escapes_what_would_break_a_line_oriented_report() {
+        // A target comes from a file, so it can carry anything a YAML scalar can.
+        // An unescaped newline puts a second line into `check` output with no
+        // severity prefix, which a log parser reads as a different record.
+        assert_eq!(one_line("a\nb"), "a\\nb");
+        assert_eq!(one_line("a\r\nb"), "a\\r\\nb");
+        assert_eq!(one_line("a\tb"), "a\\tb");
+        assert_eq!(one_line("a\u{1b}b"), "a\\u{1b}b");
+        // Ordinary text, including non-ASCII, is untouched.
+        assert_eq!(one_line("docs/guide.md"), "docs/guide.md");
+        assert_eq!(one_line("arrow → target"), "arrow → target");
+    }
 }

@@ -1111,7 +1111,7 @@ fn run_impact(
                         format!(
                             "{} (via {}, depth {}, radius {})\n",
                             i.location(),
-                            i.via,
+                            drft::util::one_line(&i.via),
                             i.depth,
                             i.impact_radius
                         )

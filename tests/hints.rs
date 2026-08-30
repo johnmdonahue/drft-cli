@@ -611,3 +611,77 @@ fn declared_edge_keys_that_match_raise_no_hint() {
         serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).expect("valid JSON");
     assert_eq!(v["hints"].as_array().map(Vec::len), Some(0));
 }
+
+/// A repository with nothing written yet has no corpus to disagree with the
+/// config, and `drft init` scaffolds `edge_keys` — so hinting here would nag
+/// every fresh repository on every command until someone wrote a first
+/// derivation. That is the objection that inverted this hint in the first place.
+#[test]
+fn a_graph_that_reached_no_files_does_not_raise_the_hint() {
+    let dir = TempDir::new().unwrap();
+    let init = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "init"])
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    for command in [vec!["check"], vec!["edges"], vec!["nodes"]] {
+        let mut args = vec!["-C", dir.path().to_str().unwrap()];
+        args.extend(command.iter().copied());
+        let output = drft_bin().args(&args).output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("edge-keys-matched-nothing"),
+            "{command:?} nagged a freshly initialised repository: {stderr}"
+        );
+    }
+}
+
+/// One finding is one line. A target carrying a newline otherwise emits a second
+/// line with no severity prefix, which a log parser reads as a different kind of
+/// record. JSON carries the value exactly and stays the authoritative form.
+#[test]
+fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: |\n  first line\n  second line\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("warn[") || line.starts_with("error[") || line.starts_with("  "),
+            "every line carries a severity or is an indented continuation: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("first line\\nsecond line"),
+        "the newline is escaped rather than emitted: {stdout}"
+    );
+
+    // JSON keeps the real string.
+    let json = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&json.stdout).trim()).expect("valid JSON");
+    assert_eq!(v["edges"][0]["target"], "first line\nsecond line");
+}

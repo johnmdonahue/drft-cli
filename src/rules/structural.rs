@@ -191,6 +191,11 @@ fn wrong_base_cause(graph: &Graph, edge: &crate::model::Edge) -> Option<String> 
             && graph.nodes.get(*raw).is_some_and(Node::is_resolved)
     })?;
     let suggestion = crate::util::relative_from(&edge.source, raw);
+    // Rendered into a text line like the finding head, so the same escaping
+    // applies: a newline here puts a line into `check` output carrying neither a
+    // severity prefix nor the `cause:` one.
+    let raw = crate::util::one_line(raw);
+    let suggestion = crate::util::one_line(&suggestion);
     Some(format!(
         "`{raw}` resolves from the graph root, but paths resolve relative to the declaring file (did you mean `{suggestion}`?)"
     ))
