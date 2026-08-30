@@ -135,14 +135,20 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
                                     "any of them"
                                 }
                             ),
-                            "check the spelling against the frontmatter the files actually carry",
+                            // The globs stay in the remedy. Reaching *some* file
+                            // does not mean reaching the right one — a corpus can
+                            // keep its derivations in files this graph never sees.
+                            "check the spelling against the frontmatter the files carry, and the graph's `files` globs",
                         )
                     } else {
                         (
-                            format!(
-                                "declares {keys}, but its `files` globs reached no file to read"
-                            ),
-                            "add files the globs reach, or correct the globs",
+                            // "No file was read" rather than "the globs matched
+                            // nothing": a file the globs do reach is dropped here
+                            // if it is ignored, unreadable, or not UTF-8 text, and
+                            // this seam cannot tell those apart. Naming only the
+                            // globs sent the reader to a correct one.
+                            format!("declares {keys}, but no file was read for this graph"),
+                            "check the `files` globs, any `ignore` patterns, and that the matched files are readable UTF-8 text",
                         )
                     };
                     hints.push(

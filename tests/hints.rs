@@ -650,9 +650,18 @@ fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
         .unwrap_or_else(|| panic!("a wrong glob must not be silent: {v}"));
     assert_eq!(hint["name"], "edge-keys-matched-nothing");
     assert!(
-        hint["message"].as_str().unwrap().contains("globs"),
-        "the message must name the glob, not the keys: {hint}"
+        hint["message"]
+            .as_str()
+            .unwrap()
+            .contains("no file was read"),
+        "the message must say nothing was read, not blame the keys: {hint}"
     );
+    // The remedy names all three reasons a file can go unread, because this seam
+    // cannot tell a wrong glob from an ignored, unreadable, or non-UTF-8 file.
+    let next = hint["next"].as_str().unwrap();
+    for cause in ["globs", "ignore", "UTF-8"] {
+        assert!(next.contains(cause), "remedy must name {cause}: {next}");
+    }
 }
 
 /// One finding is one line. A target carrying a newline otherwise emits a second

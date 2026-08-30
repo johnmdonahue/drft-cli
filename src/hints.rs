@@ -242,4 +242,12 @@ mod tests {
         // Raw on the hint, which is serialised.
         assert!(h.locus.as_deref().unwrap().contains('\n'));
     }
+
+    #[test]
+    fn the_colour_renderer_escapes_the_locus_too() {
+        let h = Hint::new("directory-lock", "carries no content").at("we\nird");
+        let colored = h.format_text_color();
+        assert_eq!(colored.lines().count(), 1, "{colored:?}");
+        assert!(colored.contains("we\\nird"), "{colored:?}");
+    }
 }

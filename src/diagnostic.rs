@@ -244,4 +244,26 @@ mod tests {
         assert!(f.cause.as_deref().unwrap().contains('\n'));
         assert!(!f.cause.as_deref().unwrap().contains("\\n"));
     }
+
+    #[test]
+    fn the_colour_renderer_escapes_everything_the_plain_one_does() {
+        let f = Finding::warn("unresolved-edge", "we\nird.md", vec![], "no defining node")
+            .with_lines(vec![2])
+            .with_target("t\nt.md")
+            .with_cause("`we\nird.md` resolves from the graph root");
+        let colored = f.format_text_color();
+        assert!(
+            !colored.contains('\n') || colored.lines().count() == 2,
+            "{colored:?}"
+        );
+        for fragment in ["we\\nird.md", "t\\nt.md"] {
+            assert!(
+                colored.contains(fragment),
+                "missing {fragment}: {colored:?}"
+            );
+        }
+        // Two lines exactly: the head and its cause. A raw newline in any of the
+        // three interpolated values would make more.
+        assert_eq!(colored.lines().count(), 2, "{colored:?}");
+    }
 }

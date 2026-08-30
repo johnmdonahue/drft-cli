@@ -575,13 +575,15 @@ fn report_lock(
             // a copy of `drft.lock` and, on a large graph, thousands of lines of
             // it. `dropped` is always named: it is never long, and an entry
             // leaving the baseline is the half worth reading.
+            // One node, one line — a node key can carry whatever a path can, and
+            // a raw newline here turns a lock report into a record nothing can read.
             if !all {
                 for node in locked {
-                    line.push_str(&format!("\n  locked  {node}"));
+                    line.push_str(&format!("\n  locked  {}", drft::util::one_line(node)));
                 }
             }
             for node in dropped {
-                line.push_str(&format!("\n  dropped {node}"));
+                line.push_str(&format!("\n  dropped {}", drft::util::one_line(node)));
             }
             write_stdout_line(&line)
         }
@@ -632,12 +634,15 @@ fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> an
     matches.dedup();
     match matches.as_slice() {
         [] => anyhow::anyhow!("node not found: \"{path}\""),
-        [hit] => anyhow::anyhow!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        [hit] => anyhow::anyhow!(
+            "node not found: \"{path}\" — did you mean \"{}\"?",
+            drft::util::one_line(hit)
+        ),
         many => {
             let shown = many
                 .iter()
                 .take(5)
-                .map(|k| format!("\"{k}\""))
+                .map(|k| format!("\"{}\"", drft::util::one_line(k)))
                 .collect::<Vec<_>>();
             let more = if many.len() > shown.len() {
                 format!(", and {} more", many.len() - shown.len())
@@ -710,7 +715,10 @@ fn resolve_lock_node(
                 hints.push(
                     Hint::new(
                         "resolved-elsewhere",
-                        format!("names no node from here; resolves to `{candidate}`"),
+                        format!(
+                            "names no node from here; resolves to `{}`",
+                            drft::util::one_line(&candidate)
+                        ),
                     )
                     .at(path)
                     .with_next("name the path from the graph root to be sure of the target"),

@@ -111,6 +111,11 @@ pub fn push_metadata_lines(lines: &mut Vec<String>, metadata: &Map<String, Value
 fn push_fields(lines: &mut Vec<String>, obj: &Map<String, Value>, indent: usize) {
     let pad = " ".repeat(indent);
     for (key, value) in obj {
+        // The key is authored content, so a newline in one forges a second block
+        // rather than merely splitting a record. `render_value` already escapes
+        // the value beside it; escaping one half and not the other is how a
+        // rendering ends up lying about what a node holds.
+        let key = crate::util::one_line(key);
         let Some(entries) = object_entries(value) else {
             lines.push(format!("{pad}{key}: {}", render_value(value)));
             continue;

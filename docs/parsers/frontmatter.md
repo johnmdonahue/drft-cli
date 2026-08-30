@@ -36,7 +36,7 @@ A frontmatter value cites another document, so — unlike a body link — a valu
 
 **The finding names the target, which is resolved against the declaring file.** A value under `docs/guide.md` is reported as `docs/TBD`, not `TBD`. The literal text is on the edge's occurrence as `raw`, which `drft edges` shows and `check` does not.
 
-Text output is line-oriented, so one record is always one line: a target, subject, node id, or hint locus carrying a newline or a control character is escaped when rendered there. The escaping belongs to the rendering — every value reaches JSON exactly as written, which is the authoritative form.
+Text output is line-oriented, so one record is always one line: a value carrying a newline or a control character is escaped wherever text renders it. The escaping belongs to the rendering — every value reaches JSON, and the lockfile, exactly as written, which is the authoritative form.
 
 Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
 
@@ -90,7 +90,7 @@ Only values reachable through one of those keys become edges. A matched key hand
 
 **Omitting it is a supported shape.** A frontmatter graph may exist purely to seed node metadata, with no provenance edges at all, so a graph without `edge_keys` loads, emits none, and says nothing about it. `edge_keys = []` is that same state written out — an empty set names nowhere to look — so it behaves identically.
 
-Declaring keys states an expectation the corpus can fail to meet, and that is the state worth reporting. A graph that declares `edge_keys` and finds no value under any of them raises an `edge-keys-matched-nothing` hint: a misspelled key otherwise produces a graph tracking nothing while the config says otherwise, at exit 0 and in silence. A graph whose `files` globs reached no files at all is exempt, so a repository with nothing written yet is not nagged. Hints are advisory and do not change the exit code.
+Declaring keys states an expectation the corpus can fail to meet, and that is the state worth reporting. A graph that declares `edge_keys` and finds no value under any of them raises an `edge-keys-matched-nothing` hint: a misspelled key otherwise produces a graph tracking nothing while the config says otherwise, at exit 0 and in silence. A graph that read no file at all says that instead, and points at the globs, the `ignore` patterns, and whether the matched files are readable text — a graph reaching nothing looks the same whether its globs are wrong or its corpus is unwritten, so the hint names both rather than guessing. Hints are advisory and do not change the exit code.
 
 ## Metadata
 

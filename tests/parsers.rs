@@ -1174,3 +1174,50 @@ fn an_impact_record_carrying_a_newline_stays_on_one_line() {
         "the newline is escaped rather than emitted: {stdout}"
     );
 }
+
+/// Both halves of an impact record come from the graph, and the second half is
+/// only reachable at depth two: a chain whose middle hop is a file whose *name*
+/// carries a newline. A markdown link cannot spell that, so the seed declares it
+/// as a frontmatter value — which this change made possible. Escaping the
+/// location and not the via left this record split.
+#[test]
+fn an_impact_record_escapes_the_via_as_well_as_the_location() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# T\n").unwrap();
+    fs::write(dir.path().join("we\nird.md"), "[t](./target.md)\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"we\\nird.md\"\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+            "--depth",
+            "2",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.contains("(via ") && line.contains("depth "),
+            "every record carries its whole suffix: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("via we\\nird.md"),
+        "the via is escaped, not emitted raw: {stdout}"
+    );
+}
