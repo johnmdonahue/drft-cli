@@ -40,13 +40,31 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
 
     // Decode each file's bytes once for the text builders. Non-UTF-8 files are
     // skipped (they have no text edges or metadata).
+    //
+    // A leading byte-order mark is dropped here, which is the one place that
+    // serves every text parser at once. A frontmatter block opens with `---` at
+    // offset 0, and a BOM ahead of it means no parser recognizes the block: the
+    // file loses its metadata and its declared edges, the markdown parser is
+    // handed the block as body text, and nothing reports any of it.
+    //
+    // Here rather than in the `fs` source, because that is what `auto_hash`
+    // hashes — stripping there moves every BOM-carrying file's hash, reports
+    // `stale-node` on files nobody edited, and stops drft's `b3:` being the
+    // file's blake3. Here rather than in the frontmatter parser, because
+    // `parsed_block` returns an offset into this text and the markdown parser
+    // masks with it; skipping three bytes without adjusting that offset leaves
+    // the closing fence partly unmasked. Removing bytes at offset 0 removes no
+    // newline, so line numbers are unaffected.
     let texts: Vec<(String, String)> = files
         .iter()
         .filter_map(|f| {
             f.bytes
                 .as_ref()
                 .and_then(|b| std::str::from_utf8(b).ok())
-                .map(|text| (f.path.clone(), text.to_string()))
+                .map(|text| {
+                    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+                    (f.path.clone(), text.to_string())
+                })
         })
         .collect();
 

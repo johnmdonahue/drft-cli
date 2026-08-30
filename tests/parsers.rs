@@ -361,3 +361,149 @@ fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
         "a broken `sources` path must still be reported, got: {stdout}"
     );
 }
+
+/// A leading byte-order mark used to cost a file its frontmatter entirely: the
+/// block opens with `---` at offset 0 and the BOM sits ahead of it, so no parser
+/// recognized the block. The file lost its metadata and its declared edges, the
+/// markdown parser was handed the block as body text, and nothing reported any of
+/// it — `detached-node` at exit 0, indistinguishable from a file that declared
+/// nothing.
+#[test]
+fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("bom.md"),
+        "\u{feff}---\nsources:\n  - target.md\n---\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            "bom.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let edges = json["edges"].as_array().expect("edges array");
+    assert_eq!(edges.len(), 1, "expected one edge, got: {json}");
+    assert_eq!(edges[0]["target"], "target.md");
+    assert_eq!(
+        edges[0]["metadata"]["@frontmatter"]["occurrences"][0]["line"],
+        serde_json::json!(3),
+        "the declared source must yield an edge, at its own line"
+    );
+}
+
+/// The mark is stripped from the decoded text, not from the bytes drft hashes.
+///
+/// Stripping in the `fs` source instead would move every BOM-carrying file's
+/// hash — reporting `stale-node` on files nobody edited, and stopping drft's
+/// `b3:` from being the file's blake3. Two files identical but for the mark
+/// therefore still hash differently, which is what pins the fix to the decode.
+#[test]
+fn a_byte_order_mark_is_still_hashed() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("plain.md"), "---\ntitle: t\n---\nbody\n").unwrap();
+    fs::write(
+        dir.path().join("bom.md"),
+        "\u{feff}---\ntitle: t\n---\nbody\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let hash = |id: &str| -> String {
+        json["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == id)
+            .unwrap()["metadata"]["@fs"]["hash"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_ne!(
+        hash("bom.md"),
+        hash("plain.md"),
+        "the mark is part of the file, so it is part of the hash"
+    );
+
+    // And both files parse to the same frontmatter, which is the point of
+    // stripping it from the text.
+    let frontmatter = |id: &str| -> Value {
+        json["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == id)
+            .unwrap()["metadata"]["@frontmatter"]
+            .clone()
+    };
+    assert_eq!(frontmatter("bom.md"), frontmatter("plain.md"));
+}
+
+/// A block drft fails to recognize is handed to the markdown parser as body
+/// text, and a single-paragraph block followed by its closing `---` is a setext
+/// heading — so the file publishes an address it does not answer to, which a link
+/// written to it then passes `unresolved-fragment` against.
+///
+/// Recognizing the block masks it, and the fabricated anchor goes with it. The
+/// general case, where any block-recognition failure does this, is its own defect.
+#[test]
+fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("bom.md"),
+        "\u{feff}---\npurpose: a title\n---\nbody\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "bom.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert_eq!(
+        json["nodes"][0]["metadata"]["@markdown"]["anchors"],
+        serde_json::json!([]),
+        "the frontmatter is masked, so it defines no heading"
+    );
+}
