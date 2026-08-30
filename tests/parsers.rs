@@ -510,14 +510,15 @@ fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
     );
 }
 
-/// A mark costs a file its headings even when it has no frontmatter, so the strip
-/// cannot live in the frontmatter parser.
+/// A mark costs a file its headings, so the strip cannot live in the frontmatter
+/// parser: whatever that parser does to its own copy of the text, the markdown
+/// parser still receives the text with the mark on the front and still loses the
+/// first heading to it.
 ///
-/// This is the plain reason that location is wrong, and it is the one that shows
-/// up on ordinary files: a document opening with a mark and a heading has no
-/// block for that parser to be called about. The offset argument — that skipping
-/// the mark's bytes without adjusting the block's end offset leaves the closing
-/// fence partly unmasked — is also true, and takes a constructed file to exhibit.
+/// This is the plain reason that location is wrong and the one that shows up on
+/// ordinary documents. The offset argument — that skipping the mark's bytes
+/// without adjusting the block's end offset leaves the closing fence partly
+/// unmasked — is also true, and takes a constructed file to exhibit.
 #[test]
 fn a_mark_on_a_file_with_no_frontmatter_still_costs_it_its_headings() {
     let dir = TempDir::new().unwrap();
@@ -581,4 +582,45 @@ fn more_than_one_leading_mark_is_stripped() {
     let edges = json["edges"].as_array().expect("edges array");
     assert_eq!(edges.len(), 1, "expected one edge, got: {json}");
     assert_eq!(edges[0]["target"], "target.md");
+}
+
+/// The strip removes marks and nothing else.
+///
+/// Every other test here asserts that something *is* removed, which leaves the
+/// boundary pinned in one direction only — a refactor generalizing the trim to
+/// "leading whitespace and zero-width characters" would land green while turning
+/// documents that are not frontmatter into frontmatter. A space before the
+/// opening fence is the cheap case: `--- ` is not a frontmatter opener, and a
+/// mark ahead of the space does not make it one.
+#[test]
+fn only_marks_are_stripped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "\u{feff} ---\nsources:\n  - target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert!(
+        json["nodes"][0]["metadata"].get("@frontmatter").is_none(),
+        "a space before the opening fence is not frontmatter, mark or no mark"
+    );
 }

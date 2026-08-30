@@ -61,8 +61,12 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
     // is the one that decides it. `parsed_block` returns an offset into this text
     // and the markdown parser masks with it, so skipping the mark's bytes without
     // adjusting that offset leaves the closing fence partly unmasked. More
-    // simply: a mark costs a file with no frontmatter its headings too, and the
-    // frontmatter parser never sees that file.
+    // simply: a mark costs a file its headings too, and a strip inside the
+    // frontmatter parser never reaches the copy the markdown parser is handed.
+    //
+    // That this is the *only* such place is the property to preserve. Normalizing
+    // inside each text parser instead is output-identical today and stays green,
+    // and it silently gives a parser added later no strip at all.
     //
     // What keeps this away from the hash is that the decode builds an owned copy
     // and never touches `files` — not the fact that it runs after `auto_hash`.
