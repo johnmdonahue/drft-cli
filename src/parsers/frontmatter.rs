@@ -50,9 +50,14 @@ fn is_link_candidate(value: &str) -> bool {
 struct Masked {
     text: String,
     /// Per masked line, the source lines its columns came from: `(col, line)`
-    /// pairs meaning "from 1-based column `col` onward, the source line is
+    /// pairs meaning "from 0-based column `col` onward, the source line is
     /// `line`". Every masked line opens with one; a fused line gains one per
     /// newline the mask swallowed.
+    ///
+    /// **Zero-based, because `saphyr::Marker::col()` is** — its own doc comment
+    /// says 1-indexed and the scanner initialises the column to 0 and resets it to
+    /// 0 on a newline. Building this table 1-based and comparing it against that
+    /// leaves the first column of every masked line resolving to nothing.
     ///
     /// Per column rather than per line, because a value can sit *after* a
     /// multi-line span closes and share a masked line with the span's opening.
@@ -62,11 +67,16 @@ struct Masked {
 }
 
 impl Masked {
-    /// The source line a value reported at 1-based `line` and `col` came from.
+    /// The source line a value reported at 1-based `line` and 0-based `col` came
+    /// from — saphyr's own convention for each, whatever its doc comments say.
     fn source_line(&self, line: usize, col: usize) -> usize {
         let Some(spans) = self.lines.get(line.wrapping_sub(1)) else {
             return line;
         };
+        // The first pair sits at column 0 and `col` is zero-based, so a line the
+        // table holds always resolves. The fallbacks cover a line it does not
+        // hold: saphyr reports line 0 for a scalar carrying a bare `!` tag, and
+        // there is no zeroth masked line to correct against.
         spans
             .iter()
             .rev()
@@ -108,12 +118,16 @@ fn strip_code(content: &str) -> Masked {
 
     // Then strip inline code spans (single and double backticks), recording the
     // source line each masked line begins on. Only this pass fuses lines; the
-    // fenced pass above rebuilds the text line for line.
+    // fenced pass above rebuilds the text line for line — though it blanks a line
+    // to `" ".repeat(line.len())`, which is a *byte* count, so a fenced line
+    // holding multi-byte characters comes back wider in characters than its
+    // source. Nothing inside a fenced line can open a span, so no breakpoint is
+    // recorded there and the widening reaches no column this table resolves.
     let mut cleaned = String::with_capacity(result.len());
     let mut lines: Vec<Vec<(usize, usize)>> = Vec::new();
-    let mut current = vec![(1usize, 1usize)];
+    let mut current = vec![(0usize, 1usize)];
     let mut source_line = 1usize;
-    let mut col = 1usize;
+    let mut col = 0usize;
     let chars: Vec<char> = result.chars().collect();
     let mut i = 0;
     while i < chars.len() {
@@ -136,11 +150,14 @@ fn strip_code(content: &str) -> Masked {
             }
             if let Some(close_start) = found {
                 // Blank the entire span — backticks, content, and closing
-                // backticks. Under `Keep` its newlines survive: a span crossing a
-                // line boundary that came back as spaces shortened the block by a
-                // line, so every node below it resolved one line too high per
-                // newline swallowed, and that number reaches `drft edges`, `drft
-                // impact`, and every finding.
+                // backticks, newlines included. Keeping a span's newlines instead
+                // was tried and reverted twice: it moves the boundary
+                // `parsed_block` decides, and it changes the *text* of a value,
+                // since `collect_links` reads a scalar's string out of this copy.
+                // Blanking them is what shortens the masked block, so a value
+                // below a span resolves one line too high per newline swallowed —
+                // and that number reaches `drft edges`, `drft impact`, and every
+                // finding. The table is what corrects it.
                 // A blanked newline advances the source line without ending the
                 // masked one — which is exactly the shift the table records.
                 let total = close_start + ticks - i;
@@ -156,16 +173,18 @@ fn strip_code(content: &str) -> Masked {
                 }
                 i += total;
             } else {
-                // No closing — keep the backtick as-is
+                // No closing — keep the backtick as-is. It still occupies a
+                // column, so the counter has to advance with it.
                 cleaned.push(chars[i]);
+                col += 1;
                 i += 1;
             }
         } else {
             if chars[i] == '\n' {
                 lines.push(std::mem::take(&mut current));
                 source_line += 1;
-                current = vec![(1, source_line)];
-                col = 1;
+                current = vec![(0, source_line)];
+                col = 0;
             } else {
                 col += 1;
             }
@@ -228,7 +247,8 @@ impl FrontmatterParser {
         // crossing the closing fence move the boundary — lifting a link out of
         // body prose in one direction, and silently dropping every declared
         // `sources:` edge in the other, on a file whose metadata still reported
-        // them.
+        // them. `strip_code` blanks whole spans, newlines included, so a moved
+        // boundary also misreports the lines it does find.
         let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };
@@ -486,6 +506,101 @@ mod tests {
             keys: None,
         };
         parser.parse("test.md", content)
+    }
+
+    /// The mask blanks every character of a span, newlines included, so the copy
+    /// is the same length and shorter by a line per newline swallowed. Asserting
+    /// the text directly is what stops a change to the blanking passing on the
+    /// strength of an integration test that only reads line numbers.
+    #[test]
+    fn the_mask_blanks_a_span_to_spaces_and_fuses_its_lines() {
+        let masked = strip_code("a: `one\ntwo` b\nc: d\n");
+        // Nine characters of span — backticks, content, and the newline between —
+        // become nine spaces, and the two source lines become one masked line.
+        assert_eq!(masked.text, "a:           b\nc: d\n");
+    }
+
+    /// The table's exact shape, because the arithmetic behind it is invisible to
+    /// any test that only reads a corrected line. Five separate changes to the
+    /// column counter left every integration test green; each moves this.
+    ///
+    /// Columns are **zero-based**, matching `saphyr::Marker::col()` rather than
+    /// its doc comment.
+    #[test]
+    fn the_table_records_a_breakpoint_at_every_swallowed_newline() {
+        // Masked line 1 is `a:` plus the blanked span plus ` b`, fusing source
+        // lines 1 and 2. Column 0 opens on line 1; from column 8 — just past the
+        // space that replaced the newline — the source is line 2.
+        let masked = strip_code("a: `one\ntwo` b\nc: d\n");
+        assert_eq!(
+            masked.lines,
+            vec![vec![(0, 1), (8, 2)], vec![(0, 3)], vec![(0, 4)]]
+        );
+    }
+
+    /// Two newlines inside one span means two breakpoints on one masked line, and
+    /// the later one has to win.
+    #[test]
+    fn a_taller_span_records_one_breakpoint_per_line_it_swallows() {
+        let masked = strip_code("a: `one\ntwo\nthree` b\n");
+        assert_eq!(masked.lines[0], vec![(0, 1), (8, 2), (12, 3)]);
+        assert_eq!(masked.source_line(1, 0), 1);
+        assert_eq!(masked.source_line(1, 7), 1);
+        assert_eq!(masked.source_line(1, 8), 2);
+        assert_eq!(masked.source_line(1, 11), 2);
+        assert_eq!(masked.source_line(1, 12), 3);
+        assert_eq!(masked.source_line(1, 20), 3);
+    }
+
+    /// Column 0 is a real column and must resolve to the line the masked line
+    /// opened on. Built one-based and compared against saphyr's zero-based
+    /// column, it resolves to nothing and the correction silently does not happen.
+    #[test]
+    fn column_zero_resolves_to_the_line_the_masked_line_opened_on() {
+        let masked = strip_code("a: `one\ntwo` b\nc: d\n");
+        assert_eq!(masked.source_line(1, 0), 1);
+        assert_eq!(masked.source_line(2, 0), 3);
+    }
+
+    /// A span on a later line records its breakpoint at that line's own column.
+    /// The counter has to reset at every masked newline for that to hold — without
+    /// the reset it carries the preceding lines' width forward, and the breakpoint
+    /// lands past every column a value on that line can occupy, so the correction
+    /// silently stops happening.
+    #[test]
+    fn the_column_restarts_on_every_masked_line() {
+        let masked = strip_code("a: bbbbbbbb\nc: `one\ntwo` d\n");
+        assert_eq!(
+            masked.lines,
+            vec![vec![(0, 1)], vec![(0, 2), (8, 3)], vec![(0, 4)]]
+        );
+        assert_eq!(masked.source_line(2, 7), 2);
+        assert_eq!(masked.source_line(2, 8), 3);
+    }
+
+    /// An unmatched backtick is copied through rather than blanked, and its line
+    /// keeps its own newline, so nothing fuses.
+    ///
+    /// It cannot be observed through the table, and that is a property rather than
+    /// a gap: the scan pairs a backtick with any later one, so an unmatched
+    /// backtick is always the last in the block and no span — and therefore no
+    /// breakpoint — can follow it. The counter still advances across it, because
+    /// `col` has to mean the masked column for the arithmetic around it to be
+    /// readable.
+    #[test]
+    fn an_unmatched_backtick_is_copied_and_fuses_nothing() {
+        let masked = strip_code("a: b`\nc: d\n");
+        assert_eq!(masked.text, "a: b`\nc: d\n");
+        assert_eq!(masked.lines, vec![vec![(0, 1)], vec![(0, 2)], vec![(0, 3)]]);
+    }
+
+    /// A line the table does not hold falls back to the masked line rather than
+    /// panicking. saphyr reports line 0 for a scalar carrying a bare `!` tag.
+    #[test]
+    fn a_line_the_table_does_not_hold_falls_back() {
+        let masked = strip_code("a: b\n");
+        assert_eq!(masked.source_line(0, 0), 0);
+        assert_eq!(masked.source_line(99, 4), 99);
     }
 
     #[test]
