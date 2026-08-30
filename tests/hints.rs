@@ -475,3 +475,64 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
     let stdout = String::from_utf8_lossy(&text.stdout);
     assert!(stdout.contains("  cause: "), "got: {stdout}");
 }
+
+/// A frontmatter graph declaring no `edge_keys` emits no edges. That is a
+/// supported shape — a graph may exist purely to seed node metadata — so it is
+/// advisory rather than a refusal. The hint is what stops the other reading:
+/// a repo that believes it is tracking provenance and is not.
+#[test]
+fn a_frontmatter_graph_without_edge_keys_hints_and_still_reads_metadata() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\ntitle: Doc\nsources:\n  - ./target.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "advisory must not change the exit");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    let hint = v["hints"]
+        .as_array()
+        .and_then(|h| h.first())
+        .unwrap_or_else(|| panic!("expected a hint: {stdout}"));
+    assert_eq!(hint["name"], "no-edge-keys");
+    assert_eq!(hint["locus"], "graphs.frontmatter");
+
+    // Metadata is untouched by the absence — that is the whole point of the shape,
+    // and `sources` is still captured as metadata even though it yields no edge.
+    let node = &v["nodes"][0];
+    assert_eq!(node["id"], "doc.md");
+    assert_eq!(node["metadata"]["@frontmatter"]["title"], "Doc");
+    assert_eq!(
+        node["metadata"]["@frontmatter"]["sources"][0], "./target.md",
+        "edge scoping must not gate metadata"
+    );
+
+    let edges = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&edges.stdout).trim().is_empty(),
+        "a graph with no edge_keys must emit no edges"
+    );
+}

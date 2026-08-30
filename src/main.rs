@@ -273,13 +273,15 @@ ignore = ["target/**", "node_modules/**"]
 parser = "markdown"
 files = ["**/*.md"]
 
-# Frontmatter link values resolve relative to the declaring file, the same way
-# that file's markdown links do — from docs/guide.md, write ../src/lib.rs, not
-# src/lib.rs. Add keys = ["sources"] to limit edges to named keys instead of
-# every path-shaped value.
+# edge_keys names the frontmatter keys whose values are derivations. Every string
+# under one becomes an edge; every other field is node metadata, read with
+# `drft nodes --field`. Omit it for a metadata-only graph that emits no edges.
+# Values resolve relative to the declaring file, the same way that file's markdown
+# links do — from docs/guide.md, write ../src/lib.rs, not src/lib.rs.
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
+edge_keys = ["sources"]
 
 [rules]
 # Built-in rules default to warn. Promote for CI:

@@ -16,4 +16,5 @@ files = [\"**/*.md\"]
 [graphs.frontmatter]
 parser = \"frontmatter\"
 files = [\"**/*.md\"]
+edge_keys = [\"sources\"]
 ";

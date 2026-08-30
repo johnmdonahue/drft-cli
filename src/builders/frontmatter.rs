@@ -11,19 +11,19 @@ use crate::parsers::Parser;
 use crate::parsers::frontmatter::FrontmatterParser;
 
 /// Build the `frontmatter` graph fragment from text files, labeled `label`.
-/// `filter` scopes which paths the builder reads (`None` reads all); `keys`
-/// scopes which frontmatter keys yield edges (`None` uses shape detection). The
-/// fragment carries edges plus a node per file whose frontmatter parses to an
-/// object.
+/// `filter` scopes which paths the builder reads (`None` reads all);
+/// `edge_keys` names the frontmatter keys whose values yield edges, and an empty
+/// list means the graph emits none. The fragment carries edges plus a node per
+/// file whose frontmatter parses to an object.
 pub fn build(
     label: &str,
     texts: &[(String, String)],
     filter: Option<GlobSet>,
-    keys: Option<Vec<String>>,
+    edge_keys: Vec<String>,
 ) -> Graph {
     let parser = FrontmatterParser {
         file_filter: filter,
-        keys,
+        edge_keys,
     };
     let mut graph = Graph::labeled(label);
 
@@ -63,7 +63,7 @@ mod tests {
             "analysis.md",
             "---\ntitle: Analysis\nstatus: draft\nsources:\n  - ./data/notes.md\n---\n\n# Body\n",
         )]);
-        let graph = build("frontmatter", &t, None, None);
+        let graph = build("frontmatter", &t, None, vec!["sources".to_string()]);
         assert_eq!(graph.label.as_deref(), Some("frontmatter"));
 
         let meta = &graph.nodes["analysis.md"].metadata;
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn no_node_without_frontmatter() {
         let t = texts(&[("plain.md", "# Just a heading\n")]);
-        let graph = build("frontmatter", &t, None, None);
+        let graph = build("frontmatter", &t, None, vec!["sources".to_string()]);
         assert!(graph.nodes.is_empty());
         assert!(graph.edges.is_empty());
     }

@@ -100,7 +100,7 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
                 name,
                 &texts,
                 files,
-                graph.keys.clone(),
+                graph.edge_keys.clone(),
             )),
             // Parser names are validated at config load (`KNOWN_PARSERS`); an
             // unknown parser cannot reach here.

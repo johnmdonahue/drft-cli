@@ -131,7 +131,7 @@ fn frontmatter_line_survives_a_multiline_code_span() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -158,7 +158,7 @@ fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -191,7 +191,7 @@ fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -220,7 +220,7 @@ fn a_value_after_a_span_closes_reports_the_closing_line() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"note\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -252,7 +252,7 @@ fn a_code_span_inside_a_link_value_blanks_to_its_own_width() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     // The span is "`a\nb`" — five characters, one of them a newline.
@@ -294,7 +294,7 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -358,15 +358,15 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     );
 }
 
-/// `keys` scoping drops path-shaped values under other keys while keeping the
+/// `edge_keys` scoping drops path-shaped values under other keys while keeping the
 /// finding that reports a typo'd source. That combination is the point: the
 /// rule-level `ignore` workaround silences both, so it cannot express this.
 #[test]
-fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
+fn frontmatter_edge_keys_scope_edges_without_hiding_broken_sources() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("real.md"), "# Real").unwrap();
@@ -386,7 +386,7 @@ fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
 
     assert!(
         !stdout.contains("/customers"),
-        "`route` is outside `keys` and must not yield an edge, got: {stdout}"
+        "`route` is outside `edge_keys` and must not yield an edge, got: {stdout}"
     );
     assert!(
         stdout.contains("unresolved-edge") && stdout.contains("missing.md"),
@@ -405,7 +405,7 @@ fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -589,7 +589,7 @@ fn more_than_one_leading_mark_is_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -629,7 +629,7 @@ fn only_marks_are_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -669,7 +669,7 @@ fn a_mark_does_not_shift_the_line_a_span_corrects() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -696,7 +696,7 @@ const SCOPED_CONFIG: &str = "\
 [graphs.frontmatter]
 parser = \"frontmatter\"
 files = [\"**/*.md\"]
-keys = [\"sources\"]
+edge_keys = [\"sources\"]
 ";
 
 /// Write a scoped-config fixture whose frontmatter is `block`, alongside the
@@ -1027,5 +1027,108 @@ fn a_crlf_document_reports_the_files_line() {
         frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
         vec![5],
         "`\\r\\n` is one line break, so the entry is on the file's line 5"
+    );
+}
+
+/// Every string reachable through a declared key is an edge. A value naming
+/// nothing that resolves becomes an edge that resolves to nothing, and
+/// `unresolved-edge` reports it exactly as it reports a typo'd path.
+///
+/// Each value below was silently discarded before: no edge, no finding, no
+/// record that the file had declared anything at all. The remedy is the reader's
+/// — fix the value, fix the config, or move the field — and none of those is
+/// available while the drop is invisible.
+#[test]
+fn prose_under_a_declared_key_is_reported_rather_than_dropped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - TBD\n  - needs review\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for value in ["TBD", "needs review"] {
+        assert!(
+            stdout.contains("unresolved-edge") && stdout.contains(value),
+            "{value:?} must be reported, not dropped, got: {stdout}"
+        );
+    }
+}
+
+/// A value naming a directory resolves. drft has directory nodes, so a
+/// derivation naming one is legitimate; the extension test discarded it for
+/// having no dot, which is a defect the heuristic was hiding.
+#[test]
+fn a_declared_value_naming_a_directory_resolves() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(dir.path().join("notes")).unwrap();
+    fs::write(dir.path().join("notes").join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: notes\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("doc.md → notes"),
+        "a directory value must resolve to its node, got: {stdout}"
+    );
+
+    let check = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&check.stdout).contains("unresolved-edge"),
+        "the directory node exists, so nothing is unresolved"
+    );
+}
+
+/// A value written as markdown link syntax is diagnosed, never unwrapped. The
+/// finding names the literal text, which is the whole remedy signal: unwrapping
+/// it would be inference about what the author meant.
+#[test]
+fn a_markdown_link_value_is_diagnosed_rather_than_unwrapped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("real.md"), "# Real\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"[Design notes](real.md)\"\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("unresolved-edge") && stdout.contains("[Design notes](real.md)"),
+        "the finding must name the literal value, got: {stdout}"
     );
 }

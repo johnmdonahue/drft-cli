@@ -28,13 +28,13 @@ template: docs/templates/page.md
 ---
 ```
 
-The parser parses the YAML frontmatter block, then collects all string leaf values and filters them through a heuristic: a value is treated as a link if it has an explicit path prefix (`./`, `../`, `/`), is a valid URI, or has a plausible file extension (1-6 alphanumeric characters after the last dot, not all digits). Non-string types (numbers, booleans, null) are skipped. Strings with spaces are rejected as prose.
+The parser parses the YAML frontmatter block and collects every string leaf value reachable through a key you declared in [`edge_keys`](#naming-the-keys-that-yield-edges). Each one becomes an edge. Non-string types (numbers, booleans, null) are skipped — they name no target. YAML mapping keys within lists (e.g. `- name: foo bar`) are ignored; only values are examined.
 
-This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
+**The declared key is the whole of the signal.** drft does not decide whether a value looks like a path. A value that resolves to nothing becomes an edge that resolves to nothing, and `unresolved-edge` reports it exactly as it reports a typo'd path — the remedy is yours: fix the value, fix the config, or move the field to a key you did not declare.
 
 Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
 
-Because both read the same rendering, **an edge whose value is path-shaped carries the target `@frontmatter` reports**. A code span inside a value is part of that value rather than something blanked out of it:
+Because both read the same rendering, **an edge carries the target `@frontmatter` reports**. A code span inside a value is part of that value rather than something blanked out of it:
 
 ```yaml
 sources: ./setup.md `draft`
@@ -42,7 +42,7 @@ sources: ./setup.md `draft`
 
 That value names a target ending in `` `draft` ``, which nothing answers to, so it raises `unresolved-edge` rather than quietly resolving to `setup.md`.
 
-A value is trimmed and has its spans blanked before the shape heuristic runs, so neither a span beside a path nor the trailing newline a `|` block scalar keeps will hide it. A span sitting _inside_ a path still can: blanking ``tar`x`get.md`` leaves a space in the middle, the heuristic reads a space as prose, and the value yields no edge. Two further qualifications, both about the direction the correspondence runs: a value the heuristic rejects has no edge to carry a target, so it holds from edges to metadata and not the other way; and a target is recorded as resolved against the declaring file, so `./setup.md` in a block appears as `setup.md` on the edge.
+One qualification: a target is recorded as resolved against the declaring file, so `./setup.md` in a block appears as `setup.md` on the edge.
 
 ### Path resolution
 
@@ -67,22 +67,24 @@ The `cause` is withheld for paths written `./`, `../`, or `/` — those are rela
 
 Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
 
-### Scoping to keys
+### Naming the keys that yield edges
 
-Shape detection classifies by value, so any path-shaped value becomes an edge whatever key it sits under. An API route (`route: /customers`) and a glob naming the files a rule governs (`paths: ["api/**"]`) both look like paths and neither is a derivation. Declare `keys` to name the keys that yield edges:
+`edge_keys` names the frontmatter keys whose values are derivations:
 
 ```toml
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
-keys = ["sources"]
+edge_keys = ["sources"]
 ```
 
-Only values reachable through one of those keys become edges. A matched key hands over its whole subtree, so lists and nested maps under `sources:` still yield every path beneath them, and the key is matched at any depth — `meta.sources` is found too. Values under every other key are left alone.
+Only values reachable through one of those keys become edges. A matched key hands over its whole subtree, so lists and nested maps under `sources:` still yield every value beneath them, and the key is matched at any depth — `meta.sources` is found too. Values under every other key are left alone, which is what keeps an API route (`route: /customers`) and a glob naming the files a rule governs (`paths: ["api/**"]`) out of the graph.
 
-Scoping picks the key; the shape heuristic above still applies within it, so prose under `sources:` is still rejected. `keys` scopes edges only — [metadata](#metadata) always captures the whole block.
+`edge_keys` scopes edges only — [metadata](#metadata) always captures the whole block, including the keys you did not declare.
 
-Omitting `keys` keeps shape detection over the entire block. Prefer `keys` where the frontmatter carries anything besides derivations: it fixes the false edges without suppressing `unresolved-edge`, which is the only finding that reports a typo'd source. A rule-level `ignore` would silence both.
+**Omitting it is a supported shape.** A frontmatter graph may exist purely to seed node metadata, with no provenance edges at all, so a graph without `edge_keys` loads and emits none. It raises a `no-edge-keys` hint saying so, because the other reading is a repo that believes it is tracking provenance and is not. Hints are advisory and do not change the exit code.
+
+`edge_keys = []` is the same state written out — an empty set names nowhere to look — so it behaves identically and raises the same hint.
 
 ## Metadata
 
@@ -100,7 +102,7 @@ Declare a graph that uses the frontmatter parser:
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
-keys = ["sources"] # optional
+edge_keys = ["sources"]
 ```
 
-`files` scopes which files the parser reads (default `["**/*.md"]`); `keys` scopes which frontmatter keys yield edges (see [scoping to keys](#scoping-to-keys)). See [configuration](../config.md) for the full graph schema.
+`files` scopes which files the parser reads (default `["**/*.md"]`); `edge_keys` names the keys whose values yield edges (see [naming the keys that yield edges](#naming-the-keys-that-yield-edges)). See [configuration](../config.md) for the full graph schema.
