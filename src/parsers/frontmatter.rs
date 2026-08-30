@@ -94,23 +94,131 @@ struct Masked {
     lines: Vec<Vec<(usize, usize)>>,
 }
 
+#[cfg(test)]
 impl Masked {
     /// The source line a value reported at 1-based `line` and 0-based `col` came
     /// from — saphyr's own convention for each, whatever its doc comments say.
+    ///
+    /// Test-only sugar over [`source_line_in`], which is what the parser calls: a
+    /// mask and a raw block build the same table shape and are read by one lookup.
     fn source_line(&self, line: usize, col: usize) -> usize {
-        let Some(spans) = self.lines.get(line.wrapping_sub(1)) else {
-            return line;
-        };
-        // The first pair sits at column 0 and `col` is zero-based, so a line the
-        // table holds always resolves. The fallbacks cover a line it does not
-        // hold: saphyr reports line 0 for a scalar carrying a bare `!` tag, and
-        // there is no zeroth masked line to correct against.
-        spans
-            .iter()
-            .rev()
-            .find(|(start, _)| *start <= col)
-            .map_or(line, |(_, source)| *source)
+        source_line_in(&self.lines, line, col)
     }
+}
+
+/// The source line a value reported at 1-based `line` and 0-based `col` came from,
+/// against any table built by the walk below.
+fn source_line_in(lines: &[Vec<(usize, usize)>], line: usize, col: usize) -> usize {
+    let Some(spans) = lines.get(line.wrapping_sub(1)) else {
+        return line;
+    };
+    // The first pair sits at column 0 and `col` is zero-based, so a line the
+    // table holds always resolves. The fallbacks cover a line it does not
+    // hold: saphyr reports line 0 for a scalar carrying a bare `!` tag, and
+    // there is no zeroth masked line to correct against.
+    spans
+        .iter()
+        .rev()
+        .find(|(start, _)| *start <= col)
+        .map_or(line, |(_, source)| *source)
+}
+
+/// The line table for a block nothing has been blanked out of: one row per line
+/// saphyr counts, carrying the file line that row sits on.
+///
+/// **A raw block is not already numbered the way the file is.** saphyr breaks on
+/// `\n` and on a lone `\r`; a file's lines are counted by `\n` alone, which is what
+/// an editor and `grep -n` report. So a stray carriage return above a value opens a
+/// row here without advancing the file line, and reporting saphyr's line unaltered
+/// moves that value and every one below it — the same shift the mask's table exists
+/// to correct, arriving by a route that does no masking at all.
+///
+/// This is the `else` arm of [`strip_code`]'s walk with the span handling removed,
+/// and it has to stay that: the two tables are read by one lookup and any
+/// disagreement about what opens a line desynchronizes them.
+fn raw_line_table(text: &str) -> Vec<Vec<(usize, usize)>> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut lines = Vec::new();
+    let mut current = vec![(0usize, 1usize)];
+    let mut source_line = 1usize;
+    for i in 0..chars.len() {
+        if opens_line(&chars, i) {
+            lines.push(std::mem::take(&mut current));
+            if chars[i] == '\n' {
+                source_line += 1;
+            }
+            current = vec![(0, source_line)];
+        }
+    }
+    lines.push(current);
+    lines
+}
+
+/// A single value with its code spans blanked and its ends trimmed, for the
+/// candidacy test alone.
+///
+/// The trim is not incidental. A `|` block scalar keeps a trailing newline and a
+/// quoted value can carry padding, both of which land inside the extension test
+/// and cost the value its edge — with no code span involved anywhere.
+///
+/// The mask does two jobs, and only one of them belongs to the block. Keeping a
+/// span from breaking the mapping is structural and is answered by reading the raw
+/// block. Deciding whether a value is a path or prose is a question about the
+/// value, and it is still worth asking — so it is asked here, where a span cannot
+/// reach past its own value to blank a sibling key.
+///
+/// The answer governs candidacy only. **The edge target stays the value the file
+/// declares**, so `@frontmatter` and the edge never disagree about what was
+/// written, and a value naming nothing that resolves raises `unresolved-edge`
+/// rather than vanishing.
+fn without_spans(value: &str) -> String {
+    // Spans only, never fences. `strip_code` is block-oriented and blanks a fenced
+    // region as well, which on a bare scalar erases any value whose text opens
+    // with a fence marker — `` ```notes.md `` became the empty string, failed the
+    // candidacy test, and was dropped with no edge and no finding. That is the
+    // silent loss this whole change exists to remove, reached through the mask
+    // meant to prevent it.
+    let chars: Vec<char> = value.chars().collect();
+    let mut out = String::with_capacity(value.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '`'
+            && let Some(end) = span_end(&chars, i)
+        {
+            // Blank the span to its own width, so a value's remaining text keeps
+            // the shape the candidacy test reads.
+            for _ in i..end {
+                out.push(' ');
+            }
+            i = end;
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out.trim().to_string()
+}
+
+/// Where the code span opening at `i` ends — one past its closing run — or `None`
+/// when nothing closes it.
+///
+/// Shared so a block mask and a value mask pair backticks by one rule. They mask
+/// different things and must not be the same function: a block mask also blanks
+/// fenced regions, which is meaningless applied to a single scalar and destroys
+/// any value whose text opens with a fence marker. Only the pairing is common.
+fn span_end(chars: &[char], i: usize) -> Option<usize> {
+    let mut ticks = 0;
+    while i + ticks < chars.len() && chars[i + ticks] == '`' {
+        ticks += 1;
+    }
+    let mut j = i + ticks;
+    while j + ticks <= chars.len() {
+        if chars[j..j + ticks].iter().all(|c| *c == '`') {
+            return Some(j + ticks);
+        }
+        j += 1;
+    }
+    None
 }
 
 /// Mask fenced blocks and inline backtick spans, replacing every character with a
@@ -164,23 +272,7 @@ fn strip_code(content: &str) -> Masked {
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '`' {
-            // Count opening backticks
-            let mut ticks = 0;
-            while i + ticks < chars.len() && chars[i + ticks] == '`' {
-                ticks += 1;
-            }
-            // Find matching closing backticks in the char array
-            let after = i + ticks;
-            let mut found = None;
-            let mut j = after;
-            while j + ticks <= chars.len() {
-                if chars[j..j + ticks].iter().all(|c| *c == '`') {
-                    found = Some(j);
-                    break;
-                }
-                j += 1;
-            }
-            if let Some(close_start) = found {
+            if let Some(span_end) = span_end(&chars, i) {
                 // Blank the entire span — backticks, content, and closing
                 // backticks, newlines included.
                 //
@@ -198,7 +290,7 @@ fn strip_code(content: &str) -> Masked {
                 // finding. The table is what corrects it.
                 // A blanked newline advances the source line without ending the
                 // masked one — which is exactly the shift the table records.
-                let total = close_start + ticks - i;
+                let total = span_end - i;
                 for c in &chars[i..i + total] {
                     cleaned.push(' ');
                     col += 1;
@@ -264,12 +356,16 @@ impl Parser for FrontmatterParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        // Two independent parses over one block, one per job. The edge scan runs on a *masked*
-        // copy — `strip_code` blanks code spans so a `path.md` written in prose
-        // can't be mistaken for a link target. Metadata runs on the *raw*
-        // frontmatter, so a code span in a value survives as the prose it is.
-        // Both read the same block — one boundary, decided by `parsed_block` —
-        // and differ only in whether spans are blanked within it.
+        // Two independent parses over one block, one per job, and both choose
+        // their rendering by the same test: the raw block where it is a YAML
+        // mapping, the masked copy otherwise. So the two can differ in what they
+        // keep — the edge scan drops values that are not link-shaped — but never
+        // in what the block *says*.
+        //
+        // Spans are still blanked before the link test, per value rather than
+        // across the block. That keeps the question the mask exists to answer
+        // while denying it the reach that let one value's backtick blank
+        // another's key.
         ParseResult {
             links: self.extract_links(content),
             // Frontmatter defines no addressable sub-file positions; anchors come
@@ -281,9 +377,13 @@ impl Parser for FrontmatterParser {
 }
 
 impl FrontmatterParser {
-    /// Extract frontmatter link edges from the *masked* frontmatter block, where
-    /// code spans are blanked so a `path.md` written in prose is never a link
-    /// target. An absent or malformed block yields no links.
+    /// Extract frontmatter link edges from the frontmatter block, preferring the
+    /// *raw* block and falling back to the masked copy only when the raw block is
+    /// not a YAML mapping on its own. An absent or malformed block yields no
+    /// links.
+    ///
+    /// Code spans are blanked per value before the link test, never across the
+    /// block — see [`without_spans`].
     fn extract_links(&self, content: &str) -> Vec<Link> {
         // The boundary is the shared one; only the masking is this job's own.
         // Finding the block in a masked copy of the *whole file* let a code span
@@ -295,17 +395,50 @@ impl FrontmatterParser {
         let Some((_, block)) = parsed_block(content) else {
             return Vec::new();
         };
-        // One mask, the same one the gate and the metadata fallback use, so a
-        // value's text here is the text they saw. Only the reported line is
-        // corrected, against the table the mask built while fusing.
+        // Raw first, masked second — the order `extract_metadata` already uses,
+        // and reading the mask unconditionally is what let the two contradict
+        // each other. `strip_code` knows nothing about YAML, so a fence opened
+        // inside a block scalar latched its fenced pass and blanked every line
+        // below it, `sources:` included. The raw block stayed well-formed
+        // throughout, so metadata reported the derivation while the edge scan
+        // found none and `detached-node` was the only thing said about it.
+        //
+        // Nothing fails to parse in that case, so no parse-failure diagnostic can
+        // reach it. Reaching the mask only when the raw block *is not a mapping*
+        // removes the class instead of reporting it. Note the condition: a raw
+        // mapping yielding no candidates at all is still the answer, and does not
+        // fall through. Reading this as "when the raw block yields nothing" gives
+        // a different program that no test distinguishes.
+        if let Some(links) = self.scan(block, &raw_line_table(block)) {
+            return links;
+        }
+        // The same mask the gate and the metadata fallback use, so a value's text
+        // here is the text they saw. Only the reported line is corrected, against
+        // the table the mask built while fusing.
         let masked = strip_code(block);
+        self.scan(&masked.text, &masked.lines).unwrap_or_default()
+    }
+
+    /// Scan one candidate rendering of the block, or `None` when it is not a YAML
+    /// mapping — the same gate `extract_metadata` applies, so the two agree on
+    /// which rendering they read.
+    ///
+    /// `lines` maps a line of `text` back to the file line it came from. **Both
+    /// renderings need one.** The mask needs it because blanking a span's newlines
+    /// shortens the copy; the raw block needs it because saphyr breaks on a lone
+    /// `\r` and a file does not. Neither table is optional and neither is the
+    /// other's.
+    fn scan(&self, text: &str, lines: &[Vec<(usize, usize)>]) -> Option<Vec<Link>> {
         // Malformed YAML contributes nothing — drft is not a YAML linter.
-        let Ok(docs) = MarkedYaml::load_from_str(masked.text.as_str()) else {
-            return Vec::new();
-        };
-        let Some(root) = docs.first() else {
-            return Vec::new();
-        };
+        let docs = MarkedYaml::load_from_str(text).ok()?;
+        let root = docs.first()?;
+        // Mirrors `extract_metadata`'s gate so the two jobs choose the same
+        // rendering by the same test. Blanking cannot turn a non-mapping into a
+        // mapping, so no input is known to reach this arm; it is here to keep the
+        // two conditions identical rather than merely equivalent today.
+        if !matches!(root.data, YamlData::Mapping(_)) {
+            return None;
+        }
 
         let mut candidates = Vec::new();
         match &self.keys {
@@ -316,14 +449,21 @@ impl FrontmatterParser {
             }
             None => collect_links(root, &mut candidates),
         }
-        candidates
-            .into_iter()
-            .filter(|(value, _, _)| is_link_candidate(value))
-            .map(|(target, line, col)| Link {
-                target,
-                line: Some(masked.source_line(line, col)),
-            })
-            .collect()
+        Some(
+            candidates
+                .into_iter()
+                // Candidacy is decided on the value with its spans blanked; the
+                // target is the value as declared. Testing the raw text instead
+                // drops `notes.md` + a trailing span on the floor, because the
+                // span lands inside the extension test — a silent loss of exactly
+                // the kind the two-candidate order above exists to remove.
+                .filter(|(value, _, _)| is_link_candidate(&without_spans(value)))
+                .map(|(target, line, col)| Link {
+                    target,
+                    line: Some(source_line_in(lines, line, col)),
+                })
+                .collect(),
+        )
     }
 }
 
@@ -443,9 +583,11 @@ fn frontmatter_block(stripped: &str) -> Option<&str> {
     Some(yaml_str)
 }
 
-/// Collect string leaf *values* (not keys) with their position in the masked copy
-/// — the frontmatter link candidates. The line is 1-based and the column is
-/// 0-based, which is saphyr's convention for each whatever its docs say.
+/// Collect string leaf *values* (not keys) with their position in whichever
+/// rendering the caller parsed — the frontmatter link candidates. The line is
+/// 1-based and the column is 0-based, which is saphyr's convention for each
+/// whatever its docs say. Both renderings carry a table mapping that position back
+/// to a file line; neither is already numbered the way the file is.
 ///
 /// Mirrors the metadata walk but keeps only strings.
 fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize, usize)>) {
@@ -1035,7 +1177,7 @@ mod tests {
     #[test]
     fn code_span_in_metadata_does_not_become_an_edge() {
         // Scope guard: capturing the raw value must not make a code-span path an
-        // edge. The mask still governs edge extraction, so nothing links here.
+        // edge. Edge extraction blanks a value's spans before the candidacy test, so nothing links here.
         let content = "---\npurpose: see `config.rs` for details\n---\n";
         let result = parse(content);
         assert!(result.links.is_empty(), "code spans are not edges");
