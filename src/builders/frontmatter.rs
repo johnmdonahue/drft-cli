@@ -5,7 +5,7 @@
 
 use globset::GlobSet;
 
-use crate::builders::link_edges;
+use crate::builders::{LinkPolicy, link_edges};
 use crate::model::{Graph, Node};
 use crate::parsers::Parser;
 use crate::parsers::frontmatter::FrontmatterParser;
@@ -37,7 +37,7 @@ pub fn build(
             graph.set_node(path.clone(), Node::new(block));
         }
 
-        for edge in link_edges(path, &result.links) {
+        for edge in link_edges(path, &result.links, LinkPolicy::Declared) {
             graph.add_edge(edge);
         }
     }

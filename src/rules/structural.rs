@@ -266,7 +266,9 @@ mod tests {
             },
         ];
         let mut markdown = Graph::labeled("markdown");
-        for edge in crate::builders::link_edges("docs/guide.md", &links) {
+        for edge in
+            crate::builders::link_edges("docs/guide.md", &links, crate::builders::LinkPolicy::Body)
+        {
             markdown.add_edge(edge);
         }
         let composed = compose(&GraphSet::new(vec![fs, markdown]));

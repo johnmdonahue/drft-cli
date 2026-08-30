@@ -91,7 +91,7 @@ impl Finding {
             format!("{}:{joined}", self.subject)
         };
         match &self.target {
-            Some(target) => format!("{subject} → {target}"),
+            Some(target) => format!("{subject} → {}", crate::util::one_line(target)),
             None => subject,
         }
     }

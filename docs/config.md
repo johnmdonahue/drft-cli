@@ -87,10 +87,17 @@ decides whether a value looks like a path, so a value naming nothing that resolv
 raises `unresolved-edge` rather than disappearing.
 
 Omitting it is a supported shape — a frontmatter graph may exist purely to seed
-node metadata — so the graph loads, emits no edges, and raises a `no-edge-keys`
-hint saying so. `edge_keys = []` is that same state written out: an empty set
-names nowhere to look, so it behaves identically and raises the same hint. It
-applies to the `frontmatter` parser only — `markdown` has no keyed structure —
+node metadata — so the graph loads, emits no edges, and says nothing about it.
+`edge_keys = []` is that same state written out: an empty set names nowhere to
+look, so it behaves identically.
+
+Declaring keys states an expectation the corpus can fail to meet, and that is the
+state worth reporting: a graph declaring `edge_keys` where no value is found
+under any of them raises an `edge-keys-matched-nothing` hint. A misspelled key
+otherwise produces a graph tracking nothing while the config says otherwise, at
+exit 0.
+
+It applies to the `frontmatter` parser only — `markdown` has no keyed structure —
 and declaring it elsewhere is a config error. See
 [the frontmatter parser](parsers/frontmatter.md#naming-the-keys-that-yield-edges).
 

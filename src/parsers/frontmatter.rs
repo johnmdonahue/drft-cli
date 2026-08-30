@@ -283,14 +283,9 @@ impl Parser for FrontmatterParser {
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
         // Two independent parses over one block, one per job, and both choose
         // their rendering by the same test: the raw block where it is a YAML
-        // mapping, the masked copy otherwise. So the two can differ in what they
-        // keep — the edge scan drops values that are not link-shaped — but never
-        // in what the block *says*.
-        //
-        // Spans are still blanked before the link test, per value rather than
-        // across the block. That keeps the question the mask exists to answer
-        // while denying it the reach that let one value's backtick blank
-        // another's key.
+        // mapping, the masked copy otherwise. The edge scan keeps a subset of
+        // what the metadata pass keeps — only the values under a declared key —
+        // but the two never differ in what the block *says*.
         ParseResult {
             links: self.extract_links(content),
             // Frontmatter defines no addressable sub-file positions; anchors come
@@ -307,8 +302,8 @@ impl FrontmatterParser {
     /// not a YAML mapping on its own. An absent or malformed block yields no
     /// links.
     ///
-    /// Code spans are blanked per value before the link test, never across the
-    /// block — see [`without_spans`].
+    /// A code span inside a value is part of that value: it is never blanked
+    /// out of the target, so the edge names what the file declared.
     fn extract_links(&self, content: &str) -> Vec<Link> {
         // The boundary is the shared one; only the masking is this job's own.
         // Finding the block in a masked copy of the *whole file* let a code span

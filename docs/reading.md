@@ -195,16 +195,17 @@ instead. `drft nodes docs/typo.md` fails rather than hinting, and `drft lock`
 with no arguments refuses rather than locking everything, because a collapsed
 `$(...)` that reads as success is the failure those guards exist for.
 
-| Hint                       | Says                                                                       |
-| -------------------------- | -------------------------------------------------------------------------- |
-| `zero-match-selector`      | A selector resolved to nothing — an empty answer, not a clean one          |
-| `large-projection`         | The rendered output is big enough to crowd a reader's context              |
-| `unknown-rule`             | A `drft.toml` rule name is not built in, so it configures nothing          |
-| `unparseable-lock`         | `drft.lock` could not be read, so every node reads as unlocked             |
-| `directory-lock`           | A locked path is a directory, which carries no content to lock             |
-| `resolved-elsewhere`       | A locked path names no node from here, so a fallback resolved it           |
-| `nothing-to-lock`          | A locked path carries no content to snapshot                               |
-| `replaced-unreadable-lock` | A rebuild replaced a lockfile it could not read, so its drops are unlisted |
+| Hint                        | Says                                                                       |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `zero-match-selector`       | A selector resolved to nothing — an empty answer, not a clean one          |
+| `large-projection`          | The rendered output is big enough to crowd a reader's context              |
+| `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing          |
+| `unparseable-lock`          | `drft.lock` could not be read, so every node reads as unlocked             |
+| `directory-lock`            | A locked path is a directory, which carries no content to lock             |
+| `resolved-elsewhere`        | A locked path names no node from here, so a fallback resolved it           |
+| `nothing-to-lock`           | A locked path carries no content to snapshot                               |
+| `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted |
+| `edge-keys-matched-nothing` | A graph declares `edge_keys` and no value was found under them             |
 
 ## Grounding an agent
 

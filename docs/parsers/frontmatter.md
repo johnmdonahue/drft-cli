@@ -16,7 +16,7 @@ The parser extracts one type of link. Each becomes an edge with parser provenanc
 
 ### link
 
-File path references found in YAML frontmatter.
+Values under a declared key, each naming a document this file derives from. With `edge_keys = ["sources", "template"]`:
 
 ```markdown
 ---
@@ -28,9 +28,15 @@ template: docs/templates/page.md
 ---
 ```
 
-The parser parses the YAML frontmatter block and collects every string leaf value reachable through a key you declared in [`edge_keys`](#naming-the-keys-that-yield-edges). Each one becomes an edge. Non-string types (numbers, booleans, null) are skipped — they name no target. YAML mapping keys within lists (e.g. `- name: foo bar`) are ignored; only values are examined.
+The parser parses the YAML frontmatter block and collects every string leaf value reachable through a key you declared in [`edge_keys`](#naming-the-keys-that-yield-edges). Each one becomes an edge. Non-string types (numbers, booleans, null) are skipped — they name no target, and neither does a value that is empty or whitespace only. Only values are examined, so a mapping key inside a list (`- name: foo bar`) is not a target, though its value `foo bar` is.
 
 **The declared key is the whole of the signal.** drft does not decide whether a value looks like a path. A value that resolves to nothing becomes an edge that resolves to nothing, and `unresolved-edge` reports it exactly as it reports a typo'd path — the remedy is yours: fix the value, fix the config, or move the field to a key you did not declare.
+
+A frontmatter value cites another document, so — unlike a body link — a value that is only a fragment (`#overview`) names no document at all. It cannot resolve, and it is reported rather than dropped. A cross-document fragment (`other.md#section`) is unaffected: the target is `other.md`, and the fragment is kept on the occurrence.
+
+**The finding names the target, which is resolved against the declaring file.** A value under `docs/guide.md` is reported as `docs/TBD`, not `TBD`. The literal text is on the edge's occurrence as `raw`, which `drft edges` shows and `check` does not.
+
+Text output is line-oriented and arrow-delimited, so a target containing a newline or a control character is escaped when rendered there. JSON carries the value exactly as written and is the authoritative form.
 
 Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
 

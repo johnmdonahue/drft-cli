@@ -249,28 +249,6 @@ impl Config {
                         PARSERS_WITH_EDGE_KEYS.join(", ")
                     );
                 }
-                // An empty set names nowhere to look for edges, which is what
-                // omitting the field already means — so the two are one state
-                // rather than a mistake and a shape. Emitting no edges is
-                // legitimate on its own: a frontmatter graph may exist purely to
-                // seed node metadata. The hint is advisory, not a refusal, and
-                // still fires, because the other reading of this state is a repo
-                // that thinks it is tracking provenance and is not.
-                if raw.edge_keys.as_deref().unwrap_or_default().is_empty()
-                    && PARSERS_WITH_EDGE_KEYS.contains(&raw.parser.as_str())
-                {
-                    config.hints.push(
-                        Hint::new(
-                            "no-edge-keys",
-                            "names no key in `edge_keys`, so this graph emits no edges",
-                        )
-                        .at(format!("graphs.{name}"))
-                        .with_next(
-                            "name the keys whose values are derivations, or leave it as a metadata-only graph"
-                                .to_string(),
-                        ),
-                    );
-                }
                 config.graphs.insert(
                     name,
                     GraphConfig {
@@ -531,10 +509,10 @@ mod tests {
     }
 
     #[test]
-    fn omitting_edge_keys_is_a_metadata_only_graph_and_hints() {
-        // A frontmatter graph may exist purely to seed node metadata, so this is
-        // advisory rather than a refusal. It still says so: the other reading is a
-        // repo that believes it is tracking provenance and is not.
+    fn omitting_edge_keys_is_a_metadata_only_graph() {
+        // A frontmatter graph may exist purely to seed node metadata, so this
+        // loads and tracks no edges. Nothing is reported: the graph is as
+        // configured, and the config layer has nothing to say about it.
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
@@ -543,22 +521,7 @@ mod tests {
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert!(config.graphs["fm"].edge_keys.is_empty());
-        let hint = config.hints.first().expect("expected a hint");
-        assert_eq!(hint.name, "no-edge-keys");
-        assert_eq!(hint.locus.as_deref(), Some("graphs.fm"));
-    }
-
-    #[test]
-    fn a_markdown_graph_does_not_raise_the_edge_keys_hint() {
-        // The hint is scoped to parsers that have a keyed structure. Raising it on
-        // markdown would nag about a field that parser cannot accept.
-        let dir = TempDir::new().unwrap();
-        fs::write(
-            dir.path().join("drft.toml"),
-            "[graphs.md]\nparser = \"markdown\"\n",
-        )
-        .unwrap();
-        assert!(Config::load(dir.path()).unwrap().hints.is_empty());
+        assert!(config.hints.is_empty(), "got: {:?}", config.hints);
     }
 
     #[test]
@@ -591,10 +554,7 @@ mod tests {
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert!(config.graphs["fm"].edge_keys.is_empty());
-        assert_eq!(
-            config.hints.first().map(|h| h.name.as_str()),
-            Some("no-edge-keys")
-        );
+        assert!(config.hints.is_empty(), "got: {:?}", config.hints);
     }
 
     #[test]

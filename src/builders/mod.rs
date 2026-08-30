@@ -15,37 +15,71 @@ use crate::model::{Edge, Metadata};
 use crate::parsers::Link;
 use crate::util::{is_uri, resolve_link};
 
+/// How a parser's links are turned into targets. The two parsers disagree about
+/// one thing, and inheriting either answer in the other's job is a defect.
+///
+/// A body link written `[see](#section)` is an **intra-file anchor**: it names a
+/// position in the file it sits in, so it is not an edge to anywhere and drops
+/// out. A frontmatter value is a citation of *another* document — a provenance
+/// claim has no "this file" form — so a value beginning with `#` names no
+/// document at all. It cannot resolve, and it must not vanish either: the author
+/// declared it, so it becomes a target nothing defines and `unresolved-edge`
+/// reports it, exactly as it reports `TBD`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkPolicy {
+    /// Body links: a fragment-only target is an intra-file anchor, not an edge.
+    Body,
+    /// Declared frontmatter values: every value names another document, so a
+    /// fragment-only value is a citation of nothing rather than an anchor.
+    Declared,
+}
+
 /// Resolve one discovered link into its edge target plus the **occurrence**
 /// metadata recording how the author wrote it: `line`, the fragment-qualified
 /// `link`, and the literal `raw` text.
 ///
-/// Returns `None` for links with no file target (empty or anchor-only). A
-/// fragment (`#heading`) is stripped from the target — which is the node
-/// identity — and preserved on the occurrence. Non-URI targets are resolved
+/// Returns `None` only where there is no target to name: an empty or
+/// whitespace-only value, and — under [`LinkPolicy::Body`] — an anchor-only one.
+/// A fragment (`#heading`) is stripped from the target, which is the node
+/// identity, and preserved on the occurrence. Non-URI targets are resolved
 /// relative to `source`; URIs pass through unchanged.
+///
+/// Resolution that yields the empty string keeps the literal instead. `.` and
+/// `sub/..` name the declaring file's own directory, which normalizes to `""` at
+/// the graph root — and an edge to `""` is a node reference the graph does not
+/// contain, which would reach `drft.lock` and the JGF export as a dangling one.
 ///
 /// `raw` is kept only when resolution moved the path. The resolved target alone
 /// cannot distinguish `foo.md` from `./foo.md` — they resolve identically — and
 /// that distinction is what tells a wrong base from a deliberate doc-relative
 /// link. Graph-only, like `line`; never locked.
-fn occurrence(source: &str, link: &Link) -> Option<(String, Metadata)> {
+fn occurrence(source: &str, link: &Link, policy: LinkPolicy) -> Option<(String, Metadata)> {
     let trimmed = link.target.trim();
-    if trimmed.is_empty() || trimmed.starts_with('#') {
+    if trimmed.is_empty() {
+        return None;
+    }
+    let anchor_only = trimmed.starts_with('#');
+    if anchor_only && policy == LinkPolicy::Body {
         return None;
     }
 
     let (base, fragment) = match trimmed.find('#') {
+        // A declared value opening with `#` is the whole target, not a fragment
+        // qualifying a document that is not there.
+        Some(_) if anchor_only => (trimmed, None),
         Some(i) => (&trimmed[..i], Some(&trimmed[i..])),
         None => (trimmed, None),
     };
-    if base.is_empty() {
-        return None;
-    }
 
-    let target = if is_uri(base) {
+    let target = if is_uri(base) || anchor_only {
         base.to_string()
     } else {
-        resolve_link(source, base)
+        let resolved = resolve_link(source, base);
+        if resolved.is_empty() {
+            base.to_string()
+        } else {
+            resolved
+        }
     };
 
     let mut occurrence = Metadata::new();
@@ -73,10 +107,10 @@ fn occurrence(source: &str, link: &Link) -> Option<(String, Metadata)> {
 /// lines naming `#security-console` and one naming `#ngwaf-edge` — is one edge
 /// with two spellings, and a scalar `link` would attribute the first to all
 /// seven. Identical occurrences dedup; distinct ones both survive.
-pub fn link_edges(source: &str, links: &[Link]) -> Vec<Edge> {
+pub fn link_edges(source: &str, links: &[Link], policy: LinkPolicy) -> Vec<Edge> {
     let mut by_target: BTreeMap<String, Vec<Metadata>> = BTreeMap::new();
     for link in links {
-        let Some((target, occurrence)) = occurrence(source, link) else {
+        let Some((target, occurrence)) = occurrence(source, link, policy) else {
             continue;
         };
         // An occurrence with nothing known about it carries no information, so
@@ -124,7 +158,7 @@ mod tests {
 
     /// The single edge `link_edges` produces for one link, for the resolution tests.
     fn one(source: &str, target: &str) -> Option<Edge> {
-        link_edges(source, &[link(target, Some(1))]).pop()
+        link_edges(source, &[link(target, Some(1))], LinkPolicy::Body).pop()
     }
 
     #[test]
@@ -180,7 +214,7 @@ mod tests {
             link("b.md", Some(6)),
             link("c.md", Some(3)),
         ];
-        let edges = link_edges("a.md", &links);
+        let edges = link_edges("a.md", &links, LinkPolicy::Body);
         let b = edges.iter().find(|e| e.target == "b.md").unwrap();
         assert_eq!(
             b.metadata["occurrences"],
@@ -199,7 +233,7 @@ mod tests {
             link("./owners.md#ngwaf-edge", Some(77)),
             link("./owners.md#security-console", Some(89)),
         ];
-        let edges = link_edges("registers/work-items.md", &links);
+        let edges = link_edges("registers/work-items.md", &links, LinkPolicy::Body);
         assert_eq!(edges.len(), 1, "one edge, three occurrences");
         assert_eq!(
             edges[0].metadata["occurrences"],
@@ -216,7 +250,7 @@ mod tests {
         // Two spellings that resolve identically are still two facts about the
         // source; the edge records both.
         let links = vec![link("./b.md", Some(4)), link("b.md", Some(9))];
-        let edges = link_edges("a.md", &links);
+        let edges = link_edges("a.md", &links, LinkPolicy::Body);
         assert_eq!(edges.len(), 1);
         assert_eq!(
             edges[0].metadata["occurrences"],
@@ -231,7 +265,7 @@ mod tests {
         // survive so a rule scanning the occurrences can reach the second. A
         // first-occurrence-wins aggregation would keep only `./config.md`.
         let links = vec![link("./config.md", Some(3)), link("config.md", Some(5))];
-        let edges = link_edges("docs/guide.md", &links);
+        let edges = link_edges("docs/guide.md", &links, LinkPolicy::Body);
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].target, "docs/config.md");
         assert_eq!(
@@ -247,7 +281,7 @@ mod tests {
     fn omits_occurrences_when_nothing_is_known() {
         // A parser that cannot locate its link contributes no facts, so the edge
         // keeps the bare no-metadata shape.
-        let edges = link_edges("a.md", &[link("b.md", None)]);
+        let edges = link_edges("a.md", &[link("b.md", None)], LinkPolicy::Body);
         assert_eq!(edges.len(), 1);
         assert!(edges[0].metadata.is_empty());
     }

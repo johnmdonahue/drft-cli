@@ -74,7 +74,11 @@ pub fn project(
 pub fn format_text(edges: &[EdgeProjection]) -> String {
     let mut blocks = Vec::new();
     for edge in edges {
-        let mut lines = vec![format!("{} → {}", edge.source, edge.target)];
+        let mut lines = vec![format!(
+            "{} → {}",
+            edge.source,
+            crate::util::one_line(&edge.target)
+        )];
         projection::push_metadata_lines(&mut lines, &edge.metadata);
         blocks.push(lines.join("\n"));
     }

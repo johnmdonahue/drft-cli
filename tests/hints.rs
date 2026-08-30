@@ -115,7 +115,7 @@ fn unknown_rule_hints_with_the_config_key_as_locus() {
 #[test]
 fn zero_match_selector_hints_without_failing() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -257,7 +257,7 @@ fn unparseable_lock_hints_and_check_still_runs() {
 fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
     for format in [vec![], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
         for name in ["a.md", "b.md", "c.md"] {
             fs::write(dir.path().join(name), "# Note").unwrap();
         }
@@ -340,7 +340,7 @@ fn error_envelope_carries_hints() {
 #[test]
 fn small_projection_raises_no_hint() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -362,7 +362,7 @@ fn small_projection_raises_no_hint() {
 #[test]
 fn a_repeated_selector_hints_once() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -476,12 +476,12 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
     assert!(stdout.contains("  cause: "), "got: {stdout}");
 }
 
-/// A frontmatter graph declaring no `edge_keys` emits no edges. That is a
-/// supported shape — a graph may exist purely to seed node metadata — so it is
-/// advisory rather than a refusal. The hint is what stops the other reading:
-/// a repo that believes it is tracking provenance and is not.
+/// A frontmatter graph declaring no `edge_keys` emits no edges, and says nothing
+/// about it. That is the graph working as configured — it exists to seed node
+/// metadata — and a hint here would nag about a deliberate shape with no way to
+/// silence it.
 #[test]
-fn a_frontmatter_graph_without_edge_keys_hints_and_still_reads_metadata() {
+fn a_metadata_only_frontmatter_graph_is_silent_and_still_reads_metadata() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
@@ -506,19 +506,18 @@ fn a_frontmatter_graph_without_edge_keys_hints_and_still_reads_metadata() {
         ])
         .output()
         .unwrap();
-    assert!(output.status.success(), "advisory must not change the exit");
+    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
 
-    let hint = v["hints"]
-        .as_array()
-        .and_then(|h| h.first())
-        .unwrap_or_else(|| panic!("expected a hint: {stdout}"));
-    assert_eq!(hint["name"], "no-edge-keys");
-    assert_eq!(hint["locus"], "graphs.frontmatter");
+    assert_eq!(
+        v["hints"].as_array().map(Vec::len),
+        Some(0),
+        "a graph that is as intended has nothing to report: {stdout}"
+    );
 
-    // Metadata is untouched by the absence — that is the whole point of the shape,
-    // and `sources` is still captured as metadata even though it yields no edge.
+    // Metadata is untouched by the absence — that is the whole point of the
+    // shape, and `sources` is captured even though it yields no edge.
     let node = &v["nodes"][0];
     assert_eq!(node["id"], "doc.md");
     assert_eq!(node["metadata"]["@frontmatter"]["title"], "Doc");
@@ -535,4 +534,80 @@ fn a_frontmatter_graph_without_edge_keys_hints_and_still_reads_metadata() {
         String::from_utf8_lossy(&edges.stdout).trim().is_empty(),
         "a graph with no edge_keys must emit no edges"
     );
+}
+
+/// The informative state is the opposite one: keys declared, and nothing found
+/// under them. A misspelled key is the case that used to exit 0 in total silence
+/// while the config claimed the graph tracked something.
+#[test]
+fn declared_edge_keys_that_match_nothing_raise_a_hint() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"source\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    // The frontmatter says `sources`; the config says `source`.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "the hint is advisory");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    let hint = v["hints"]
+        .as_array()
+        .and_then(|h| h.first())
+        .unwrap_or_else(|| panic!("expected a hint: {stdout}"));
+    assert_eq!(hint["name"], "edge-keys-matched-nothing");
+    assert_eq!(hint["locus"], "graphs.fm");
+    assert!(
+        hint["message"].as_str().unwrap().contains("`source`"),
+        "the hint must name the key that matched nothing: {hint}"
+    );
+}
+
+/// A graph whose declared keys do match stays quiet.
+#[test]
+fn declared_edge_keys_that_match_raise_no_hint() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).expect("valid JSON");
+    assert_eq!(v["hints"].as_array().map(Vec::len), Some(0));
 }

@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::builders;
 use crate::config::{Config, compile_globs};
+use crate::hints::{Hint, Hints};
 use crate::model::{Graph, GraphSet};
 use crate::sources::{self, fs::SourceFile};
 use crate::util::hash_bytes;
@@ -28,7 +29,7 @@ const LOCKFILE_IGNORE: &str = "drft.lock";
 /// `fs` is implicit and always builds first — it owns the identity space. Each
 /// configured text graph (`[graphs.*]`) then builds over the same fs walk's
 /// content, scoped by its filter and labeled with the graph's name.
-pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
+pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<GraphSet> {
     let mut ignore = config.ignore_patterns().to_vec();
     ignore.push(LOCKFILE_IGNORE.to_string());
     let files = sources::fs::walk(root, &ignore)?;
@@ -96,12 +97,36 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
         let files = compile_globs(&graph.files)?;
         match graph.parser.as_str() {
             "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
-            "frontmatter" => graphs.push(builders::frontmatter::build(
-                name,
-                &texts,
-                files,
-                graph.edge_keys.clone(),
-            )),
+            "frontmatter" => {
+                let fragment =
+                    builders::frontmatter::build(name, &texts, files, graph.edge_keys.clone());
+                // Declaring keys states an expectation the corpus can fail to
+                // meet — a misspelled key, a corpus that never uses it, a `files`
+                // glob that reaches nothing. That produces a graph tracking
+                // nothing while the config says otherwise, and it exits 0.
+                //
+                // Declaring *no* keys is not this state: a frontmatter graph may
+                // exist purely to seed node metadata, and a graph that is as
+                // intended has nothing to report.
+                if !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
+                    hints.push(
+                        Hint::new(
+                            "edge-keys-matched-nothing",
+                            format!(
+                                "declares {} but no value was found under {}, so this graph has no edges",
+                                render_keys(&graph.edge_keys),
+                                if graph.edge_keys.len() == 1 { "it" } else { "any of them" }
+                            ),
+                        )
+                        .at(format!("graphs.{name}"))
+                        .with_next(
+                            "check the spelling against the frontmatter the files actually carry, and the graph's `files` globs"
+                                .to_string(),
+                        ),
+                    );
+                }
+                graphs.push(fragment)
+            }
             // Parser names are validated at config load (`KNOWN_PARSERS`); an
             // unknown parser cannot reach here.
             other => unreachable!("unvalidated parser \"{other}\""),
@@ -124,6 +149,17 @@ fn auto_hash(graph: &mut Graph, files: &[SourceFile]) {
     }
 }
 
+/// Render a key list for a hint message: `` `a` ``, `` `a` and `b` ``, or
+/// `` `a`, `b` and `c` ``.
+fn render_keys(keys: &[String]) -> String {
+    let quoted: Vec<String> = keys.iter().map(|k| format!("`{k}`")).collect();
+    match quoted.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,7 +173,7 @@ mod tests {
         fs::write(dir.path().join("index.md"), "# Index").unwrap();
         let config = Config::defaults();
 
-        let set = build_set(dir.path(), &config).unwrap();
+        let set = build_set(dir.path(), &config, &mut Hints::default()).unwrap();
         // fs is always the base graph, built first regardless of config.
         let fs_graph = &set.graphs[0];
         assert_eq!(fs_graph.label.as_deref(), Some("fs"));
@@ -160,7 +196,7 @@ mod tests {
         fs::write(outer.path().join("secret.md"), "secret").unwrap();
         std::os::unix::fs::symlink(outer.path().join("secret.md"), root.join("trap.md")).unwrap();
 
-        let set = build_set(&root, &Config::defaults()).unwrap();
+        let set = build_set(&root, &Config::defaults(), &mut Hints::default()).unwrap();
         let trap = &set.graphs[0].nodes["trap.md"];
         assert_eq!(trap.metadata["type"], Value::String("symlink".into()));
         assert!(
@@ -180,7 +216,7 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
             .unwrap();
 
-        let set = build_set(dir.path(), &Config::defaults()).unwrap();
+        let set = build_set(dir.path(), &Config::defaults(), &mut Hints::default()).unwrap();
         let nodes = &set.graphs[0].nodes;
         assert_eq!(
             nodes["alias.md"].metadata["type"],

@@ -80,7 +80,7 @@ The substrate is a **set of independent graphs**; composition is a projection ov
 - **[`src/compose.rs`](src/compose.rs)** — merge the set by path, nest metadata under `@<graph>`, stamp `_graphs` provenance, dedup edges. The only module that knows about more than one graph.
 - **[`src/rules/`](src/rules/check.rs)** — findings over the composed graph. `staleness.rs` joins the lockfile; `structural.rs` reads shape; `check.rs` applies config and severity, and owns the findings about the run itself rather than about a node — the ones that have to fire when there is no lockfile to join.
 
-Core types live in [`src/model.rs`](src/model.rs); path/URI/hash helpers in [`src/util.rs`](src/util.rs); the lockfile in [`src/lock.rs`](src/lock.rs).
+Core types live in [`src/model.rs`](src/model.rs); path/URI/hash and text-rendering helpers in [`src/util.rs`](src/util.rs); the lockfile in [`src/lock.rs`](src/lock.rs).
 
 ## Adding a rule
 
