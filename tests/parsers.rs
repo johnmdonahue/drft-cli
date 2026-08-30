@@ -42,6 +42,38 @@ fn frontmatter_edge_lines(dir: &Path, source: &str, target: &str) -> Vec<u64> {
         .collect()
 }
 
+/// Every `@frontmatter` edge target recorded for `source`.
+///
+/// Reads the targets rather than probing a guessed list of them, so a value drft
+/// records under a spelling the test did not anticipate still counts as linked.
+fn frontmatter_edge_targets(dir: &Path, source: &str) -> Vec<String> {
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            source,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "drft edges failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    json["edges"]
+        .as_array()
+        .expect("edges array")
+        .iter()
+        .filter(|e| e["source"] == source)
+        .filter(|e| e["metadata"]["@frontmatter"].is_object())
+        .filter_map(|e| e["target"].as_str().map(str::to_string))
+        .collect()
+}
+
 /// Frontmatter link-target values become edges that participate in staleness:
 /// editing the linked file makes the *declaring* file's edge stale.
 ///
@@ -655,5 +687,345 @@ fn a_mark_does_not_shift_the_line_a_span_corrects() {
         frontmatter_edge_lines(dir.path(), "marked.md", "target.md"),
         frontmatter_edge_lines(dir.path(), "plain.md", "target.md"),
         "a mark changes nothing about which line a value is reported on"
+    );
+}
+
+/// A config scoping edges to `sources`, so the fixtures below exercise the
+/// declared-key path a corpus actually uses rather than shape detection.
+const SCOPED_CONFIG: &str = "\
+[graphs.frontmatter]
+parser = \"frontmatter\"
+files = [\"**/*.md\"]
+keys = [\"sources\"]
+";
+
+/// Write a scoped-config fixture whose frontmatter is `block`, alongside the
+/// `target.md` its `sources` entry names.
+fn scoped_fixture(block: &str) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), SCOPED_CONFIG).unwrap();
+    fs::write(dir.path().join("doc.md"), block).unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    // A second resolvable file, so a fixture can put a hostile value beside a
+    // working one — the shape where losing the hostile value leaves the node
+    // connected and raises no `detached-node` to notice it by.
+    fs::write(dir.path().join("other.md"), "# Other\n").unwrap();
+    dir
+}
+
+/// The `@frontmatter` metadata a projection reports for `source`.
+fn frontmatter_metadata(dir: &Path, source: &str) -> Value {
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            source,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "drft nodes failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    json["nodes"][0]["metadata"]["@frontmatter"].clone()
+}
+
+/// An unclosed fence inside a block scalar latches the mask's fenced pass, which
+/// blanks every line below it — `sources:` included. The raw block is well-formed
+/// YAML throughout, so metadata reported the derivation while the edge scan found
+/// none and `detached-node` was the only thing said about the file.
+///
+/// Nothing fails to parse here, so no parse-failure diagnostic reaches this: the
+/// edge scan has to read the block the metadata read.
+#[test]
+fn a_fence_inside_a_block_scalar_keeps_the_blocks_edges() {
+    let dir = scoped_fixture("---\nnote: |\n  ```\n  code\nsources:\n  - ./target.md\n---\nbody\n");
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![6],
+        "the `sources` entry on line 6 should yield an edge despite the fence above it"
+    );
+}
+
+/// The mask's inline pass pairs backticks across lines, so one written as a
+/// literal character in two separate values blanks everything between them. The
+/// raw block parses — a backtick is only a reserved indicator at the *start* of a
+/// scalar — so the same contradiction appears by a second route.
+#[test]
+fn stray_backticks_in_two_values_keep_the_blocks_edges() {
+    let dir = scoped_fixture(
+        "---\na: one ` two\nsources:\n  - ./target.md\nb: three ` four\n---\nbody\n",
+    );
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![4],
+        "the `sources` entry on line 4 should yield an edge despite the paired backticks"
+    );
+}
+
+/// The masked copy is still read, and is still the only thing that recovers a
+/// block the raw parse rejects. A value *beginning* with a backtick is invalid
+/// YAML — the character is a reserved indicator there — so the raw parse fails and
+/// the mask is what keeps the sibling `sources:` entry structured.
+///
+/// The line is corrected against the mask's table, so it is the file's line rather
+/// than the shortened masked block's.
+#[test]
+fn a_block_only_the_mask_can_parse_still_yields_edges() {
+    let dir = scoped_fixture("---\nnote: `unquoted span`\nsources:\n  - ./target.md\n---\nbody\n");
+
+    assert_eq!(
+        frontmatter_metadata(dir.path(), "doc.md")["note"],
+        Value::Null,
+        "the masked fallback blanks the span, which is what makes this the fallback path"
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![4],
+        "the masked fallback should still yield the edge, at the file's line"
+    );
+}
+
+/// The edge target is the value the metadata reports, backticks and all.
+///
+/// Reading the mask unconditionally made these two disagree in the quiet
+/// direction as well as the loud one: a trailing code span blanks to spaces, YAML
+/// strips them from a plain scalar, and the edge resolved to a path the file does
+/// not declare while `@frontmatter` reported the value the author wrote. An
+/// `unresolved-edge` naming the declared value is the honest reading, and it is
+/// the same contradiction this module exists to remove.
+#[test]
+fn a_trailing_code_span_does_not_silently_clean_up_an_edge_target() {
+    let dir = scoped_fixture("---\nsources: ./target.md `x`\n---\nbody\n");
+
+    assert_eq!(
+        frontmatter_metadata(dir.path(), "doc.md")["sources"],
+        Value::String("./target.md `x`".into()),
+        "the metadata reports the value as written"
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        Vec::<u64>::new(),
+        "the span is not silently dropped to manufacture a resolving target"
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md `x`"),
+        vec![2],
+        "the edge records the declared value, which `unresolved-edge` then reports"
+    );
+}
+
+/// A declared value keeps its edge when a code span sits inside it.
+///
+/// Reading the raw block is what stops a span blanking a sibling key, but the
+/// candidacy test still has to see the value without its spans: `target.md` plus a
+/// trailing span puts the backticks inside the extension test, which rejects them,
+/// and the value is then neither an edge nor a finding. That is the same silent
+/// drop the raw-first order exists to remove, arriving from the other side.
+#[test]
+fn a_span_inside_a_declared_value_does_not_cost_it_the_edge() {
+    let dir = scoped_fixture("---\nsources: target.md`x`\n---\nbody\n");
+
+    assert_eq!(
+        frontmatter_metadata(dir.path(), "doc.md")["sources"],
+        Value::String("target.md`x`".into()),
+        "the metadata reports the value as written"
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md`x`"),
+        vec![2],
+        "the value is a candidate, and the edge records it as declared"
+    );
+}
+
+/// The same value inside a list, beside one that resolves — the shape where the
+/// loss leaves no `detached-node` behind either, because the node keeps its other
+/// edge and `check` output is byte-identical to a run that lost nothing.
+#[test]
+fn a_span_inside_one_list_value_does_not_cost_it_the_edge() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), SCOPED_CONFIG).unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./other.md\n  - target.md`x`\n---\nbody\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("other.md"), "# Other\n").unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "other.md"),
+        vec![3],
+        "the plain entry keeps its edge"
+    );
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md`x`"),
+        vec![4],
+        "the entry carrying a span keeps one too, rather than vanishing beside it"
+    );
+}
+
+/// A lone carriage return is a line break to the YAML parser and not to the file,
+/// so a raw block is not already numbered the way the file is. Reporting saphyr's
+/// line unaltered moves every value below a stray `\r` — one line per return.
+#[test]
+fn a_lone_carriage_return_does_not_shift_the_reported_line() {
+    let dir = scoped_fixture("---\nnote: \"a\r  b\"\nsources:\n  - ./target.md\n---\nbody\n");
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![4],
+        "the entry is on the file's line 4, which is what `grep -n` reports"
+    );
+}
+
+/// Two returns, so an off-by-one and an off-by-N are told apart. A fix that
+/// advanced the correction once per block rather than once per return passes the
+/// single-return case above and fails this one.
+#[test]
+fn every_lone_carriage_return_shifts_the_line_it_would_report() {
+    let dir = scoped_fixture(
+        "---\nnote: \"one\r  two\r  three\"\nsources:\n  - ./target.md\n---\nbody\n",
+    );
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![4],
+        "two returns above the entry still leave it on the file's line 4"
+    );
+}
+
+/// The pass property, over every hostile block anyone has constructed: **a
+/// path-shaped value under a declared key is an edge or a finding, never
+/// silence.**
+///
+/// Asserted against `drft check` rather than against a list of expected edges,
+/// because the failure this guards is the quiet one — an edge disappearing while
+/// the output stays byte-identical to a run that lost nothing.
+#[test]
+fn no_hostile_block_drops_a_declared_value_in_silence() {
+    // Each block declares `./target.md` or a value naming it. Whatever drft does
+    // with the value, it may not do it silently.
+    let blocks = [
+        (
+            "fence in a block scalar",
+            "note: |\n  ```\n  code\nsources:\n  - ./target.md",
+        ),
+        (
+            "backticks in two values",
+            "a: one ` two\nsources:\n  - ./target.md\nb: three ` four",
+        ),
+        (
+            "span before the key",
+            "note: `unquoted span`\nsources:\n  - ./target.md",
+        ),
+        ("trailing span in the value", "sources: ./target.md `x`"),
+        ("interior span in the value", "sources: target.md`x`"),
+        ("leading span in the value", "sources: `x` ./target.md"),
+        (
+            "colon hidden in a span",
+            "note: x `has: a colon`\nsources:\n  - ./target.md",
+        ),
+        (
+            "lone carriage return above",
+            "note: \"a\r  b\"\nsources:\n  - ./target.md",
+        ),
+        (
+            "crlf throughout",
+            "note: plain\r\nsources:\r\n  - ./target.md",
+        ),
+        (
+            "span crossing two lines",
+            "note: `one\ntwo`\nsources:\n  - ./target.md",
+        ),
+        (
+            "tilde fence in a block scalar",
+            "note: |\n  ~~~\n  code\nsources:\n  - ./target.md",
+        ),
+        (
+            "value opening with a fence marker",
+            "sources:\n  - \"```target.md\"",
+        ),
+        (
+            "value opening with a tilde fence",
+            "sources:\n  - \"~~~target.md\"",
+        ),
+        (
+            "fence-marker value beside one that resolves",
+            "sources:\n  - \"```target.md\"\n  - ./other.md",
+        ),
+    ];
+
+    let mut examined = 0;
+    for (name, body) in blocks {
+        let dir = scoped_fixture(&format!("---\n{body}\n---\nbody\n"));
+        let meta = frontmatter_metadata(dir.path(), "doc.md");
+        // Only blocks whose metadata still carries the declaration are in scope:
+        // where the block itself is unreadable, the diagnostic rule owns it.
+        let declared = meta["sources"].to_string().contains("target.md");
+        if !declared {
+            continue;
+        }
+        examined += 1;
+
+        let output = drft_bin()
+            .args(["-C", dir.path().to_str().unwrap(), "check"])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let linked = frontmatter_edge_targets(dir.path(), "doc.md")
+            .iter()
+            .any(|t| t.contains("target.md"));
+        // `detached-node` is deliberately not evidence. A file reports it *because*
+        // the edge was lost, so accepting it lets the defect satisfy the assertion:
+        // with this clause reading `|| stdout.contains("detached-node")`, this test
+        // passed with the entire fix reverted while five others failed.
+        let reported = stdout.contains("unresolved-edge");
+
+        assert!(
+            linked || reported,
+            "`{name}`: `@frontmatter` carries {}, and drft produced neither an edge \
+             naming it nor an `unresolved-edge` about it. check said:\n{stdout}",
+            meta["sources"]
+        );
+    }
+
+    // A skipped block asserts nothing, so the count is part of the property: an
+    // edit that stops drft recognising these blocks would otherwise empty this
+    // test while leaving it green.
+    assert_eq!(
+        examined,
+        blocks.len(),
+        "every block here should keep its declaration in `@frontmatter`; {} of {} did not, and asserted nothing",
+        blocks.len() - examined,
+        blocks.len()
+    );
+}
+
+/// A CRLF document reports the file's line, which requires counting `\r\n` as one
+/// break rather than two.
+///
+/// The raw path's line table is a copy of the mask's walk, and the two must agree
+/// about what opens a line. Simplifying the test to `c == '\n' || c == '\r'` reads
+/// as equivalent, drops the lookahead, opens two rows per CRLF line, and reports
+/// this entry two lines high — with the whole suite green, until this fixture
+/// asserted the line.
+#[test]
+fn a_crlf_document_reports_the_files_line() {
+    let dir = scoped_fixture(
+        "---\r\ntitle: t\r\nnote: plain\r\nsources:\r\n  - ./target.md\r\n---\r\nbody\r\n",
+    );
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![5],
+        "`\\r\\n` is one line break, so the entry is on the file's line 5"
     );
 }

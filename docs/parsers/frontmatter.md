@@ -32,6 +32,18 @@ The parser parses the YAML frontmatter block, then collects all string leaf valu
 
 This means `sources: setup.md` and `sources: ../shared/glossary.md` are detected, but `title: My Document` and `version: 1.0` are not. YAML mapping keys within lists (e.g., `- name: foo bar`) are correctly ignored — only values are examined.
 
+Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
+
+Because both read the same rendering, **an edge whose value is path-shaped carries the target `@frontmatter` reports**. A code span inside a value is part of that value rather than something blanked out of it:
+
+```yaml
+sources: ./setup.md `draft`
+```
+
+That value names a target ending in `` `draft` ``, which nothing answers to, so it raises `unresolved-edge` rather than quietly resolving to `setup.md`.
+
+A value is trimmed and has its spans blanked before the shape heuristic runs, so neither a span beside a path nor the trailing newline a `|` block scalar keeps will hide it. A span sitting _inside_ a path still can: blanking ``tar`x`get.md`` leaves a space in the middle, the heuristic reads a space as prose, and the value yields no edge. Two further qualifications, both about the direction the correspondence runs: a value the heuristic rejects has no edge to carry a target, so it holds from edges to metadata and not the other way; and a target is recorded as resolved against the declaring file, so `./setup.md` in a block appears as `setup.md` on the edge.
+
 ### Path resolution
 
 Paths resolve relative to the **declaring file**, the same way that file's markdown links do. From a doc at `docs/taxonomy.md`:
