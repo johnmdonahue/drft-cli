@@ -407,10 +407,12 @@ fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
 
 /// The mark is stripped from the decoded text, not from the bytes drft hashes.
 ///
-/// Stripping in the `fs` source instead would move every BOM-carrying file's
+/// Stripping in the `fs` source instead would move every mark-carrying file's
 /// hash — reporting `stale-node` on files nobody edited, and stopping drft's
 /// `b3:` from being the file's blake3. Two files identical but for the mark
-/// therefore still hash differently, which is what pins the fix to the decode.
+/// therefore still hash differently, which is what rules the `fs` source out.
+/// Ruling out the *frontmatter parser* is a different test, below: that location
+/// cannot reach a file which has no frontmatter at all.
 #[test]
 fn a_byte_order_mark_is_still_hashed() {
     let dir = TempDir::new().unwrap();
@@ -506,4 +508,77 @@ fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
         serde_json::json!([]),
         "the frontmatter is masked, so it defines no heading"
     );
+}
+
+/// A mark costs a file its headings even when it has no frontmatter, so the strip
+/// cannot live in the frontmatter parser.
+///
+/// This is the plain reason that location is wrong, and it is the one that shows
+/// up on ordinary files: a document opening with a mark and a heading has no
+/// block for that parser to be called about. The offset argument — that skipping
+/// the mark's bytes without adjusting the block's end offset leaves the closing
+/// fence partly unmasked — is also true, and takes a constructed file to exhibit.
+#[test]
+fn a_mark_on_a_file_with_no_frontmatter_still_costs_it_its_headings() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("doc.md"), "\u{feff}# Only a heading\n").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert_eq!(
+        json["nodes"][0]["metadata"]["@markdown"]["anchors"],
+        serde_json::json!(["only-a-heading"]),
+        "the heading is the file's first line once the mark is gone"
+    );
+}
+
+/// A tool re-marking an already-marked file writes two marks, and stripping one
+/// would leave that file failing exactly as it did before — same silent loss, same
+/// absence of any finding. Accommodating one mark and dropping a file with two is
+/// the incoherent position, so every leading mark goes.
+#[test]
+fn more_than_one_leading_mark_is_stripped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "\u{feff}\u{feff}---\nsources:\n  - target.md\n---\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let edges = json["edges"].as_array().expect("edges array");
+    assert_eq!(edges.len(), 1, "expected one edge, got: {json}");
+    assert_eq!(edges[0]["target"], "target.md");
 }

@@ -41,20 +41,40 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
     // Decode each file's bytes once for the text builders. Non-UTF-8 files are
     // skipped (they have no text edges or metadata).
     //
-    // A leading byte-order mark is dropped here, which is the one place that
+    // Leading byte-order marks are dropped here, which is the one place that
     // serves every text parser at once. A frontmatter block opens with `---` at
-    // offset 0, and a BOM ahead of it means no parser recognizes the block: the
+    // offset 0, and a mark ahead of it means no parser recognizes the block: the
     // file loses its metadata and its declared edges, the markdown parser is
     // handed the block as body text, and nothing reports any of it.
     //
+    // *Marks*, plural: a tool re-marking an already-marked file writes two, and
+    // stripping one would leave that file failing exactly as it did before, just
+    // as quietly. Accommodating one mark and silently dropping a file with two is
+    // the incoherent position.
+    //
     // Here rather than in the `fs` source, because that is what `auto_hash`
-    // hashes — stripping there moves every BOM-carrying file's hash, reports
+    // hashes — stripping there moves every mark-carrying file's hash, reports
     // `stale-node` on files nobody edited, and stops drft's `b3:` being the
-    // file's blake3. Here rather than in the frontmatter parser, because
-    // `parsed_block` returns an offset into this text and the markdown parser
-    // masks with it; skipping three bytes without adjusting that offset leaves
-    // the closing fence partly unmasked. Removing bytes at offset 0 removes no
-    // newline, so line numbers are unaffected.
+    // file's blake3.
+    //
+    // Here rather than in the frontmatter parser for two reasons, and the second
+    // is the one that decides it. `parsed_block` returns an offset into this text
+    // and the markdown parser masks with it, so skipping the mark's bytes without
+    // adjusting that offset leaves the closing fence partly unmasked. More
+    // simply: a mark costs a file with no frontmatter its headings too, and the
+    // frontmatter parser never sees that file.
+    //
+    // What keeps this away from the hash is that the decode builds an owned copy
+    // and never touches `files` — not the fact that it runs after `auto_hash`.
+    // Reordering the two statements changes nothing; moving the normalization
+    // into a source changes every mark-carrying file's hash.
+    //
+    // Removing bytes at offset 0 removes no newline, so line numbers are
+    // unaffected. Byte offsets into the original file are not: everything here
+    // is an offset into the stripped text, which is what every consumer of this
+    // text uses. And a U+FEFF that is genuinely content rather than a mark is
+    // indistinguishable at offset 0, so a file opening with one loses it from the
+    // text while keeping it in the hash.
     let texts: Vec<(String, String)> = files
         .iter()
         .filter_map(|f| {
@@ -62,7 +82,7 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
                 .as_ref()
                 .and_then(|b| std::str::from_utf8(b).ok())
                 .map(|text| {
-                    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+                    let text = text.trim_start_matches('\u{feff}');
                     (f.path.clone(), text.to_string())
                 })
         })
