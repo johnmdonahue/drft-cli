@@ -170,6 +170,13 @@ a config key like `rules.stale-nodes`, sometimes nothing.
 }
 ```
 
+Text output is line-oriented, so one record is always one line. A path or value
+carrying a newline or a control character — anything a filename or a YAML scalar
+can hold — is escaped when rendered as text, so a finding, an edge, a node id, or
+a hint locus can never split across lines. The escaping belongs to the rendering:
+every value reaches JSON exactly as written, which is the authoritative form for
+anything reading drft rather than reading with drft.
+
 In text, hints go to stderr after the result, so a pipe carries only the
 projection.
 

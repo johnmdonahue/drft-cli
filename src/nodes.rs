@@ -75,7 +75,7 @@ pub fn project(
 pub fn format_text(nodes: &[NodeProjection]) -> String {
     let mut blocks = Vec::new();
     for node in nodes {
-        let mut lines = vec![node.id.clone()];
+        let mut lines = vec![crate::util::one_line(&node.id)];
         projection::push_metadata_lines(&mut lines, &node.metadata);
         blocks.push(lines.join("\n"));
     }
@@ -211,5 +211,16 @@ mod tests {
             format_text(&out),
             "docs/a.md\n  @frontmatter\n    purpose: \"line one\\nline two\"\n"
         );
+    }
+
+    #[test]
+    fn a_node_id_carrying_a_newline_stays_on_one_line() {
+        // `check` escapes the same id, so rendering it raw here made one node two
+        // records in `nodes` and `graph --format text`.
+        let projection = NodeProjection {
+            id: "we\nird.md".to_string(),
+            metadata: Map::new(),
+        };
+        assert_eq!(format_text(&[projection]).trim_end(), "we\\nird.md");
     }
 }

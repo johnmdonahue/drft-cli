@@ -612,29 +612,47 @@ fn declared_edge_keys_that_match_raise_no_hint() {
     assert_eq!(v["hints"].as_array().map(Vec::len), Some(0));
 }
 
-/// A repository with nothing written yet has no corpus to disagree with the
-/// config, and `drft init` scaffolds `edge_keys` — so hinting here would nag
-/// every fresh repository on every command until someone wrote a first
-/// derivation. That is the objection that inverted this hint in the first place.
+/// A graph reaching no file looks identical whether its globs are wrong or the
+/// files are simply unwritten, so the hint covers both and names both remedies
+/// rather than guessing. An exemption for the second was tried and removed: it
+/// hid a misspelled `files` glob, which is one of the states this hint exists to
+/// report.
 #[test]
-fn a_graph_that_reached_no_files_does_not_raise_the_hint() {
+fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
     let dir = TempDir::new().unwrap();
-    let init = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "init"])
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.mdx\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
         .output()
         .unwrap();
-    assert!(init.status.success());
-
-    for command in [vec!["check"], vec!["edges"], vec!["nodes"]] {
-        let mut args = vec!["-C", dir.path().to_str().unwrap()];
-        args.extend(command.iter().copied());
-        let output = drft_bin().args(&args).output().unwrap();
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            !stderr.contains("edge-keys-matched-nothing"),
-            "{command:?} nagged a freshly initialised repository: {stderr}"
-        );
-    }
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).expect("valid JSON");
+    let hint = v["hints"]
+        .as_array()
+        .and_then(|h| h.first())
+        .unwrap_or_else(|| panic!("a wrong glob must not be silent: {v}"));
+    assert_eq!(hint["name"], "edge-keys-matched-nothing");
+    assert!(
+        hint["message"].as_str().unwrap().contains("globs"),
+        "the message must name the glob, not the keys: {hint}"
+    );
 }
 
 /// One finding is one line. A target carrying a newline otherwise emits a second

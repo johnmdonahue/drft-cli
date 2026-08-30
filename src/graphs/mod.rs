@@ -102,38 +102,53 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
                 let fragment =
                     builders::frontmatter::build(name, &texts, files, graph.edge_keys.clone());
                 // Declaring keys states an expectation the corpus can fail to
-                // meet — a misspelled key, or one no file uses. That produces a
-                // graph tracking nothing while the config says otherwise, and it
-                // exits 0.
+                // meet, and every way of failing it produces a graph tracking
+                // nothing while the config says otherwise, at exit 0.
+                //
+                // Two ways, and the message says which, because the remedy
+                // differs: the graph's globs reached no file at all, or they
+                // reached files and no value sat under a declared key.
                 //
                 // Declaring *no* keys is not this state: a frontmatter graph may
                 // exist purely to seed node metadata, and a graph that is as
                 // intended has nothing to report.
                 //
-                // Neither is a graph that reached no files. A repository with
-                // nothing written yet has no corpus to disagree with the config,
-                // and `drft init` scaffolds `edge_keys`, so hinting here would nag
-                // every fresh repository on every command until someone wrote a
-                // first derivation — the same objection that inverted this hint.
-                let read_any = texts.iter().any(|(path, _)| match &parser_files {
+                // There is deliberately no exemption for a repository with
+                // nothing in it yet. One was tried and it swallowed a misspelled
+                // `files` glob — a graph reaching no file looks identical whether
+                // the globs are wrong or the files are unwritten, so exempting
+                // the second hides the first. The first message covers both, and
+                // names the two remedies rather than assuming which applies.
+                let matched_any = texts.iter().any(|(path, _)| match &parser_files {
                     Some(set) => set.is_match(path),
                     None => true,
                 });
-                if read_any && !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
-                    hints.push(
-                        Hint::new(
-                            "edge-keys-matched-nothing",
+                if !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
+                    let keys = render_keys(&graph.edge_keys);
+                    let (message, next) = if matched_any {
+                        (
                             format!(
-                                "declares {} but no value was found under {}, so this graph has no edges",
-                                render_keys(&graph.edge_keys),
-                                if graph.edge_keys.len() == 1 { "it" } else { "any of them" }
+                                "declares {keys} but no value was found under {}, so this graph has no edges",
+                                if graph.edge_keys.len() == 1 {
+                                    "it"
+                                } else {
+                                    "any of them"
+                                }
                             ),
+                            "check the spelling against the frontmatter the files actually carry",
                         )
-                        .at(format!("graphs.{name}"))
-                        .with_next(
-                            "check the spelling against the frontmatter the files actually carry, and the graph's `files` globs"
-                                .to_string(),
-                        ),
+                    } else {
+                        (
+                            format!(
+                                "declares {keys}, but its `files` globs reached no file to read"
+                            ),
+                            "add files the globs reach, or correct the globs",
+                        )
+                    };
+                    hints.push(
+                        Hint::new("edge-keys-matched-nothing", message)
+                            .at(format!("graphs.{name}"))
+                            .with_next(next.to_string()),
                     );
                 }
                 graphs.push(fragment)

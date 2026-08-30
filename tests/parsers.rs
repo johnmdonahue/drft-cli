@@ -1132,3 +1132,45 @@ fn a_markdown_link_value_is_diagnosed_rather_than_unwrapped() {
         "the finding must name the literal value, got: {stdout}"
     );
 }
+
+/// `drft impact` renders a record per line, and both halves of it come from the
+/// graph. Escaping one and not the other split a record across two lines, the
+/// first carrying no `(via …, depth …, radius …)` suffix — the failure the
+/// escaping exists to prevent, reached through a declared frontmatter value.
+#[test]
+fn an_impact_record_carrying_a_newline_stays_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: |\n  first line\n  second line\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.contains("(via "),
+            "every record carries its suffix, so none was split: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("first line\\nsecond line"),
+        "the newline is escaped rather than emitted: {stdout}"
+    );
+}

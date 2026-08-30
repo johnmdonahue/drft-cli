@@ -113,7 +113,7 @@ impl Finding {
             self.message
         );
         match &self.cause {
-            Some(cause) => format!("{head}\n  cause: {cause}"),
+            Some(cause) => format!("{head}\n  cause: {}", crate::util::one_line(cause)),
             None => head,
         }
     }
@@ -135,7 +135,10 @@ impl Finding {
             self.message
         );
         match &self.cause {
-            Some(cause) => format!("{head}\n  {bold}cause{reset}: {cause}"),
+            Some(cause) => format!(
+                "{head}\n  {bold}cause{reset}: {}",
+                crate::util::one_line(cause)
+            ),
             None => head,
         }
     }
@@ -198,5 +201,47 @@ mod tests {
         let json = serde_json::to_value(&f).unwrap();
         assert_eq!(json["subject"], "index.md");
         assert_eq!(json["target"], "gone.md");
+    }
+
+    // One finding is one line. Each of these deletions left the whole suite green
+    // before the tests existed, and each puts a line into `check` output carrying
+    // neither a severity prefix nor the cause indent.
+
+    #[test]
+    fn a_node_findings_subject_stays_on_one_line() {
+        let f = Finding::warn("detached-node", "we\nird.md", vec![], "no connections");
+        assert_eq!(
+            f.format_text(),
+            "warn[detached-node]: we\\nird.md (no connections)"
+        );
+    }
+
+    #[test]
+    fn an_edge_findings_subject_and_lines_stay_on_one_line() {
+        let f = Finding::warn("unresolved-edge", "we\nird.md", vec![], "no defining node")
+            .with_lines(vec![2])
+            .with_target("t\nt.md");
+        assert_eq!(
+            f.format_text(),
+            "warn[unresolved-edge]: we\\nird.md:2 → t\\nt.md (no defining node)"
+        );
+    }
+
+    #[test]
+    fn a_cause_is_escaped_when_rendered_and_kept_raw_on_the_finding() {
+        let f = Finding::warn("unresolved-edge", "a.md", vec![], "no defining node")
+            .with_lines(vec![1])
+            .with_target("docs/b.md")
+            .with_cause("`we\nird.md` resolves from the graph root");
+        let text = f.format_text();
+        assert!(
+            text.lines().count() == 2,
+            "head plus one cause line: {text:?}"
+        );
+        assert!(text.contains("`we\\nird.md`"), "{text:?}");
+        // The finding itself keeps the real bytes — it is serialised to JSON,
+        // where the value has to survive exactly as written.
+        assert!(f.cause.as_deref().unwrap().contains('\n'));
+        assert!(!f.cause.as_deref().unwrap().contains("\\n"));
     }
 }

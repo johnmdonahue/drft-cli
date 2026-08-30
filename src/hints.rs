@@ -61,7 +61,14 @@ impl Hint {
     /// read as one output vocabulary. The `next` line indents beneath it.
     pub fn format_text(&self) -> String {
         let head = match &self.locus {
-            Some(locus) => format!("hint[{}]: {} ({})", self.name, locus, self.message),
+            // A locus is often a node path, which can carry anything a filename
+            // can. One hint is one line, as one finding is.
+            Some(locus) => format!(
+                "hint[{}]: {} ({})",
+                self.name,
+                crate::util::one_line(locus),
+                self.message
+            ),
             None => format!("hint[{}]: {}", self.name, self.message),
         };
         match &self.next {
@@ -77,8 +84,10 @@ impl Hint {
         let cyan = "\x1b[36m";
         let head = match &self.locus {
             Some(locus) => format!(
-                "{blue}hint{reset}[{bold}{}{reset}]: {cyan}{locus}{reset} ({})",
-                self.name, self.message
+                "{blue}hint{reset}[{bold}{}{reset}]: {cyan}{}{reset} ({})",
+                self.name,
+                crate::util::one_line(locus),
+                self.message
             ),
             None => format!(
                 "{blue}hint{reset}[{bold}{}{reset}]: {}",
@@ -220,5 +229,17 @@ mod tests {
         let v = serde_json::to_value(&hints).unwrap();
         assert!(v.is_array(), "got: {v}");
         assert_eq!(v.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_locus_carrying_a_newline_stays_on_one_line() {
+        // A locus is often a node path, which can carry whatever a filename can.
+        let h = Hint::new("directory-lock", "carries no content").at("we\nird");
+        assert_eq!(
+            h.format_text(),
+            "hint[directory-lock]: we\\nird (carries no content)"
+        );
+        // Raw on the hint, which is serialised.
+        assert!(h.locus.as_deref().unwrap().contains('\n'));
     }
 }

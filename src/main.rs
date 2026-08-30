@@ -1110,7 +1110,7 @@ fn run_impact(
                     .map(|i| {
                         format!(
                             "{} (via {}, depth {}, radius {})\n",
-                            i.location(),
+                            drft::util::one_line(&i.location()),
                             drft::util::one_line(&i.via),
                             i.depth,
                             i.impact_radius

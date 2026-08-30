@@ -36,7 +36,7 @@ A frontmatter value cites another document, so — unlike a body link — a valu
 
 **The finding names the target, which is resolved against the declaring file.** A value under `docs/guide.md` is reported as `docs/TBD`, not `TBD`. The literal text is on the edge's occurrence as `raw`, which `drft edges` shows and `check` does not.
 
-Text output is line-oriented and arrow-delimited, so a target containing a newline or a control character is escaped when rendered there. JSON carries the value exactly as written and is the authoritative form.
+Text output is line-oriented, so one record is always one line: a target, subject, node id, or hint locus carrying a newline or a control character is escaped when rendered there. The escaping belongs to the rendering — every value reaches JSON exactly as written, which is the authoritative form.
 
 Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
 

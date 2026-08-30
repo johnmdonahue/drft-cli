@@ -241,4 +241,19 @@ mod tests {
     fn format_text_empty_is_blank() {
         assert_eq!(format_text(&[]), "");
     }
+
+    #[test]
+    fn a_source_or_target_carrying_a_newline_stays_on_one_line() {
+        // Both halves of the arrow come from files and can carry anything a path
+        // can. Deleting either escape left the suite green before this existed.
+        let projection = EdgeProjection {
+            source: "we\nird.md".to_string(),
+            target: "t\nt.md".to_string(),
+            metadata: Map::new(),
+        };
+        assert_eq!(
+            format_text(&[projection]).trim_end(),
+            "we\\nird.md → t\\nt.md"
+        );
+    }
 }
