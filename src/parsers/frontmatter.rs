@@ -32,6 +32,25 @@ fn is_link_candidate(value: &str) -> bool {
     }
 }
 
+/// Whether a character starts a new line **as the YAML parser counts them**.
+///
+/// saphyr breaks on a lone `\r`; `str::lines` does not, splitting on `\n` and
+/// stripping a `\r` only where one immediately precedes a `\n`. The table is
+/// indexed by the parser's line numbers, so it has to agree with the parser — a
+/// carriage return left inside a line desynchronized the two and sent the
+/// correction to the wrong line.
+///
+/// This is not the same question as which line of the *file* a value sits on. A
+/// file's lines are counted by `\n` alone, which is what an editor and `grep -n`
+/// report, so a lone `\r` opens a new row of this table that maps to the same
+/// source line as the row before it.
+///
+/// A CRLF file arrives with its `\r` already stripped by the fenced pass, so
+/// nothing is counted twice.
+fn is_break(c: char) -> bool {
+    c == '\n' || c == '\r'
+}
+
 /// A code-masked copy of a block, with the source lines its columns came from.
 ///
 /// The mask blanks a code span to spaces, newlines included, because fusing a
@@ -86,7 +105,7 @@ impl Masked {
 }
 
 /// Mask fenced blocks and inline backtick spans, replacing every character with a
-/// space, and record where each masked line started in the source.
+/// space, and record which source lines each masked line's columns came from.
 fn strip_code(content: &str) -> Masked {
     // First strip fenced code blocks (``` and ~~~)
     let mut result = String::with_capacity(content.len());
@@ -116,13 +135,17 @@ fn strip_code(content: &str) -> Masked {
         result.push('\n');
     }
 
-    // Then strip inline code spans (single and double backticks), recording the
-    // source line each masked line begins on. Only this pass fuses lines; the
-    // fenced pass above rebuilds the text line for line — though it blanks a line
-    // to `" ".repeat(line.len())`, which is a *byte* count, so a fenced line
-    // holding multi-byte characters comes back wider in characters than its
-    // source. Nothing inside a fenced line can open a span, so no breakpoint is
-    // recorded there and the widening reaches no column this table resolves.
+    // Then strip inline code spans (single and double backticks), recording a
+    // breakpoint wherever a swallowed newline means the columns after it came from
+    // the next source line. Only this pass fuses lines; the fenced pass above
+    // rebuilds the text line for line.
+    //
+    // That pass blanks a line to `" ".repeat(line.len())`, which is a *byte* count,
+    // so a fenced line holding multi-byte characters comes back wider in characters
+    // than its source. A span opened before a fence encloses the blanked fence lines
+    // and does record breakpoints inside them, so the widening is not out of reach —
+    // it simply does not matter, because this counter and saphyr both count
+    // characters over the same masked text. The widening moves both equally.
     let mut cleaned = String::with_capacity(result.len());
     let mut lines: Vec<Vec<(usize, usize)>> = Vec::new();
     let mut current = vec![(0usize, 1usize)];
@@ -150,13 +173,19 @@ fn strip_code(content: &str) -> Masked {
             }
             if let Some(close_start) = found {
                 // Blank the entire span — backticks, content, and closing
-                // backticks, newlines included. Keeping a span's newlines instead
-                // was tried and reverted twice: it moves the boundary
+                // backticks, newlines included.
+                //
+                // Keeping a span's newlines instead is not an option, for two
+                // reasons that are easy to miss: it moves the boundary
                 // `parsed_block` decides, and it changes the *text* of a value,
-                // since `collect_links` reads a scalar's string out of this copy.
-                // Blanking them is what shortens the masked block, so a value
+                // because `collect_links` reads a scalar's string out of this copy
+                // and YAML folds a preserved newline to a single space. The edge
+                // target, the node it resolves to, and the lockfile entry move
+                // with it.
+                //
+                // Blanking is therefore what shortens the masked block, so a value
                 // below a span resolves one line too high per newline swallowed —
-                // and that number reaches `drft edges`, `drft impact`, and every
+                // a number that reaches `drft edges`, `drft impact`, and every
                 // finding. The table is what corrects it.
                 // A blanked newline advances the source line without ending the
                 // masked one — which is exactly the shift the table records.
@@ -180,9 +209,14 @@ fn strip_code(content: &str) -> Masked {
                 i += 1;
             }
         } else {
-            if chars[i] == '\n' {
+            if is_break(chars[i]) {
+                // A lone `\r` starts a new line for saphyr, so it starts a new
+                // row of this table — but it is not a line break in the file, so
+                // the source line it maps to does not advance.
                 lines.push(std::mem::take(&mut current));
-                source_line += 1;
+                if chars[i] == '\n' {
+                    source_line += 1;
+                }
                 current = vec![(0, source_line)];
                 col = 0;
             } else {
@@ -400,9 +434,9 @@ fn frontmatter_block(stripped: &str) -> Option<&str> {
     Some(yaml_str)
 }
 
-/// Collect string leaf *values* (not keys) with their 1-based line and column in
-/// the masked copy — the
-/// frontmatter link candidates. Mirrors the metadata walk but keeps only strings.
+/// Collect string leaf *values* (not keys) with their position in the masked copy
+/// — the frontmatter link candidates. The line is 1-based and the column is
+/// 0-based, which is saphyr's convention for each whatever its docs say. Mirrors the metadata walk but keeps only strings.
 fn collect_links(node: &MarkedYaml, out: &mut Vec<(String, usize, usize)>) {
     match &node.data {
         YamlData::Value(Scalar::String(s)) => {
@@ -578,29 +612,57 @@ mod tests {
         assert_eq!(masked.source_line(2, 8), 3);
     }
 
-    /// An unmatched backtick is copied through rather than blanked, and its line
-    /// keeps its own newline, so nothing fuses.
-    ///
-    /// It cannot be observed through the table, and that is a property rather than
-    /// a gap: the scan pairs a backtick with any later one, so an unmatched
-    /// backtick is always the last in the block and no span — and therefore no
-    /// breakpoint — can follow it. The counter still advances across it, because
-    /// `col` has to mean the masked column for the arithmetic around it to be
-    /// readable.
-    #[test]
-    fn an_unmatched_backtick_is_copied_and_fuses_nothing() {
-        let masked = strip_code("a: b`\nc: d\n");
-        assert_eq!(masked.text, "a: b`\nc: d\n");
-        assert_eq!(masked.lines, vec![vec![(0, 1)], vec![(0, 2)], vec![(0, 3)]]);
-    }
-
     /// A line the table does not hold falls back to the masked line rather than
-    /// panicking. saphyr reports line 0 for a scalar carrying a bare `!` tag.
+    /// panicking.
+    ///
+    /// Two things land here. saphyr reports line 0 for a scalar carrying a bare
+    /// `!` tag, and there is no zeroth masked line. And saphyr treats a lone `\r`
+    /// as a line break where `str::lines` does not, so a block containing one
+    /// desynchronizes this table from saphyr's line numbering and the lookup can
+    /// run past the end. The fallback keeps that quiet rather than correct — see
+    /// the tracked defect for the lone-`\r` case.
     #[test]
     fn a_line_the_table_does_not_hold_falls_back() {
         let masked = strip_code("a: b\n");
         assert_eq!(masked.source_line(0, 0), 0);
         assert_eq!(masked.source_line(99, 4), 99);
+    }
+
+    /// A lone carriage return opens a new row of the table without advancing the
+    /// source line.
+    ///
+    /// saphyr breaks on it and `str::lines` does not, so the table has to break on
+    /// it too or its rows stop lining up with the parser's line numbers. But a
+    /// file's lines are counted by `\n` alone — which is what an editor reports —
+    /// so both rows map to the same source line.
+    #[test]
+    fn a_lone_carriage_return_opens_a_row_without_advancing_the_source_line() {
+        let masked = strip_code("a: one\rb: two\nc: three\n");
+        // Rows one and two both map to source line 1, split by the `\r`. The
+        // trailing row is the empty line after the final newline the fenced pass
+        // appends — never looked up, and asserted here so it does not read as an
+        // off-by-one to the next person auditing this table.
+        assert_eq!(
+            masked.lines,
+            vec![vec![(0, 1)], vec![(0, 1)], vec![(0, 2)], vec![(0, 3)]]
+        );
+    }
+
+    /// A backtick with no partner is copied through rather than blanked, and a
+    /// span can still follow it — so the counter has to advance across it.
+    ///
+    /// The tempting argument is that an unmatched backtick must be the last one in
+    /// the block, since the scan pairs each with any later one. That is false: a
+    /// run of two with no two-run closer is consumed **one at a time**, and the
+    /// survivor pairs with a later single backtick. Here the leading run is
+    /// ``` `` ```, the first is copied, and the second opens a span that swallows
+    /// the newline — putting a breakpoint after a character the counter would
+    /// otherwise not have counted.
+    #[test]
+    fn a_copied_backtick_still_advances_the_column() {
+        let masked = strip_code("``\n`\n");
+        assert_eq!(masked.text, "`   \n");
+        assert_eq!(masked.lines, vec![vec![(0, 1), (3, 2)], vec![(0, 3)]]);
     }
 
     #[test]
