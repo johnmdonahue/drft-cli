@@ -626,8 +626,10 @@ mod tests {
     /// A line the table does not hold falls back to the masked line rather than
     /// panicking.
     ///
-    /// One thing reaches it: saphyr reports line 0 for a scalar carrying a bare
-    /// `!` tag, and there is no zeroth masked line. Line-terminator disagreements
+    /// One thing reaches it: saphyr reports line 0 for a scalar carrying a *local*
+    /// tag — `!`, `!foo`, or a verbatim `!<…>` — and there is no zeroth masked
+    /// line. A global tag such as `!!str` reports its real line. This predates the
+    /// table and is identical on the unmodified parser. Line-terminator disagreements
     /// do not — `opens_line` matches saphyr break for break, so the table holds a
     /// row for every line the parser can name.
     #[test]
@@ -674,6 +676,43 @@ mod tests {
             "`b` is on source line 2, as it is for a plain CRLF file"
         );
         assert_eq!(masked.lines, strip_code("a: one\r\nb: two\n").lines);
+    }
+
+    /// `\n\r` is two breaks, not one — the mirror of the case above, and the arm
+    /// that had no test.
+    ///
+    /// The lookahead suppressing a duplicate row belongs on the `\r` and only
+    /// there. Writing the symmetric suppression on the `\n` instead passes every
+    /// other test in this suite while collapsing two rows the parser counts
+    /// separately, which desynchronizes the table exactly as under-counting did.
+    #[test]
+    fn a_newline_before_a_carriage_return_opens_two_rows() {
+        let masked = strip_code("a: 1\n\rb: 2\n");
+        assert_eq!(
+            masked.lines,
+            vec![vec![(0, 1)], vec![(0, 2)], vec![(0, 2)], vec![(0, 3)]],
+            "the newline ends source line 1; the carriage return opens a second \
+             row on source line 2 without advancing it"
+        );
+    }
+
+    /// Only `\n` and `\r` open a row, because those are the only characters the
+    /// parser breaks on.
+    ///
+    /// Every other test here asserts that something *does* open a row, which
+    /// leaves the break set pinned in one direction: widening it to Unicode's
+    /// other separators reads as a correctness fix, passes the whole suite, and
+    /// desynchronizes the table on any block containing one.
+    #[test]
+    fn unicode_separators_do_not_open_a_row() {
+        for separator in ['\u{2028}', '\u{0085}', '\u{000c}', '\u{2029}', '\u{000b}'] {
+            let masked = strip_code(&format!("a: 1{separator}b: 2\n"));
+            assert_eq!(
+                masked.lines,
+                vec![vec![(0, 1)], vec![(0, 2)]],
+                "{separator:?} is not a line break to this parser"
+            );
+        }
     }
 
     /// A backtick with no partner is copied through rather than blanked, and a
