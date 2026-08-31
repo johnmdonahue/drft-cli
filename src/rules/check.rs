@@ -15,8 +15,20 @@ use crate::rules::{staleness, structural};
 
 /// Evaluate all v0.8 rules and apply config. Staleness rules run only against a
 /// usable baseline; structural rules always run.
-pub fn run(graph: &Graph, lock: Option<&Lock>, config: &Config) -> Vec<Finding> {
-    let mut findings = Vec::new();
+///
+/// `parser_findings` are raised during the build, by a parser that recognized
+/// something it could not read. They arrive already made rather than derived
+/// here because the graph cannot express them — a file whose block nothing could
+/// read and a file with no block are the same shape once built. They join the
+/// derived findings before severity and ignore globs are applied, so config
+/// promotes, silences and scopes them like any other rule.
+pub fn run(
+    graph: &Graph,
+    lock: Option<&Lock>,
+    config: &Config,
+    parser_findings: Vec<Finding>,
+) -> Vec<Finding> {
+    let mut findings = parser_findings;
 
     // A baseline that does not exist and a baseline with no entries are the same
     // fact: nothing to compare against. Both used to leave `check` silent, so a
@@ -155,7 +167,7 @@ mod tests {
     #[test]
     fn applies_default_warn_severity() {
         let graph = composed_unresolved();
-        let findings = run(&graph, None, &Config::defaults());
+        let findings = run(&graph, None, &Config::defaults(), Vec::new());
         let unresolved = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -172,7 +184,7 @@ mod tests {
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        let findings = run(&composed_unresolved(), None, &config);
+        let findings = run(&composed_unresolved(), None, &config, Vec::new());
         let unresolved = findings
             .iter()
             .find(|f| f.name == "unresolved-edge")
@@ -189,7 +201,7 @@ mod tests {
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        let findings = run(&composed_unresolved(), None, &config);
+        let findings = run(&composed_unresolved(), None, &config, Vec::new());
         assert!(!findings.iter().any(|f| f.name == "unresolved-edge"));
     }
 
@@ -218,7 +230,7 @@ mod tests {
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
 
-        let findings = run(&composed, Some(&lock), &config);
+        let findings = run(&composed, Some(&lock), &config, Vec::new());
         // The group file's own staleness is suppressed (subject is in the group).
         assert!(
             !findings
@@ -245,7 +257,7 @@ mod tests {
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        let findings = run(&composed_unresolved(), None, &config);
+        let findings = run(&composed_unresolved(), None, &config, Vec::new());
         assert!(!findings.iter().any(|f| f.name == "unresolved-edge"));
     }
 }

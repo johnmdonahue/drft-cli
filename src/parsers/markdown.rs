@@ -1,4 +1,4 @@
-use super::{Link, ParseResult, Parser, frontmatter, slug};
+use super::{Link, ParseResult, Parser, slug};
 use pulldown_cmark::{Event, LinkType, Options, Parser as CmarkParser, Tag, TagEnd};
 
 /// Built-in markdown parser. Extracts inline/reference/autolinks and images.
@@ -16,45 +16,14 @@ impl Parser for MarkdownParser {
     }
 
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
-        // Frontmatter is the frontmatter parser's to read. Masked rather than
-        // skipped so byte offsets — and the link line numbers taken from them —
-        // stay file-accurate.
-        let masked = mask_frontmatter(content);
-        let (links, anchors) = extract(masked.as_deref().unwrap_or(content));
+        let (links, anchors) = extract(content);
         ParseResult {
             links,
             anchors,
             metadata: None,
+            diagnostics: Vec::new(),
         }
     }
-}
-
-/// Blank a leading YAML frontmatter block, preserving every newline so line
-/// numbers are unchanged. `None` when the file opens with no such block.
-///
-/// Without this, a single-key block reads as a **setext heading**: `purpose: x`
-/// followed by the closing `---` is a paragraph underlined by dashes, so the
-/// document publishes `#purpose-x` as an address it does not answer to — a
-/// fabricated anchor that also silently accepts any link written to it.
-///
-/// The boundary comes from the frontmatter parser rather than being re-derived
-/// here. Guessing it a second time is how the two disagree, and the failure is
-/// not symmetric: masking a document that merely opens with a `---` thematic
-/// break deletes its headings **and its links** from the graph, which reaches
-/// staleness and `drft impact`, not just this parser's anchors.
-fn mask_frontmatter(content: &str) -> Option<String> {
-    let close = frontmatter::mapping_block_end(content)?;
-    let masked = content
-        .char_indices()
-        .map(|(i, ch)| {
-            if i < close && ch != '\n' && ch != '\r' {
-                ' '
-            } else {
-                ch
-            }
-        })
-        .collect();
-    Some(masked)
 }
 
 /// Walk the document once, collecting link targets and the anchors it defines.
@@ -71,6 +40,18 @@ fn extract(content: &str) -> (Vec<Link>, Vec<String>) {
     let mut slugger = slug::Slugger::default();
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
+    // A leading fenced block is metadata, not content, so the library claims it
+    // and emits nothing from inside it. Without this a single-key block reads as
+    // a **setext heading** — `purpose: x` underlined by the closing `---` — and
+    // the document publishes `#purpose-x` as an address it does not answer to,
+    // which then silently accepts any link written to it.
+    //
+    // The block's extent is the library's call, which is what keeps one answer in
+    // the tree. Deciding it here a second time is how two deciders come to
+    // describe different spans of one file, and the frontmatter parser mirrors
+    // this library's fence rules rather than approximating them so that the
+    // question never has two answers.
+    options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
     // The offset iterator yields each event's byte range so we can locate links.
     let parser = CmarkParser::new_ext(content, options).into_offset_iter();
 
@@ -420,14 +401,64 @@ mod tests {
     }
 
     #[test]
-    fn a_comment_only_block_is_read_as_content() {
-        // A YAML comment and a markdown ATX heading are the same syntax, so
-        // accepting a comment-only block would delete `# First` from any document
-        // that opens with a thematic break above a heading.
+    fn a_comment_only_block_is_frontmatter() {
+        // A leading fenced block is frontmatter whatever it holds, so a block of
+        // YAML comments is metadata that happens to carry none — not a heading.
+        // The heading syntax and the comment syntax are identical, and only the
+        // position separates them.
         assert_eq!(
             anchors("---\n# just a comment\n---\n\n# Real\n"),
-            vec!["just-a-comment", "real"]
+            vec!["real"]
         );
+    }
+
+    #[test]
+    fn a_rule_above_a_blank_line_is_a_thematic_break() {
+        // The block's first line may not be blank, which is what keeps a document
+        // opening with a horizontal rule from losing its headings. This is the
+        // half of the fence rule that is easy to drop, and dropping it costs
+        // content rather than merely mislabeling it.
+        assert_eq!(
+            anchors("---\n\n# First\n\n---\n\n# Second\n"),
+            vec!["first", "second"]
+        );
+    }
+
+    #[test]
+    fn a_block_partway_down_a_document_is_also_a_block() {
+        // The library claims a fenced block wherever it sits, not only at the
+        // head of a file. Nothing reads a mid-document block — the frontmatter
+        // parser is leading-only — so its content leaves both graphs.
+        assert_eq!(
+            anchors("# Head\n\ntext\n\n---\nSection\n---\n\n## After\n"),
+            vec!["head", "after"]
+        );
+    }
+
+    #[test]
+    fn a_link_written_inside_the_block_is_not_a_body_edge() {
+        // Nothing escapes a claimed block: the library emits its content as text,
+        // never as markup. This pins the property rather than the mechanism, so
+        // it still holds if a later version of the library changes how it
+        // suppresses the block's events.
+        let parser = MarkdownParser { file_filter: None };
+        let content = "---\nsee: [a](a.md)\n---\n\n# T\n\nSee [b](b.md).\n";
+        let result = parser.parse("t.md", content);
+        assert_eq!(result.anchors, vec!["t"]);
+        assert_eq!(result.links.len(), 1, "only the body link is an edge");
+        assert_eq!(result.links[0].target, "b.md");
+    }
+
+    #[test]
+    fn frontmatter_inside_a_fenced_code_block_is_untouched() {
+        // A documented example of frontmatter is content. The fence has to open
+        // the block for the block to be claimed, and a code fence opens first.
+        let parser = MarkdownParser { file_filter: None };
+        let content = "# Head\n\n```md\n---\nsources:\n  - ./nope.md\n---\n```\n\n[t](t.md)\n";
+        let result = parser.parse("t.md", content);
+        assert_eq!(result.anchors, vec!["head"]);
+        assert_eq!(result.links[0].target, "t.md");
+        assert_eq!(result.links[0].line, Some(10));
     }
 
     #[test]
@@ -443,8 +474,13 @@ mod tests {
     }
 
     #[test]
-    fn a_rule_above_a_setext_title_is_not_frontmatter() {
-        assert_eq!(anchors("---\nMy Title\n---\n\nBody\n"), vec!["my-title"]);
+    fn a_block_at_the_head_of_a_file_is_frontmatter_whatever_it_holds() {
+        // `---\nMy Title\n---` is equally a rule above a setext heading, and the
+        // ambiguity has to be settled one way for the whole class. It is settled
+        // toward frontmatter: rendering it as a heading mints `#my-title` as an
+        // address the document does not answer to, and a fabricated address
+        // silently accepts every link written to it.
+        assert!(anchors("---\nMy Title\n---\n\nBody\n").is_empty());
     }
 
     #[test]

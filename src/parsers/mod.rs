@@ -16,8 +16,21 @@ pub struct Link {
     pub line: Option<usize>,
 }
 
+/// Something a parser recognized and could not read, named so a rule can report
+/// it. A parser that merely finds nothing produces no diagnostic: the point is
+/// the gap between what a file is structured as and what could be taken from it.
+#[derive(Debug, Clone)]
+pub struct Diagnostic {
+    /// The rule this becomes. Must name an entry in the built-in rule list, or
+    /// config cannot promote, silence or ignore it like any other rule.
+    pub rule: &'static str,
+    pub message: String,
+    /// 1-based source line, where the parser can place it.
+    pub line: Option<usize>,
+}
+
 /// Combined output from parsing a single file: links, the anchors it defines,
-/// and optional metadata.
+/// optional metadata, and anything the parser could not read.
 #[derive(Debug, Clone, Default)]
 pub struct ParseResult {
     pub links: Vec<Link>,
@@ -26,6 +39,8 @@ pub struct ParseResult {
     pub anchors: Vec<String>,
     /// Structured metadata extracted from the file.
     pub metadata: Option<serde_json::Value>,
+    /// What the parser recognized and could not act on. Empty for a clean parse.
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// Trait implemented by the built-in text parsers.

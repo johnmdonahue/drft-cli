@@ -507,7 +507,7 @@ fn a_byte_order_mark_is_still_hashed() {
 /// heading — so the file publishes an address it does not answer to, which a link
 /// written to it then passes `unresolved-fragment` against.
 ///
-/// Recognizing the block masks it, and the fabricated anchor goes with it. The
+/// Recognizing the block claims it, and the fabricated anchor goes with it. The
 /// general case, where any block-recognition failure does this, is its own defect.
 #[test]
 fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
@@ -538,7 +538,7 @@ fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
     assert_eq!(
         json["nodes"][0]["metadata"]["@markdown"]["anchors"],
         serde_json::json!([]),
-        "the frontmatter is masked, so it defines no heading"
+        "the frontmatter block is claimed, so it defines no heading"
     );
 }
 

@@ -170,6 +170,6 @@ fn anchors_and_fragments_match_what_a_browser_resolves() {
     );
     assert!(
         stdout.contains("cite.md:5 → target.md#purpose-a-single-key-block"),
-        "frontmatter is masked, so its closing --- is not a setext heading, got: {stdout}"
+        "the block is claimed, so its closing --- is not a setext heading, got: {stdout}"
     );
 }
