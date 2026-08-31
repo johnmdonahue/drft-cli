@@ -92,8 +92,8 @@ node metadata — so the graph loads, emits no edges, and says nothing about it.
 look, so it behaves identically.
 
 Declaring keys states an expectation the corpus can fail to meet, and that is the
-state worth reporting: a graph declaring `edge_keys` where no value is found
-under any of them raises an `edge-keys-matched-nothing` hint. A misspelled key
+state worth reporting: a graph declaring `edge_keys` that ends up with no edges
+raises an `edge-keys-matched-nothing` hint. A misspelled key
 otherwise produces a graph tracking nothing while the config says otherwise, at
 exit 0.
 

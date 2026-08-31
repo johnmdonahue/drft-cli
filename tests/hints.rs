@@ -583,6 +583,15 @@ fn declared_edge_keys_that_match_nothing_raise_a_hint() {
     // and one was. Reaching some file is not reaching the right one, an `ignore`
     // pattern can drop the file that carried the derivations, and only a string
     // names a target: all three belong here, not just the spelling.
+    // The message says nothing *yielded* an edge rather than that no value was
+    // found: a number, a boolean, an empty string or an empty list is a value
+    // that is present, prints in the `@frontmatter` block, and names no target.
+    // Unpinned, this reverted to the contradicting wording with the suite green.
+    let message = hint["message"].as_str().unwrap();
+    assert!(
+        message.contains("yielded an edge") && !message.contains("no value was found"),
+        "message must not claim the value is absent: {message}"
+    );
     let next = hint["next"].as_str().unwrap();
     for cause in ["spelling", "globs", "ignore", "strings"] {
         assert!(next.contains(cause), "remedy must name {cause}: {next}");

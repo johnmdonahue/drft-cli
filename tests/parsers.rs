@@ -1292,48 +1292,88 @@ fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
     );
 }
 
-/// One record is one line, across every command that renders text.
+/// One record is one line, across every command and both renderers.
 ///
 /// This exists because the per-call-site version of this rule failed four times
-/// in a row, always the same way: a `format!` interpolating two values, one
-/// escaped and one not. Grepping the function just edited would have caught each,
-/// and did not. Escaping is a property of the rendering layer, and asserting it
-/// once over real output is the only check that does not have to be remembered at
-/// every new call site.
+/// in a row, always the same way: a `format!` interpolating two file-derived
+/// values with one escaped and one not. Escaping is a property of the rendering
+/// layer, and asserting it once over real output is the only check that does not
+/// have to be remembered at every new call site.
 ///
-/// The fixture puts a newline into every channel a value can arrive through: a
-/// filename, a declared frontmatter value, a metadata key, and a graph name. Each
-/// injected newline has a distinctive **tail** — the text after it — and the
-/// assertion is that no tail ever begins a line. Classifying lines as heads or
-/// continuations was tried first and is vacuous: an orphan line looks exactly
-/// like a head.
+/// **Three earlier versions of this test passed while asserting nothing**, which
+/// is the failure mode to guard against when extending it:
+///
+/// - The first classified lines as record heads or indented continuations. An
+///   orphan line satisfies "head", so it asserted nothing at all.
+/// - The second injected a newline into an unquoted YAML key, which is invalid,
+///   so the block did not parse and no value reached the output. A *quoted* key
+///   carries one fine — the fixture below uses that, and the comment claiming the
+///   channel was unreachable was wrong.
+/// - The third used tails `"ird "` and `"ird("`, neither of which matches an
+///   orphan line whose whole content is `ird` — so the namespace header, the very
+///   site the commit adding this test had fixed, was uncovered.
+///
+/// Extending it means adding a channel to the fixture **and** proving the new
+/// tail fails when its escape is reverted. A tail that never appears is a tail
+/// that asserts nothing.
+///
+/// **What it covers, measured rather than assumed.** A mutation sweep over every
+/// `one_line` call site found this catches the node id, both halves of an edge,
+/// a finding's target, the `@namespace` header, a metadata key, the lock report's
+/// locked list, a hint's locus, and `impact`'s location. It does **not** reach a
+/// finding's cause, a hint's `next` (every one is a literal today), the dropped
+/// list, `resolved-elsewhere`, or the not-found error's own interpolations —
+/// several of those are pinned by their own tests nearby, and the rest are
+/// recorded in the queue. This is a net, not a proof.
 #[test]
 fn no_command_splits_a_record_across_lines() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.\"we\\nird\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+        // The graph name reaches text output as the `@namespace` header. The
+        // second graph declares a key nothing uses, which is what raises a hint —
+        // without one, every hint render site is unreachable and untested.
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n         [graphs.\"we\\nird\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n\n         [graphs.\"un\\nused\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"no\\nthing\"]\n",
     )
     .unwrap();
-    fs::write(dir.path().join("we\nird.md"), "# W\n\n[t](./target.md)\n").unwrap();
+    // A broken link as well as a good one: the broken one makes this file an
+    // edge finding's *subject*, which is the only way that escape is reachable.
+    fs::write(
+        dir.path().join("we\nird.md"),
+        "# W\n\n[t](./target.md)\n\n[gone](./missing.md)\n",
+    )
+    .unwrap();
     fs::write(dir.path().join("target.md"), "# T\n").unwrap();
-    // A newline in a YAML *key* makes the block invalid, so that channel is
-    // unreachable and injecting it only produced a fixture with no frontmatter at
-    // all — which is how the first version of this test passed while asserting
-    // nothing.
+    // Nothing links to this one, so it becomes a `detached-node` subject — the
+    // only way a finding's *subject* escape is reachable at all.
+    fs::write(dir.path().join("or\nphan.md"), "# O\n").unwrap();
+    // A quoted key carries a newline; an unquoted one makes the block invalid.
     fs::write(
         dir.path().join("doc.md"),
-        "---\nsources: |\n  first line\n  second line\n---\n\n# Doc\n",
+        // `target.md` written bare from a file in a subdirectory would resolve from
+        // the root — that is what raises a `cause` line, the second renderer whose
+        // escapes nothing else reaches.
+        "---\n\"ke\\ny\": value\nsources: |\n  first line\n  second line\n---\n\n# Doc\n",
+    )
+    .unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(
+        dir.path().join("sub").join("bare.md"),
+        "# B\n\n[t](we\nird.md)\n",
     )
     .unwrap();
 
-    // The text following each injected newline. If any render site emits the
-    // value raw, one of these begins a line of its own.
-    let tails = ["ird.md", "second line", "ird ", "ird("];
+    // The text following each injected newline. If any render site emits its
+    // value raw, one of these begins a line of its own. Bare `ird` rather than
+    // `ird.md`: the namespace header's orphan line is just `ird`.
+    let tails = ["ird", "phan", "second line", "y: value", "used", "thing"];
     let root = dir.path().to_str().unwrap();
 
     for args in [
         vec!["check"],
+        // The colored renderer is a second set of interpolations, and every one of
+        // its escapes was unpinned until this ran it.
+        vec!["check", "--color", "always"],
         vec!["nodes"],
         vec!["edges"],
         vec![
@@ -1344,10 +1384,8 @@ fn no_command_splits_a_record_across_lines() {
             "--depth",
             "2",
         ],
-        // Lock the newline-named file, not `doc.md`: the lock report renders the
-        // node it wrote, so locking a well-behaved path exercises nothing.
         vec!["lock", "we\nird.md"],
-        vec!["nodes", "missing.md"],
+        vec!["nodes", "no\nsuch.md"],
     ] {
         let mut full = vec!["-C", root];
         full.extend(args.iter().copied());
@@ -1356,7 +1394,11 @@ fn no_command_splits_a_record_across_lines() {
         for (stream, bytes) in [("stdout", &output.stdout), ("stderr", &output.stderr)] {
             let text = String::from_utf8_lossy(bytes);
             for line in text.lines() {
-                let trimmed = line.trim_start();
+                // Strip indentation and any color escape so a continuation line
+                // and a colored head are compared on their content.
+                let trimmed = line.trim_start().trim_start_matches(|c: char| {
+                    c == '\u{1b}' || c == '[' || c == ';' || c.is_ascii_digit() || c == 'm'
+                });
                 for tail in tails {
                     assert!(
                         !trimmed.starts_with(tail),
