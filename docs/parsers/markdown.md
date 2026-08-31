@@ -85,11 +85,14 @@ a first line that is neither blank nor a closing fence, and a closing line of
 exactly `---` or `...`. A document that merely opens with a `---` thematic break
 above a blank line keeps its headings and its links.
 
-A fenced block is claimed **wherever it appears**, not only at the head of the
-file, and its content reaches neither graph: this parser emits nothing from
-inside it, and the [frontmatter parser](frontmatter.md) reads only a block at the
-very start. So a `---\nkey: value\n---` section partway down a document loses its
-headings and its links, and nothing reports it.
+**Only a leading block.** The markdown library will claim a fenced block wherever
+one appears; drft takes its answer only when the block starts at byte 0.
+Frontmatter is the head of a file under every convention that writes it, and no
+markdown specification gives a block further down any meaning at all — so a
+`---\nkey: value\n---` section partway through a document is a thematic break, a
+setext heading and another thematic break, exactly as a reader sees it. A file
+whose first line is blank is prose for the same reason, even though the library
+reports its later block as the document's first event.
 
 The block's extent is decided by fence syntax alone, so it does not depend on
 whether the YAML inside parses. The [frontmatter parser](frontmatter.md) mirrors
