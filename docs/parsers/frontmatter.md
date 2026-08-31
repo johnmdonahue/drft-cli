@@ -71,7 +71,7 @@ warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.r
 
 The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
 
-Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
+Frontmatter that is not well-formed YAML contributes no edges or metadata, and raises `unreadable-frontmatter` naming the file. drft is not a YAML linter and does not say which construct failed — only that a block it recognized could not be read, which is what separates a file that declares nothing from one whose declarations were dropped.
 
 ### Naming the keys that yield edges
 
@@ -96,9 +96,11 @@ Declaring keys states an expectation the corpus can fail to meet, and that is th
 
 The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
 
-A block counts as frontmatter only when it parses as a YAML **mapping**, and one selector decides where it ends — for this parser's metadata, for its edges, and for the [markdown parser](markdown.md)'s mask. Code spans are blanked within that block, not used to find it: a backtick opened in frontmatter and closed in the body would otherwise move the boundary, and the two directions of that were a link lifted out of body prose and a declared `sources:` entry silently producing no edge. So a file opening with a `---` thematic break rather than frontmatter keeps its first heading and its links.
+Where a block ends is decided by fence syntax, and only then is its text read. A block is opened by exactly three dashes on a line of their own and closed by a line of exactly `---` or `...`, and its first line may be neither blank nor a closing fence. These are the [markdown parser](markdown.md)'s rules, mirrored here rather than approximated, because a parser claiming a span the other renders publishes the same text as metadata and as an address at once. Both parsers also read **only a leading block** — the markdown library is willing to claim one anywhere, and neither parser takes it. A block further down a document is prose to both, which is what every renderer shows.
 
-A mapping is required rather than any valid YAML because YAML and markdown collide: `# First` is a YAML comment _and_ a markdown heading, so treating a comment-only block as frontmatter would delete the most ordinary heading in markdown from any document that opens with a rule. A block parsing to a bare scalar is ambiguous the same way — `---`, `My Title`, `---` is equally a rule above a setext heading. Both are read as content, which costs comment-only frontmatter its metadata and is the recoverable direction to be wrong in.
+Code spans are blanked within that block, not used to find it: a backtick opened in frontmatter and closed in the body would otherwise move the boundary, and the two directions of that were a link lifted out of body prose and a declared `sources:` entry silently producing no edge. A file opening with a `---` thematic break above a blank line keeps its first heading and its links.
+
+Metadata is contributed only when that block parses as a YAML **mapping**. A block that does not — a comment-only block, one parsing to a bare scalar, one whose YAML is malformed — contributes nothing, and raises `unreadable-frontmatter` naming the file. The rule is what makes the outcome recoverable: the block is claimed by its fences either way, so nothing renders its text as content, and silence about a block a reader can see is the failure worth preventing.
 
 ## Configuration
 

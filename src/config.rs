@@ -160,6 +160,7 @@ const BUILTIN_RULES: &[&str] = &[
     "detached-node",
     "unlocked-node",
     "no-baseline",
+    "unreadable-frontmatter",
 ];
 
 /// Parsers a graph may declare. `fs` is the implicit base graph (a provider, not

@@ -334,7 +334,7 @@ fn run_lock(
 
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config, hints)?;
+    let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
 
@@ -756,7 +756,7 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
 fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config, hints)?;
+    let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
 
     // `--raw` dumps the per-graph fragment set — a JSON structure with no text
     // projection — so it is JSON-only and ignores `--format`. The composed views
@@ -819,7 +819,12 @@ fn run_nodes(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
+    let composed = compose::compose(&graphs::build_set(
+        &graph_root,
+        &config,
+        hints,
+        &mut Vec::new(),
+    )?);
 
     // Validate namespaces up front: a typo must error, not read as an empty
     // answer. Normalize to the `@<graph>` keys the projection matches on.
@@ -865,7 +870,12 @@ fn run_edges(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
+    let composed = compose::compose(&graphs::build_set(
+        &graph_root,
+        &config,
+        hints,
+        &mut Vec::new(),
+    )?);
 
     let requested_ns = resolve_namespaces(&config, namespaces)?;
     // Edges match on source, so a selector resolves to the source node set. No
@@ -1088,7 +1098,12 @@ fn run_impact(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
+    let composed = compose::compose(&graphs::build_set(
+        &graph_root,
+        &config,
+        hints,
+        &mut Vec::new(),
+    )?);
 
     let seeds: Vec<String> = paths
         .iter()
@@ -1145,11 +1160,12 @@ fn run_check(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config, hints)?;
+    let mut parser_findings = Vec::new();
+    let set = graphs::build_set(&graph_root, &config, hints, &mut parser_findings)?;
     let composed = compose::compose(&set);
     let lock = lock::read(&graph_root, hints)?;
 
-    let findings = rules::check::run(&composed, lock.as_ref(), &config);
+    let findings = rules::check::run(&composed, lock.as_ref(), &config, parser_findings);
 
     let colorize = use_color(color, format);
     match format {

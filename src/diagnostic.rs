@@ -7,8 +7,9 @@ use serde::Serialize;
 /// `target` is what the link points at on edge-level findings (absent on
 /// node-level ones) — usually the destination node's path, but
 /// `unresolved-fragment` reports `path#fragment`, so a consumer must not assume
-/// it is a node id, `lines` is the source line(s) where an edge finding's link
-/// appears (absent otherwise), `_graphs` carries the same provenance key the node
+/// it is a node id, `lines` is the source line(s) the finding points at — an
+/// edge finding's link, or the line of the construct a node finding is about
+/// (absent otherwise), `_graphs` carries the same provenance key the node
 /// or edge does, so a consumer never has to parse anything, and `cause` names the
 /// likely reason when the finding is correct but reads as the wrong problem.
 ///
@@ -67,7 +68,8 @@ impl Finding {
         self
     }
 
-    /// Attach the source line(s) where an edge finding's link appears. They
+    /// Attach the source line(s) this finding points at — an edge finding's link,
+    /// or the line of the construct a node finding is about. They
     /// annotate the subject (`subject:line → target`) and serialize as `lines`.
     /// The `subject` path itself is unchanged, so `ignore` globs still match it.
     pub fn with_lines(mut self, lines: Vec<usize>) -> Self {

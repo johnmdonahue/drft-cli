@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::builders;
 use crate::config::{Config, compile_globs};
+use crate::diagnostic::Finding;
 use crate::hints::{Hint, Hints};
 use crate::model::{Graph, GraphSet};
 use crate::sources::{self, fs::SourceFile};
@@ -29,7 +30,12 @@ const LOCKFILE_IGNORE: &str = "drft.lock";
 /// `fs` is implicit and always builds first — it owns the identity space. Each
 /// configured text graph (`[graphs.*]`) then builds over the same fs walk's
 /// content, scoped by its filter and labeled with the graph's name.
-pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<GraphSet> {
+pub fn build_set(
+    root: &Path,
+    config: &Config,
+    hints: &mut Hints,
+    findings: &mut Vec<Finding>,
+) -> Result<GraphSet> {
     let mut ignore = config.ignore_patterns().to_vec();
     ignore.push(LOCKFILE_IGNORE.to_string());
     let files = sources::fs::walk(root, &ignore)?;
@@ -58,12 +64,11 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
     // `stale-node` on files nobody edited, and stops drft's `b3:` being the
     // file's blake3.
     //
-    // Here rather than in the frontmatter parser for two reasons, and the second
-    // is the one that decides it. `parsed_block` returns an offset into this text
-    // and the markdown parser masks with it, so skipping the mark's bytes without
-    // adjusting that offset leaves the closing fence partly unmasked. More
-    // simply: a mark costs a file its headings too, and a strip inside the
-    // frontmatter parser never reaches the copy the markdown parser is handed.
+    // Here rather than in the frontmatter parser, because a mark costs a file its
+    // headings too: the markdown library declines to open a metadata block on a
+    // line that does not start with the fence, so a marked file's frontmatter
+    // renders as a setext heading. A strip inside the frontmatter parser never
+    // reaches the copy the markdown parser is handed.
     //
     // That this is the *only* such place is the property to preserve. Normalizing
     // inside each text parser instead is output-identical today and stays green,
@@ -99,8 +104,13 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
             "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
             "frontmatter" => {
                 let parser_files = files.clone();
-                let fragment =
-                    builders::frontmatter::build(name, &texts, files, graph.edge_keys.clone());
+                let fragment = builders::frontmatter::build(
+                    name,
+                    &texts,
+                    files,
+                    graph.edge_keys.clone(),
+                    findings,
+                );
                 // Declaring keys states an expectation the corpus can fail to
                 // meet, and every way of failing it produces a graph tracking
                 // nothing while the config says otherwise, at exit 0.
@@ -214,7 +224,7 @@ mod tests {
         fs::write(dir.path().join("index.md"), "# Index").unwrap();
         let config = Config::defaults();
 
-        let set = build_set(dir.path(), &config, &mut Hints::default()).unwrap();
+        let set = build_set(dir.path(), &config, &mut Hints::default(), &mut Vec::new()).unwrap();
         // fs is always the base graph, built first regardless of config.
         let fs_graph = &set.graphs[0];
         assert_eq!(fs_graph.label.as_deref(), Some("fs"));
@@ -237,7 +247,13 @@ mod tests {
         fs::write(outer.path().join("secret.md"), "secret").unwrap();
         std::os::unix::fs::symlink(outer.path().join("secret.md"), root.join("trap.md")).unwrap();
 
-        let set = build_set(&root, &Config::defaults(), &mut Hints::default()).unwrap();
+        let set = build_set(
+            &root,
+            &Config::defaults(),
+            &mut Hints::default(),
+            &mut Vec::new(),
+        )
+        .unwrap();
         let trap = &set.graphs[0].nodes["trap.md"];
         assert_eq!(trap.metadata["type"], Value::String("symlink".into()));
         assert!(
@@ -257,7 +273,13 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
             .unwrap();
 
-        let set = build_set(dir.path(), &Config::defaults(), &mut Hints::default()).unwrap();
+        let set = build_set(
+            dir.path(),
+            &Config::defaults(),
+            &mut Hints::default(),
+            &mut Vec::new(),
+        )
+        .unwrap();
         let nodes = &set.graphs[0].nodes;
         assert_eq!(
             nodes["alias.md"].metadata["type"],

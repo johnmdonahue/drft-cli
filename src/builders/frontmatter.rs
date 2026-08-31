@@ -6,6 +6,7 @@
 use globset::GlobSet;
 
 use crate::builders::{LinkPolicy, link_edges};
+use crate::diagnostic::Finding;
 use crate::model::{Graph, Node};
 use crate::parsers::Parser;
 use crate::parsers::frontmatter::FrontmatterParser;
@@ -15,11 +16,18 @@ use crate::parsers::frontmatter::FrontmatterParser;
 /// `edge_keys` names the frontmatter keys whose values yield edges, and an empty
 /// list means the graph emits none. The fragment carries edges plus a node per
 /// file whose frontmatter parses to an object.
+///
+/// `findings` collects what the parser recognized and could not read. These are
+/// findings rather than graph content because they are about a file's absence
+/// from the graph, which the graph itself cannot express: a file with a block
+/// nothing could read and a file with no block at all are the same shape once
+/// built.
 pub fn build(
     label: &str,
     texts: &[(String, String)],
     filter: Option<GlobSet>,
     edge_keys: Vec<String>,
+    findings: &mut Vec<Finding>,
 ) -> Graph {
     let parser = FrontmatterParser {
         file_filter: filter,
@@ -39,6 +47,19 @@ pub fn build(
 
         for edge in link_edges(path, &result.links, LinkPolicy::Declared) {
             graph.add_edge(edge);
+        }
+
+        for diagnostic in result.diagnostics {
+            let mut finding = Finding::warn(
+                diagnostic.rule,
+                path.clone(),
+                vec![format!("@{label}")],
+                diagnostic.message,
+            );
+            if let Some(line) = diagnostic.line {
+                finding = finding.with_lines(vec![line]);
+            }
+            findings.push(finding);
         }
     }
 
@@ -63,7 +84,13 @@ mod tests {
             "analysis.md",
             "---\ntitle: Analysis\nstatus: draft\nsources:\n  - ./data/notes.md\n---\n\n# Body\n",
         )]);
-        let graph = build("frontmatter", &t, None, vec!["sources".to_string()]);
+        let graph = build(
+            "frontmatter",
+            &t,
+            None,
+            vec!["sources".to_string()],
+            &mut Vec::new(),
+        );
         assert_eq!(graph.label.as_deref(), Some("frontmatter"));
 
         let meta = &graph.nodes["analysis.md"].metadata;
@@ -77,7 +104,13 @@ mod tests {
     #[test]
     fn no_node_without_frontmatter() {
         let t = texts(&[("plain.md", "# Just a heading\n")]);
-        let graph = build("frontmatter", &t, None, vec!["sources".to_string()]);
+        let graph = build(
+            "frontmatter",
+            &t,
+            None,
+            vec!["sources".to_string()],
+            &mut Vec::new(),
+        );
         assert!(graph.nodes.is_empty());
         assert!(graph.edges.is_empty());
     }

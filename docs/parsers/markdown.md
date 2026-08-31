@@ -78,11 +78,29 @@ Two things define an address, because a reader's platform resolves both:
   how a hand-rolled table of contents and a back-compat anchor kept after a
   heading rename stay addressable.
 
-YAML frontmatter is masked before parsing, so a single-key block's closing `---`
-is not read as a setext heading. Where the block ends is the
-[frontmatter parser](frontmatter.md)'s call, not this one's: it has to parse as a
-YAML mapping, so a document that merely opens with a `---` thematic break keeps
-its headings and its links.
+A leading fenced block is metadata, so a single-key block's closing `---` is not
+read as a setext heading. The markdown library decides where such a block begins
+and ends, and emits nothing from inside it: three dashes on a line of their own,
+a first line that is neither blank nor a closing fence, and a closing line of
+exactly `---` or `...`. A document that merely opens with a `---` thematic break
+above a blank line keeps its headings and its links.
+
+**Only a leading block.** The markdown library will claim a fenced block wherever
+one appears; drft takes its answer only when the block starts at byte 0.
+Frontmatter is the head of a file under every convention that writes it, and no
+markdown specification gives a block further down any meaning at all — so a
+`---\nkey: value\n---` section partway through a document is a thematic break, a
+setext heading and another thematic break, exactly as a reader sees it. A file
+whose first line is blank is prose for the same reason, even though the library
+reports its later block as the document's first event.
+
+The block's extent is decided by fence syntax alone, so it does not depend on
+whether the YAML inside parses. The [frontmatter parser](frontmatter.md) mirrors
+these rules rather than approximating them, which is what keeps one answer to
+where a block ends. A block it cannot read is reported as
+`unreadable-frontmatter` — but only where a frontmatter graph covers the file,
+since that parser is what raises it. This parser withholds the block's text
+regardless.
 
 The slug downcases the heading's rendered text, drops every character that is not
 a letter, digit, combining mark, underscore, hyphen, or space, then turns spaces

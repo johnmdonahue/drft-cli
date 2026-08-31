@@ -170,6 +170,92 @@ fn anchors_and_fragments_match_what_a_browser_resolves() {
     );
     assert!(
         stdout.contains("cite.md:5 → target.md#purpose-a-single-key-block"),
-        "frontmatter is masked, so its closing --- is not a setext heading, got: {stdout}"
+        "the block is claimed, so its closing --- is not a setext heading, got: {stdout}"
+    );
+}
+
+/// A frontmatter block the fences claim but the YAML cannot supply reaches
+/// `drft check` as a finding, and config governs it like any other rule.
+///
+/// This covers the whole delivery path, which unit tests cannot: the parser
+/// raises a `Diagnostic`, the builder turns it into a `Finding`, `build_set`
+/// carries it out, and `check` merges it before severity is applied. A mutation
+/// sweep found every one of those four links deletable with the suite green,
+/// because nothing asserted the string ever reached a user.
+#[test]
+fn an_unreadable_frontmatter_block_reaches_check() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    // A bare scalar between fences: claimed as a block, carries no keys.
+    fs::write(
+        dir.path().join("bad.md"),
+        "---\nJust A Title\n---\n\nBody\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("good.md"),
+        "---\nsources:\n  - ./bad.md\n---\n\n# Good\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("warn[unreadable-frontmatter]: bad.md:1"),
+        "the claimed block should be reported at its opening fence, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("unreadable-frontmatter]: good.md"),
+        "a block that reads cleanly is not reported, got: {stdout}"
+    );
+}
+
+/// `unreadable-frontmatter` promotes to `error` and fails the run, and `off`
+/// silences it — the property that makes it a rule rather than a hint.
+#[test]
+fn unreadable_frontmatter_severity_is_configurable() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("bad.md"),
+        "---\nJust A Title\n---\n\nBody\n",
+    )
+    .unwrap();
+
+    let promoted =
+        format!("{DEFAULT_CONFIG}\n[rules.unreadable-frontmatter]\nseverity = \"error\"\n");
+    fs::write(dir.path().join("drft.toml"), &promoted).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("error[unreadable-frontmatter]"),
+        "promotion should raise the severity, got: {stdout}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an error-severity finding fails the run, got: {stdout}"
+    );
+    assert!(
+        !String::from_utf8_lossy(&output.stderr).contains("unknown-rule"),
+        "the rule must be in BUILTIN_RULES or config silently configures nothing"
+    );
+
+    let silenced =
+        format!("{DEFAULT_CONFIG}\n[rules.unreadable-frontmatter]\nseverity = \"off\"\n");
+    fs::write(dir.path().join("drft.toml"), &silenced).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter"),
+        "`off` should silence it entirely"
     );
 }

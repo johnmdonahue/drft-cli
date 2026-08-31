@@ -1,7 +1,7 @@
 use saphyr::{LoadableYamlNode, MarkedYaml, Scalar, YamlData};
 use std::borrow::Cow;
 
-use super::{Link, ParseResult, Parser};
+use super::{Diagnostic, Link, ParseResult, Parser};
 
 /// Whether the character at `i` opens a new line **as the YAML parser counts
 /// them**.
@@ -292,6 +292,7 @@ impl Parser for FrontmatterParser {
             // from the markdown body's headings.
             anchors: Vec::new(),
             metadata: extract_metadata(content),
+            diagnostics: unreadable_block(content).into_iter().collect(),
         }
     }
 }
@@ -409,45 +410,59 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
     None
 }
 
-/// The frontmatter block this parser recognizes: where it ends in `content`, and
-/// its raw text.
+/// The frontmatter block this parser reads: where it ends in `content`, and its
+/// raw text. `None` when the fences name no block, and also when they name one
+/// whose YAML is not a mapping — [`unreadable_block`] separates those two, which
+/// is what lets an unreadable block be reported instead of dropped.
 ///
-/// One selector, so the offset the markdown parser masks and the metadata this
-/// parser contributes can never describe different spans. They did: this looked
-/// for its block in a copy of the **whole file** with code spans blanked, so a
-/// backtick opened in frontmatter and closed in the body blanked the closing
-/// fence and moved the boundary past it. The mask, working from the raw content,
-/// saw no frontmatter at all — and the file published anchors slugged from a
-/// block this parser had already claimed.
+/// The block is found in the raw content. Looking for it in a `strip_code` copy
+/// of the **whole file** let a backtick opened in frontmatter and closed in the
+/// body blank the closing fence and move the boundary past it, so the edge scan
+/// read a block nothing else agreed on.
 ///
 /// Masking is applied to the block text instead, which serves the reason it
 /// exists — a code span can hide a `:` that would otherwise break the mapping —
 /// without letting a span decide where the block ends.
 fn parsed_block(content: &str) -> Option<(usize, &str)> {
-    let block = frontmatter_block(content)?;
-    let end = "---".len() + block.len() + "\n---".len();
-    // Raw first, so a code span survives as the prose it is; then the same block
-    // with spans blanked, since one can hide a `:` that breaks the mapping.
-    let parses = is_mapping(block) || is_mapping(&strip_code(block).text);
-    parses.then_some((end, block))
+    let (block, end) = frontmatter_block(content)?;
+    yields_metadata(block).then_some((end, block))
 }
 
-/// Whether `block` parses as a YAML **mapping** — the shape that separates
-/// frontmatter from a document opening with a `---` thematic break.
+/// Whether a recognized block yields metadata, in any rendering this parser will
+/// read it in.
 ///
-/// A mapping is required rather than any valid YAML because YAML and markdown
-/// collide on two constructs, and accepting either would delete real content:
+/// Either rendering counts: the block as written, or the block with code spans
+/// blanked, since a span can hide a `:` that breaks the mapping. This is a
+/// question of whether *any* reading yields a mapping, so it is unordered —
+/// which rendering's values are used is [`extract_metadata`]'s decision, and
+/// that one is ordered.
 ///
-/// - A comment-only block parses to no document at all. But `# First` is a YAML
-///   comment *and* a markdown ATX heading, so treating one as frontmatter reads
-///   `---\n\n# First\n\n---` as a block and deletes the most ordinary heading in
-///   markdown, along with any link beneath it.
-/// - A block parsing to a bare scalar is ambiguous the same way:
-///   `---\nMy Title\n---` is equally a rule above a setext heading.
+/// **No test distinguishes the two disjuncts**, because no input is known where
+/// the raw block parses and the masked copy does not. Blanking a span can only
+/// remove characters, so such an input may not exist; that is unproven either
+/// way, and it is why the raw arm is kept rather than argued away.
 ///
-/// Both are left as content. The cost is that comment-only frontmatter has its
-/// text read as prose; the alternative deletes a document's headings and edges,
-/// and only one of those is recoverable by reading the page.
+/// **One spelling, called by both the reader and the diagnostic.** Written out
+/// twice, the two drift, and the failure is not a missing finding but a
+/// contradictory one: a run reporting that a block's keys were all dropped while
+/// printing those same keys under `@frontmatter`.
+fn yields_metadata(block: &str) -> bool {
+    is_mapping(block) || is_mapping(&strip_code(block).text)
+}
+
+/// Whether `block` parses as a YAML **mapping** — the shape that yields metadata.
+///
+/// This no longer decides what is frontmatter; the fences do, and they are the
+/// markdown library's. It decides only whether a block drft already claims has
+/// anything a node can carry. A comment-only block parses to no document at all
+/// and a bare scalar carries no keys, so neither contributes metadata — and both
+/// raise [`UNREADABLE_FRONTMATTER`] rather than falling through in silence.
+///
+/// The gate used to be the boundary too, which is what made the YAML/markdown
+/// collision load-bearing: `# First` is a comment and an ATX heading, and
+/// `---\nMy Title\n---` is a block and a setext heading, so a wrong answer here
+/// deleted real content. Now the two questions are separate and only this one
+/// rests on the YAML.
 fn is_mapping(block: &str) -> bool {
     MarkedYaml::load_from_str(block)
         .ok()
@@ -461,39 +476,163 @@ fn is_mapping(block: &str) -> bool {
 /// The byte offset just past a leading YAML frontmatter block, or `None` when the
 /// file does not open with one.
 ///
-/// The block has to parse as a **mapping**, which is what separates frontmatter
-/// from a document that merely opens with a `---` thematic break. Only a mapping
-/// contributes node metadata (see [`crate::builders::frontmatter`]), so this is
-/// the same block this parser consumes — and the markdown parser masks exactly
-/// what this one claims, rather than guessing at the boundary a second time and
-/// disagreeing.
+/// The block has to parse as a **mapping**, which is what separates a block this
+/// parser contributes metadata from (see [`crate::builders::frontmatter`]) from
+/// one it only recognizes. Nothing in production calls this: the markdown parser
+/// takes its block from the markdown library, and this remains as the offset half
+/// of the boundary, read by tests alone.
+#[cfg(test)]
 pub fn mapping_block_end(content: &str) -> Option<usize> {
     parsed_block(content).map(|(end, _)| end)
 }
 
-/// Extract the YAML frontmatter block — the text between the opening `---` and the
-/// next `\n---`, or `None` when there is no well-formed block.
+/// A frontmatter fence is exactly three characters wide. A fourth makes the line
+/// a thematic break.
+const FENCE_WIDTH: usize = 3;
+
+/// The rule an unreadable block becomes. A rule rather than a hint because a
+/// hint cannot change an exit code, and a repository whose derivations are
+/// declared in frontmatter needs a dropped block to be able to fail its run.
+pub const UNREADABLE_FRONTMATTER: &str = "unreadable-frontmatter";
+
+/// A block whose fences are a frontmatter block and whose YAML is not a mapping.
 ///
-/// Called on the **raw** content only, through [`parsed_block`]. Calling it on a
+/// This is the whole reason the fence scan and the mapping gate are separate
+/// questions. The markdown parser skips whatever the fences claim, so a block
+/// that fails the mapping gate reaches neither graph: no anchors, no metadata,
+/// no edges. Before this it was reported by accident — the block stayed visible
+/// to the markdown parser and minted a wrong anchor, which was at least
+/// something to notice. Silence is the worse failure, so it is named instead.
+fn unreadable_block(content: &str) -> Option<Diagnostic> {
+    let (block, _) = frontmatter_block(content)?;
+    if yields_metadata(block) {
+        return None;
+    }
+    Some(Diagnostic {
+        rule: UNREADABLE_FRONTMATTER,
+        // What the reader has to know is that the block was recognized and is
+        // being skipped wholesale — not which YAML construct failed, which drft
+        // is not a linter for and cannot report faithfully across two renderings.
+        message: "frontmatter block is not a YAML mapping, so its keys, values \
+                  and edges are all dropped"
+            .to_string(),
+        // The opening fence, which is the line a reader edits. Line 1 whenever
+        // there is a block at all, since the fence has to open the file.
+        line: Some(1),
+    })
+}
+
+/// Extract the YAML frontmatter block — its raw text, and the byte offset in
+/// `content` just past the closing fence.
+///
+/// Called on the **raw** content only, by [`parsed_block`] and [`unreadable_block`]. Calling it on a
 /// `strip_code` copy of the whole file finds a different boundary whenever a span
 /// crosses the closing fence, because blanking the span takes the fence with it —
 /// which is how the edge scan came to read a block nothing else agreed on. The
 /// slice keeps the newline after the opening fence, so a node's line within the
 /// block equals its line within the file.
-fn frontmatter_block(stripped: &str) -> Option<&str> {
-    let rest = stripped.strip_prefix("---")?;
-    // The opening fence has to be a line of its own. `---key: v` is not
-    // frontmatter under any convention that writes it, and reading it as one
-    // invents metadata out of a document's first paragraph.
-    if !rest.starts_with('\n') && !rest.starts_with("\r\n") {
+///
+/// The three fence conditions mirror the markdown library that decides the same
+/// block for the [markdown parser](super::markdown), character for character
+/// rather than by approximation. A rule derived from the inputs that happened to
+/// be tested matches those inputs; a rule copied from the component it has to
+/// agree with matches the component. Every place these two drift apart, one
+/// parser claims a span the other renders, and the file is both metadata and
+/// prose at once.
+fn frontmatter_block(content: &str) -> Option<(&str, usize)> {
+    let rest = content.strip_prefix("---")?;
+    // The opening fence has to be a line of its own, carrying nothing but
+    // whitespace after it. `---key: v` is not frontmatter under any convention
+    // that writes it, and reading it as one invents metadata out of a document's
+    // first paragraph.
+    //
+    // This also settles the fence width, which is why nothing tests that
+    // separately: a fourth dash falls inside this line and is not whitespace, so
+    // `----` is rejected here, exactly as the renderer rejects it. A standalone
+    // three-dash guard was tried and removed — no input reached it that this did
+    // not already reject, and a guard that cannot fail measures nothing.
+    let opening_line = rest.find('\n').unwrap_or(rest.len());
+    if !rest[..opening_line]
+        .bytes()
+        .all(|b| b.is_ascii_whitespace())
+    {
         return None;
     }
-    let end = rest.find("\n---")?;
-    let yaml_str = &rest[..end];
-    if yaml_str.trim().is_empty() {
-        return None;
+
+    let mut cursor = 0;
+    let mut first_line = true;
+    while let Some(offset) = rest[cursor..].find('\n') {
+        let line_start = cursor + offset + 1;
+        let line = &rest[line_start..];
+        let closes = closes_block(line);
+        // A block's first line may be neither blank nor the closing fence. This
+        // is what makes `---` above a blank line a thematic break rather than an
+        // empty block, and dropping it is not cosmetic: `---\n\nkey: v\n---`
+        // parses as a mapping, so without this the block is claimed here and
+        // rendered as a setext heading there.
+        if first_line {
+            if closes || is_blank(line) {
+                return None;
+            }
+            first_line = false;
+        }
+        if closes {
+            // Past the opening fence, the block, its newline, and the closing
+            // fence characters. Trailing spaces after the fence are outside it,
+            // as they were when the closer was matched as a bare prefix.
+            return Some((
+                &rest[..line_start - 1],
+                "---".len() + line_start + FENCE_WIDTH,
+            ));
+        }
+        cursor = line_start;
     }
-    Some(yaml_str)
+    None
+}
+
+/// Whether `line` opens with a closing frontmatter fence: exactly three `-` or
+/// exactly three `.`, then spaces, then the end of the line.
+///
+/// A fourth fence character disqualifies the line and a tab after the fence
+/// disqualifies it; spaces do not, and the end of the file ends a line. Matching
+/// a bare `\n---` prefix instead — which is what this replaced — accepts `----`
+/// and `---x` as closers, ending the block where the markdown library does not.
+fn closes_block(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let fence = match bytes.first() {
+        // `...` is YAML's document-end marker, and the library accepts it as a
+        // closer wherever it accepts `---`.
+        Some(b'-') => b'-',
+        Some(b'.') => b'.',
+        _ => return false,
+    };
+    if bytes.iter().take_while(|&&b| b == fence).count() != FENCE_WIDTH {
+        return false;
+    }
+    let after = &bytes[FENCE_WIDTH..];
+    let spaces = after.iter().take_while(|&&b| b == b' ').count();
+    matches!(after.get(spaces), None | Some(b'\n' | b'\r'))
+}
+
+/// Whether `line` is blank up to its end.
+///
+/// Blank means the four characters the markdown library counts as non-newline
+/// whitespace. **This set is not the one the opening fence uses** — that check is
+/// `u8::is_ascii_whitespace`, which excludes vertical tab and includes `\r`,
+/// mirroring a different library predicate. Unifying them looks like tidying and
+/// changes what both accept.
+fn is_blank(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let indent = bytes
+        .iter()
+        // The four the markdown library counts as non-newline whitespace. Space
+        // and tab alone read a line holding a form feed as content, which opens a
+        // block the renderer does not — so the file reports unreadable
+        // frontmatter here while publishing an anchor slugged from that same
+        // text there. Mirroring a rule means mirroring its character set.
+        .take_while(|&&b| matches!(b, b' ' | b'\t' | 0x0b | 0x0c))
+        .count();
+    matches!(bytes.get(indent), None | Some(b'\n' | b'\r'))
 }
 
 /// Collect string leaf *values* (not keys) with their position in whichever
@@ -801,7 +940,189 @@ mod tests {
         // file would publish anchors slugged out of what this one had claimed.
         let content = "---\npurpose: `a: b\n---\nc: d` tail\nkey: v\n---\n\n# Body\n";
         assert!(parse(content).metadata.is_none());
-        assert!(mapping_block_end(content).is_none(), "and the mask agrees");
+        assert!(
+            mapping_block_end(content).is_none(),
+            "and this parser declines it, though the markdown parser claims it"
+        );
+    }
+
+    #[test]
+    fn a_longer_closing_fence_does_not_close_the_block() {
+        // `rest.find("\n---")` matched the first three characters of `----`, so a
+        // block "closed" by a thematic break was claimed here and rendered as a
+        // setext heading by the markdown parser — the same text being metadata
+        // and an address at once.
+        assert!(parse("---\ntitle: Doc\n----\n\nBody\n").metadata.is_none());
+        assert!(parse("---\ntitle: Doc\n---x\n\nBody\n").metadata.is_none());
+    }
+
+    #[test]
+    fn a_closing_fence_takes_trailing_spaces_but_not_a_tab() {
+        // Mirrors the markdown library, which scans spaces after the fence and
+        // stops at anything else. A tab is not a space to either of them.
+        assert!(parse("---\ntitle: Doc\n---  \n\nBody\n").metadata.is_some());
+        assert!(parse("---\ntitle: Doc\n---\t\n\nBody\n").metadata.is_none());
+    }
+
+    #[test]
+    fn a_document_end_marker_closes_the_block() {
+        // `...` is YAML's document-end marker and the library accepts it wherever
+        // it accepts `---`. Keys below it are outside the block.
+        //
+        // The assertion is on the **boundary offset**, not on the metadata: saphyr
+        // stops at `...` on its own, so a parser that ran to the later `---` still
+        // yields `{title: Doc}` and a metadata-only test passes with this fence
+        // rule deleted. The offset is what actually moves.
+        let content = "---\ntitle: Doc\n...\npurpose: below\n---\n\nBody\n";
+        assert_eq!(
+            mapping_block_end(content),
+            Some("---\ntitle: Doc\n...".len()),
+            "the block ends at the document-end marker, not at the later fence"
+        );
+        let metadata = parse(content)
+            .metadata
+            .expect("the block above `...` is read");
+        assert!(metadata.get("title").is_some());
+        assert!(metadata.get("purpose").is_none());
+    }
+
+    #[test]
+    fn an_opening_fence_is_exactly_three_dashes() {
+        // A fourth dash makes the line a thematic break to the renderer, so
+        // opening a block on it claims a span the renderer publishes as content.
+        assert!(parse("----\ntitle: Doc\n----\n\nBody\n").metadata.is_none());
+        assert!(parse("----\ntitle: Doc\n---\n\nBody\n").metadata.is_none());
+    }
+
+    #[test]
+    fn an_opening_fence_may_carry_trailing_whitespace() {
+        // The renderer allows whitespace after the opening fence and still opens
+        // the block. Rejecting it leaves the block claimed there and unread here,
+        // which is a declared derivation lost with nothing said.
+        assert!(parse("--- \ntitle: Doc\n---\n\nBody\n").metadata.is_some());
+        assert!(parse("---\t\ntitle: Doc\n---\n\nBody\n").metadata.is_some());
+    }
+
+    #[test]
+    fn a_first_line_of_exotic_whitespace_is_still_blank() {
+        // The renderer counts vertical tab and form feed as blank-line
+        // whitespace. Counting only space and tab opens a block it does not, so
+        // the file would report unreadable frontmatter here while publishing an
+        // anchor slugged from the same text there.
+        for whitespace in ["\u{0b}", "\u{0c}", " ", "\t"] {
+            let content = format!("---\n{whitespace}\nkey: value\n---\n\nBody\n");
+            assert!(
+                parse(&content).metadata.is_none(),
+                "a first line of {whitespace:?} is blank, so this is a thematic break"
+            );
+            assert!(
+                parse(&content).diagnostics.is_empty(),
+                "and a thematic break is not an unreadable block"
+            );
+        }
+    }
+
+    #[test]
+    fn a_blank_first_line_makes_it_a_thematic_break() {
+        // The library will not open a block whose first line is blank, and
+        // matching that is what stops this parser claiming a span the markdown
+        // parser renders. `key: v` above a `---` is a setext heading there, so
+        // reading it as frontmatter here publishes metadata and an address for
+        // one piece of text.
+        assert!(parse("---\n\nkey: v\n---\n\nBody\n").metadata.is_none());
+        // A blank line lower in the block is ordinary YAML.
+        assert!(
+            parse("---\nkey: v\n\nother: w\n---\n\nBody\n")
+                .metadata
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn an_unreadable_block_is_reported_rather_than_dropped() {
+        // The markdown parser skips whatever the fences claim, so a block that
+        // fails the mapping gate reaches neither graph. Saying nothing about it
+        // is the failure this rule exists to prevent.
+        let result = parse("---\nJust A Title\n---\n\nBody\n");
+        assert!(result.metadata.is_none());
+        let diagnostic = result
+            .diagnostics
+            .first()
+            .expect("a claimed block that is not a mapping is reported");
+        assert_eq!(diagnostic.rule, UNREADABLE_FRONTMATTER);
+        assert_eq!(diagnostic.line, Some(1));
+
+        // A file with no block at all has nothing to report.
+        assert!(parse("# Body\n\ntext\n").diagnostics.is_empty());
+        // Neither does one whose block reads cleanly.
+        assert!(
+            parse("---\ntitle: Doc\n---\n\nBody\n")
+                .diagnostics
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn an_opening_fence_owns_its_line_even_when_a_closer_follows() {
+        // `---key: v\n---` is rejected by the first-line guard as well, so it
+        // cannot tell whether the opening-line check is doing anything. A block
+        // with a second line separates them: without the opening-line check this
+        // claims a block, and the renderer claims none.
+        assert!(
+            parse("---key: v\nfoo: bar\n---\n\nBody\n")
+                .metadata
+                .is_none()
+        );
+        assert!(
+            parse("---key: v\nfoo: bar\n---\n\nBody\n")
+                .diagnostics
+                .is_empty(),
+            "text that is not a block is not an unreadable block"
+        );
+    }
+
+    #[test]
+    fn a_first_line_that_is_a_closing_fence_opens_nothing() {
+        // The other half of the first-line guard, and the blank-line test does
+        // not reach it. `---` above `---` is two thematic breaks to every
+        // renderer; claiming a block there reports unreadable frontmatter on a
+        // document that has none.
+        for content in [
+            "---\n---\n\n# Head\n",
+            "---\n...\nkey: v\n---\n\nBody\n",
+            "---\n---\nkey: v\n---\n\nBody\n",
+        ] {
+            let result = parse(content);
+            assert!(result.metadata.is_none(), "no block in {content:?}");
+            assert!(
+                result.diagnostics.is_empty(),
+                "and nothing to report in {content:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_opening_fence_whitespace_set_is_not_the_blank_line_set() {
+        // The renderer's opening-fence scan is `is_ascii_whitespace`, which
+        // excludes vertical tab; its blank-line scan includes it. Two predicates,
+        // deliberately different, and the temptation is to unify them.
+        //
+        // The observable is whether a block is *recognized*, not whether it
+        // yields metadata: a form feed opens the block's text and saphyr rejects
+        // that, so the fence accepting it shows up as a diagnostic rather than as
+        // keys. Asserting on metadata alone cannot tell the two fences apart.
+        let vertical_tab = parse("---\u{0b}\nkey: v\n---\n\nBody\n");
+        assert!(vertical_tab.metadata.is_none());
+        assert!(
+            vertical_tab.diagnostics.is_empty(),
+            "a vertical tab does not open a fence, so there is no block to report"
+        );
+
+        let form_feed = parse("---\u{0c}\nkey: v\n---\n\nBody\n");
+        assert!(
+            !form_feed.diagnostics.is_empty(),
+            "a form feed does open a fence, so the block is recognized"
+        );
     }
 
     #[test]
@@ -814,9 +1135,8 @@ mod tests {
 
     #[test]
     fn mapping_block_end_agrees_with_what_this_parser_extracts() {
-        // The markdown parser masks whatever this returns, so a disagreement
-        // publishes an address the file does not answer to — or deletes content
-        // that was never frontmatter.
+        // The offset and the metadata describe one block, so a disagreement means
+        // this parser contributed keys from a span it does not claim.
         let frontmatter = "---\ntitle: Doc\n---\n\n# Body\n";
         assert_eq!(
             mapping_block_end(frontmatter),

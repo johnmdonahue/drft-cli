@@ -5,11 +5,13 @@ sources:
   - ../../src/rules/structural.rs
   - ../../src/rules/check.rs
   - ../../src/config.rs
+  - ../../src/parsers/frontmatter.rs
+  - ../../src/builders/frontmatter.rs
 ---
 
 # Rules
 
-A rule is a function over the composed graph: graph in, findings out. `drft check`
+Most rules are a function over the composed graph: graph in, findings out. `drft check`
 runs every rule, joins the lockfile for the staleness rules, and emits findings as
 warnings or errors.
 
@@ -32,18 +34,36 @@ The rule set is deliberately drift-focused. [`staleness.rs`](../../src/rules/sta
 derives the drift findings by joining the graph to the lockfile;
 [`structural.rs`](../../src/rules/structural.rs) derives the rest from graph shape.
 
-| Rule                  | When                                                            |
-| --------------------- | --------------------------------------------------------------- |
-| `stale-node`          | A node's current hash differs from its locked hash              |
-| `stale-edge`          | An edge's locked target hash differs from the target's          |
-| `new-edge`            | A current edge has no locked target hash                        |
-| `removed-edge`        | The lockfile has an edge absent from the graph                  |
-| `removed-node`        | The lockfile has a node absent from the graph                   |
-| `unresolved-edge`     | An edge target has no defining node (URIs excepted)             |
-| `unresolved-fragment` | A link's `#fragment` names no anchor its target defines         |
-| `detached-node`       | A node has no inbound or outbound edges (directories excepted)  |
-| `unlocked-node`       | A lockable node has no lock entry, so it has no baseline        |
-| `no-baseline`         | The lockfile is absent or has no entries, so nothing is checked |
+| Rule                     | When                                                            |
+| ------------------------ | --------------------------------------------------------------- |
+| `stale-node`             | A node's current hash differs from its locked hash              |
+| `stale-edge`             | An edge's locked target hash differs from the target's          |
+| `new-edge`               | A current edge has no locked target hash                        |
+| `removed-edge`           | The lockfile has an edge absent from the graph                  |
+| `removed-node`           | The lockfile has a node absent from the graph                   |
+| `unresolved-edge`        | An edge target has no defining node (URIs excepted)             |
+| `unresolved-fragment`    | A link's `#fragment` names no anchor its target defines         |
+| `detached-node`          | A node has no inbound or outbound edges (directories excepted)  |
+| `unlocked-node`          | A lockable node has no lock entry, so it has no baseline        |
+| `no-baseline`            | The lockfile is absent or has no entries, so nothing is checked |
+| `unreadable-frontmatter` | A frontmatter block was recognized and is not a YAML mapping    |
+
+**A block nobody can read is reported, not dropped.** A leading fenced block is
+frontmatter by its fences alone, so its text is never rendered as content. When
+the YAML inside it is not a mapping, the file contributes no metadata and no
+declared edges, and without a finding it looks identical to a file that declares
+nothing. `unreadable-frontmatter` names the file and its opening line.
+
+**It fires only where a frontmatter graph reads the file.** The frontmatter
+parser is what recognizes the block, so a repository with no `[graphs.frontmatter]`
+— or a file outside that graph's `files` globs — gets no finding, and the block's
+text is still withheld from the markdown graph. That is the same scoping every
+graph-derived rule has, and it is worth knowing because the markdown parser
+suppresses the block either way.
+
+It is a rule rather than a hint because a repository whose derivations are
+declared in frontmatter needs a dropped block to be able to fail a run. It
+defaults to `warn` like every other rule, and promotes to `error` the same way.
 
 **A baseline that does not exist is reported, not assumed.** `drft check` derives
 staleness by comparing the graph against the lockfile, so with no lockfile — or one
