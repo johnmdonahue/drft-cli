@@ -131,7 +131,7 @@ fn frontmatter_line_survives_a_multiline_code_span() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -158,7 +158,7 @@ fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -191,7 +191,7 @@ fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -220,7 +220,7 @@ fn a_value_after_a_span_closes_reports_the_closing_line() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"note\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -252,7 +252,7 @@ fn a_code_span_inside_a_link_value_blanks_to_its_own_width() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     // The span is "`a\nb`" — five characters, one of them a newline.
@@ -294,7 +294,7 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -358,15 +358,15 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     );
 }
 
-/// `keys` scoping drops path-shaped values under other keys while keeping the
+/// `edge_keys` scoping drops path-shaped values under other keys while keeping the
 /// finding that reports a typo'd source. That combination is the point: the
 /// rule-level `ignore` workaround silences both, so it cannot express this.
 #[test]
-fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
+fn frontmatter_edge_keys_scope_edges_without_hiding_broken_sources() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("real.md"), "# Real").unwrap();
@@ -386,7 +386,7 @@ fn frontmatter_keys_scope_edges_without_hiding_broken_sources() {
 
     assert!(
         !stdout.contains("/customers"),
-        "`route` is outside `keys` and must not yield an edge, got: {stdout}"
+        "`route` is outside `edge_keys` and must not yield an edge, got: {stdout}"
     );
     assert!(
         stdout.contains("unresolved-edge") && stdout.contains("missing.md"),
@@ -405,7 +405,7 @@ fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -589,7 +589,7 @@ fn more_than_one_leading_mark_is_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -629,7 +629,7 @@ fn only_marks_are_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -669,7 +669,7 @@ fn a_mark_does_not_shift_the_line_a_span_corrects() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
-        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nkeys = [\"sources\"]\n",
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
@@ -696,7 +696,7 @@ const SCOPED_CONFIG: &str = "\
 [graphs.frontmatter]
 parser = \"frontmatter\"
 files = [\"**/*.md\"]
-keys = [\"sources\"]
+edge_keys = [\"sources\"]
 ";
 
 /// Write a scoped-config fixture whose frontmatter is `block`, alongside the
@@ -1028,4 +1028,385 @@ fn a_crlf_document_reports_the_files_line() {
         vec![5],
         "`\\r\\n` is one line break, so the entry is on the file's line 5"
     );
+}
+
+/// Every string reachable through a declared key is an edge. A value naming
+/// nothing that resolves becomes an edge that resolves to nothing, and
+/// `unresolved-edge` reports it exactly as it reports a typo'd path.
+///
+/// Each value below was silently discarded before: no edge, no finding, no
+/// record that the file had declared anything at all. The remedy is the reader's
+/// — fix the value, fix the config, or move the field — and none of those is
+/// available while the drop is invisible.
+#[test]
+fn prose_under_a_declared_key_is_reported_rather_than_dropped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - TBD\n  - needs review\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for value in ["TBD", "needs review"] {
+        assert!(
+            stdout.contains("unresolved-edge") && stdout.contains(value),
+            "{value:?} must be reported, not dropped, got: {stdout}"
+        );
+    }
+}
+
+/// A value naming a directory resolves. drft has directory nodes, so a
+/// derivation naming one is legitimate; the extension test discarded it for
+/// having no dot, which is a defect the heuristic was hiding.
+#[test]
+fn a_declared_value_naming_a_directory_resolves() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(dir.path().join("notes")).unwrap();
+    fs::write(dir.path().join("notes").join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: notes\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("doc.md → notes"),
+        "a directory value must resolve to its node, got: {stdout}"
+    );
+
+    let check = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&check.stdout).contains("unresolved-edge"),
+        "the directory node exists, so nothing is unresolved"
+    );
+}
+
+/// A value written as markdown link syntax is diagnosed, never unwrapped. The
+/// finding names the literal text, which is the whole remedy signal: unwrapping
+/// it would be inference about what the author meant.
+#[test]
+fn a_markdown_link_value_is_diagnosed_rather_than_unwrapped() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("real.md"), "# Real\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"[Design notes](real.md)\"\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("unresolved-edge") && stdout.contains("[Design notes](real.md)"),
+        "the finding must name the literal value, got: {stdout}"
+    );
+}
+
+/// `drft impact` renders a record per line, and both halves of it come from the
+/// graph. Escaping one and not the other split a record across two lines, the
+/// first carrying no `(via …, depth …, radius …)` suffix — the failure the
+/// escaping exists to prevent, reached through a declared frontmatter value.
+#[test]
+fn an_impact_record_carrying_a_newline_stays_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: |\n  first line\n  second line\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.contains("(via "),
+            "every record carries its suffix, so none was split: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("first line\\nsecond line"),
+        "the newline is escaped rather than emitted: {stdout}"
+    );
+}
+
+/// Both halves of an impact record come from the graph, and the second half is
+/// only reachable at depth two: a chain whose middle hop is a file whose *name*
+/// carries a newline. A markdown link cannot spell that, so the seed declares it
+/// as a frontmatter value — which this change made possible. Escaping the
+/// location and not the via left this record split.
+#[test]
+fn an_impact_record_escapes_the_via_as_well_as_the_location() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# T\n").unwrap();
+    fs::write(dir.path().join("we\nird.md"), "[t](./target.md)\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"we\\nird.md\"\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+            "--depth",
+            "2",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.contains("(via ") && line.contains("depth "),
+            "every record carries its whole suffix: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("via we\\nird.md"),
+        "the via is escaped, not emitted raw: {stdout}"
+    );
+}
+
+/// The two builders pass different link policies, and nothing pinned *which*.
+/// The unit tests exercise `link_edges` with a policy handed to them, so swapping
+/// the policy each builder passes left the whole suite green — twice, across two
+/// review rounds. These two run through the binary, so the wiring is what is
+/// under test rather than the function.
+///
+/// A body link naming only a fragment is an intra-file anchor. It names a
+/// position in the file it sits in, so there is nothing to draw an edge to.
+#[test]
+fn the_markdown_builder_draws_no_edge_for_an_anchor_only_link() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "# Doc\n\n## Section\n\n[see](#section)\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.trim().is_empty(),
+        "an anchor-only body link is not an edge: {stdout}"
+    );
+}
+
+/// A frontmatter value cites another document — a provenance claim has no "this
+/// file" form — so a value beginning with `#` names no document at all. It cannot
+/// resolve, and it must not vanish either.
+#[test]
+fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"#overview\"\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("doc.md → #overview"),
+        "a declared fragment-only value is an edge that resolves to nothing: {stdout}"
+    );
+
+    let check = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&check.stdout).contains("unresolved-edge"),
+        "and it is reported rather than dropped"
+    );
+}
+
+/// One record is one line, across every command and both renderers.
+///
+/// This exists because the per-call-site version of this rule failed four times
+/// in a row, always the same way: a `format!` interpolating two file-derived
+/// values with one escaped and one not. Escaping is a property of the rendering
+/// layer, and asserting it once over real output is the only check that does not
+/// have to be remembered at every new call site.
+///
+/// **Three earlier versions of this test passed while asserting nothing**, which
+/// is the failure mode to guard against when extending it:
+///
+/// - The first classified lines as record heads or indented continuations. An
+///   orphan line satisfies "head", so it asserted nothing at all.
+/// - The second injected a newline into an unquoted YAML key, which is invalid,
+///   so the block did not parse and no value reached the output. A *quoted* key
+///   carries one fine — the fixture below uses that, and the comment claiming the
+///   channel was unreachable was wrong.
+/// - The third used tails `"ird "` and `"ird("`, neither of which matches an
+///   orphan line whose whole content is `ird` — so the namespace header, the very
+///   site the commit adding this test had fixed, was uncovered.
+///
+/// Extending it means adding a channel to the fixture **and** proving the new
+/// tail fails when its escape is reverted. A tail that never appears is a tail
+/// that asserts nothing.
+///
+/// **What it covers, measured rather than assumed.** A mutation sweep over every
+/// `one_line` call site found this catches the node id, both halves of an edge,
+/// a finding's target, the `@namespace` header, a metadata key, the lock report's
+/// locked list, a hint's locus, and `impact`'s location. It does **not** reach a
+/// finding's cause, a hint's `next` (every one is a literal today), the dropped
+/// list, `resolved-elsewhere`, or the not-found error's own interpolations —
+/// several of those are pinned by their own tests nearby, and the rest are
+/// recorded in the queue. This is a net, not a proof.
+#[test]
+fn no_command_splits_a_record_across_lines() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        // The graph name reaches text output as the `@namespace` header. The
+        // second graph declares a key nothing uses, which is what raises a hint —
+        // without one, every hint render site is unreachable and untested.
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n         [graphs.\"we\\nird\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n\n         [graphs.\"un\\nused\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"no\\nthing\"]\n",
+    )
+    .unwrap();
+    // A broken link as well as a good one: the broken one makes this file an
+    // edge finding's *subject*, which is the only way that escape is reachable.
+    fs::write(
+        dir.path().join("we\nird.md"),
+        "# W\n\n[t](./target.md)\n\n[gone](./missing.md)\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# T\n").unwrap();
+    // Nothing links to this one, so it becomes a `detached-node` subject — the
+    // only way a finding's *subject* escape is reachable at all.
+    fs::write(dir.path().join("or\nphan.md"), "# O\n").unwrap();
+    // A quoted key carries a newline; an unquoted one makes the block invalid.
+    fs::write(
+        dir.path().join("doc.md"),
+        // `target.md` written bare from a file in a subdirectory would resolve from
+        // the root — that is what raises a `cause` line, the second renderer whose
+        // escapes nothing else reaches.
+        "---\n\"ke\\ny\": value\nsources: |\n  first line\n  second line\n---\n\n# Doc\n",
+    )
+    .unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(
+        dir.path().join("sub").join("bare.md"),
+        "# B\n\n[t](we\nird.md)\n",
+    )
+    .unwrap();
+
+    // The text following each injected newline. If any render site emits its
+    // value raw, one of these begins a line of its own. Bare `ird` rather than
+    // `ird.md`: the namespace header's orphan line is just `ird`.
+    let tails = ["ird", "phan", "second line", "y: value", "used", "thing"];
+    let root = dir.path().to_str().unwrap();
+
+    for args in [
+        vec!["check"],
+        // The colored renderer is a second set of interpolations, and every one of
+        // its escapes was unpinned until this ran it.
+        vec!["check", "--color", "always"],
+        vec!["nodes"],
+        vec!["edges"],
+        vec![
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+            "--depth",
+            "2",
+        ],
+        vec!["lock", "we\nird.md"],
+        vec!["nodes", "no\nsuch.md"],
+    ] {
+        let mut full = vec!["-C", root];
+        full.extend(args.iter().copied());
+        let output = drft_bin().args(&full).output().unwrap();
+
+        for (stream, bytes) in [("stdout", &output.stdout), ("stderr", &output.stderr)] {
+            let text = String::from_utf8_lossy(bytes);
+            for line in text.lines() {
+                // Strip indentation and any color escape so a continuation line
+                // and a colored head are compared on their content.
+                let trimmed = line.trim_start().trim_start_matches(|c: char| {
+                    c == '\u{1b}' || c == '[' || c == ';' || c.is_ascii_digit() || c == 'm'
+                });
+                for tail in tails {
+                    assert!(
+                        !trimmed.starts_with(tail),
+                        "{args:?} {stream}: a value was rendered raw, so {tail:?} \
+                         begins its own line — full output:\n{text}"
+                    );
+                }
+            }
+        }
+    }
 }

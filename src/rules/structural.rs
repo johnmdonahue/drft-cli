@@ -191,6 +191,9 @@ fn wrong_base_cause(graph: &Graph, edge: &crate::model::Edge) -> Option<String> 
             && graph.nodes.get(*raw).is_some_and(Node::is_resolved)
     })?;
     let suggestion = crate::util::relative_from(&edge.source, raw);
+    // Not escaped here. A cause is data on the finding and is serialised to JSON,
+    // where the value has to survive exactly as written; escaping belongs to the
+    // text rendering, which applies it in `Finding::format_text`.
     Some(format!(
         "`{raw}` resolves from the graph root, but paths resolve relative to the declaring file (did you mean `{suggestion}`?)"
     ))
@@ -266,7 +269,9 @@ mod tests {
             },
         ];
         let mut markdown = Graph::labeled("markdown");
-        for edge in crate::builders::link_edges("docs/guide.md", &links) {
+        for edge in
+            crate::builders::link_edges("docs/guide.md", &links, crate::builders::LinkPolicy::Body)
+        {
             markdown.add_edge(edge);
         }
         let composed = compose(&GraphSet::new(vec![fs, markdown]));
@@ -646,5 +651,46 @@ mod tests {
         );
         // A genuinely orphaned file is still flagged.
         assert!(n.contains(&("detached-node", "lonely.md")));
+    }
+
+    /// The cause is data on the finding, and it is serialised. Escaping it here —
+    /// where it is produced rather than where it is rendered — put a literal
+    /// backslash-n into JSON, against the guarantee that JSON carries what the
+    /// file carried. The hand-built `Finding` test in `diagnostic` cannot see
+    /// this: it never runs this producer.
+    #[test]
+    fn the_cause_carries_the_literal_bytes_not_their_rendering() {
+        let mut fs = Graph::labeled("fs");
+        fs.set_node("docs/guide.md", fs_node());
+        fs.set_node("we\nird.md", fs_node());
+        let links = [crate::parsers::Link {
+            target: "we\nird.md".into(),
+            line: Some(2),
+        }];
+        let mut markdown = Graph::labeled("markdown");
+        for edge in
+            crate::builders::link_edges("docs/guide.md", &links, crate::builders::LinkPolicy::Body)
+        {
+            markdown.add_edge(edge);
+        }
+        let composed = compose(&GraphSet {
+            graphs: vec![fs, markdown],
+        });
+        let edge = composed
+            .edges
+            .iter()
+            .find(|e| e.source == "docs/guide.md")
+            .expect("one edge");
+
+        let cause =
+            wrong_base_cause(&composed, edge).expect("the bare spelling resolves from the root");
+        assert!(
+            cause.contains('\n'),
+            "the producer must keep the bytes: {cause:?}"
+        );
+        assert!(
+            !cause.contains("\\n"),
+            "escaping belongs to the rendering: {cause:?}"
+        );
     }
 }

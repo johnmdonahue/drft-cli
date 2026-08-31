@@ -36,20 +36,21 @@ pub enum RuleSeverity {
 pub struct GraphConfig {
     pub files: Vec<String>,
     pub parser: String,
-    /// `frontmatter` only: the keys whose values yield edges. `None` keeps
-    /// shape detection over the whole block.
-    pub keys: Option<Vec<String>>,
+    /// `frontmatter` only: the keys whose values yield edges. Empty means the
+    /// graph emits none — a supported shape, since a frontmatter graph may exist
+    /// purely to seed node metadata.
+    pub edge_keys: Vec<String>,
 }
 
 /// `deny_unknown_fields` so a key the parser does not support is a hard error
 /// rather than a silent discard. A graph table that parses is read as a graph
-/// that works — a speculative `keys = [...]` must not exit 0 doing nothing.
+/// that works — a speculative `edge_keys = [...]` must not exit 0 doing nothing.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawGraph {
     files: Option<Vec<String>>,
     parser: String,
-    keys: Option<Vec<String>>,
+    edge_keys: Option<Vec<String>>,
 }
 
 // ── Rule config ────────────────────────────────────────────────
@@ -170,8 +171,8 @@ const KNOWN_PARSERS: &[&str] = &["markdown", "frontmatter"];
 /// YAML — is not a claim about what a file can be cited by.
 const PARSERS_WITH_ANCHORS: &[&str] = &["markdown"];
 
-/// Parsers that accept `keys`. Markdown has no keyed structure to scope.
-const PARSERS_WITH_KEYS: &[&str] = &["frontmatter"];
+/// Parsers that accept `edge_keys`. Markdown has no keyed structure to scope.
+const PARSERS_WITH_EDGE_KEYS: &[&str] = &["frontmatter"];
 
 /// Graph names reserved for drft's implicit graphs. Declaring one would collide
 /// with the core `@fs` namespace at compose and overwrite its `type`/`hash`.
@@ -237,19 +238,15 @@ impl Config {
                         KNOWN_PARSERS.join(", ")
                     );
                 }
-                // `keys` scopes a keyed structure; only the frontmatter parser has
-                // one. Accepting it elsewhere would reintroduce exactly the silent
-                // no-op that made it unfindable in the first place (#71).
-                if raw.keys.is_some() && !PARSERS_WITH_KEYS.contains(&raw.parser.as_str()) {
+                // `edge_keys` scopes a keyed structure; only the frontmatter
+                // parser has one. Accepting it elsewhere would reintroduce exactly
+                // the silent no-op that made it unfindable in the first place (#71).
+                if raw.edge_keys.is_some() && !PARSERS_WITH_EDGE_KEYS.contains(&raw.parser.as_str())
+                {
                     anyhow::bail!(
-                        "`keys` is not supported by the \"{}\" parser in graph \"{name}\" (supported: {})",
+                        "`edge_keys` is not supported by the \"{}\" parser in graph \"{name}\" (supported: {})",
                         raw.parser,
-                        PARSERS_WITH_KEYS.join(", ")
-                    );
-                }
-                if raw.keys.as_ref().is_some_and(Vec::is_empty) {
-                    anyhow::bail!(
-                        "`keys` is empty in graph \"{name}\" — the graph would track nothing (omit it for shape detection)"
+                        PARSERS_WITH_EDGE_KEYS.join(", ")
                     );
                 }
                 config.graphs.insert(
@@ -257,7 +254,7 @@ impl Config {
                     GraphConfig {
                         files: raw.files.unwrap_or_else(|| vec![DEFAULT_FILES.to_string()]),
                         parser: raw.parser,
-                        keys: raw.keys,
+                        edge_keys: raw.edge_keys.unwrap_or_default(),
                     },
                 );
             }
@@ -489,43 +486,52 @@ mod tests {
     }
 
     #[test]
-    fn frontmatter_graph_accepts_keys() {
+    fn frontmatter_graph_accepts_edge_keys() {
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = [\"sources\"]\n",
+            "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = [\"sources\"]\n",
         )
         .unwrap();
         let config = Config::load(dir.path()).unwrap();
-        assert_eq!(
-            config.graphs["fm"].keys.as_deref(),
-            Some(&["sources".to_string()][..])
-        );
+        assert_eq!(config.graphs["fm"].edge_keys, vec!["sources".to_string()]);
     }
 
     #[test]
-    fn keys_omitted_is_shape_detection() {
+    fn declaring_edge_keys_raises_no_hint() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = [\"sources\"]\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).unwrap().hints.is_empty());
+    }
+
+    #[test]
+    fn omitting_edge_keys_is_a_metadata_only_graph() {
+        // A frontmatter graph may exist purely to seed node metadata, so this
+        // loads and tracks no edges. Nothing is reported: the graph is as
+        // configured, and the config layer has nothing to say about it.
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
             "[graphs.fm]\nparser = \"frontmatter\"\n",
         )
         .unwrap();
-        assert!(
-            Config::load(dir.path()).unwrap().graphs["fm"]
-                .keys
-                .is_none()
-        );
+        let config = Config::load(dir.path()).unwrap();
+        assert!(config.graphs["fm"].edge_keys.is_empty());
+        assert!(config.hints.is_empty(), "got: {:?}", config.hints);
     }
 
     #[test]
-    fn keys_on_markdown_parser_errors() {
-        // Markdown has no keyed structure — accepting `keys` there would be the
-        // silent no-op this option exists to remove.
+    fn edge_keys_on_markdown_parser_errors() {
+        // Markdown has no keyed structure — accepting `edge_keys` there would be
+        // the silent no-op this option exists to remove.
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[graphs.md]\nparser = \"markdown\"\nkeys = [\"sources\"]\n",
+            "[graphs.md]\nparser = \"markdown\"\nedge_keys = [\"sources\"]\n",
         )
         .unwrap();
         let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
@@ -536,16 +542,19 @@ mod tests {
     }
 
     #[test]
-    fn empty_keys_errors() {
-        // `keys = []` would scope the graph to nothing — always a mistake.
+    fn empty_edge_keys_is_the_same_state_as_omitting_it() {
+        // An empty set names nowhere to look, which is what omitting the field
+        // already means. Treating one as a mistake and the other as a shape would
+        // make the config say two things with one meaning.
         let dir = TempDir::new().unwrap();
         fs::write(
             dir.path().join("drft.toml"),
-            "[graphs.fm]\nparser = \"frontmatter\"\nkeys = []\n",
+            "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = []\n",
         )
         .unwrap();
-        let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
-        assert!(err.contains("track nothing"), "got: {err}");
+        let config = Config::load(dir.path()).unwrap();
+        assert!(config.graphs["fm"].edge_keys.is_empty());
+        assert!(config.hints.is_empty(), "got: {:?}", config.hints);
     }
 
     #[test]

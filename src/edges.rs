@@ -74,7 +74,11 @@ pub fn project(
 pub fn format_text(edges: &[EdgeProjection]) -> String {
     let mut blocks = Vec::new();
     for edge in edges {
-        let mut lines = vec![format!("{} → {}", edge.source, edge.target)];
+        let mut lines = vec![format!(
+            "{} → {}",
+            crate::util::one_line(&edge.source),
+            crate::util::one_line(&edge.target)
+        )];
         projection::push_metadata_lines(&mut lines, &edge.metadata);
         blocks.push(lines.join("\n"));
     }
@@ -236,5 +240,20 @@ mod tests {
     #[test]
     fn format_text_empty_is_blank() {
         assert_eq!(format_text(&[]), "");
+    }
+
+    #[test]
+    fn a_source_or_target_carrying_a_newline_stays_on_one_line() {
+        // Both halves of the arrow come from files and can carry anything a path
+        // can. Deleting either escape left the suite green before this existed.
+        let projection = EdgeProjection {
+            source: "we\nird.md".to_string(),
+            target: "t\nt.md".to_string(),
+            metadata: Map::new(),
+        };
+        assert_eq!(
+            format_text(&[projection]).trim_end(),
+            "we\\nird.md → t\\nt.md"
+        );
     }
 }

@@ -3,35 +3,6 @@ use std::borrow::Cow;
 
 use super::{Link, ParseResult, Parser};
 
-/// Check whether a frontmatter value looks like a link target (file path or URI).
-fn is_link_candidate(value: &str) -> bool {
-    // URIs are always candidates — graph builder classifies them as External(Remote)
-    if crate::util::is_uri(value) {
-        return true;
-    }
-    // Explicit path prefixes are always candidates.
-    // The graph builder gates all filesystem access for out-of-root targets.
-    if value.starts_with("./") || value.starts_with("../") || value.starts_with('/') {
-        return true;
-    }
-    // Prose contains spaces — file paths don't
-    if value.contains(' ') {
-        return false;
-    }
-    // Must have a plausible file extension: dot followed by 1-6 alphanumeric
-    // chars that aren't all digits (rejects v2.0, e.g., Dr.)
-    let basename = value.rsplit('/').next().unwrap_or(value);
-    if let Some(dot_pos) = basename.rfind('.') {
-        let ext = &basename[dot_pos + 1..];
-        !ext.is_empty()
-            && ext.len() <= 6
-            && ext.chars().all(|c| c.is_ascii_alphanumeric())
-            && !ext.chars().all(|c| c.is_ascii_digit())
-    } else {
-        false
-    }
-}
-
 /// Whether the character at `i` opens a new line **as the YAML parser counts
 /// them**.
 ///
@@ -152,51 +123,6 @@ fn raw_line_table(text: &str) -> Vec<Vec<(usize, usize)>> {
     }
     lines.push(current);
     lines
-}
-
-/// A single value with its code spans blanked and its ends trimmed, for the
-/// candidacy test alone.
-///
-/// The trim is not incidental. A `|` block scalar keeps a trailing newline and a
-/// quoted value can carry padding, both of which land inside the extension test
-/// and cost the value its edge — with no code span involved anywhere.
-///
-/// The mask does two jobs, and only one of them belongs to the block. Keeping a
-/// span from breaking the mapping is structural and is answered by reading the raw
-/// block. Deciding whether a value is a path or prose is a question about the
-/// value, and it is still worth asking — so it is asked here, where a span cannot
-/// reach past its own value to blank a sibling key.
-///
-/// The answer governs candidacy only. **The edge target stays the value the file
-/// declares**, so `@frontmatter` and the edge never disagree about what was
-/// written, and a value naming nothing that resolves raises `unresolved-edge`
-/// rather than vanishing.
-fn without_spans(value: &str) -> String {
-    // Spans only, never fences. `strip_code` is block-oriented and blanks a fenced
-    // region as well, which on a bare scalar erases any value whose text opens
-    // with a fence marker — `` ```notes.md `` became the empty string, failed the
-    // candidacy test, and was dropped with no edge and no finding. That is the
-    // silent loss this whole change exists to remove, reached through the mask
-    // meant to prevent it.
-    let chars: Vec<char> = value.chars().collect();
-    let mut out = String::with_capacity(value.len());
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '`'
-            && let Some(end) = span_end(&chars, i)
-        {
-            // Blank the span to its own width, so a value's remaining text keeps
-            // the shape the candidacy test reads.
-            for _ in i..end {
-                out.push(' ');
-            }
-            i = end;
-            continue;
-        }
-        out.push(chars[i]);
-        i += 1;
-    }
-    out.trim().to_string()
 }
 
 /// Where the code span opening at `i` ends — one past its closing run — or `None`
@@ -339,12 +265,11 @@ fn strip_code(content: &str) -> Masked {
 pub struct FrontmatterParser {
     /// File routing filter. None = receives all File nodes.
     pub file_filter: Option<globset::GlobSet>,
-    /// Keys whose values yield edges. `None` falls back to shape detection over
-    /// the whole block, which cannot tell a derivation (`sources:`) from a value
-    /// that merely looks like a path (`route: /customers`). Naming the keys lets
-    /// the config say what the graph tracks. Scopes edges only — metadata always
-    /// captures the entire block.
-    pub keys: Option<Vec<String>>,
+    /// Keys whose values yield edges. Empty means the graph emits none, which is
+    /// a supported configuration: a frontmatter graph may exist purely to seed
+    /// node metadata. Scopes edges only — metadata always captures the entire
+    /// block, whatever this holds.
+    pub edge_keys: Vec<String>,
 }
 
 impl Parser for FrontmatterParser {
@@ -358,14 +283,9 @@ impl Parser for FrontmatterParser {
     fn parse(&self, _path: &str, content: &str) -> ParseResult {
         // Two independent parses over one block, one per job, and both choose
         // their rendering by the same test: the raw block where it is a YAML
-        // mapping, the masked copy otherwise. So the two can differ in what they
-        // keep — the edge scan drops values that are not link-shaped — but never
-        // in what the block *says*.
-        //
-        // Spans are still blanked before the link test, per value rather than
-        // across the block. That keeps the question the mask exists to answer
-        // while denying it the reach that let one value's backtick blank
-        // another's key.
+        // mapping, the masked copy otherwise. The edge scan keeps a subset of
+        // what the metadata pass keeps — only the values under a declared key —
+        // but the two never differ in what the block *says*.
         ParseResult {
             links: self.extract_links(content),
             // Frontmatter defines no addressable sub-file positions; anchors come
@@ -382,8 +302,8 @@ impl FrontmatterParser {
     /// not a YAML mapping on its own. An absent or malformed block yields no
     /// links.
     ///
-    /// Code spans are blanked per value before the link test, never across the
-    /// block — see [`without_spans`].
+    /// A code span inside a value is part of that value: it is never blanked
+    /// out of the target, so the edge names what the file declared.
     fn extract_links(&self, content: &str) -> Vec<Link> {
         // The boundary is the shared one; only the masking is this job's own.
         // Finding the block in a masked copy of the *whole file* let a code span
@@ -441,23 +361,16 @@ impl FrontmatterParser {
         }
 
         let mut candidates = Vec::new();
-        match &self.keys {
-            Some(keys) => {
-                let wanted: std::collections::HashSet<&str> =
-                    keys.iter().map(String::as_str).collect();
-                collect_scoped(root, &wanted, &mut candidates);
-            }
-            None => collect_links(root, &mut candidates),
-        }
+        let wanted: std::collections::HashSet<&str> =
+            self.edge_keys.iter().map(String::as_str).collect();
+        collect_scoped(root, &wanted, &mut candidates);
         Some(
             candidates
                 .into_iter()
-                // Candidacy is decided on the value with its spans blanked; the
-                // target is the value as declared. Testing the raw text instead
-                // drops `notes.md` + a trailing span on the floor, because the
-                // span lands inside the extension test — a silent loss of exactly
-                // the kind the two-candidate order above exists to remove.
-                .filter(|(value, _, _)| is_link_candidate(&without_spans(value)))
+                // Every string reachable through a declared key is an edge. The
+                // key is the whole of the signal, so nothing here asks what a
+                // value looks like — one that resolves to nothing becomes an edge
+                // that resolves to nothing, and `unresolved-edge` says so.
                 .map(|(target, line, col)| Link {
                     target,
                     line: Some(source_line_in(lines, line, col)),
@@ -687,10 +600,16 @@ fn scalar_to_json(scalar: &Scalar) -> serde_json::Value {
 mod tests {
     use super::*;
 
+    /// Parse with `sources` as the sole edge key — the shape every fixture below
+    /// uses unless it names its own.
     fn parse(content: &str) -> ParseResult {
+        parse_with(content, &["sources"])
+    }
+
+    fn parse_with(content: &str, edge_keys: &[&str]) -> ParseResult {
         let parser = FrontmatterParser {
             file_filter: None,
-            keys: None,
+            edge_keys: edge_keys.iter().map(|k| k.to_string()).collect(),
         };
         parser.parse("test.md", content)
     }
@@ -963,11 +882,11 @@ mod tests {
         assert!(result.metadata.is_none());
     }
 
-    /// Parse with `keys` scoping, returning the edge targets.
-    fn scoped(content: &str, keys: &[&str]) -> Vec<String> {
+    /// Parse with the given edge keys, returning the edge targets.
+    fn scoped(content: &str, edge_keys: &[&str]) -> Vec<String> {
         let parser = FrontmatterParser {
             file_filter: None,
-            keys: Some(keys.iter().map(|k| k.to_string()).collect()),
+            edge_keys: edge_keys.iter().map(|k| k.to_string()).collect(),
         };
         parser
             .parse("doc.md", content)
@@ -978,7 +897,7 @@ mod tests {
     }
 
     #[test]
-    fn keys_scope_excludes_other_keys() {
+    fn edge_keys_scope_excludes_other_keys() {
         // The two real collisions from #73: an API route and a rule's glob scope,
         // both path-shaped, neither a derivation.
         let content = "---\nsources:\n  - ../src/lib.rs\nroute: /customers\npaths:\n  - \"api/openapi.yaml\"\n---\n";
@@ -986,7 +905,7 @@ mod tests {
     }
 
     #[test]
-    fn keys_scope_takes_whole_subtree() {
+    fn edge_keys_scope_takes_whole_subtree() {
         // A matched key hands its entire subtree over, so nesting under it still
         // yields every path beneath.
         let content = "---\nsources:\n  primary:\n    - ../a.rs\n  secondary: ../b.rs\n---\n";
@@ -996,7 +915,7 @@ mod tests {
     }
 
     #[test]
-    fn keys_scope_finds_nested_key() {
+    fn edge_keys_scope_finds_nested_key() {
         // The key scopes the walk, not its depth — `sources` under an unrelated
         // parent is still found.
         let content = "---\nmeta:\n  sources:\n    - ../a.rs\n---\n";
@@ -1004,50 +923,27 @@ mod tests {
     }
 
     #[test]
-    fn keys_scope_keeps_line_numbers() {
+    fn edge_keys_scope_keeps_line_numbers() {
         let content = "---\ntitle: T\nsources:\n  - ../a.rs\n---\n";
         let parser = FrontmatterParser {
             file_filter: None,
-            keys: Some(vec!["sources".to_string()]),
+            edge_keys: vec!["sources".to_string()],
         };
         let links = parser.parse("doc.md", content).links;
         assert_eq!(links[0].line, Some(4));
     }
 
     #[test]
-    fn keys_scope_still_shape_filters() {
-        // Scoping picks the key; `is_link_candidate` still rejects prose under it.
-        let content = "---\nsources:\n  - ../a.rs\n  - not a path at all\n---\n";
-        assert_eq!(scoped(content, &["sources"]), vec!["../a.rs"]);
-    }
-
-    #[test]
-    fn keys_scope_leaves_metadata_whole() {
-        // `keys` scopes edges only — the metadata namespace keeps the full block.
+    fn edge_keys_scope_leaves_metadata_whole() {
+        // `edge_keys` scopes edges only — the metadata namespace keeps the full block.
         let content = "---\ntitle: T\nroute: /customers\nsources:\n  - ../a.rs\n---\n";
         let parser = FrontmatterParser {
             file_filter: None,
-            keys: Some(vec!["sources".to_string()]),
+            edge_keys: vec!["sources".to_string()],
         };
         let meta = parser.parse("doc.md", content).metadata.unwrap();
         assert_eq!(meta["title"], "T");
         assert_eq!(meta["route"], "/customers");
-    }
-
-    #[test]
-    fn no_keys_scope_is_shape_detection() {
-        // The default is unchanged: every path-shaped value is a candidate.
-        let content = "---\nroute: /customers\nsources:\n  - ../a.rs\n---\n";
-        let mut got: Vec<String> = parse(content).links.into_iter().map(|l| l.target).collect();
-        got.sort();
-        assert_eq!(got, vec!["../a.rs", "/customers"]);
-    }
-
-    #[test]
-    fn frontmatter_skips_non_paths() {
-        let content = "---\ntitle: My Document\nversion: 1.0\ntags:\n  - rust\n  - cli\n---\n";
-        let result = parse(content);
-        assert!(result.links.is_empty());
     }
 
     #[test]
@@ -1175,19 +1071,6 @@ mod tests {
     }
 
     #[test]
-    fn code_span_in_metadata_does_not_become_an_edge() {
-        // Scope guard: capturing the raw value must not make a code-span path an
-        // edge. Edge extraction blanks a value's spans before the candidacy test, so nothing links here.
-        let content = "---\npurpose: see `config.rs` for details\n---\n";
-        let result = parse(content);
-        assert!(result.links.is_empty(), "code spans are not edges");
-        assert_eq!(
-            result.metadata.unwrap()["purpose"],
-            "see `config.rs` for details"
-        );
-    }
-
-    #[test]
     fn block_scalar_with_code_span_survives_whole() {
         // The reported case: a multi-line `purpose` block scalar whose spans were
         // blanked. Every character now comes back, newline included.
@@ -1215,7 +1098,7 @@ mod tests {
     fn no_filter_matches_everything() {
         let parser = FrontmatterParser {
             file_filter: None,
-            keys: None,
+            edge_keys: Vec::new(),
         };
         assert!(parser.matches("index.md"));
         assert!(parser.matches("main.rs"));
@@ -1227,7 +1110,7 @@ mod tests {
         builder.add(globset::Glob::new("*.md").unwrap());
         let parser = FrontmatterParser {
             file_filter: Some(builder.build().unwrap()),
-            keys: None,
+            edge_keys: Vec::new(),
         };
         assert!(parser.matches("index.md"));
         assert!(!parser.matches("main.rs"));
@@ -1243,20 +1126,6 @@ mod tests {
     }
 
     #[test]
-    fn skips_prose_with_spaces() {
-        let content = "---\npurpose: configuration reference\nstatus: needs review\n---\n";
-        let result = parse(content);
-        assert!(result.links.is_empty());
-    }
-
-    #[test]
-    fn skips_abbreviations_and_versions() {
-        let content = "---\nnote: e.g.\nversion: v2.0\nauthor: Dr.\n---\n";
-        let result = parse(content);
-        assert!(result.links.is_empty());
-    }
-
-    #[test]
     fn accepts_paths_without_prefix() {
         let content = "---\nsources:\n  - config.rs\n  - docs/setup.md\n---\n";
         let result = parse(content);
@@ -1268,17 +1137,72 @@ mod tests {
     #[test]
     fn emits_absolute_paths() {
         let content = "---\nsource: /usr/local/config.toml\n---\n";
-        let result = parse(content);
+        let result = parse_with(content, &["source"]);
         assert_eq!(result.links.len(), 1);
         assert_eq!(result.links[0].target, "/usr/local/config.toml");
     }
 
+    // The declared key is the whole of the signal. Nothing below asks what a
+    // value looks like, which is the property the deleted shape filter broke.
+
     #[test]
-    fn yaml_list_values_not_parsed_as_uris() {
-        // Regression: `- name: foo bar bazz` was split on `- ` to get
-        // `name: foo bar bazz`, which the old is_uri matched as scheme `name:`
-        let content = "---\ntags:\n  - name: foo bar bazz\n  - status: draft\n---\n";
-        let result = parse(content);
+    fn prose_under_a_declared_key_is_an_edge() {
+        // Each of these was silently dropped for failing an extension test. A
+        // value naming nothing that resolves is an edge that resolves to nothing,
+        // and the rules layer says so — it does not vanish here.
+        let content = "---\nsources:\n  - TBD\n  - needs review\n  - v2.0\n  - 2026-01-01\n---\n";
+        assert_eq!(
+            scoped(content, &["sources"]),
+            vec!["TBD", "needs review", "v2.0", "2026-01-01"]
+        );
+    }
+
+    #[test]
+    fn a_value_naming_a_directory_is_an_edge() {
+        // drft has directory nodes, so a derivation naming one is legitimate. The
+        // extension test discarded it for having no dot.
+        let content = "---\nsources: docs\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["docs"]);
+    }
+
+    #[test]
+    fn a_markdown_link_value_is_not_unwrapped() {
+        // The target is the literal text. Unwrapping it would be inference about
+        // what the author meant; naming it is what lets the finding be read.
+        let content = "---\nsources: \"[Design notes](real.md)\"\n---\n";
+        assert_eq!(
+            scoped(content, &["sources"]),
+            vec!["[Design notes](real.md)"]
+        );
+    }
+
+    #[test]
+    fn a_path_carrying_a_fragment_keeps_it() {
+        let content = "---\nsources: ./real.md#section\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["./real.md#section"]);
+    }
+
+    #[test]
+    fn non_string_scalars_are_not_edges() {
+        // Only strings are collected; a number or a boolean has no target to name.
+        let content = "---\nsources:\n  - 42\n  - true\n  - null\n---\n";
+        assert!(scoped(content, &["sources"]).is_empty());
+    }
+
+    #[test]
+    fn an_undeclared_key_yields_no_edge() {
+        // The scoping is the only filter left, so it has to hold on its own.
+        let content = "---\nroute: /customers\nsources: ./a.md\n---\n";
+        assert_eq!(scoped(content, &["sources"]), vec!["./a.md"]);
+    }
+
+    #[test]
+    fn no_declared_keys_yields_no_edges() {
+        // A metadata-only graph: the block is still captured, and nothing is an
+        // edge. The config layer hints about this shape; the parser just obeys.
+        let content = "---\ntitle: T\nsources: ./a.md\n---\n";
+        let result = parse_with(content, &[]);
         assert!(result.links.is_empty());
+        assert_eq!(result.metadata.unwrap()["title"], "T");
     }
 }

@@ -1,10 +1,33 @@
-//! Path, URI, and hashing utilities shared by the sources, builders, and rules.
+//! Path, URI, hashing, and text-rendering utilities shared by the sources,
+//! builders, rules, and the text output paths.
 
 use std::path::{Component, Path};
 
 /// Hash content with BLAKE3, returning `b3:<hex>`.
 pub fn hash_bytes(content: &[u8]) -> String {
     format!("b3:{}", blake3::hash(content).to_hex())
+}
+
+/// Render a string safely on one line of text output.
+///
+/// A target comes from a file, so it can carry anything a YAML scalar can hold —
+/// a newline from a `|` block scalar, a tab, a control character. Text output is
+/// line-oriented and arrow-delimited, so an unescaped newline puts a second line
+/// into `drft check` with no severity prefix, which any log parser or grep reads
+/// as a different kind of record. JSON carries the real string; this is for the
+/// human- and shell-facing rendering only.
+pub fn one_line(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Check whether a target string is a URI.
@@ -193,5 +216,19 @@ mod tests {
     #[test]
     fn hash_has_prefix() {
         assert!(hash_bytes(b"hello").starts_with("b3:"));
+    }
+
+    #[test]
+    fn one_line_escapes_what_would_break_a_line_oriented_report() {
+        // A target comes from a file, so it can carry anything a YAML scalar can.
+        // An unescaped newline puts a second line into `check` output with no
+        // severity prefix, which a log parser reads as a different record.
+        assert_eq!(one_line("a\nb"), "a\\nb");
+        assert_eq!(one_line("a\r\nb"), "a\\r\\nb");
+        assert_eq!(one_line("a\tb"), "a\\tb");
+        assert_eq!(one_line("a\u{1b}b"), "a\\u{1b}b");
+        // Ordinary text, including non-ASCII, is untouched.
+        assert_eq!(one_line("docs/guide.md"), "docs/guide.md");
+        assert_eq!(one_line("arrow → target"), "arrow → target");
     }
 }

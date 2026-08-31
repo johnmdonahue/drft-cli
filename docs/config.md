@@ -75,17 +75,31 @@ parser = "frontmatter"
 files = ["**/*.md"]
 ```
 
-| Field    | Required | Default        | Description                                                        |
-| -------- | -------- | -------------- | ------------------------------------------------------------------ |
-| `parser` | yes      | —              | How to interpret the files (see [parsers](parsers/README.md))      |
-| `files`  | no       | `["**/*.md"]`  | Globs scoping which files the parser reads                         |
-| `keys`   | no       | shape detected | `frontmatter` only — the frontmatter keys whose values yield edges |
+| Field       | Required | Default       | Description                                                        |
+| ----------- | -------- | ------------- | ------------------------------------------------------------------ |
+| `parser`    | yes      | —             | How to interpret the files (see [parsers](parsers/README.md))      |
+| `files`     | no       | `["**/*.md"]` | Globs scoping which files the parser reads                         |
+| `edge_keys` | no       | none          | `frontmatter` only — the frontmatter keys whose values yield edges |
 
-`keys` names what the graph tracks, so a path-shaped value under an unrelated key
-(`route: /customers`) is not mistaken for a derivation. Omit it to classify by
-value shape across the whole block. It applies to the `frontmatter` parser only —
-`markdown` has no keyed structure — and declaring it elsewhere, or as an empty
-list, is a config error. See [the frontmatter parser](parsers/frontmatter.md#scoping-to-keys).
+`edge_keys` names what the graph tracks: every string value reachable through one
+of those keys is an edge, and every other field is node metadata. drft never
+decides whether a value looks like a path, so a value naming nothing that resolves
+raises `unresolved-edge` rather than disappearing.
+
+Omitting it is a supported shape — a frontmatter graph may exist purely to seed
+node metadata — so the graph loads, emits no edges, and says nothing about it.
+`edge_keys = []` is that same state written out: an empty set names nowhere to
+look, so it behaves identically.
+
+Declaring keys states an expectation the corpus can fail to meet, and that is the
+state worth reporting: a graph declaring `edge_keys` that ends up with no edges
+raises an `edge-keys-matched-nothing` hint. A misspelled key
+otherwise produces a graph tracking nothing while the config says otherwise, at
+exit 0.
+
+It applies to the `frontmatter` parser only — `markdown` has no keyed structure —
+and declaring it elsewhere is a config error. See
+[the frontmatter parser](parsers/frontmatter.md#naming-the-keys-that-yield-edges).
 
 These are the only accepted keys. Any other key is a config error naming the key
 and the accepted set. A graph table that parses is read as a graph that works, so

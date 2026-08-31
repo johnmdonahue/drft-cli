@@ -15,4 +15,4 @@ parser the parsed frontmatter block. A graph names its parser with
 | Parser                        | Emits                                                        |
 | ----------------------------- | ------------------------------------------------------------ |
 | [markdown](markdown.md)       | edges (inline, reference, autolink, image) + heading anchors |
-| [frontmatter](frontmatter.md) | edges (link-target values) + node metadata                   |
+| [frontmatter](frontmatter.md) | edges (values under declared keys) + node metadata           |

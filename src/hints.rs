@@ -61,11 +61,22 @@ impl Hint {
     /// read as one output vocabulary. The `next` line indents beneath it.
     pub fn format_text(&self) -> String {
         let head = match &self.locus {
-            Some(locus) => format!("hint[{}]: {} ({})", self.name, locus, self.message),
-            None => format!("hint[{}]: {}", self.name, self.message),
+            // A locus is often a node path, which can carry anything a filename
+            // can. One hint is one line, as one finding is.
+            Some(locus) => format!(
+                "hint[{}]: {} ({})",
+                self.name,
+                crate::util::one_line(locus),
+                crate::util::one_line(&self.message)
+            ),
+            None => format!(
+                "hint[{}]: {}",
+                self.name,
+                crate::util::one_line(&self.message)
+            ),
         };
         match &self.next {
-            Some(next) => format!("{head}\n  next: {next}"),
+            Some(next) => format!("{head}\n  next: {}", crate::util::one_line(next)),
             None => head,
         }
     }
@@ -77,16 +88,22 @@ impl Hint {
         let cyan = "\x1b[36m";
         let head = match &self.locus {
             Some(locus) => format!(
-                "{blue}hint{reset}[{bold}{}{reset}]: {cyan}{locus}{reset} ({})",
-                self.name, self.message
+                "{blue}hint{reset}[{bold}{}{reset}]: {cyan}{}{reset} ({})",
+                self.name,
+                crate::util::one_line(locus),
+                crate::util::one_line(&self.message)
             ),
             None => format!(
                 "{blue}hint{reset}[{bold}{}{reset}]: {}",
-                self.name, self.message
+                self.name,
+                crate::util::one_line(&self.message)
             ),
         };
         match &self.next {
-            Some(next) => format!("{head}\n  {bold}next{reset}: {next}"),
+            Some(next) => format!(
+                "{head}\n  {bold}next{reset}: {}",
+                crate::util::one_line(next)
+            ),
             None => head,
         }
     }
@@ -220,5 +237,47 @@ mod tests {
         let v = serde_json::to_value(&hints).unwrap();
         assert!(v.is_array(), "got: {v}");
         assert_eq!(v.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_locus_carrying_a_newline_stays_on_one_line() {
+        // A locus is often a node path, which can carry whatever a filename can.
+        let h = Hint::new("directory-lock", "carries no content").at("we\nird");
+        assert_eq!(
+            h.format_text(),
+            "hint[directory-lock]: we\\nird (carries no content)"
+        );
+        // Raw on the hint, which is serialised.
+        assert!(h.locus.as_deref().unwrap().contains('\n'));
+    }
+
+    #[test]
+    fn the_colour_renderer_escapes_the_locus_too() {
+        let h = Hint::new("directory-lock", "carries no content").at("we\nird");
+        let colored = h.format_text_color();
+        assert_eq!(colored.lines().count(), 1, "{colored:?}");
+        assert!(colored.contains("we\\nird"), "{colored:?}");
+    }
+
+    /// A hint message interpolates config values — a graph name, a declared key —
+    /// so it can carry whatever `drft.toml` carries, and so can the remedy.
+    /// Escaping the locus alone left the same hint splitting across lines.
+    #[test]
+    fn a_message_and_a_next_carrying_newlines_stay_on_their_own_lines() {
+        let h = Hint::new("edge-keys-matched-nothing", "declares `so\nurces`")
+            .at("graphs.we\nird")
+            .with_next("check `so\nurces`");
+        let text = h.format_text();
+        assert_eq!(text.lines().count(), 2, "{text:?}");
+        for fragment in [
+            "graphs.we\\nird",
+            "declares `so\\nurces`",
+            "check `so\\nurces`",
+        ] {
+            assert!(text.contains(fragment), "missing {fragment}: {text:?}");
+        }
+        assert_eq!(h.format_text_color().lines().count(), 2);
+        // Raw on the hint, which is serialised.
+        assert!(h.message.contains('\n') && h.next.as_deref().unwrap().contains('\n'));
     }
 }

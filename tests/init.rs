@@ -43,3 +43,39 @@ fn init_fails_if_exists() {
         "expected 'already exists' in stderr: {stderr}"
     );
 }
+
+/// The template is the first config most repos ever run, so it has to produce a
+/// working graph rather than merely a parseable one. Asserting substrings of the
+/// file cannot catch a template that declares a frontmatter graph tracking
+/// nothing — only running the tree it produced can.
+#[test]
+fn the_init_template_produces_a_graph_that_emits_frontmatter_edges() {
+    let dir = TempDir::new().unwrap();
+    let init = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "init"])
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./target.md\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("doc.md → target.md"),
+        "the template's frontmatter graph emitted no edge: {stdout}"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("edge-keys-matched-nothing"),
+        "the template's declared key must match the frontmatter it scaffolds: {stderr}"
+    );
+}

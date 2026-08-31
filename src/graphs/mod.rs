@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::builders;
 use crate::config::{Config, compile_globs};
+use crate::hints::{Hint, Hints};
 use crate::model::{Graph, GraphSet};
 use crate::sources::{self, fs::SourceFile};
 use crate::util::hash_bytes;
@@ -28,7 +29,7 @@ const LOCKFILE_IGNORE: &str = "drft.lock";
 /// `fs` is implicit and always builds first — it owns the identity space. Each
 /// configured text graph (`[graphs.*]`) then builds over the same fs walk's
 /// content, scoped by its filter and labeled with the graph's name.
-pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
+pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<GraphSet> {
     let mut ignore = config.ignore_patterns().to_vec();
     ignore.push(LOCKFILE_IGNORE.to_string());
     let files = sources::fs::walk(root, &ignore)?;
@@ -96,12 +97,77 @@ pub fn build_set(root: &Path, config: &Config) -> Result<GraphSet> {
         let files = compile_globs(&graph.files)?;
         match graph.parser.as_str() {
             "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
-            "frontmatter" => graphs.push(builders::frontmatter::build(
-                name,
-                &texts,
-                files,
-                graph.keys.clone(),
-            )),
+            "frontmatter" => {
+                let parser_files = files.clone();
+                let fragment =
+                    builders::frontmatter::build(name, &texts, files, graph.edge_keys.clone());
+                // Declaring keys states an expectation the corpus can fail to
+                // meet, and every way of failing it produces a graph tracking
+                // nothing while the config says otherwise, at exit 0.
+                //
+                // Two ways, and the message says which, because the remedy
+                // differs: the graph's globs reached no file at all, or they
+                // reached files and no value sat under a declared key.
+                //
+                // Declaring *no* keys is not this state: a frontmatter graph may
+                // exist purely to seed node metadata, and a graph that is as
+                // intended has nothing to report.
+                //
+                // There is deliberately no exemption for a repository with
+                // nothing in it yet. One was tried and it swallowed a misspelled
+                // `files` glob — a graph reaching no file looks identical whether
+                // the globs are wrong or the files are unwritten, so exempting
+                // the second hides the first. The first message covers both, and
+                // names the two remedies rather than assuming which applies.
+                let matched_any = texts.iter().any(|(path, _)| match &parser_files {
+                    Some(set) => set.is_match(path),
+                    None => true,
+                });
+                if !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
+                    let keys = render_keys(&graph.edge_keys);
+                    let (message, next) = if matched_any {
+                        (
+                            // "Nothing yielded an edge" rather than "no value was
+                            // found": a number, a boolean, an empty string or an
+                            // empty list under a declared key is a value that is
+                            // present and still names no target, and saying it was
+                            // not found contradicts the `@frontmatter` block the
+                            // same run prints.
+                            format!(
+                                "declares {keys} but nothing under {} yielded an edge",
+                                if graph.edge_keys.len() == 1 {
+                                    "it"
+                                } else {
+                                    "any of them"
+                                }
+                            ),
+                            // Every reason a declared key can come up empty, for
+                            // the same reason the other branch names all of its
+                            // own: reaching some file is not reaching the right
+                            // one, an `ignore` pattern can drop exactly the file
+                            // that carried the derivations, and only a string
+                            // names a target.
+                            "check the spelling against the frontmatter the files carry, the graph's `files` globs and any `ignore` patterns, and that the values are strings",
+                        )
+                    } else {
+                        (
+                            // "No file was read" rather than "the globs matched
+                            // nothing": a file the globs do reach is dropped here
+                            // if it is ignored, unreadable, or not UTF-8 text, and
+                            // this seam cannot tell those apart. Naming only the
+                            // globs sent the reader to a correct one.
+                            format!("declares {keys}, but no file was read for this graph"),
+                            "check the `files` globs, any `ignore` patterns, and that the matched files are readable UTF-8 text",
+                        )
+                    };
+                    hints.push(
+                        Hint::new("edge-keys-matched-nothing", message)
+                            .at(format!("graphs.{name}"))
+                            .with_next(next.to_string()),
+                    );
+                }
+                graphs.push(fragment)
+            }
             // Parser names are validated at config load (`KNOWN_PARSERS`); an
             // unknown parser cannot reach here.
             other => unreachable!("unvalidated parser \"{other}\""),
@@ -124,6 +190,17 @@ fn auto_hash(graph: &mut Graph, files: &[SourceFile]) {
     }
 }
 
+/// Render a key list for a hint message: `` `a` ``, `` `a` and `b` ``, or
+/// `` `a`, `b` and `c` ``.
+fn render_keys(keys: &[String]) -> String {
+    let quoted: Vec<String> = keys.iter().map(|k| format!("`{k}`")).collect();
+    match quoted.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,7 +214,7 @@ mod tests {
         fs::write(dir.path().join("index.md"), "# Index").unwrap();
         let config = Config::defaults();
 
-        let set = build_set(dir.path(), &config).unwrap();
+        let set = build_set(dir.path(), &config, &mut Hints::default()).unwrap();
         // fs is always the base graph, built first regardless of config.
         let fs_graph = &set.graphs[0];
         assert_eq!(fs_graph.label.as_deref(), Some("fs"));
@@ -160,7 +237,7 @@ mod tests {
         fs::write(outer.path().join("secret.md"), "secret").unwrap();
         std::os::unix::fs::symlink(outer.path().join("secret.md"), root.join("trap.md")).unwrap();
 
-        let set = build_set(&root, &Config::defaults()).unwrap();
+        let set = build_set(&root, &Config::defaults(), &mut Hints::default()).unwrap();
         let trap = &set.graphs[0].nodes["trap.md"];
         assert_eq!(trap.metadata["type"], Value::String("symlink".into()));
         assert!(
@@ -180,7 +257,7 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
             .unwrap();
 
-        let set = build_set(dir.path(), &Config::defaults()).unwrap();
+        let set = build_set(dir.path(), &Config::defaults(), &mut Hints::default()).unwrap();
         let nodes = &set.graphs[0].nodes;
         assert_eq!(
             nodes["alias.md"].metadata["type"],

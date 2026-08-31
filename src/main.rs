@@ -273,13 +273,15 @@ ignore = ["target/**", "node_modules/**"]
 parser = "markdown"
 files = ["**/*.md"]
 
-# Frontmatter link values resolve relative to the declaring file, the same way
-# that file's markdown links do — from docs/guide.md, write ../src/lib.rs, not
-# src/lib.rs. Add keys = ["sources"] to limit edges to named keys instead of
-# every path-shaped value.
+# edge_keys names the frontmatter keys whose values are derivations. Every string
+# under one becomes an edge; every other field is node metadata, read with
+# `drft nodes --field`. Omit it for a metadata-only graph that emits no edges.
+# Values resolve relative to the declaring file, the same way that file's markdown
+# links do — from docs/guide.md, write ../src/lib.rs, not src/lib.rs.
 [graphs.frontmatter]
 parser = "frontmatter"
 files = ["**/*.md"]
+edge_keys = ["sources"]
 
 [rules]
 # Built-in rules default to warn. Promote for CI:
@@ -332,7 +334,7 @@ fn run_lock(
 
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config)?;
+    let set = graphs::build_set(&graph_root, &config, hints)?;
     let composed = compose::compose(&set);
     let snapshot = lock::Lock::from_composed(&composed);
 
@@ -573,13 +575,15 @@ fn report_lock(
             // a copy of `drft.lock` and, on a large graph, thousands of lines of
             // it. `dropped` is always named: it is never long, and an entry
             // leaving the baseline is the half worth reading.
+            // One node, one line — a node key can carry whatever a path can, and
+            // a raw newline here turns a lock report into a record nothing can read.
             if !all {
                 for node in locked {
-                    line.push_str(&format!("\n  locked  {node}"));
+                    line.push_str(&format!("\n  locked  {}", drft::util::one_line(node)));
                 }
             }
             for node in dropped {
-                line.push_str(&format!("\n  dropped {node}"));
+                line.push_str(&format!("\n  dropped {}", drft::util::one_line(node)));
             }
             write_stdout_line(&line)
         }
@@ -629,13 +633,17 @@ fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> an
     matches.sort();
     matches.dedup();
     match matches.as_slice() {
-        [] => anyhow::anyhow!("node not found: \"{path}\""),
-        [hit] => anyhow::anyhow!("node not found: \"{path}\" — did you mean \"{hit}\"?"),
+        [] => anyhow::anyhow!("node not found: \"{}\"", drft::util::one_line(path)),
+        [hit] => anyhow::anyhow!(
+            "node not found: \"{}\" — did you mean \"{}\"?",
+            drft::util::one_line(path),
+            drft::util::one_line(hit)
+        ),
         many => {
             let shown = many
                 .iter()
                 .take(5)
-                .map(|k| format!("\"{k}\""))
+                .map(|k| format!("\"{}\"", drft::util::one_line(k)))
                 .collect::<Vec<_>>();
             let more = if many.len() > shown.len() {
                 format!(", and {} more", many.len() - shown.len())
@@ -643,7 +651,8 @@ fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> an
                 String::new()
             };
             anyhow::anyhow!(
-                "node not found: \"{path}\" — multiple matches: {}{more}",
+                "node not found: \"{}\" — multiple matches: {}{more}",
+                drft::util::one_line(path),
                 shown.join(", ")
             )
         }
@@ -708,7 +717,10 @@ fn resolve_lock_node(
                 hints.push(
                     Hint::new(
                         "resolved-elsewhere",
-                        format!("names no node from here; resolves to `{candidate}`"),
+                        format!(
+                            "names no node from here; resolves to `{}`",
+                            drft::util::one_line(&candidate)
+                        ),
                     )
                     .at(path)
                     .with_next("name the path from the graph root to be sure of the target"),
@@ -744,7 +756,7 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
 fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config)?;
+    let set = graphs::build_set(&graph_root, &config, hints)?;
 
     // `--raw` dumps the per-graph fragment set — a JSON structure with no text
     // projection — so it is JSON-only and ignores `--format`. The composed views
@@ -807,7 +819,7 @@ fn run_nodes(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
 
     // Validate namespaces up front: a typo must error, not read as an empty
     // answer. Normalize to the `@<graph>` keys the projection matches on.
@@ -853,7 +865,7 @@ fn run_edges(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
 
     let requested_ns = resolve_namespaces(&config, namespaces)?;
     // Edges match on source, so a selector resolves to the source node set. No
@@ -1076,7 +1088,7 @@ fn run_impact(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(&graph_root, &config)?);
+    let composed = compose::compose(&graphs::build_set(&graph_root, &config, hints)?);
 
     let seeds: Vec<String> = paths
         .iter()
@@ -1108,8 +1120,8 @@ fn run_impact(
                     .map(|i| {
                         format!(
                             "{} (via {}, depth {}, radius {})\n",
-                            i.location(),
-                            i.via,
+                            drft::util::one_line(&i.location()),
+                            drft::util::one_line(&i.via),
                             i.depth,
                             i.impact_radius
                         )
@@ -1133,7 +1145,7 @@ fn run_check(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config)?;
+    let set = graphs::build_set(&graph_root, &config, hints)?;
     let composed = compose::compose(&set);
     let lock = lock::read(&graph_root, hints)?;
 

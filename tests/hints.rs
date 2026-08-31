@@ -115,7 +115,7 @@ fn unknown_rule_hints_with_the_config_key_as_locus() {
 #[test]
 fn zero_match_selector_hints_without_failing() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -257,7 +257,7 @@ fn unparseable_lock_hints_and_check_still_runs() {
 fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
     for format in [vec![], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
         for name in ["a.md", "b.md", "c.md"] {
             fs::write(dir.path().join(name), "# Note").unwrap();
         }
@@ -340,7 +340,7 @@ fn error_envelope_carries_hints() {
 #[test]
 fn small_projection_raises_no_hint() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -362,7 +362,7 @@ fn small_projection_raises_no_hint() {
 #[test]
 fn a_repeated_selector_hints_once() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -474,4 +474,309 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&text.stdout);
     assert!(stdout.contains("  cause: "), "got: {stdout}");
+}
+
+/// A frontmatter graph declaring no `edge_keys` emits no edges, and says nothing
+/// about it. That is the graph working as configured — it exists to seed node
+/// metadata — and a hint here would nag about a deliberate shape with no way to
+/// silence it.
+#[test]
+fn a_metadata_only_frontmatter_graph_is_silent_and_still_reads_metadata() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\ntitle: Doc\nsources:\n  - ./target.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "doc.md",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    assert_eq!(
+        v["hints"].as_array().map(Vec::len),
+        Some(0),
+        "a graph that is as intended has nothing to report: {stdout}"
+    );
+
+    // Metadata is untouched by the absence — that is the whole point of the
+    // shape, and `sources` is captured even though it yields no edge.
+    let node = &v["nodes"][0];
+    assert_eq!(node["id"], "doc.md");
+    assert_eq!(node["metadata"]["@frontmatter"]["title"], "Doc");
+    assert_eq!(
+        node["metadata"]["@frontmatter"]["sources"][0], "./target.md",
+        "edge scoping must not gate metadata"
+    );
+
+    let edges = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&edges.stdout).trim().is_empty(),
+        "a graph with no edge_keys must emit no edges"
+    );
+}
+
+/// The informative state is the opposite one: keys declared, and nothing found
+/// under them. A misspelled key is the case that used to exit 0 in total silence
+/// while the config claimed the graph tracked something.
+#[test]
+fn declared_edge_keys_that_match_nothing_raise_a_hint() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"source\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    // The frontmatter says `sources`; the config says `source`.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "the hint is advisory");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+
+    let hint = v["hints"]
+        .as_array()
+        .and_then(|h| h.first())
+        .unwrap_or_else(|| panic!("expected a hint: {stdout}"));
+    assert_eq!(hint["name"], "edge-keys-matched-nothing");
+    assert_eq!(hint["locus"], "graphs.fm");
+    assert!(
+        hint["message"].as_str().unwrap().contains("`source`"),
+        "the hint must name the key that matched nothing: {hint}"
+    );
+    // The remedy was unpinned, so a clause could be dropped from it silently —
+    // and one was. Reaching some file is not reaching the right one, an `ignore`
+    // pattern can drop the file that carried the derivations, and only a string
+    // names a target: all three belong here, not just the spelling.
+    // The message says nothing *yielded* an edge rather than that no value was
+    // found: a number, a boolean, an empty string or an empty list is a value
+    // that is present, prints in the `@frontmatter` block, and names no target.
+    // Unpinned, this reverted to the contradicting wording with the suite green.
+    let message = hint["message"].as_str().unwrap();
+    assert!(
+        message.contains("yielded an edge") && !message.contains("no value was found"),
+        "message must not claim the value is absent: {message}"
+    );
+    let next = hint["next"].as_str().unwrap();
+    for cause in ["spelling", "globs", "ignore", "strings"] {
+        assert!(next.contains(cause), "remedy must name {cause}: {next}");
+    }
+}
+
+/// A graph whose declared keys do match stays quiet.
+#[test]
+fn declared_edge_keys_that_match_raise_no_hint() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).expect("valid JSON");
+    assert_eq!(v["hints"].as_array().map(Vec::len), Some(0));
+}
+
+/// A graph reaching no file looks identical whether its globs are wrong or the
+/// files are simply unwritten, so the hint covers both and names both remedies
+/// rather than guessing. An exemption for the second was tried and removed: it
+/// hid a misspelled `files` glob, which is one of the states this hint exists to
+/// report.
+#[test]
+fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.mdx\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources:\n  - ./a.md\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).expect("valid JSON");
+    let hint = v["hints"]
+        .as_array()
+        .and_then(|h| h.first())
+        .unwrap_or_else(|| panic!("a wrong glob must not be silent: {v}"));
+    assert_eq!(hint["name"], "edge-keys-matched-nothing");
+    assert!(
+        hint["message"]
+            .as_str()
+            .unwrap()
+            .contains("no file was read"),
+        "the message must say nothing was read, not blame the keys: {hint}"
+    );
+    // The remedy names all three reasons a file can go unread, because this seam
+    // cannot tell a wrong glob from an ignored, unreadable, or non-UTF-8 file.
+    let next = hint["next"].as_str().unwrap();
+    for cause in ["globs", "ignore", "UTF-8"] {
+        assert!(next.contains(cause), "remedy must name {cause}: {next}");
+    }
+}
+
+/// One finding is one line. A target carrying a newline otherwise emits a second
+/// line with no severity prefix, which a log parser reads as a different kind of
+/// record. JSON carries the value exactly and stays the authoritative form.
+#[test]
+fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: |\n  first line\n  second line\n---\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("warn[") || line.starts_with("error[") || line.starts_with("  "),
+            "every line carries a severity or is an indented continuation: {line:?}"
+        );
+    }
+    assert!(
+        stdout.contains("first line\\nsecond line"),
+        "the newline is escaped rather than emitted: {stdout}"
+    );
+
+    // JSON keeps the real string.
+    let json = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "edges",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&json.stdout).trim()).expect("valid JSON");
+    assert_eq!(v["edges"][0]["target"], "first line\nsecond line");
+}
+
+/// `drft lock` names the nodes it wrote, and a node key carries whatever a path
+/// carries. One node, one line — a raw newline turns the report into a record
+/// nothing can read, including the caller checking what a lock covered.
+#[test]
+fn a_lock_report_keeps_one_node_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(dir.path().join("we\nird.md"), "# W\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "we\nird.md"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("locked  we\\nird.md"),
+        "the node name is escaped: {stdout}"
+    );
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("locked ") || line.starts_with("  "),
+            "every line is the summary or an indented node: {line:?}"
+        );
+    }
+}
+
+/// A not-found error names the path the caller gave and the node it might have
+/// meant. Both come from the filesystem, and escaping one and not the other
+/// splits the error across lines with no `error:` prefix on the second.
+#[test]
+fn a_not_found_error_keeps_both_halves_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("we\nird.md"), "# W\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "nodes", "we\nird.md"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "an unresolved path refuses");
+    for line in stderr.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("error:") || line.starts_with("  "),
+            "every line carries the prefix: {line:?}"
+        );
+    }
+    assert!(stderr.contains("we\\nird.md"), "got: {stderr}");
 }

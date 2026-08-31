@@ -7,7 +7,7 @@
 use globset::GlobSet;
 use serde_json::Value;
 
-use crate::builders::link_edges;
+use crate::builders::{LinkPolicy, link_edges};
 use crate::model::{Graph, Metadata, Node};
 use crate::parsers::Parser;
 use crate::parsers::markdown::MarkdownParser;
@@ -41,7 +41,7 @@ pub fn build(label: &str, texts: &[(String, String)], filter: Option<GlobSet>) -
         );
         graph.set_node(path.clone(), Node::new(metadata));
 
-        for edge in link_edges(path, &result.links) {
+        for edge in link_edges(path, &result.links, LinkPolicy::Body) {
             graph.add_edge(edge);
         }
     }
