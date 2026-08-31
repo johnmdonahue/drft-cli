@@ -425,10 +425,21 @@ fn extract_metadata(content: &str) -> Option<serde_json::Value> {
 /// without letting a span decide where the block ends.
 fn parsed_block(content: &str) -> Option<(usize, &str)> {
     let (block, end) = frontmatter_block(content)?;
-    // Raw first, so a code span survives as the prose it is; then the same block
-    // with spans blanked, since one can hide a `:` that breaks the mapping.
-    let parses = is_mapping(block) || is_mapping(&strip_code(block).text);
-    parses.then_some((end, block))
+    yields_metadata(block).then_some((end, block))
+}
+
+/// Whether a recognized block yields metadata, in any rendering this parser will
+/// read it in.
+///
+/// Raw first, so a code span survives as the prose it is; then the same block
+/// with spans blanked, since one can hide a `:` that breaks the mapping.
+///
+/// **One spelling, called by both the reader and the diagnostic.** Written out
+/// twice, the two drift, and the failure is not a missing finding but a
+/// contradictory one: a run reporting that a block's keys were all dropped while
+/// printing those same keys under `@frontmatter`.
+fn yields_metadata(block: &str) -> bool {
+    is_mapping(block) || is_mapping(&strip_code(block).text)
 }
 
 /// Whether `block` parses as a YAML **mapping** — the shape that yields metadata.
@@ -462,6 +473,7 @@ fn is_mapping(block: &str) -> bool {
 /// one it only recognizes. Nothing in production calls this: the markdown parser
 /// takes its block from the markdown library, and this remains as the offset half
 /// of the boundary, read by tests alone.
+#[cfg(test)]
 pub fn mapping_block_end(content: &str) -> Option<usize> {
     parsed_block(content).map(|(end, _)| end)
 }
@@ -485,7 +497,7 @@ pub const UNREADABLE_FRONTMATTER: &str = "unreadable-frontmatter";
 /// something to notice. Silence is the worse failure, so it is named instead.
 fn unreadable_block(content: &str) -> Option<Diagnostic> {
     let (block, _) = frontmatter_block(content)?;
-    if is_mapping(block) || is_mapping(&strip_code(block).text) {
+    if yields_metadata(block) {
         return None;
     }
     Some(Diagnostic {
@@ -505,7 +517,7 @@ fn unreadable_block(content: &str) -> Option<Diagnostic> {
 /// Extract the YAML frontmatter block — its raw text, and the byte offset in
 /// `content` just past the closing fence.
 ///
-/// Called on the **raw** content only, through [`parsed_block`]. Calling it on a
+/// Called on the **raw** content only, by [`parsed_block`] and [`unreadable_block`]. Calling it on a
 /// `strip_code` copy of the whole file finds a different boundary whenever a span
 /// crosses the closing fence, because blanking the span takes the fence with it —
 /// which is how the edge scan came to read a block nothing else agreed on. The
@@ -594,7 +606,13 @@ fn closes_block(line: &str) -> bool {
     matches!(after.get(spaces), None | Some(b'\n' | b'\r'))
 }
 
-/// Whether `line` is blank up to its end: spaces and tabs only.
+/// Whether `line` is blank up to its end.
+///
+/// Blank means the four characters the markdown library counts as non-newline
+/// whitespace. **This set is not the one the opening fence uses** — that check is
+/// `u8::is_ascii_whitespace`, which excludes vertical tab and includes `\r`,
+/// mirroring a different library predicate. Unifying them looks like tidying and
+/// changes what both accept.
 fn is_blank(line: &str) -> bool {
     let bytes = line.as_bytes();
     let indent = bytes
@@ -914,7 +932,10 @@ mod tests {
         // file would publish anchors slugged out of what this one had claimed.
         let content = "---\npurpose: `a: b\n---\nc: d` tail\nkey: v\n---\n\n# Body\n";
         assert!(parse(content).metadata.is_none());
-        assert!(mapping_block_end(content).is_none(), "and the mask agrees");
+        assert!(
+            mapping_block_end(content).is_none(),
+            "and this parser declines it, though the markdown parser claims it"
+        );
     }
 
     #[test]
@@ -1030,6 +1051,69 @@ mod tests {
             parse("---\ntitle: Doc\n---\n\nBody\n")
                 .diagnostics
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn an_opening_fence_owns_its_line_even_when_a_closer_follows() {
+        // `---key: v\n---` is rejected by the first-line guard as well, so it
+        // cannot tell whether the opening-line check is doing anything. A block
+        // with a second line separates them: without the opening-line check this
+        // claims a block, and the renderer claims none.
+        assert!(
+            parse("---key: v\nfoo: bar\n---\n\nBody\n")
+                .metadata
+                .is_none()
+        );
+        assert!(
+            parse("---key: v\nfoo: bar\n---\n\nBody\n")
+                .diagnostics
+                .is_empty(),
+            "text that is not a block is not an unreadable block"
+        );
+    }
+
+    #[test]
+    fn a_first_line_that_is_a_closing_fence_opens_nothing() {
+        // The other half of the first-line guard, and the blank-line test does
+        // not reach it. `---` above `---` is two thematic breaks to every
+        // renderer; claiming a block there reports unreadable frontmatter on a
+        // document that has none.
+        for content in [
+            "---\n---\n\n# Head\n",
+            "---\n...\nkey: v\n---\n\nBody\n",
+            "---\n---\nkey: v\n---\n\nBody\n",
+        ] {
+            let result = parse(content);
+            assert!(result.metadata.is_none(), "no block in {content:?}");
+            assert!(
+                result.diagnostics.is_empty(),
+                "and nothing to report in {content:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_opening_fence_whitespace_set_is_not_the_blank_line_set() {
+        // The renderer's opening-fence scan is `is_ascii_whitespace`, which
+        // excludes vertical tab; its blank-line scan includes it. Two predicates,
+        // deliberately different, and the temptation is to unify them.
+        //
+        // The observable is whether a block is *recognized*, not whether it
+        // yields metadata: a form feed opens the block's text and saphyr rejects
+        // that, so the fence accepting it shows up as a diagnostic rather than as
+        // keys. Asserting on metadata alone cannot tell the two fences apart.
+        let vertical_tab = parse("---\u{0b}\nkey: v\n---\n\nBody\n");
+        assert!(vertical_tab.metadata.is_none());
+        assert!(
+            vertical_tab.diagnostics.is_empty(),
+            "a vertical tab does not open a fence, so there is no block to report"
+        );
+
+        let form_feed = parse("---\u{0c}\nkey: v\n---\n\nBody\n");
+        assert!(
+            !form_feed.diagnostics.is_empty(),
+            "a form feed does open a fence, so the block is recognized"
         );
     }
 

@@ -441,9 +441,9 @@ mod tests {
 
     #[test]
     fn a_code_span_in_frontmatter_does_not_leak_an_anchor() {
-        // A backtick span can hide a `:` that breaks the mapping. The frontmatter
-        // parser falls back to a code-masked parse, and the mask has to agree or
-        // the fabricated-anchor bug comes back for exactly this file.
+        // A backtick span can hide a `:` that breaks the mapping. The block is
+        // claimed by its fences regardless, so whether the YAML parses no longer
+        // decides whether this text can mint an anchor.
         let content = "---\npurpose: use `a: b` here\n---\n\n# Real\n";
         assert_eq!(anchors(content), vec!["real"]);
     }

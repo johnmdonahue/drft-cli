@@ -54,6 +54,13 @@ the YAML inside it is not a mapping, the file contributes no metadata and no
 declared edges, and without a finding it looks identical to a file that declares
 nothing. `unreadable-frontmatter` names the file and its opening line.
 
+**It fires only where a frontmatter graph reads the file.** The frontmatter
+parser is what recognizes the block, so a repository with no `[graphs.frontmatter]`
+— or a file outside that graph's `files` globs — gets no finding, and the block's
+text is still withheld from the markdown graph. That is the same scoping every
+graph-derived rule has, and it is worth knowing because the markdown parser
+suppresses the block either way.
+
 It is a rule rather than a hint because a repository whose derivations are
 declared in frontmatter needs a dropped block to be able to fail a run. It
 defaults to `warn` like every other rule, and promotes to `error` the same way.

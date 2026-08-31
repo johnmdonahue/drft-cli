@@ -97,8 +97,10 @@ reports its later block as the document's first event.
 The block's extent is decided by fence syntax alone, so it does not depend on
 whether the YAML inside parses. The [frontmatter parser](frontmatter.md) mirrors
 these rules rather than approximating them, which is what keeps one answer to
-where a block ends; a block it then cannot read is reported as
-`unreadable-frontmatter` rather than dropped.
+where a block ends. A block it cannot read is reported as
+`unreadable-frontmatter` — but only where a frontmatter graph covers the file,
+since that parser is what raises it. This parser withholds the block's text
+regardless.
 
 The slug downcases the heading's rendered text, drops every character that is not
 a letter, digit, combining mark, underscore, hyphen, or space, then turns spaces

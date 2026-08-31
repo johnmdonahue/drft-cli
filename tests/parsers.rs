@@ -284,11 +284,11 @@ fn a_code_span_inside_a_link_value_blanks_to_its_own_width() {
     );
 }
 
-/// The same mask decides whether a block *is* frontmatter, for this parser's
-/// metadata and for the markdown parser's mask. Masking with newlines kept there
-/// drops such a block out of frontmatter entirely, and the markdown parser then
-/// reads it as body: a setext heading slugged from the frontmatter text, and any
-/// link inside it lifted into the graph.
+/// The code mask decides whether a claimed block yields metadata. Masking with
+/// newlines kept there drops such a block out of frontmatter entirely — the block
+/// is still claimed by its fences, so the markdown parser withholds its text
+/// either way, but the file loses its declared keys and raises
+/// `unreadable-frontmatter` instead of contributing them.
 #[test]
 fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     let dir = TempDir::new().unwrap();
