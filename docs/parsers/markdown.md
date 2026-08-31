@@ -85,6 +85,12 @@ a first line that is neither blank nor a closing fence, and a closing line of
 exactly `---` or `...`. A document that merely opens with a `---` thematic break
 above a blank line keeps its headings and its links.
 
+A fenced block is claimed **wherever it appears**, not only at the head of the
+file, and its content reaches neither graph: this parser emits nothing from
+inside it, and the [frontmatter parser](frontmatter.md) reads only a block at the
+very start. So a `---\nkey: value\n---` section partway down a document loses its
+headings and its links, and nothing reports it.
+
 The block's extent is decided by fence syntax alone, so it does not depend on
 whether the YAML inside parses. The [frontmatter parser](frontmatter.md) mirrors
 these rules rather than approximating them, which is what keeps one answer to

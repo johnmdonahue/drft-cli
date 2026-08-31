@@ -5,11 +5,13 @@ sources:
   - ../../src/rules/structural.rs
   - ../../src/rules/check.rs
   - ../../src/config.rs
+  - ../../src/parsers/frontmatter.rs
+  - ../../src/builders/frontmatter.rs
 ---
 
 # Rules
 
-A rule is a function over the composed graph: graph in, findings out. `drft check`
+Most rules are a function over the composed graph: graph in, findings out. `drft check`
 runs every rule, joins the lockfile for the staleness rules, and emits findings as
 warnings or errors.
 
