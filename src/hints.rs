@@ -67,12 +67,16 @@ impl Hint {
                 "hint[{}]: {} ({})",
                 self.name,
                 crate::util::one_line(locus),
-                self.message
+                crate::util::one_line(&self.message)
             ),
-            None => format!("hint[{}]: {}", self.name, self.message),
+            None => format!(
+                "hint[{}]: {}",
+                self.name,
+                crate::util::one_line(&self.message)
+            ),
         };
         match &self.next {
-            Some(next) => format!("{head}\n  next: {next}"),
+            Some(next) => format!("{head}\n  next: {}", crate::util::one_line(next)),
             None => head,
         }
     }
@@ -87,15 +91,19 @@ impl Hint {
                 "{blue}hint{reset}[{bold}{}{reset}]: {cyan}{}{reset} ({})",
                 self.name,
                 crate::util::one_line(locus),
-                self.message
+                crate::util::one_line(&self.message)
             ),
             None => format!(
                 "{blue}hint{reset}[{bold}{}{reset}]: {}",
-                self.name, self.message
+                self.name,
+                crate::util::one_line(&self.message)
             ),
         };
         match &self.next {
-            Some(next) => format!("{head}\n  {bold}next{reset}: {next}"),
+            Some(next) => format!(
+                "{head}\n  {bold}next{reset}: {}",
+                crate::util::one_line(next)
+            ),
             None => head,
         }
     }
@@ -249,5 +257,27 @@ mod tests {
         let colored = h.format_text_color();
         assert_eq!(colored.lines().count(), 1, "{colored:?}");
         assert!(colored.contains("we\\nird"), "{colored:?}");
+    }
+
+    /// A hint message interpolates config values — a graph name, a declared key —
+    /// so it can carry whatever `drft.toml` carries, and so can the remedy.
+    /// Escaping the locus alone left the same hint splitting across lines.
+    #[test]
+    fn a_message_and_a_next_carrying_newlines_stay_on_their_own_lines() {
+        let h = Hint::new("edge-keys-matched-nothing", "declares `so\nurces`")
+            .at("graphs.we\nird")
+            .with_next("check `so\nurces`");
+        let text = h.format_text();
+        assert_eq!(text.lines().count(), 2, "{text:?}");
+        for fragment in [
+            "graphs.we\\nird",
+            "declares `so\\nurces`",
+            "check `so\\nurces`",
+        ] {
+            assert!(text.contains(fragment), "missing {fragment}: {text:?}");
+        }
+        assert_eq!(h.format_text_color().lines().count(), 2);
+        // Raw on the hint, which is serialised.
+        assert!(h.message.contains('\n') && h.next.as_deref().unwrap().contains('\n'));
     }
 }

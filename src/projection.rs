@@ -89,7 +89,10 @@ pub fn filtered_out(
 /// edge's `source → target`.
 pub fn push_metadata_lines(lines: &mut Vec<String>, metadata: &Map<String, Value>) {
     for (ns, value) in metadata {
-        lines.push(format!("  {ns}"));
+        // The namespace comes from a graph name in `drft.toml`, so it is authored
+        // content like the keys below it. Escaping the key and not its header
+        // still prints one node as two blocks.
+        lines.push(format!("  {}", crate::util::one_line(ns)));
         match value.as_object() {
             Some(obj) => push_fields(lines, obj, 4),
             None => lines.push(format!("    {}", render_value(value))),
@@ -466,6 +469,26 @@ mod tests {
         assert_eq!(
             join_sections(&[("nodes", ""), ("edges", &edges)]),
             "# nodes\n\n# edges\n\na.md → b.md\n"
+        );
+    }
+
+    /// A namespace header and a metadata key are both authored content, and both
+    /// sit in the same block. Escaping one and not the other makes a single node
+    /// print as two blocks — forging a record rather than splitting one.
+    #[test]
+    fn a_namespace_and_a_key_carrying_newlines_keep_one_node_in_one_block() {
+        let mut lines = Vec::new();
+        push_metadata_lines(
+            &mut lines,
+            &obj(json!({ "@we\nird": { "so\nurces": "./t.md" } })),
+        );
+        assert_eq!(
+            lines,
+            vec![
+                "  @we\\nird".to_string(),
+                "    so\\nurces: ./t.md".to_string()
+            ],
+            "got: {lines:?}"
         );
     }
 }

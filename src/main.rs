@@ -633,9 +633,10 @@ fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> an
     matches.sort();
     matches.dedup();
     match matches.as_slice() {
-        [] => anyhow::anyhow!("node not found: \"{path}\""),
+        [] => anyhow::anyhow!("node not found: \"{}\"", drft::util::one_line(path)),
         [hit] => anyhow::anyhow!(
-            "node not found: \"{path}\" — did you mean \"{}\"?",
+            "node not found: \"{}\" — did you mean \"{}\"?",
+            drft::util::one_line(path),
             drft::util::one_line(hit)
         ),
         many => {
@@ -650,7 +651,8 @@ fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> an
                 String::new()
             };
             anyhow::anyhow!(
-                "node not found: \"{path}\" — multiple matches: {}{more}",
+                "node not found: \"{}\" — multiple matches: {}{more}",
+                drft::util::one_line(path),
                 shown.join(", ")
             )
         }

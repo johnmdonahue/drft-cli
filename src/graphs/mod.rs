@@ -127,18 +127,27 @@ pub fn build_set(root: &Path, config: &Config, hints: &mut Hints) -> Result<Grap
                     let keys = render_keys(&graph.edge_keys);
                     let (message, next) = if matched_any {
                         (
+                            // "Nothing yielded an edge" rather than "no value was
+                            // found": a number, a boolean, an empty string or an
+                            // empty list under a declared key is a value that is
+                            // present and still names no target, and saying it was
+                            // not found contradicts the `@frontmatter` block the
+                            // same run prints.
                             format!(
-                                "declares {keys} but no value was found under {}, so this graph has no edges",
+                                "declares {keys} but nothing under {} yielded an edge",
                                 if graph.edge_keys.len() == 1 {
                                     "it"
                                 } else {
                                     "any of them"
                                 }
                             ),
-                            // The globs stay in the remedy. Reaching *some* file
-                            // does not mean reaching the right one — a corpus can
-                            // keep its derivations in files this graph never sees.
-                            "check the spelling against the frontmatter the files carry, and the graph's `files` globs",
+                            // Every reason a declared key can come up empty, for
+                            // the same reason the other branch names all of its
+                            // own: reaching some file is not reaching the right
+                            // one, an `ignore` pattern can drop exactly the file
+                            // that carried the derivations, and only a string
+                            // names a target.
+                            "check the spelling against the frontmatter the files carry, the graph's `files` globs and any `ignore` patterns, and that the values are strings",
                         )
                     } else {
                         (

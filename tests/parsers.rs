@@ -1221,3 +1221,150 @@ fn an_impact_record_escapes_the_via_as_well_as_the_location() {
         "the via is escaped, not emitted raw: {stdout}"
     );
 }
+
+/// The two builders pass different link policies, and nothing pinned *which*.
+/// The unit tests exercise `link_edges` with a policy handed to them, so swapping
+/// the policy each builder passes left the whole suite green — twice, across two
+/// review rounds. These two run through the binary, so the wiring is what is
+/// under test rather than the function.
+///
+/// A body link naming only a fragment is an intra-file anchor. It names a
+/// position in the file it sits in, so there is nothing to draw an edge to.
+#[test]
+fn the_markdown_builder_draws_no_edge_for_an_anchor_only_link() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "# Doc\n\n## Section\n\n[see](#section)\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.trim().is_empty(),
+        "an anchor-only body link is not an edge: {stdout}"
+    );
+}
+
+/// A frontmatter value cites another document — a provenance claim has no "this
+/// file" form — so a value beginning with `#` names no document at all. It cannot
+/// resolve, and it must not vanish either.
+#[test]
+fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: \"#overview\"\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("doc.md → #overview"),
+        "a declared fragment-only value is an edge that resolves to nothing: {stdout}"
+    );
+
+    let check = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&check.stdout).contains("unresolved-edge"),
+        "and it is reported rather than dropped"
+    );
+}
+
+/// One record is one line, across every command that renders text.
+///
+/// This exists because the per-call-site version of this rule failed four times
+/// in a row, always the same way: a `format!` interpolating two values, one
+/// escaped and one not. Grepping the function just edited would have caught each,
+/// and did not. Escaping is a property of the rendering layer, and asserting it
+/// once over real output is the only check that does not have to be remembered at
+/// every new call site.
+///
+/// The fixture puts a newline into every channel a value can arrive through: a
+/// filename, a declared frontmatter value, a metadata key, and a graph name. Each
+/// injected newline has a distinctive **tail** — the text after it — and the
+/// assertion is that no tail ever begins a line. Classifying lines as heads or
+/// continuations was tried first and is vacuous: an orphan line looks exactly
+/// like a head.
+#[test]
+fn no_command_splits_a_record_across_lines() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.\"we\\nird\"]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("we\nird.md"), "# W\n\n[t](./target.md)\n").unwrap();
+    fs::write(dir.path().join("target.md"), "# T\n").unwrap();
+    // A newline in a YAML *key* makes the block invalid, so that channel is
+    // unreachable and injecting it only produced a fixture with no frontmatter at
+    // all — which is how the first version of this test passed while asserting
+    // nothing.
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\nsources: |\n  first line\n  second line\n---\n\n# Doc\n",
+    )
+    .unwrap();
+
+    // The text following each injected newline. If any render site emits the
+    // value raw, one of these begins a line of its own.
+    let tails = ["ird.md", "second line", "ird ", "ird("];
+    let root = dir.path().to_str().unwrap();
+
+    for args in [
+        vec!["check"],
+        vec!["nodes"],
+        vec!["edges"],
+        vec![
+            "impact",
+            "doc.md",
+            "--direction",
+            "outbound",
+            "--depth",
+            "2",
+        ],
+        // Lock the newline-named file, not `doc.md`: the lock report renders the
+        // node it wrote, so locking a well-behaved path exercises nothing.
+        vec!["lock", "we\nird.md"],
+        vec!["nodes", "missing.md"],
+    ] {
+        let mut full = vec!["-C", root];
+        full.extend(args.iter().copied());
+        let output = drft_bin().args(&full).output().unwrap();
+
+        for (stream, bytes) in [("stdout", &output.stdout), ("stderr", &output.stderr)] {
+            let text = String::from_utf8_lossy(bytes);
+            for line in text.lines() {
+                let trimmed = line.trim_start();
+                for tail in tails {
+                    assert!(
+                        !trimmed.starts_with(tail),
+                        "{args:?} {stream}: a value was rendered raw, so {tail:?} \
+                         begins its own line — full output:\n{text}"
+                    );
+                }
+            }
+        }
+    }
+}

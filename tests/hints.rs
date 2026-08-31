@@ -579,6 +579,14 @@ fn declared_edge_keys_that_match_nothing_raise_a_hint() {
         hint["message"].as_str().unwrap().contains("`source`"),
         "the hint must name the key that matched nothing: {hint}"
     );
+    // The remedy was unpinned, so a clause could be dropped from it silently —
+    // and one was. Reaching some file is not reaching the right one, an `ignore`
+    // pattern can drop the file that carried the derivations, and only a string
+    // names a target: all three belong here, not just the spelling.
+    let next = hint["next"].as_str().unwrap();
+    for cause in ["spelling", "globs", "ignore", "strings"] {
+        assert!(next.contains(cause), "remedy must name {cause}: {next}");
+    }
 }
 
 /// A graph whose declared keys do match stays quiet.
@@ -711,4 +719,55 @@ fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
     let v: serde_json::Value =
         serde_json::from_str(String::from_utf8_lossy(&json.stdout).trim()).expect("valid JSON");
     assert_eq!(v["edges"][0]["target"], "first line\nsecond line");
+}
+
+/// `drft lock` names the nodes it wrote, and a node key carries whatever a path
+/// carries. One node, one line — a raw newline turns the report into a record
+/// nothing can read, including the caller checking what a lock covered.
+#[test]
+fn a_lock_report_keeps_one_node_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(dir.path().join("we\nird.md"), "# W\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "we\nird.md"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("locked  we\\nird.md"),
+        "the node name is escaped: {stdout}"
+    );
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("locked ") || line.starts_with("  "),
+            "every line is the summary or an indented node: {line:?}"
+        );
+    }
+}
+
+/// A not-found error names the path the caller gave and the node it might have
+/// meant. Both come from the filesystem, and escaping one and not the other
+/// splits the error across lines with no `error:` prefix on the second.
+#[test]
+fn a_not_found_error_keeps_both_halves_on_one_line() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("we\nird.md"), "# W\n").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "nodes", "we\nird.md"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "an unresolved path refuses");
+    for line in stderr.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.starts_with("error:") || line.starts_with("  "),
+            "every line carries the prefix: {line:?}"
+        );
+    }
+    assert!(stderr.contains("we\\nird.md"), "got: {stderr}");
 }

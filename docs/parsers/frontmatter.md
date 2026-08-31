@@ -1,5 +1,5 @@
 ---
-purpose: the frontmatter parser — edges from link values plus node metadata
+purpose: the frontmatter parser — edges from declared keys plus node metadata
 sources:
   - ../../src/parsers/frontmatter.rs
 ---
@@ -8,7 +8,7 @@ sources:
 
 ## The concept
 
-The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: detecting file path references as edges, and attaching the parsed frontmatter as node metadata.
+The frontmatter parser extracts YAML frontmatter from files. It serves two purposes: emitting the values under declared keys as edges, and attaching the parsed frontmatter as node metadata.
 
 ## Link types
 

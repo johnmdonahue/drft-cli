@@ -1,5 +1,5 @@
-//! The `frontmatter` builder: emits link edges from frontmatter link-target
-//! values, plus the parsed frontmatter block as metadata on the file it read.
+//! The `frontmatter` builder: emits link edges from the values under declared
+//! keys, plus the parsed frontmatter block as metadata on the file it read.
 //! It is colocated — its metadata is about its own file — so its drift rides the
 //! file's `fs` hash; it contributes no hash of its own.
 
