@@ -71,7 +71,7 @@ warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.r
 
 The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
 
-Frontmatter that is not well-formed YAML contributes no edges or metadata. drft detects link drift, not YAML validity, so it stays silent on malformed frontmatter rather than reporting it.
+Frontmatter that is not well-formed YAML contributes no edges or metadata, and raises `unreadable-frontmatter` naming the file. drft is not a YAML linter and does not say which construct failed — only that a block it recognized could not be read, which is what separates a file that declares nothing from one whose declarations were dropped.
 
 ### Naming the keys that yield edges
 

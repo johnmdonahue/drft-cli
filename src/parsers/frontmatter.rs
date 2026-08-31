@@ -431,8 +431,16 @@ fn parsed_block(content: &str) -> Option<(usize, &str)> {
 /// Whether a recognized block yields metadata, in any rendering this parser will
 /// read it in.
 ///
-/// Raw first, so a code span survives as the prose it is; then the same block
-/// with spans blanked, since one can hide a `:` that breaks the mapping.
+/// Either rendering counts: the block as written, or the block with code spans
+/// blanked, since a span can hide a `:` that breaks the mapping. This is a
+/// question of whether *any* reading yields a mapping, so it is unordered —
+/// which rendering's values are used is [`extract_metadata`]'s decision, and
+/// that one is ordered.
+///
+/// **No test distinguishes the two disjuncts**, because no input is known where
+/// the raw block parses and the masked copy does not. Blanking a span can only
+/// remove characters, so such an input may not exist; that is unproven either
+/// way, and it is why the raw arm is kept rather than argued away.
 ///
 /// **One spelling, called by both the reader and the diagnostic.** Written out
 /// twice, the two drift, and the failure is not a missing finding but a
