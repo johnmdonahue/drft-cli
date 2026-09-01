@@ -3,8 +3,9 @@
 
 use anyhow::Result;
 use globset::GlobSet;
-use ignore::WalkBuilder;
-use std::path::Path;
+use ignore::{Walk, WalkBuilder};
+use serde::Serialize;
+use std::path::{Path, PathBuf};
 
 use crate::config::compile_globs;
 
@@ -37,6 +38,22 @@ pub struct SourceFile {
     pub bytes: Option<Vec<u8>>,
 }
 
+/// Ignore sources used by the filesystem walk. Paths are relative to the graph
+/// root, so the report is stable across checkouts and does not expose home paths.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct IgnoreSources {
+    pub gitignore: IgnoreSource,
+    pub dot_ignore: IgnoreSource,
+    pub git_exclude: IgnoreSource,
+    pub git_global: IgnoreSource,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct IgnoreSource {
+    pub enabled: bool,
+    pub files: Vec<String>,
+}
+
 /// Walk the tree under `root`, honoring `.gitignore` and the `ignore` globs,
 /// yielding one [`SourceFile`] per file, symlink, and directory. Paths are
 /// relative to `root`, sorted.
@@ -45,9 +62,9 @@ pub struct SourceFile {
 /// the graph. The lone exception is VCS metadata ([`VCS_DIRS`]), pruned from
 /// traversal — `.git/` would otherwise flood the graph with internal state.
 ///
-/// Only committed `.gitignore` rules prune the walk. The user's global
-/// gitignore, the per-clone `.git/info/exclude`, and ignore files above `root`
-/// are all ignored, so the graph depends only on what is committed at the root.
+/// Repository `.gitignore` rules from the graph root through the Git root prune
+/// the walk. Nested `.gitignore` files also apply to their subtrees. The user's
+/// global excludes and the per-clone `.git/info/exclude` do not apply.
 ///
 /// The walk does not follow symlinks: a symlink is a leaf node at its own path,
 /// never traversed through. Its relationship to its target is carried by the
@@ -62,28 +79,11 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
 
     let mut files = Vec::new();
 
-    // Reproducibility over convenience: the graph must depend only on what is
-    // committed at the root, never on machine-local or above-root state. So,
-    // unlike ripgrep's defaults, drft honors committed `.gitignore` but not the
-    // user's global gitignore, the per-clone `.git/info/exclude`, or ignore
-    // files in directories above the declared root.
-    let walker = WalkBuilder::new(root)
-        .follow_links(false)
-        .hidden(false)
-        .parents(false)
-        .git_global(false)
-        .git_exclude(false)
-        .filter_entry(|entry| {
-            // With the hidden filter off, dot-directories are walked. Prune VCS
-            // metadata explicitly so it never enters the graph. `.git` can be a
-            // file (submodules, linked worktrees) as well as a directory, so
-            // match by name regardless of kind.
-            entry
-                .file_name()
-                .to_str()
-                .is_none_or(|name| !VCS_DIRS.contains(&name))
-        })
-        .build();
+    // Repository `.gitignore` files are shared project state, including files
+    // between the graph root and Git root. Machine-local global excludes and
+    // `.git/info/exclude` remain disabled so they cannot silently change a
+    // shared lockfile between checkouts.
+    let walker = filesystem_walker(root);
 
     for entry in walker {
         let entry = entry?;
@@ -136,6 +136,109 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
     Ok(files)
 }
 
+fn filesystem_walker(root: &Path) -> Walk {
+    WalkBuilder::new(root)
+        .follow_links(false)
+        .hidden(false)
+        .ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .filter_entry(|entry| {
+            // With the hidden filter off, dot-directories are walked. Prune VCS
+            // metadata explicitly so it never enters the graph. `.git` can be a
+            // file (submodules, linked worktrees) as well as a directory, so
+            // match by name regardless of kind.
+            entry
+                .file_name()
+                .to_str()
+                .is_none_or(|name| !VCS_DIRS.contains(&name))
+        })
+        .build()
+}
+
+/// Report the ignore sources configured for the filesystem walk and the
+/// repository `.gitignore` files it can consult.
+pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
+    let repository_root = repository_root(root);
+    let mut files = Vec::new();
+
+    if let Some(repository_root) = &repository_root {
+        files = parent_gitignore_files(root, repository_root);
+        for entry in filesystem_walker(root) {
+            let entry = entry?;
+            if entry.file_type().is_some_and(|kind| kind.is_dir()) {
+                let candidate = entry.path().join(".gitignore");
+                if candidate.is_file() {
+                    files.push(display_relative(root, &candidate));
+                }
+            }
+        }
+    }
+    files.sort();
+    files.dedup();
+
+    Ok(IgnoreSources {
+        gitignore: IgnoreSource {
+            enabled: repository_root.is_some(),
+            files: files.clone(),
+        },
+        dot_ignore: IgnoreSource {
+            enabled: false,
+            files: Vec::new(),
+        },
+        git_exclude: IgnoreSource {
+            enabled: false,
+            files: Vec::new(),
+        },
+        git_global: IgnoreSource {
+            enabled: false,
+            files: Vec::new(),
+        },
+    })
+}
+
+fn repository_root(root: &Path) -> Option<PathBuf> {
+    root.ancestors()
+        .find(|dir| dir.join(".git").exists() || dir.join(".jj").exists())
+        .map(Path::to_path_buf)
+}
+
+fn parent_gitignore_files(root: &Path, repository_root: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    for dir in root.ancestors() {
+        let candidate = dir.join(".gitignore");
+        if candidate.is_file() {
+            files.push(display_relative(root, &candidate));
+        }
+        if dir == repository_root {
+            break;
+        }
+    }
+    files
+}
+
+fn display_relative(root: &Path, path: &Path) -> String {
+    if let Ok(relative) = path.strip_prefix(root) {
+        return relative.to_string_lossy().replace('\\', "/");
+    }
+
+    let root_parts: Vec<_> = root.components().collect();
+    let path_parts: Vec<_> = path.components().collect();
+    let shared = root_parts
+        .iter()
+        .zip(&path_parts)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let mut relative = PathBuf::new();
+    for _ in shared..root_parts.len() {
+        relative.push("..");
+    }
+    for part in &path_parts[shared..] {
+        relative.push(part.as_os_str());
+    }
+    relative.to_string_lossy().replace('\\', "/")
+}
+
 /// `lstat` the entry at `root/relative` without following symlinks.
 fn abs_lstat(root: &Path, relative: &str) -> Option<std::fs::Metadata> {
     root.join(relative).symlink_metadata().ok()
@@ -156,7 +259,17 @@ fn is_ignored(ignore_set: &Option<GlobSet>, relative: &str, kind: NodeKind) -> b
 mod tests {
     use super::*;
     use std::fs;
+    use std::process::Command;
     use tempfile::TempDir;
+
+    fn init_git(path: &Path) {
+        let status = Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
 
     #[test]
     fn walks_all_files_sorted() {
@@ -243,22 +356,117 @@ mod tests {
     }
 
     #[test]
-    fn ignore_files_above_root_do_not_prune_the_walk() {
-        // A git repo whose root sits *above* the graph root, with a gitignore
-        // that would exclude `keep.md`. Because `parents` is off, the rule above
-        // the declared root has no effect — the graph is self-contained.
+    fn repository_gitignore_above_root_prunes_the_walk() {
         let outer = TempDir::new().unwrap();
-        fs::create_dir(outer.path().join(".git")).unwrap();
-        fs::write(outer.path().join(".gitignore"), "keep.md\n").unwrap();
+        init_git(outer.path());
+        fs::write(outer.path().join(".gitignore"), "/project/ignored.md\n").unwrap();
         let root = outer.path().join("project");
         fs::create_dir(&root).unwrap();
+        fs::write(root.join("ignored.md"), "x").unwrap();
         fs::write(root.join("keep.md"), "k").unwrap();
 
         let files = walk(&root, &[]).unwrap();
         assert!(
             files.iter().any(|f| f.path == "keep.md"),
-            "an ignore rule above the root must not prune the walk"
+            "the unmatched file must remain in the graph"
         );
+        assert!(
+            !files.iter().any(|f| f.path == "ignored.md"),
+            "a repository-root anchored rule must apply below the graph root"
+        );
+    }
+
+    #[test]
+    fn per_clone_git_exclude_does_not_prune_the_walk() {
+        let repo = TempDir::new().unwrap();
+        init_git(repo.path());
+        fs::write(repo.path().join(".git/info/exclude"), "local.md\n").unwrap();
+        fs::write(repo.path().join("local.md"), "local").unwrap();
+
+        let files = walk(repo.path(), &[]).unwrap();
+        assert!(
+            files.iter().any(|file| file.path == "local.md"),
+            "machine-local excludes must not change the graph"
+        );
+    }
+
+    #[test]
+    fn dot_ignore_above_repository_does_not_prune_the_walk() {
+        let outer = TempDir::new().unwrap();
+        fs::write(outer.path().join(".ignore"), "hidden.md\n").unwrap();
+        let repo = outer.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        init_git(&repo);
+        let root = repo.join("project");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("hidden.md"), "visible").unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(
+            files.iter().any(|file| file.path == "hidden.md"),
+            "a .ignore file outside the repository must not change the graph"
+        );
+    }
+
+    #[test]
+    fn ignore_report_names_repository_files_and_disabled_sources() {
+        let outer = TempDir::new().unwrap();
+        init_git(outer.path());
+        fs::write(outer.path().join(".gitignore"), "outside.md\n").unwrap();
+        let root = outer.path().join("project");
+        fs::create_dir_all(root.join("docs")).unwrap();
+        fs::write(root.join(".gitignore"), "target/\n").unwrap();
+        fs::write(root.join("docs/.gitignore"), "draft.md\n").unwrap();
+
+        let report = ignore_sources(&root).unwrap();
+        assert_eq!(
+            report.gitignore.files,
+            vec!["../.gitignore", ".gitignore", "docs/.gitignore"]
+        );
+        assert!(report.gitignore.enabled);
+        assert!(!report.dot_ignore.enabled);
+        assert!(!report.git_exclude.enabled);
+        assert!(!report.git_global.enabled);
+    }
+
+    #[test]
+    fn ignore_report_names_a_consulted_gitignore_hidden_as_a_file() {
+        let repo = TempDir::new().unwrap();
+        init_git(repo.path());
+        fs::write(repo.path().join(".gitignore"), "/docs/.gitignore\n").unwrap();
+        fs::create_dir(repo.path().join("docs")).unwrap();
+        fs::write(repo.path().join("docs/.gitignore"), "secret.md\n").unwrap();
+        fs::write(repo.path().join("docs/secret.md"), "secret").unwrap();
+
+        let files = walk(repo.path(), &[]).unwrap();
+        assert!(!files.iter().any(|file| file.path == "docs/secret.md"));
+        let report = ignore_sources(repo.path()).unwrap();
+        assert_eq!(
+            report.gitignore.files,
+            vec![".gitignore", "docs/.gitignore"]
+        );
+    }
+
+    #[test]
+    fn ignore_report_disables_gitignore_outside_a_repository() {
+        let outer = TempDir::new().unwrap();
+        fs::write(outer.path().join(".gitignore"), "parent-hidden.md\n").unwrap();
+        let root = outer.path().join("project");
+        fs::create_dir_all(root.join("docs")).unwrap();
+        fs::write(root.join("docs/.gitignore"), "nested-hidden.md\n").unwrap();
+        fs::write(root.join("parent-hidden.md"), "visible").unwrap();
+        fs::write(root.join("docs/nested-hidden.md"), "visible").unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(files.iter().any(|file| file.path == "parent-hidden.md"));
+        assert!(
+            files
+                .iter()
+                .any(|file| file.path == "docs/nested-hidden.md")
+        );
+        let report = ignore_sources(&root).unwrap();
+        assert!(!report.gitignore.enabled);
+        assert!(report.gitignore.files.is_empty());
     }
 
     #[test]

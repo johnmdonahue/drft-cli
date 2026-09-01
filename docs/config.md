@@ -43,13 +43,21 @@ The `fs` graph walks every file under the graph root, including dot-directories
 like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are
 pruned. `ignore` removes paths from that walk by glob; drft also respects
 `.gitignore` automatically. There is no `include` — the graph is everything
-under the root minus what `ignore` and `.gitignore` remove. drft excludes its
-own `drft.lock` from the graph.
+under the root minus what `ignore` and repository `.gitignore` files remove.
+drft reads `.gitignore` files from the graph root through the Git root, plus
+nested files under the graph root. It excludes its own `drft.lock` from the
+graph.
 
-Only committed `.gitignore` rules count. For reproducibility, the graph never
-depends on machine-local or above-root state: your global gitignore, the
-per-clone `.git/info/exclude`, and ignore files in directories above the root
-are all disregarded.
+drft reads the working-tree contents of each repository `.gitignore`, matching
+Git. An uncommitted edit to one therefore affects discovery.
+Outside a Git or Jujutsu repository, drft does not consult `.gitignore` files.
+
+Other ignore sources do not change the graph: drft disregards `.ignore`, the
+per-clone `.git/info/exclude`, and global excludes. Run
+`drft config --show-ignores` to list the repository `.gitignore` files drft
+consults and confirm which source classes are enabled. Add `--format json` for
+structured output. The command only reads configuration and ignore policy; it
+does not build the graph or update `drft.lock`.
 
 This top-level `ignore` is a **discovery** filter: matching paths never become
 nodes, so nothing links to them and nothing is validated against them. To keep

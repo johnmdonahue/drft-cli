@@ -10,6 +10,7 @@ use drft::lock;
 use drft::nodes;
 use drft::projection;
 use drft::rules;
+use drft::sources;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -197,6 +198,10 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
 
     let result = match &cli.command {
         Commands::Init => run_init(&root),
+        Commands::Config { show_ignores } => {
+            debug_assert!(*show_ignores);
+            run_config_show_ignores(&root, cli.format)
+        }
         Commands::Lock { paths, all } => run_lock(&root, cli.format, paths, *all, hints),
         Commands::Impact {
             paths,
@@ -253,6 +258,38 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
     }
 
     result
+}
+
+fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
+    let graph_root = find_graph_root(root);
+    Config::load(&graph_root)?;
+    let report = sources::fs::ignore_sources(&graph_root)?;
+
+    match format {
+        OutputFormat::Text => {
+            if report.gitignore.enabled {
+                println!("repository .gitignore: enabled");
+                if report.gitignore.files.is_empty() {
+                    println!("  files: none found");
+                } else {
+                    println!("  files:");
+                    for path in &report.gitignore.files {
+                        println!("    {path}");
+                    }
+                }
+            } else {
+                println!("repository .gitignore: disabled (no repository)");
+            }
+            println!(".ignore: disabled");
+            println!(".git/info/exclude: disabled");
+            println!("global excludes: disabled");
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+    }
+
+    Ok(0)
 }
 
 fn run_init(root: &Path) -> Result<i32> {

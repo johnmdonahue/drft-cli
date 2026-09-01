@@ -29,6 +29,13 @@ pub enum Commands {
     /// Create a drft.toml config file
     Init,
 
+    /// Inspect configuration-derived behavior
+    Config {
+        /// Show the ignore sources used for filesystem discovery
+        #[arg(long, required = true)]
+        show_ignores: bool,
+    },
+
     /// Snapshot the current state to drft.lock
     Lock {
         /// Lock these paths and their outbound edges (at least one required, or --all)
