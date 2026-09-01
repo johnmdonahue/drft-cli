@@ -43,6 +43,7 @@ pub struct SourceFile {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct IgnoreSources {
     pub gitignore: IgnoreSource,
+    pub dot_ignore: IgnoreSource,
     pub git_exclude: IgnoreSource,
     pub git_global: IgnoreSource,
 }
@@ -139,6 +140,7 @@ fn filesystem_walker(root: &Path) -> Walk {
     WalkBuilder::new(root)
         .follow_links(false)
         .hidden(false)
+        .ignore(false)
         .git_global(false)
         .git_exclude(false)
         .filter_entry(|entry| {
@@ -163,8 +165,11 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
 
     for entry in walker {
         let entry = entry?;
-        if entry.file_name() == ".gitignore" {
-            files.push(display_relative(root, entry.path()));
+        if entry.file_type().is_some_and(|kind| kind.is_dir()) {
+            let candidate = entry.path().join(".gitignore");
+            if candidate.is_file() {
+                files.push(display_relative(root, &candidate));
+            }
         }
     }
     files.sort();
@@ -174,6 +179,10 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
         gitignore: IgnoreSource {
             enabled: true,
             files: files.clone(),
+        },
+        dot_ignore: IgnoreSource {
+            enabled: false,
+            files: Vec::new(),
         },
         git_exclude: IgnoreSource {
             enabled: false,
@@ -374,6 +383,24 @@ mod tests {
     }
 
     #[test]
+    fn dot_ignore_above_repository_does_not_prune_the_walk() {
+        let outer = TempDir::new().unwrap();
+        fs::write(outer.path().join(".ignore"), "hidden.md\n").unwrap();
+        let repo = outer.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        init_git(&repo);
+        let root = repo.join("project");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("hidden.md"), "visible").unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(
+            files.iter().any(|file| file.path == "hidden.md"),
+            "a .ignore file outside the repository must not change the graph"
+        );
+    }
+
+    #[test]
     fn ignore_report_names_repository_files_and_disabled_sources() {
         let outer = TempDir::new().unwrap();
         init_git(outer.path());
@@ -389,8 +416,27 @@ mod tests {
             vec!["../.gitignore", ".gitignore", "docs/.gitignore"]
         );
         assert!(report.gitignore.enabled);
+        assert!(!report.dot_ignore.enabled);
         assert!(!report.git_exclude.enabled);
         assert!(!report.git_global.enabled);
+    }
+
+    #[test]
+    fn ignore_report_names_a_consulted_gitignore_hidden_as_a_file() {
+        let repo = TempDir::new().unwrap();
+        init_git(repo.path());
+        fs::write(repo.path().join(".gitignore"), "/docs/.gitignore\n").unwrap();
+        fs::create_dir(repo.path().join("docs")).unwrap();
+        fs::write(repo.path().join("docs/.gitignore"), "secret.md\n").unwrap();
+        fs::write(repo.path().join("docs/secret.md"), "secret").unwrap();
+
+        let files = walk(repo.path(), &[]).unwrap();
+        assert!(!files.iter().any(|file| file.path == "docs/secret.md"));
+        let report = ignore_sources(repo.path()).unwrap();
+        assert_eq!(
+            report.gitignore.files,
+            vec![".gitignore", "docs/.gitignore"]
+        );
     }
 
     #[test]

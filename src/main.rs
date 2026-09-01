@@ -276,6 +276,7 @@ fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
                     println!("    {path}");
                 }
             }
+            println!(".ignore: disabled");
             println!(".git/info/exclude: disabled");
             println!("global excludes: disabled");
         }

@@ -81,5 +81,21 @@ fn show_ignores_reports_sources_without_touching_the_lock() {
     );
     assert_eq!(json["git_exclude"]["enabled"], false);
     assert_eq!(json["git_global"]["enabled"], false);
+    assert_eq!(json["dot_ignore"]["enabled"], false);
     assert_eq!(fs::read_to_string(lock).unwrap(), "sentinel\n");
+}
+
+#[test]
+fn show_ignores_text_names_enabled_and_disabled_sources() {
+    let (_repo, root) = nested_fixture();
+    let output = drft_bin()
+        .args(["-C", root.to_str().unwrap(), "config", "--show-ignores"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "repository .gitignore: enabled\n  files:\n    ../.gitignore\n    docs/.gitignore\n.ignore: disabled\n.git/info/exclude: disabled\nglobal excludes: disabled\n"
+    );
+    assert!(output.stderr.is_empty());
 }

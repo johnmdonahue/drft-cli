@@ -51,8 +51,8 @@ graph.
 drft reads the working-tree contents of each repository `.gitignore`, matching
 Git. An uncommitted edit to one therefore affects discovery.
 
-Machine-local ignore sources do not change the graph: drft disregards the
-per-clone `.git/info/exclude` and global excludes. Run
+Other ignore sources do not change the graph: drft disregards `.ignore`, the
+per-clone `.git/info/exclude`, and global excludes. Run
 `drft config --show-ignores` to list the repository `.gitignore` files drft
 consults and confirm which source classes are enabled. Add `--format json` for
 structured output. The command only reads configuration and ignore policy; it
