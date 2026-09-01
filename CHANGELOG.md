@@ -97,6 +97,8 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 
 ### Fixed
 
+- **Repository `.gitignore` files above the graph root apply to discovery** (#111). A `drft.toml` in a repository subdirectory used to ignore only rules declared at or below that subdirectory, so a repository-root pattern could hide a file from Git while drft still indexed it. drft reads repository `.gitignore` files through the Git root while keeping `.git/info/exclude` and global excludes disabled. `drft config --show-ignores` reports the files and source classes used without building the graph or changing `drft.lock`.
+
 - **`drft lock <directory>` fails instead of reporting a successful no-op** (#149). A directory is a graph node, but it carries no hash or outbound edges and therefore has no lock entry. Naming one used to print `locked 0 nodes`, emit a hint, and exit 0 without changing the baseline — indistinguishable to an automated caller from successfully locking the requested scope. Directory paths remain exact paths and do not expand into subtrees; name the reviewed files individually, or use `--all` when the whole graph was reviewed. A path that was formerly a lockable file and became a directory still succeeds by dropping its old entry.
 
 - **A literal NUL no longer truncates frontmatter in silence** (#148). The YAML scanner treats NUL as end of input and returned the valid mapping prefix before it, so keys below the byte disappeared without a parse error. A recognized block containing NUL is now rejected wholesale as `unreadable-frontmatter`: it contributes neither prefix metadata nor prefix edges. NUL in body text remains body content.
