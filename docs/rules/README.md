@@ -46,7 +46,7 @@ derives the drift findings by joining the graph to the lockfile;
 | `detached-node`          | A node has no inbound or outbound edges (directories excepted)  |
 | `unlocked-node`          | A lockable node has no lock entry, so it has no baseline        |
 | `no-baseline`            | The lockfile is absent or has no entries, so nothing is checked |
-| `unreadable-frontmatter` | A frontmatter block was recognized and is not a YAML mapping    |
+| `unreadable-frontmatter` | A recognized block cannot be read completely as a YAML mapping  |
 | `unreadable-text`        | A matched text file is not valid UTF-8                          |
 
 **A text graph that cannot decode a matched file reports the file.** The raw
@@ -65,9 +65,14 @@ intentional binary content. Like every rule, `unreadable-text` defaults to
 
 **A block nobody can read is reported, not dropped.** A leading fenced block is
 frontmatter by its fences alone, so its text is never rendered as content. When
-the YAML inside it is not a mapping, the file contributes no metadata and no
+the YAML inside it cannot be read completely as a mapping, the file contributes no metadata and no
 declared edges, and without a finding it looks identical to a file that declares
 nothing. `unreadable-frontmatter` names the file and its opening line.
+
+A literal NUL inside the recognized block is included: the YAML scanner treats
+it as end of input, so accepting the parsed prefix would silently discard every
+key below it. NUL in the document body is outside the block and does not fire
+this rule.
 
 The commonest cause is a value that begins with a code span — the backtick is a reserved indicator in YAML, so the block never parses. Quoting the value or writing it as a block scalar fixes it, and both keep the backticks. See [the frontmatter parser](../parsers/frontmatter.md).
 

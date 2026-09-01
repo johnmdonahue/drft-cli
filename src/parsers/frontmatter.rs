@@ -113,8 +113,8 @@ impl Parser for FrontmatterParser {
                     // What the reader has to know is that the block was recognized
                     // and is being skipped wholesale — not which YAML construct
                     // failed, which drft is not a linter for.
-                    message: "frontmatter block is not a YAML mapping, so its keys, values \
-                              and edges are all dropped"
+                    message: "frontmatter block could not be read completely as a YAML \
+                              mapping, so its keys, values and edges are all dropped"
                         .to_string(),
                     // The opening fence, which is the line a reader edits. Line 1
                     // whenever there is a block at all, since the fence has to
@@ -179,6 +179,13 @@ impl FrontmatterParser {
 /// deleted real content. Now the two questions are separate and only this one
 /// rests on the YAML.
 fn mapping(block: &str) -> Option<MarkedYaml<'_>> {
+    // saphyr's scanner uses NUL as its end-of-input sentinel. A literal NUL in
+    // the source therefore returns a valid prefix document instead of an error.
+    // Reject it in the already-recognized block so the prefix cannot become
+    // metadata or edges; body NULs remain body content.
+    if block.contains('\0') {
+        return None;
+    }
     let root = MarkedYaml::load_from_str(block).ok()?.into_iter().next()?;
     matches!(root.data, YamlData::Mapping(_)).then_some(root)
 }
@@ -586,6 +593,50 @@ mod tests {
                 .diagnostics
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_literal_nul_makes_the_whole_recognized_block_unreadable() {
+        for block in [
+            "\0\nsources: ./target.md",
+            "note: \0\nsources: ./target.md",
+            "note: before\0after\nsources: ./target.md",
+            "note: ok # before\0after\nsources: ./target.md",
+            "note: |\n  before\0after\nsources: ./target.md",
+            "sour\0ces: ./target.md",
+            "sources: ./target.md\n\0",
+            "{sources: ./target.md}\0",
+        ] {
+            let result = parse_with(&format!("---\n{block}\n---\nbody\n"), &["sources"]);
+            assert!(
+                result.metadata.is_none(),
+                "prefix metadata survived {block:?}"
+            );
+            assert!(result.links.is_empty(), "prefix edges survived {block:?}");
+            assert_eq!(result.diagnostics.len(), 1, "diagnostic for {block:?}");
+            assert_eq!(result.diagnostics[0].rule, UNREADABLE_FRONTMATTER);
+            assert_eq!(result.diagnostics[0].line, Some(1));
+        }
+    }
+
+    #[test]
+    fn escaped_or_outside_nuls_do_not_make_frontmatter_unreadable() {
+        for content in [
+            "---\nnote: \\\\0\n---\nbody\n",
+            "---\nnote: clean\n---\nbody\0\n",
+            "---\n{note: clean} # trailing comment\n---\nbody\n",
+            "---\nnote: café\n---\nbody\n",
+        ] {
+            let result = parse_with(content, &[]);
+            assert!(
+                result.metadata.is_some(),
+                "valid block rejected: {content:?}"
+            );
+            assert!(
+                result.diagnostics.is_empty(),
+                "valid block reported: {content:?}"
+            );
+        }
     }
 
     #[test]

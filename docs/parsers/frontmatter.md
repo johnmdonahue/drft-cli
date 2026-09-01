@@ -38,7 +38,7 @@ A frontmatter value cites another document, so — unlike a body link — a valu
 
 Text output is line-oriented, so one record is always one line: a value carrying a newline or a control character is escaped wherever text renders it. The escaping belongs to the rendering — every value reaches JSON, and the lockfile, exactly as written, which is the authoritative form.
 
-Edges and [metadata](#metadata) read one parse of the block as written. A block whose YAML is invalid yields neither, and raises `unreadable-frontmatter` naming the file.
+Edges and [metadata](#metadata) read one parse of the block as written. A block that cannot be read completely as a YAML mapping yields neither, and raises `unreadable-frontmatter` naming the file. This includes a literal NUL: the YAML scanner treats it as end of input, so drft rejects the whole block instead of publishing the prefix before it. A NUL in body text is outside the block and has no effect.
 
 The commonest invalid block is a value that _begins_ with a backtick, since the character is a reserved indicator in YAML. Quote the value or write it as a block scalar:
 
@@ -81,7 +81,7 @@ warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.r
 
 The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
 
-Frontmatter that is not well-formed YAML contributes no edges or metadata, and raises `unreadable-frontmatter` naming the file. drft is not a YAML linter and does not say which construct failed — only that a block it recognized could not be read, which is what separates a file that declares nothing from one whose declarations were dropped.
+Frontmatter that cannot be read completely as a YAML mapping contributes no edges or metadata, and raises `unreadable-frontmatter` naming the file. drft is not a YAML linter and does not say which construct failed — only that a block it recognized could not be read, which is what separates a file that declares nothing from one whose declarations were dropped.
 
 ### Naming the keys that yield edges
 
@@ -110,7 +110,7 @@ Where a block ends is decided by fence syntax, and only then is its text read. A
 
 Nothing about a block's content moves its boundary. A file opening with a `---` thematic break above a blank line keeps its first heading and its links, and a backtick opened in frontmatter and closed in the body changes neither where the block ends nor what it says.
 
-Metadata is contributed only when that block parses as a YAML **mapping**. A block that does not — a comment-only block, one parsing to a bare scalar, one whose YAML is malformed — contributes nothing, and raises `unreadable-frontmatter` naming the file. The rule is what makes the outcome recoverable: the block is claimed by its fences either way, so nothing renders its text as content, and silence about a block a reader can see is the failure worth preventing.
+Metadata is contributed only when the complete block parses as a YAML **mapping**. A block that does not — a comment-only block, one parsing to a bare scalar, malformed YAML, or one truncated by a literal NUL — contributes nothing, and raises `unreadable-frontmatter` naming the file. The rule is what makes the outcome recoverable: the block is claimed by its fences either way, so nothing renders its text as content, and silence about a block a reader can see is the failure worth preventing.
 
 ## Configuration
 
