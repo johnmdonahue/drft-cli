@@ -267,14 +267,18 @@ fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
 
     match format {
         OutputFormat::Text => {
-            println!("repository .gitignore: enabled");
-            if report.gitignore.files.is_empty() {
-                println!("  files: none found");
-            } else {
-                println!("  files:");
-                for path in &report.gitignore.files {
-                    println!("    {path}");
+            if report.gitignore.enabled {
+                println!("repository .gitignore: enabled");
+                if report.gitignore.files.is_empty() {
+                    println!("  files: none found");
+                } else {
+                    println!("  files:");
+                    for path in &report.gitignore.files {
+                        println!("    {path}");
+                    }
                 }
+            } else {
+                println!("repository .gitignore: disabled (no repository)");
             }
             println!(".ignore: disabled");
             println!(".git/info/exclude: disabled");

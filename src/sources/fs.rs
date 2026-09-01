@@ -159,16 +159,18 @@ fn filesystem_walker(root: &Path) -> Walk {
 /// Report the ignore sources configured for the filesystem walk and the
 /// repository `.gitignore` files it can consult.
 pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
-    let mut files = parent_gitignore_files(root);
+    let repository_root = repository_root(root);
+    let mut files = Vec::new();
 
-    let walker = filesystem_walker(root);
-
-    for entry in walker {
-        let entry = entry?;
-        if entry.file_type().is_some_and(|kind| kind.is_dir()) {
-            let candidate = entry.path().join(".gitignore");
-            if candidate.is_file() {
-                files.push(display_relative(root, &candidate));
+    if let Some(repository_root) = &repository_root {
+        files = parent_gitignore_files(root, repository_root);
+        for entry in filesystem_walker(root) {
+            let entry = entry?;
+            if entry.file_type().is_some_and(|kind| kind.is_dir()) {
+                let candidate = entry.path().join(".gitignore");
+                if candidate.is_file() {
+                    files.push(display_relative(root, &candidate));
+                }
             }
         }
     }
@@ -177,7 +179,7 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
 
     Ok(IgnoreSources {
         gitignore: IgnoreSource {
-            enabled: true,
+            enabled: repository_root.is_some(),
             files: files.clone(),
         },
         dot_ignore: IgnoreSource {
@@ -195,14 +197,20 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
     })
 }
 
-fn parent_gitignore_files(root: &Path) -> Vec<String> {
+fn repository_root(root: &Path) -> Option<PathBuf> {
+    root.ancestors()
+        .find(|dir| dir.join(".git").exists() || dir.join(".jj").exists())
+        .map(Path::to_path_buf)
+}
+
+fn parent_gitignore_files(root: &Path, repository_root: &Path) -> Vec<String> {
     let mut files = Vec::new();
     for dir in root.ancestors() {
         let candidate = dir.join(".gitignore");
         if candidate.is_file() {
             files.push(display_relative(root, &candidate));
         }
-        if dir.join(".git").exists() {
+        if dir == repository_root {
             break;
         }
     }
@@ -437,6 +445,28 @@ mod tests {
             report.gitignore.files,
             vec![".gitignore", "docs/.gitignore"]
         );
+    }
+
+    #[test]
+    fn ignore_report_disables_gitignore_outside_a_repository() {
+        let outer = TempDir::new().unwrap();
+        fs::write(outer.path().join(".gitignore"), "parent-hidden.md\n").unwrap();
+        let root = outer.path().join("project");
+        fs::create_dir_all(root.join("docs")).unwrap();
+        fs::write(root.join("docs/.gitignore"), "nested-hidden.md\n").unwrap();
+        fs::write(root.join("parent-hidden.md"), "visible").unwrap();
+        fs::write(root.join("docs/nested-hidden.md"), "visible").unwrap();
+
+        let files = walk(&root, &[]).unwrap();
+        assert!(files.iter().any(|file| file.path == "parent-hidden.md"));
+        assert!(
+            files
+                .iter()
+                .any(|file| file.path == "docs/nested-hidden.md")
+        );
+        let report = ignore_sources(&root).unwrap();
+        assert!(!report.gitignore.enabled);
+        assert!(report.gitignore.files.is_empty());
     }
 
     #[test]

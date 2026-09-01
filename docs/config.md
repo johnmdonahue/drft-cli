@@ -50,6 +50,7 @@ graph.
 
 drft reads the working-tree contents of each repository `.gitignore`, matching
 Git. An uncommitted edit to one therefore affects discovery.
+Outside a Git or Jujutsu repository, drft does not consult `.gitignore` files.
 
 Other ignore sources do not change the graph: drft disregards `.ignore`, the
 per-clone `.git/info/exclude`, and global excludes. Run
