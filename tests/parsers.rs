@@ -788,6 +788,61 @@ fn frontmatter_metadata(dir: &Path, source: &str) -> Value {
     json["nodes"][0]["metadata"]["@frontmatter"].clone()
 }
 
+/// The exact remaining #112 reproduction parses as written after the masked
+/// fallback was removed: the folded scalar keeps its code span and the declared
+/// source still becomes an edge at its source line.
+#[test]
+fn a_folded_scalar_opening_with_a_code_span_keeps_its_edge_and_metadata() {
+    let block = "---\nderives_from:\n  - ./target.md\nnote: >-\n  `alpha` one two three four five six seven eight nine ten eleven twelve\n  second line of the folded block\n---\nbody\n";
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"derives_from\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("doc.md"), block).unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+
+    assert_eq!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
+        vec![3]
+    );
+    let metadata = frontmatter_metadata(dir.path(), "doc.md");
+    assert_eq!(metadata["derives_from"], serde_json::json!(["./target.md"]));
+    assert_eq!(
+        metadata["note"],
+        "`alpha` one two three four five six seven eight nine ten eleven twelve second line of the folded block"
+    );
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter]: doc.md"));
+}
+
+/// The exact #126 formatter output is outside saphyr's accepted flow syntax,
+/// but it cannot drop the declared list silently. The file-level diagnostic is
+/// the contract because the failed parse cannot identify a trustworthy key.
+#[test]
+fn a_wrapped_flow_list_with_a_column_zero_closer_is_reported() {
+    for body in [
+        "---\nsources: [\n  \"./target.md\",\n]\n---\nbody\n",
+        "---\nsources: [\n  \"./target.md\"\n]\n---\nbody\n",
+    ] {
+        let dir = scoped_fixture(body);
+        assert!(frontmatter_edge_targets(dir.path(), "doc.md").is_empty());
+        let output = drft_bin()
+            .args(["-C", dir.path().to_str().unwrap(), "check"])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("warn[unreadable-frontmatter]: doc.md:1"),
+            "the dropped declaration must name its file: {stdout}"
+        );
+    }
+}
+
 /// An unclosed fence inside a block scalar latches the mask's fenced pass, which
 /// blanks every line below it — `sources:` included. The raw block is well-formed
 /// YAML throughout, so metadata reported the derivation while the edge scan found
@@ -1008,6 +1063,14 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
         (
             "value opening with a tilde fence",
             "sources:\n  - \"~~~target.md\"",
+        ),
+        (
+            "wrapped flow sequence with a column-zero closer",
+            "sources: [\n  \"./target.md\",\n]",
+        ),
+        (
+            "wrapped flow sequence without a trailing comma",
+            "sources: [\n  \"./target.md\"\n]",
         ),
         (
             "fence-marker value beside one that resolves",

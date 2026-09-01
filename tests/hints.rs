@@ -674,7 +674,8 @@ fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
         "the message must say nothing was read, not blame the keys: {hint}"
     );
     // The remedy names all three reasons a file can go unread, because this seam
-    // cannot tell a wrong glob from an ignored, unreadable, or non-UTF-8 file.
+    // cannot tell a wrong glob from an ignored or unreadable file. Invalid UTF-8
+    // also raises `unreadable-text`, but the graph-level expectation still holds.
     let next = hint["next"].as_str().unwrap();
     for cause in ["globs", "ignore", "UTF-8"] {
         assert!(next.contains(cause), "remedy must name {cause}: {next}");

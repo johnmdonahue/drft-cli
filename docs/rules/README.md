@@ -47,6 +47,21 @@ derives the drift findings by joining the graph to the lockfile;
 | `unlocked-node`          | A lockable node has no lock entry, so it has no baseline        |
 | `no-baseline`            | The lockfile is absent or has no entries, so nothing is checked |
 | `unreadable-frontmatter` | A frontmatter block was recognized and is not a YAML mapping    |
+| `unreadable-text`        | A matched text file is not valid UTF-8                          |
+
+**A text graph that cannot decode a matched file reports the file.** The raw
+bytes remain in the `@fs` graph and keep their byte-for-byte hash, but markdown
+and frontmatter graphs require valid UTF-8. `unreadable-text` names a file that
+matches one or more text graphs and says those graphs could not read its edges or
+metadata. One finding carries every affected graph namespace when their globs
+overlap. Files outside every text graph stay quiet, so binary assets are not
+treated as broken text.
+
+The rule does not guess a source encoding: arbitrary invalid bytes cannot
+reliably distinguish Latin-1, Windows-1252, and other single-byte encodings.
+Re-save the file as UTF-8, or narrow the text graph's `files` globs if the file is
+intentional binary content. Like every rule, `unreadable-text` defaults to
+`warn`, can be promoted to `error`, and supports rule-level ignore globs.
 
 **A block nobody can read is reported, not dropped.** A leading fenced block is
 frontmatter by its fences alone, so its text is never rendered as content. When

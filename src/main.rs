@@ -1160,12 +1160,12 @@ fn run_check(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let mut parser_findings = Vec::new();
-    let set = graphs::build_set(&graph_root, &config, hints, &mut parser_findings)?;
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(&graph_root, &config, hints, &mut build_findings)?;
     let composed = compose::compose(&set);
     let lock = lock::read(&graph_root, hints)?;
 
-    let findings = rules::check::run(&composed, lock.as_ref(), &config, parser_findings);
+    let findings = rules::check::run(&composed, lock.as_ref(), &config, build_findings);
 
     let colorize = use_color(color, format);
     match format {
