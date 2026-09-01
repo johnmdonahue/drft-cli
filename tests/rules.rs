@@ -371,4 +371,27 @@ fn unreadable_text_severity_is_configurable() {
         .output()
         .unwrap();
     assert!(!String::from_utf8_lossy(&output.stdout).contains("unreadable-text"));
+
+    let rule_ignored =
+        format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nignore = [\"bad.md\"]\n");
+    fs::write(dir.path().join("drft.toml"), rule_ignored).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("unreadable-text"),
+        "the rule-level ignore must suppress the matching subject"
+    );
+
+    let globally_ignored = format!("{DEFAULT_CONFIG}\n[rules]\nignore = [\"bad.md\"]\n");
+    fs::write(dir.path().join("drft.toml"), globally_ignored).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("unreadable-text"),
+        "the global rule ignore must suppress the matching subject"
+    );
 }

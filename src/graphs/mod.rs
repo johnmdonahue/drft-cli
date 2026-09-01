@@ -90,16 +90,23 @@ pub fn build_set(
     // text uses. And a U+FEFF that is genuinely content rather than a mark is
     // indistinguishable at offset 0, so a file opening with one loses it from the
     // text while keeping it in the hash.
+    let mut invalid_text_paths = BTreeSet::new();
     let texts: Vec<(String, String)> = files
         .iter()
         .filter_map(|f| {
-            f.bytes
-                .as_ref()
-                .and_then(|b| std::str::from_utf8(b).ok())
-                .map(|text| {
+            let bytes = f.bytes.as_ref()?;
+            match std::str::from_utf8(bytes) {
+                Ok(text) => {
                     let text = text.trim_start_matches('\u{feff}');
-                    (f.path.clone(), text.to_string())
-                })
+                    Some((f.path.clone(), text.to_string()))
+                }
+                Err(_) => {
+                    if f.kind == NodeKind::File {
+                        invalid_text_paths.insert(f.path.clone());
+                    }
+                    None
+                }
+            }
         })
         .collect();
 
@@ -107,19 +114,13 @@ pub fn build_set(
 
     for (name, graph) in &config.graphs {
         let graph_files = compile_globs(&graph.files)?;
-        for file in &files {
+        for path in &invalid_text_paths {
             let matches_graph = graph_files
                 .as_ref()
-                .is_none_or(|patterns| patterns.is_match(&file.path));
-            if file.kind == NodeKind::File
-                && matches_graph
-                && file
-                    .bytes
-                    .as_ref()
-                    .is_some_and(|bytes| std::str::from_utf8(bytes).is_err())
-            {
+                .is_none_or(|patterns| patterns.is_match(path));
+            if matches_graph {
                 unreadable_text
-                    .entry(file.path.clone())
+                    .entry(path.clone())
                     .or_default()
                     .insert(format!("@{name}"));
             }
