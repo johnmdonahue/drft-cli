@@ -253,12 +253,11 @@ fn scoped_lock_batches_a_live_update_with_a_drop() {
     }
 }
 
-/// Locking a directory writes nothing, and says so. A directory node carries no
-/// hash and no edges, so it is never a lock entry and there is nothing to
-/// snapshot — but exiting 0 in silence made that indistinguishable from a lock
-/// that covered the subtree.
+/// Locking a directory fails. A directory is a graph node, but it carries no hash
+/// or outbound edges and therefore has no lock entry. Exit 0 would assert that the
+/// requested lock succeeded even though the command changed nothing.
 #[test]
-fn scoped_lock_of_a_directory_reports_zero_and_hints() {
+fn scoped_lock_of_a_directory_errors_and_writes_nothing() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
@@ -271,12 +270,15 @@ fn scoped_lock_of_a_directory_reports_zero_and_hints() {
         .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(2));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stdout.contains("locked 0 nodes"), "stdout={stdout:?}");
-    assert!(stderr.contains("directory-lock"), "stderr={stderr:?}");
+    assert!(stdout.is_empty(), "stdout={stdout:?}");
+    assert!(
+        stderr.contains("cannot lock directory node \"sub\""),
+        "stderr={stderr:?}"
+    );
     assert_eq!(
         fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
         before,
@@ -284,10 +286,10 @@ fn scoped_lock_of_a_directory_reports_zero_and_hints() {
     );
 }
 
-/// Every spelling of a directory reports zero. Each resolves to the same node and
-/// each used to exit 0 in silence.
+/// Every exact-path spelling of a directory fails rather than being reinterpreted
+/// as a recursive selector.
 #[test]
-fn every_directory_spelling_reports_zero() {
+fn every_directory_spelling_errors() {
     for spelling in ["sub", "sub/", "./sub"] {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
@@ -300,11 +302,11 @@ fn every_directory_spelling_reports_zero() {
             .args(["-C", dir.path().to_str().unwrap(), "lock", spelling])
             .output()
             .unwrap();
-        assert!(output.status.success(), "{spelling:?} should exit 0");
-        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(2), "{spelling:?} should exit 2");
+        let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stdout.contains("locked 0 nodes"),
-            "{spelling:?} was silent: stdout={stdout:?}"
+            stderr.contains("cannot lock directory node"),
+            "{spelling:?} did not explain the refusal: stderr={stderr:?}"
         );
     }
 }
@@ -327,10 +329,40 @@ fn a_directory_lock_does_not_manufacture_an_empty_baseline() {
         .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     assert!(
         !dir.path().join("drft.lock").exists(),
         "a lock that wrote nothing must not create a lockfile"
+    );
+}
+
+/// Every path is validated before any lock entry changes. A valid file must not
+/// hide a directory operand that cannot be locked.
+#[test]
+fn a_directory_in_a_batch_prevents_every_write() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("a.md"), "# A").unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    fs::write(dir.path().join("sub").join("b.md"), "# B").unwrap();
+    lock_all(dir.path());
+    fs::write(dir.path().join("a.md"), "# A changed").unwrap();
+    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md", "sub/"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        before,
+        "a failed batch must leave the baseline byte-identical"
+    );
+    assert!(
+        check(dir.path()).contains("stale-node]: a.md"),
+        "the valid path in a failed batch must remain stale"
     );
 }
 
@@ -383,8 +415,8 @@ fn lock_reports_what_it_wrote() {
     assert_eq!(v["dropped"].as_array().unwrap().len(), 0);
 }
 
-/// A bare name resolves to the path the caller spelled before any `.md` variant
-/// invented from it.
+/// A bare name resolves to the directory the caller spelled before any `.md`
+/// variant invented from it, then fails because that exact node is not lockable.
 ///
 /// With both `docs/` and `docs.md` present, `drft lock docs` used to snapshot
 /// `docs.md` — clearing its `stale-node` finding and writing a durable "this was
@@ -414,7 +446,12 @@ fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
         .args(["-C", dir.path().to_str().unwrap(), "lock", "docs"])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cannot lock directory node \"docs\""),
+        "stderr={:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let after = check(dir.path());
     assert!(

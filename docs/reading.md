@@ -45,8 +45,9 @@ selector projects every edge leaving that subtree.
 Selector expansion is a reader affordance only. Writers like `drft lock` stay
 exact-path-only, so a subtree or glob never fans out into a write. A directory
 named to `drft lock` therefore resolves to the directory node itself, which
-carries no content to snapshot — the command reports `locked 0 nodes` and hints,
-rather than locking the subtree and rather than exiting silently.
+carries no content to snapshot — the command fails rather than claiming a lock
+that changed nothing. Name the files you reviewed. Any recursive locking syntax
+must use an explicit selector rather than reinterpret a directory path as its subtree.
 
 The empty selector divides on the same line. A reader with no selector returns
 everything, because the cost is a large read. `drft lock` with no paths errors
@@ -202,17 +203,17 @@ instead. `drft nodes docs/typo.md` fails rather than hinting, and `drft lock`
 with no arguments refuses rather than locking everything, because a collapsed
 `$(...)` that reads as success is the failure those guards exist for.
 
-| Hint                        | Says                                                                                      |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| `zero-match-selector`       | A selector resolved to nothing — an empty answer, not a clean one                         |
-| `large-projection`          | The rendered output is big enough to crowd a reader's context                             |
-| `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing                         |
-| `unparseable-lock`          | `drft.lock` could not be read, so every node reads as unlocked                            |
-| `directory-lock`            | A locked path is a directory, which carries no content to lock                            |
-| `resolved-elsewhere`        | A locked path names no node from here, so a fallback resolved it                          |
-| `nothing-to-lock`           | A locked path carries no content to snapshot                                              |
-| `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                |
-| `edge-keys-matched-nothing` | A graph declares `edge_keys` and gets no edges — nothing yielded one, or no file was read |
+| Hint                        | Says                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `zero-match-selector`       | A selector resolved to nothing — an empty answer, not a clean one                                      |
+| `large-projection`          | The rendered output is big enough to crowd a reader's context                                          |
+| `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing                                      |
+| `unparseable-lock`          | `drft.lock` could not be read, so every node reads as unlocked                                         |
+| `directory-lock`            | A formerly lockable path is now a directory; its old entry was dropped, but no descendants were locked |
+| `resolved-elsewhere`        | A locked path names no node from here, so a fallback resolved it                                       |
+| `nothing-to-lock`           | A locked path carries no content to snapshot                                                           |
+| `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                             |
+| `edge-keys-matched-nothing` | A graph declares `edge_keys` and gets no edges — nothing yielded one, or no file was read              |
 
 ## Grounding an agent
 

@@ -435,6 +435,26 @@ fn run_lock(
         .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p, hints))
         .collect::<Result<Vec<_>>>()?;
 
+    // A directory is a graph node, but not a lockable one: it has no content hash
+    // and no outbound edges. Refuse a no-op directory lock before changing any
+    // other path in the batch. A directory key that survives in the old lockfile
+    // is different — it used to be a lockable node, so naming it reviews and drops
+    // that stale entry below.
+    for (path, node) in paths.iter().zip(&nodes) {
+        let is_directory = composed
+            .nodes
+            .get(node)
+            .and_then(drft::model::Node::fs_type)
+            == Some("directory");
+        if is_directory && !snapshot.nodes.contains_key(node) && !existing.nodes.contains_key(node)
+        {
+            anyhow::bail!(
+                "cannot lock directory node \"{}\" — directories carry no content to snapshot. Name the files you reviewed, or pass `--all` to lock every node.",
+                drft::util::one_line(path)
+            );
+        }
+    }
+
     // Make the lockfile reflect each named path's current state: re-snapshot a node
     // that carries content, and drop the entry for anything that no longer does —
     // a deleted file, or a path that has become a hash-less directory. Dropping the
