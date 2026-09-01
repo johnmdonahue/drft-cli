@@ -67,9 +67,10 @@ fn mask_frontmatter(content: &str) -> Option<String> {
 /// when the file does not open with one.
 ///
 /// The library is asked rather than told: a block's extent is decided by fence
-/// syntax it already implements, and the frontmatter parser mirrors those same
-/// rules so both read one span.
-fn leading_metadata_block(content: &str) -> Option<usize> {
+/// syntax it already implements. The [frontmatter parser](super::frontmatter)
+/// calls this rather than deciding again, so the two read one span by
+/// construction instead of by agreement.
+pub(super) fn leading_metadata_block(content: &str) -> Option<usize> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
     match CmarkParser::new_ext(content, options)
@@ -496,9 +497,23 @@ mod tests {
         // heading that every renderer shows.
         assert_eq!(anchors("\n---\nkey: v\n---\n\nBody\n"), vec!["key-v"]);
         assert_eq!(anchors("   \n---\nkey: v\n---\n\nBody\n"), vec!["key-v"]);
-        // And the frontmatter parser declines it too, so nothing reads it as
-        // metadata either — the two agree that this is prose.
-        assert!(crate::parsers::frontmatter::mapping_block_end("\n---\nkey: v\n---\n").is_none());
+        // The frontmatter parser declines it for the same reason, asserted against
+        // its own output in `a_block_below_a_blank_first_line_is_not_frontmatter`.
+        // Both read one boundary now, so the check that matters is that neither
+        // takes a block the library reports at a non-zero offset.
+    }
+
+    #[test]
+    fn a_document_end_marker_ends_the_masked_region() {
+        // `...` closes a block wherever `---` does, so the text below it is
+        // document rather than metadata — and a parser running to the later fence
+        // would mask a setext heading every renderer publishes. Metadata cannot
+        // show this: saphyr stops at `...` on its own, so the block above yields
+        // the same keys either way. What moves is the anchor.
+        assert_eq!(
+            anchors("---\ntitle: Doc\n...\npurpose: below\n---\n\nBody\n"),
+            vec!["purpose-below"]
+        );
     }
 
     #[test]

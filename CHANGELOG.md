@@ -10,6 +10,8 @@ Also removes the last place drft guessed. A frontmatter value used to become an 
 
 And it settles where a frontmatter block ends. Two parsers used to answer that question separately, so a file could be metadata to one and prose to the other — publishing an address it does not answer to, which then accepted every link written to it. One set of fence rules now decides, and a block nobody can read is reported instead of dropped.
 
+Which leaves the last thing drft reconstructed. A block whose YAML is invalid used to be recovered by blanking its code spans and reading what survived, and what survived was not what the file said: a value written `` `widget-loader` is the entry point `` came out as `is the entry point`. Such a block is now reported, with the keys it declared, and the author decides how to fix it.
+
 ### Breaking changes
 
 - **`keys` is renamed `edge_keys`, and frontmatter edges no longer depend on what a value looks like** (#137, #134, #138, #112). The parser used to collect every string in the block and filter it through a shape heuristic — an explicit `./` prefix, a URI, or a plausible file extension, with anything containing a space rejected as prose. A value that failed produced no edge, no finding, and no record that the file had declared anything, so the commonest way to lose a derivation was to write one the heuristic did not recognize. Now the declared key is the whole of the signal: **every string value reachable through an `edge_keys` key is an edge**, and one naming nothing that resolves raises `unresolved-edge` exactly as a typo'd path does. The remedy is the reader's — fix the value, fix the config, or move the field to a key you did not declare. No alias for the old name, per no-backwards-compat.
@@ -31,13 +33,27 @@ And it settles where a frontmatter block ends. Two parsers used to answer that q
 
   **Expect findings on the first `check` after upgrading, concentrated rather than spread.** A corpus that writes every entry under `sources:` in markdown link syntax by convention gets one finding per such value, all at once, even where the inner target resolves. That is the diagnosis working, not a regression — but it arrives in a batch. Values that are genuinely prose (`TBD`, `needs review`, a date, a version) surface the same way. Against a tracked lockfile each new edge is also a `new-edge`, so the count roughly doubles; review them before relocking, since a locked prose value becomes a durable baseline entry.
 
+- **A block only a code mask could parse is reported, not recovered** (#140, #112). The parser used to blank code spans and read the blanked copy whenever the block as written was not a YAML mapping. That recovered a block YAML rejects — a value opening with a backtick is the commonest, since the character is a reserved indicator there — by publishing values the file does not contain. ``purpose: `widget-loader` is the entry point`` was reported as `is the entry point`, with the span the author wrote silently removed, and a span inside a link value composed an edge target out of spaces. Such a block now yields no metadata and no edges, and raises `unreadable-frontmatter` naming the file and its opening line.
+
+  The remedy is the author's, and it is one edit — quote the value, or write it as a block scalar. Both are captured verbatim, backticks included:
+
+  ```yaml
+  purpose: "`widget-loader` is the entry point"
+  note: |
+    `widget-loader` is the entry point
+  ```
+
+  This is also what closes the last silent drop (#140). A fenced code block inside a block scalar, closed by a longer fence than it opened with, never closed — the mask blanked every line below it, `sources:` included, and the residue was well-formed YAML, so nothing failed to parse and no diagnostic could fire. The file declared a derivation, drft dropped the key, and said nothing.
+
+  **Expect findings on the first `check` after upgrading, on files that reported metadata before.** The rule's default severity is `warn`, so the exit code does not change unless you have promoted it. Against a tracked lockfile, a recovered block that stops contributing leaves `removed-edge` findings for whatever it used to declare.
+
 - **A leading fenced block is frontmatter, and the markdown library decides where it ends** (#133). drft used to decide that itself: `mask_frontmatter` took its boundary from the frontmatter parser, so both halves of drft agreed with each other and disagreed with CommonMark about which fences open and close a block. That ran in two directions, and both were defects.
 
   Where **drft claimed a block the renderer does not** — a `----`, `---x` or `---\t` closer, a blank first line — drft read metadata out of text every renderer shows as prose, and masked the heading that text actually forms. `---\ntitle: Doc\n----` published `@frontmatter {"title": "Doc"}` and no anchor at all, so a link to `#title-doc` — an address GitHub really does answer to — came back as `unresolved-fragment`. Invented metadata and a false finding, together.
 
   Where **the renderer claims a block drft does not** — a setext title, a comment-only block, an opening fence with a trailing space or tab, a `...` closer — nothing masked it, so the markdown parser read the block's YAML as body content and slugged anchors out of it. That is the fabricated address of #133, and it silently accepted every link written to it.
 
-  The rules are now the library's, mirrored in the frontmatter parser rather than approximated: a block opens on a line of exactly three dashes carrying nothing but whitespace, its first line is neither blank nor a closing fence, and it closes on a line of exactly `---` or `...` followed only by spaces. Both parsers read only a **leading** block, which is narrower than the library and is what keeps the rest of a document prose.
+  The rules are now the library's, read from it once and shared by both parsers rather than reimplemented beside it: a block opens on a line of exactly three dashes carrying nothing but whitespace, its first line is neither blank nor a closing fence, and it closes on a line of exactly `---` or `...` followed only by spaces. Both parsers read only a **leading** block, which is narrower than the library and is what keeps the rest of a document prose.
 
   **What changes for an existing repository, all of it visible on the first `check`:**
 

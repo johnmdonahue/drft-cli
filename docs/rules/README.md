@@ -54,6 +54,8 @@ the YAML inside it is not a mapping, the file contributes no metadata and no
 declared edges, and without a finding it looks identical to a file that declares
 nothing. `unreadable-frontmatter` names the file and its opening line.
 
+The commonest cause is a value that begins with a code span — the backtick is a reserved indicator in YAML, so the block never parses. Quoting the value or writing it as a block scalar fixes it, and both keep the backticks. See [the frontmatter parser](../parsers/frontmatter.md).
+
 **It fires only where a frontmatter graph reads the file.** The frontmatter
 parser is what recognizes the block, so a repository with no `[graphs.frontmatter]`
 — or a file outside that graph's `files` globs — gets no finding, and the block's

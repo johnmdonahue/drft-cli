@@ -122,10 +122,14 @@ fn frontmatter_sources_create_edges() {
     );
 }
 
-/// A code span crossing a line boundary blanks to spaces *and newlines*, so every
-/// entry below it keeps its real line. Blanking the newline too shortened the
-/// masked block by a line and reported everything under the span one line high —
-/// in `drft edges`, in `drft impact`, and in every finding's location.
+/// A code span crossing a line boundary sits inside a quoted scalar, so the block
+/// parses and every entry below the span keeps its real line.
+///
+/// This fixture predates the block being read as written, when a span was blanked
+/// to spaces and its newlines swallowed — which shortened the block by a line and
+/// reported everything under the span one line high, in `drft edges`, in
+/// `drft impact`, and in every finding's location. It is kept as an input rather
+/// than as a test of that machinery, which no longer exists.
 #[test]
 fn frontmatter_line_survives_a_multiline_code_span() {
     let dir = TempDir::new().unwrap();
@@ -149,10 +153,11 @@ fn frontmatter_line_survives_a_multiline_code_span() {
     );
 }
 
-/// The shift is one line per newline the span swallowed, not one line. A fix that
-/// restores only the span's first newline reports the right line for a two-line
-/// span and the wrong one for anything taller, and passes a suite that only ever
-/// asks about two.
+/// The same input one line taller. The shift the old masking produced was one
+/// line per newline swallowed, so a fix restoring only the first newline reported
+/// the right line for a two-line span and the wrong one for anything taller, and
+/// passed a suite that only ever asked about two. Kept as an input for the same
+/// reason as the test above.
 #[test]
 fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
     let dir = TempDir::new().unwrap();
@@ -176,18 +181,17 @@ fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
     );
 }
 
-/// Blanking a span's newlines is also what lets some blocks parse at all: fusing
-/// the lines hides a construct that would otherwise break the mapping. The edge
-/// scan reads that same mask, so a block reaching frontmatter only through it
-/// still yields its declared edges — and still reports their real lines, because
-/// the correction is a table rather than a second mask.
+/// One of the two blocks the code mask used to recover by fusing a span's lines,
+/// kept as an input rather than as a test of that machinery.
 ///
-/// Masking this block any other way produces no edge, no `stale-edge`, and
-/// `drft impact target.md` reporting no dependents, while the file still plainly
-/// declares it. Under a config gating on `stale-edge` that turns a failing check
-/// into a passing one.
+/// **What makes it unreadable is the line break, not the span.** `status` opens a
+/// plain scalar that continues onto the next line and is then used as an implicit
+/// key, which YAML rejects. Measured: strip the backticks and it is still
+/// unreadable; join the two lines, backticks and all, and it parses. Blanking the
+/// span to spaces is what fused those lines into one valid key, which is exactly
+/// what the mask did and why it recovered a block the file does not contain.
 #[test]
-fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
+fn a_block_the_mask_recovered_by_fusing_lines_is_reported() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
@@ -201,22 +205,40 @@ fn frontmatter_edges_survive_a_block_that_parses_only_when_spans_fuse() {
     )
     .unwrap();
 
-    // The span fuses the block's first two lines, so `./target.md` is line 5 and
-    // an uncorrected mask reports 4.
-    assert_eq!(
-        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
-        vec![5],
-        "a declared `sources` entry must yield an edge, at its own line, when the \
-         block reaches frontmatter only through the line-collapsing mask"
+    assert!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md").is_empty(),
+        "the block is not read, so it declares nothing"
+    );
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("unreadable-frontmatter"),
+        "the loss is reported rather than silent: {stdout}"
     );
 }
 
-/// A value can sit *after* a multi-line span closes, sharing a masked line with
-/// the span's opening. Its own line is where the span closed, not where it opened,
-/// and the mask did not touch it — so a correction that maps a whole masked line
-/// to where it began reports the wrong line for a value that is perfectly intact.
+/// The other mask-recovery input: a value sitting after a multi-line span closes.
+///
+/// **It carries two fatal features and either alone is enough**, so it names no
+/// single cause. Measured: the leading backtick is fatal on its own — the same
+/// value on one line, and the same value with its continuation indented, are both
+/// unreadable. The column-zero continuation is fatal on its own — strip every
+/// backtick and it is still unreadable. Remove both and it parses.
+///
+/// That is why this is kept for its input rather than as a test of a condition.
+/// `a_value_opening_with_a_code_span_makes_the_block_unreadable` isolates the
+/// first, and `a_value_continued_at_column_zero_mints_no_target` the second.
+///
+/// A *readable* block still needs its line corrected, because saphyr breaks on a
+/// lone carriage return and a file's lines do not. What carries that is
+/// `a_row_resolves_to_the_source_line_it_opened_on` in the parser's own tests,
+/// with `a_lone_carriage_return_does_not_shift_the_reported_line` and
+/// `every_lone_carriage_return_shifts_the_line_it_would_report` end to end.
 #[test]
-fn a_value_after_a_span_closes_reports_the_closing_line() {
+fn a_value_after_a_span_closes_is_reported_with_its_block() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
@@ -224,73 +246,69 @@ fn a_value_after_a_span_closes_reports_the_closing_line() {
     )
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
-    // The span opens on line 2 and closes on line 4, where the value also sits.
     fs::write(
         dir.path().join("doc.md"),
         "---\nnote: `x\ny\nz` ./target.md\n---\nbody\n",
     )
     .unwrap();
 
-    assert_eq!(
-        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
-        vec![4],
-        "the value shares a masked line with the span's opening, but sits after \
-         its close"
+    assert!(frontmatter_edge_lines(dir.path(), "doc.md", "target.md").is_empty());
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter"),
+        "a value the block cannot yield is not silently absent"
     );
 }
 
-/// The mask blanks a span to spaces, and a span *inside* a link value is part of
-/// that value's text — `collect_links` reads the scalar out of the masked copy.
-/// So the mask decides the edge target, not only where the target was found.
+/// A value whose continuation starts at column zero mints nothing.
 ///
-/// Masking with the span's newlines kept would fold them to a single space
-/// instead, changing the target string, the node it resolves to, the lockfile
-/// entry, and — where the two spellings name different files — the exit code. The
-/// blanked width is what pins that: five characters of span become five spaces.
+/// The mask used to compose a target out of this input: it blanked the span to
+/// spaces and `collect_links` read the scalar from that copy, so the edge named
+/// `./     target.md`, a string the file does not contain. The block is invalid
+/// YAML — a plain scalar cannot continue at this indentation, span or no span —
+/// so nothing is minted.
+///
+/// **The span is incidental here.** That a span *inside* a readable value stays
+/// in the target is held by
+/// `a_trailing_code_span_does_not_silently_clean_up_an_edge_target`.
 #[test]
-fn a_code_span_inside_a_link_value_blanks_to_its_own_width() {
+fn a_value_continued_at_column_zero_mints_no_target() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
-    // The span is "`a\nb`" — five characters, one of them a newline.
     fs::write(
         dir.path().join("doc.md"),
         "---\nsources: ./`a\nb`target.md\n---\nbody\n",
     )
     .unwrap();
 
+    assert!(
+        frontmatter_edge_targets(dir.path(), "doc.md").is_empty(),
+        "no edge, rather than an edge to a target the mask composed"
+    );
     let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "edges",
-            "doc.md",
-        ])
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
-    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
-    let raw = json["edges"][0]["metadata"]["@frontmatter"]["occurrences"][0]["raw"]
-        .as_str()
-        .expect("occurrence raw");
-    assert_eq!(
-        raw, "./     target.md",
-        "the span's five characters blank to five spaces; folding them to one \
-         would move the edge to a different target"
-    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter"));
 }
 
-/// The code mask decides whether a claimed block yields metadata. Masking with
-/// newlines kept there drops such a block out of frontmatter entirely — the block
-/// is still claimed by its fences, so the markdown parser withholds its text
-/// either way, but the file loses its declared keys and raises
-/// `unreadable-frontmatter` instead of contributing them.
+/// A block the frontmatter parser cannot read is still claimed by its fences, so
+/// the markdown parser withholds its text either way. That is what keeps the loss
+/// recoverable: nothing is rendered as content, nothing is slugged into an
+/// address, and the finding names the file.
+///
+/// The pairing matters. If an unreadable block fell back to being prose, its text
+/// would mint anchors the file does not answer to and its bracketed links would
+/// become body edges — a block half-read in two directions at once.
 #[test]
-fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
+fn an_unreadable_block_is_still_withheld_from_the_markdown_graph() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("drft.toml"),
@@ -299,6 +317,9 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     .unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
     fs::write(dir.path().join("decoy.md"), "# Decoy\n").unwrap();
+    // A span crossing a line break makes this block invalid YAML, and it carries a
+    // bracketed link the markdown parser would read as a body link if the block
+    // were treated as prose.
     fs::write(
         dir.path().join("doc.md"),
         "---\nstatus `ok\nfine` note: \"see [d](./decoy.md)\"\nsources: \"./target.md\"\n---\n\n# Heading\n",
@@ -320,8 +341,8 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
     let metadata = &json["nodes"][0]["metadata"];
 
     assert!(
-        metadata.get("@frontmatter").is_some(),
-        "the block should still be frontmatter, got: {metadata}"
+        metadata.get("@frontmatter").is_none(),
+        "the block is not a mapping, so it contributes nothing: {metadata}"
     );
     assert_eq!(
         metadata["@markdown"]["anchors"],
@@ -330,31 +351,63 @@ fn a_block_parsing_only_through_the_fused_mask_stays_frontmatter() {
          publishes an address the file does not answer to"
     );
     assert!(
-        frontmatter_edge_lines(dir.path(), "doc.md", "decoy.md").is_empty(),
-        "a link inside frontmatter is not a body link"
+        frontmatter_edge_targets(dir.path(), "doc.md").is_empty(),
+        "neither the declared source nor the link inside the block becomes an edge"
     );
+
     let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "edges",
-            "doc.md",
-        ])
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
         .unwrap();
-    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
-    let targets: Vec<&str> = json["edges"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|e| e["target"].as_str().unwrap())
-        .collect();
-    assert_eq!(
-        targets,
-        vec!["target.md"],
-        "the declared source is the only edge; `decoy.md` sits inside frontmatter"
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter"),
+        "and the file is named, which is the whole of what makes this recoverable"
+    );
+}
+
+/// The reported reproduction for a declaration dropped in silence, verbatim.
+///
+/// The mask's fenced pass required a closing line equal to the opening marker, so
+/// a four-backtick line never closed a three-backtick fence and every line below
+/// it — `sources:` included — was blanked away. The residue was well-formed YAML,
+/// so nothing failed to parse and no diagnostic could fire: the file declared a
+/// derivation, drft dropped the key, and said nothing.
+///
+/// **What this pins is the reproduction's outcome, not that fence rule.** The
+/// block is reported because `title`'s value opens with a backtick, which is
+/// invalid YAML. Strip `title` and this document parses on both sides of the
+/// change — the latch is gone rather than fixed, because the pass that latched
+/// does not exist, so no input can distinguish it. Keeping the fixture whole is
+/// what makes this the reported case rather than a paraphrase of it.
+#[test]
+fn the_reported_silent_drop_is_a_finding() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("drft.toml"),
+        "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
+    fs::write(
+        dir.path().join("doc.md"),
+        "---\ntitle: `a: b`\npurpose: |\n  ```\n  code\n  ````\nsources:\n  - ./target.md\n---\nbody\n",
+    )
+    .unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("unreadable-frontmatter"),
+        "the declaration is not dropped in silence: {stdout}"
+    );
+
+    let metadata = frontmatter_metadata(dir.path(), "doc.md");
+    assert!(
+        metadata.is_null(),
+        "no partial block reconstructed from what a mask left: {metadata}"
     );
 }
 
@@ -770,26 +823,25 @@ fn stray_backticks_in_two_values_keep_the_blocks_edges() {
     );
 }
 
-/// The masked copy is still read, and is still the only thing that recovers a
-/// block the raw parse rejects. A value *beginning* with a backtick is invalid
-/// YAML — the character is a reserved indicator there — so the raw parse fails and
-/// the mask is what keeps the sibling `sources:` entry structured.
-///
-/// The line is corrected against the mask's table, so it is the file's line rather
-/// than the shortened masked block's.
+/// A value *beginning* with a backtick is invalid YAML — the character is a
+/// reserved indicator there — and the mask was the only thing that recovered such
+/// a block. The recovery reported `note` as null, a value the file does not
+/// contain, and the block is now reported instead.
 #[test]
-fn a_block_only_the_mask_can_parse_still_yields_edges() {
+fn a_block_only_a_mask_could_parse_is_reported() {
     let dir = scoped_fixture("---\nnote: `unquoted span`\nsources:\n  - ./target.md\n---\nbody\n");
 
-    assert_eq!(
-        frontmatter_metadata(dir.path(), "doc.md")["note"],
-        Value::Null,
-        "the masked fallback blanks the span, which is what makes this the fallback path"
+    assert!(
+        frontmatter_edge_lines(dir.path(), "doc.md", "target.md").is_empty(),
+        "the sibling entry goes with the block that could not be read"
     );
-    assert_eq!(
-        frontmatter_edge_lines(dir.path(), "doc.md", "target.md"),
-        vec![4],
-        "the masked fallback should still yield the edge, at the file's line"
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("unreadable-frontmatter"),
+        "and the author is told, which is what makes the loss recoverable"
     );
 }
 
@@ -967,12 +1019,6 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
     for (name, body) in blocks {
         let dir = scoped_fixture(&format!("---\n{body}\n---\nbody\n"));
         let meta = frontmatter_metadata(dir.path(), "doc.md");
-        // Only blocks whose metadata still carries the declaration are in scope:
-        // where the block itself is unreadable, the diagnostic rule owns it.
-        let declared = meta["sources"].to_string().contains("target.md");
-        if !declared {
-            continue;
-        }
         examined += 1;
 
         let output = drft_bin()
@@ -987,23 +1033,31 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
         // the edge was lost, so accepting it lets the defect satisfy the assertion:
         // with this clause reading `|| stdout.contains("detached-node")`, this test
         // passed with the entire fix reverted while five others failed.
-        let reported = stdout.contains("unresolved-edge");
+        //
+        // `unreadable-frontmatter` is evidence, and it is the only rule that can
+        // speak for a block whose YAML never parsed. It names the file and says the
+        // keys were dropped, which is the difference between a loss a reader can
+        // act on and one nobody sees.
+        let reported =
+            stdout.contains("unresolved-edge") || stdout.contains("unreadable-frontmatter");
 
         assert!(
             linked || reported,
             "`{name}`: `@frontmatter` carries {}, and drft produced neither an edge \
-             naming it nor an `unresolved-edge` about it. check said:\n{stdout}",
+             naming it nor a finding about it. check said:\n{stdout}",
             meta["sources"]
         );
     }
 
-    // A skipped block asserts nothing, so the count is part of the property: an
-    // edit that stops drft recognising these blocks would otherwise empty this
-    // test while leaving it green.
+    // The count cannot fail while every block is examined unconditionally, and
+    // that is the point of asserting it: it is a guard against a future skip
+    // clause. One stood here — blocks whose metadata no longer carried the
+    // declaration were skipped — and it quietly narrowed the property to the ten
+    // blocks that still passed.
     assert_eq!(
         examined,
         blocks.len(),
-        "every block here should keep its declaration in `@frontmatter`; {} of {} did not, and asserted nothing",
+        "every block here is in scope; {} of {} asserted nothing",
         blocks.len() - examined,
         blocks.len()
     );
@@ -1012,11 +1066,11 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
 /// A CRLF document reports the file's line, which requires counting `\r\n` as one
 /// break rather than two.
 ///
-/// The raw path's line table is a copy of the mask's walk, and the two must agree
-/// about what opens a line. Simplifying the test to `c == '\n' || c == '\r'` reads
-/// as equivalent, drops the lookahead, opens two rows per CRLF line, and reports
-/// this entry two lines high — with the whole suite green, until this fixture
-/// asserted the line.
+/// Simplifying `opens_line` to `c == '\n' || c == '\r'` reads as equivalent, drops
+/// the lookahead, opens two rows per CRLF line, and reports this entry two lines
+/// high. This fixture is what fails when that happens; it guards the lookahead
+/// rather than the line-table lookup, which the two lone-carriage-return tests
+/// carry.
 #[test]
 fn a_crlf_document_reports_the_files_line() {
     let dir = scoped_fixture(
