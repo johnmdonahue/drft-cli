@@ -843,6 +843,29 @@ fn a_wrapped_flow_list_with_a_column_zero_closer_is_reported() {
     }
 }
 
+/// Exact #148 reproduction: saphyr treats literal NUL as end of input, so the
+/// prefix used to publish while the declared edge below it vanished.
+#[test]
+fn a_nul_truncated_frontmatter_block_reaches_check() {
+    let dir = scoped_fixture("---\nnote: \0\nsources: ./target.md\n---\nbody\n");
+
+    assert!(frontmatter_edge_targets(dir.path(), "doc.md").is_empty());
+    assert!(
+        frontmatter_metadata(dir.path(), "doc.md").is_null(),
+        "an unreadable block must not publish its parsed prefix"
+    );
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("warn[unreadable-frontmatter]: doc.md:1"),
+        "the dropped block must reach check by its own rule: {stdout}"
+    );
+}
+
 /// An unclosed fence inside a block scalar latches the mask's fenced pass, which
 /// blanks every line below it — `sources:` included. The raw block is well-formed
 /// YAML throughout, so metadata reported the derivation while the edge scan found
@@ -1076,6 +1099,10 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
             "fence-marker value beside one that resolves",
             "sources:\n  - \"```target.md\"\n  - ./other.md",
         ),
+        (
+            "literal NUL before the declared key",
+            "note: \0\nsources: ./target.md",
+        ),
     ];
 
     let mut examined = 0;
@@ -1101,8 +1128,11 @@ fn no_hostile_block_drops_a_declared_value_in_silence() {
         // speak for a block whose YAML never parsed. It names the file and says the
         // keys were dropped, which is the difference between a loss a reader can
         // act on and one nobody sees.
-        let reported =
-            stdout.contains("unresolved-edge") || stdout.contains("unreadable-frontmatter");
+        let reported = if name == "literal NUL before the declared key" {
+            stdout.contains("warn[unreadable-frontmatter]: doc.md:1")
+        } else {
+            stdout.contains("unresolved-edge") || stdout.contains("unreadable-frontmatter")
+        };
 
         assert!(
             linked || reported,
