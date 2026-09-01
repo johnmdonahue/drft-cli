@@ -95,9 +95,10 @@ whose first line is blank is prose for the same reason, even though the library
 reports its later block as the document's first event.
 
 The block's extent is decided by fence syntax alone, so it does not depend on
-whether the YAML inside parses. The [frontmatter parser](frontmatter.md) mirrors
-these rules rather than approximating them, which is what keeps one answer to
-where a block ends. A block it cannot read is reported as
+whether the YAML inside parses. The [frontmatter parser](frontmatter.md) reads the
+same answer from this parser rather than deciding it again, which is what keeps one
+answer to where a block ends. What it decides for itself is that a block the library
+reports below line one is not frontmatter. A block it cannot read is reported as
 `unreadable-frontmatter` — but only where a frontmatter graph covers the file,
 since that parser is what raises it. This parser withholds the block's text
 regardless.

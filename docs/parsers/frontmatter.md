@@ -38,9 +38,19 @@ A frontmatter value cites another document, so — unlike a body link — a valu
 
 Text output is line-oriented, so one record is always one line: a value carrying a newline or a control character is escaped wherever text renders it. The escaping belongs to the rendering — every value reaches JSON, and the lockfile, exactly as written, which is the authoritative form.
 
-Edges and [metadata](#metadata) read the same rendering of the block. The raw block is preferred, and the masked copy — code spans blanked — is read only when the raw block is not a YAML mapping on its own. What reaches it is any block YAML rejects until a span is blanked. A value that _begins_ with a backtick is the commonest, since the character is a reserved indicator there; a span hiding a `:` is another, and a span swallowing a line break can take a `-` or a tab into a position that breaks the mapping.
+Edges and [metadata](#metadata) read one parse of the block as written. A block whose YAML is invalid yields neither, and raises `unreadable-frontmatter` naming the file.
 
-Because both read the same rendering, **an edge carries the target `@frontmatter` reports**. A code span inside a value is part of that value rather than something blanked out of it:
+The commonest invalid block is a value that _begins_ with a backtick, since the character is a reserved indicator in YAML. Quote the value or write it as a block scalar:
+
+```yaml
+purpose: "`widget-loader` is the entry point"
+note: |
+  `widget-loader` is the entry point
+```
+
+Both are captured verbatim, backticks included. A span hiding a `:` and a span swallowing a line break break a block the same way and take the same remedy.
+
+Because edges and metadata read one rendering, **an edge carries the target `@frontmatter` reports**. A code span inside a value is part of that value rather than something blanked out of it:
 
 ```yaml
 sources: ./setup.md `draft`
@@ -96,9 +106,9 @@ Declaring keys states an expectation the corpus can fail to meet, and that is th
 
 The parser attaches the parsed frontmatter block to the file's node. In the composed graph it nests under the graph's `@<name>` namespace — `@frontmatter` for a graph named `frontmatter` — alongside the file's `@fs` facts.
 
-Where a block ends is decided by fence syntax, and only then is its text read. A block is opened by exactly three dashes on a line of their own and closed by a line of exactly `---` or `...`, and its first line may be neither blank nor a closing fence. These are the [markdown parser](markdown.md)'s rules, mirrored here rather than approximated, because a parser claiming a span the other renders publishes the same text as metadata and as an address at once. Both parsers also read **only a leading block** — the markdown library is willing to claim one anywhere, and neither parser takes it. A block further down a document is prose to both, which is what every renderer shows.
+Where a block ends is decided by fence syntax, and only then is its text read. A block is opened by exactly three dashes on a line of their own and closed by a line of exactly `---` or `...`, and its first line may be neither blank nor a closing fence. These are the [markdown parser](markdown.md)'s rules, and both parsers read one decider rather than two implementations of it, because a parser claiming a span the other renders publishes the same text as metadata and as an address at once. The fence line is the fence: whitespace after the opening `---` is outside the text the YAML parser reads. Both parsers also read **only a leading block** — the markdown library is willing to claim one anywhere, and neither parser takes it. A block further down a document is prose to both, which is what every renderer shows.
 
-Code spans are blanked within that block, not used to find it: a backtick opened in frontmatter and closed in the body would otherwise move the boundary, and the two directions of that were a link lifted out of body prose and a declared `sources:` entry silently producing no edge. A file opening with a `---` thematic break above a blank line keeps its first heading and its links.
+Nothing about a block's content moves its boundary. A file opening with a `---` thematic break above a blank line keeps its first heading and its links, and a backtick opened in frontmatter and closed in the body changes neither where the block ends nor what it says.
 
 Metadata is contributed only when that block parses as a YAML **mapping**. A block that does not — a comment-only block, one parsing to a bare scalar, one whose YAML is malformed — contributes nothing, and raises `unreadable-frontmatter` naming the file. The rule is what makes the outcome recoverable: the block is claimed by its fences either way, so nothing renders its text as content, and silence about a block a reader can see is the failure worth preventing.
 
