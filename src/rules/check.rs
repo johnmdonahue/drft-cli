@@ -16,19 +16,18 @@ use crate::rules::{staleness, structural};
 /// Evaluate all v0.8 rules and apply config. Staleness rules run only against a
 /// usable baseline; structural rules always run.
 ///
-/// `parser_findings` are raised during the build, by a parser that recognized
-/// something it could not read. They arrive already made rather than derived
-/// here because the graph cannot express them — a file whose block nothing could
-/// read and a file with no block are the same shape once built. They join the
-/// derived findings before severity and ignore globs are applied, so config
-/// promotes, silences and scopes them like any other rule.
+/// `build_findings` are raised while constructing the graph, where the condition
+/// disappears from the built shape. They include parser diagnostics and files a
+/// configured text graph could not decode. They join the derived findings before
+/// severity and ignore globs are applied, so config promotes, silences and scopes
+/// them like any other rule.
 pub fn run(
     graph: &Graph,
     lock: Option<&Lock>,
     config: &Config,
-    parser_findings: Vec<Finding>,
+    build_findings: Vec<Finding>,
 ) -> Vec<Finding> {
-    let mut findings = parser_findings;
+    let mut findings = build_findings;
 
     // A baseline that does not exist and a baseline with no entries are the same
     // fact: nothing to compare against. Both used to leave `check` silent, so a

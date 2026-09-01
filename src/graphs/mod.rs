@@ -7,6 +7,7 @@
 //! builders never compute hashes; drft does, once per node, from the source
 //! bytes.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::Result;
@@ -17,7 +18,10 @@ use crate::config::{Config, compile_globs};
 use crate::diagnostic::Finding;
 use crate::hints::{Hint, Hints};
 use crate::model::{Graph, GraphSet};
-use crate::sources::{self, fs::SourceFile};
+use crate::sources::{
+    self,
+    fs::{NodeKind, SourceFile},
+};
 use crate::util::hash_bytes;
 
 /// drft's own lockfile is never graph content — hashing it would be circular
@@ -45,8 +49,9 @@ pub fn build_set(
 
     let mut graphs = vec![fs_graph];
 
-    // Decode each file's bytes once for the text builders. Non-UTF-8 files are
-    // skipped (they have no text edges or metadata).
+    // Decode each file's bytes once for the text builders. Non-UTF-8 files stay
+    // in the fs graph, with their raw-byte hash, and are reported below when a
+    // configured text graph would otherwise have read them.
     //
     // Leading byte-order marks are dropped here, which is the one place that
     // serves every text parser at once. A frontmatter block opens with `---` at
@@ -98,16 +103,35 @@ pub fn build_set(
         })
         .collect();
 
+    let mut unreadable_text: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+
     for (name, graph) in &config.graphs {
-        let files = compile_globs(&graph.files)?;
+        let graph_files = compile_globs(&graph.files)?;
+        for file in &files {
+            let matches_graph = graph_files
+                .as_ref()
+                .is_none_or(|patterns| patterns.is_match(&file.path));
+            if file.kind == NodeKind::File
+                && matches_graph
+                && file
+                    .bytes
+                    .as_ref()
+                    .is_some_and(|bytes| std::str::from_utf8(bytes).is_err())
+            {
+                unreadable_text
+                    .entry(file.path.clone())
+                    .or_default()
+                    .insert(format!("@{name}"));
+            }
+        }
         match graph.parser.as_str() {
-            "markdown" => graphs.push(builders::markdown::build(name, &texts, files)),
+            "markdown" => graphs.push(builders::markdown::build(name, &texts, graph_files)),
             "frontmatter" => {
-                let parser_files = files.clone();
+                let parser_files = graph_files.clone();
                 let fragment = builders::frontmatter::build(
                     name,
                     &texts,
-                    files,
+                    graph_files,
                     graph.edge_keys.clone(),
                     findings,
                 );
@@ -162,10 +186,10 @@ pub fn build_set(
                     } else {
                         (
                             // "No file was read" rather than "the globs matched
-                            // nothing": a file the globs do reach is dropped here
-                            // if it is ignored, unreadable, or not UTF-8 text, and
-                            // this seam cannot tell those apart. Naming only the
-                            // globs sent the reader to a correct one.
+                            // nothing": a file the globs do reach can be ignored,
+                            // unreadable, or invalid UTF-8. `unreadable-text`
+                            // names the last case by file; this graph-level hint
+                            // still has to cover the others without guessing.
                             format!("declares {keys}, but no file was read for this graph"),
                             "check the `files` globs, any `ignore` patterns, and that the matched files are readable UTF-8 text",
                         )
@@ -183,6 +207,15 @@ pub fn build_set(
             other => unreachable!("unvalidated parser \"{other}\""),
         }
     }
+
+    findings.extend(unreadable_text.into_iter().map(|(path, graphs)| {
+        Finding::warn(
+            "unreadable-text",
+            path,
+            graphs.into_iter().collect(),
+            "file is not valid UTF-8, so matched text graphs could not read its edges or metadata",
+        )
+    }));
 
     Ok(GraphSet::new(graphs))
 }

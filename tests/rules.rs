@@ -259,3 +259,116 @@ fn unreadable_frontmatter_severity_is_configurable() {
         "`off` should silence it entirely"
     );
 }
+
+/// A file selected by text graphs cannot disappear at the UTF-8 decode seam.
+/// The finding is one per file even when graph scopes overlap, and it carries
+/// every namespace that could not read the file.
+#[test]
+fn invalid_utf8_is_reported_once_by_matching_text_graphs() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    let bytes = b"title: \xff\n";
+    fs::write(dir.path().join("bad.md"), bytes).unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "check",
+        ])
+        .output()
+        .unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("valid JSON check output");
+    let findings: Vec<_> = json["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|finding| finding["name"] == "unreadable-text")
+        .collect();
+
+    assert_eq!(
+        findings.len(),
+        1,
+        "one file should yield one finding: {json}"
+    );
+    assert_eq!(findings[0]["subject"], "bad.md");
+    assert_eq!(
+        findings[0]["_graphs"],
+        serde_json::json!(["@frontmatter", "@markdown"])
+    );
+    assert!(
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not valid UTF-8")
+    );
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "bad.md",
+        ])
+        .output()
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let metadata = &json["nodes"][0]["metadata"];
+    assert_eq!(
+        metadata["@fs"]["hash"],
+        format!("b3:{}", blake3::hash(bytes))
+    );
+    assert!(
+        metadata.get("@markdown").is_none() && metadata.get("@frontmatter").is_none(),
+        "invalid text must not be decoded lossily into a text graph: {metadata}"
+    );
+}
+
+/// Binary bytes outside every configured text graph are ordinary graph content,
+/// not an unreadable text document.
+#[test]
+fn invalid_utf8_outside_text_graph_scope_is_not_reported() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("image.bin"), b"\xff\x00\xfe").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("unreadable-text"),
+        "an unmatched binary should stay quiet"
+    );
+}
+
+/// `unreadable-text` is a registered rule: it can fail the run, be silenced,
+/// and does not raise an unknown-rule hint.
+#[test]
+fn unreadable_text_severity_is_configurable() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("bad.md"), b"\xff").unwrap();
+
+    let promoted = format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nseverity = \"error\"\n");
+    fs::write(dir.path().join("drft.toml"), promoted).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("error[unreadable-text]"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("unknown-rule"));
+
+    let silenced = format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nseverity = \"off\"\n");
+    fs::write(dir.path().join("drft.toml"), silenced).unwrap();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "check"])
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("unreadable-text"));
+}
