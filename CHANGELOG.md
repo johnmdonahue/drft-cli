@@ -2,7 +2,7 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.17.0 (2026-09-01)
 
 Makes a lock's coverage observable. Every way of ending up with a baseline that does not cover what you think it covers was silent — a directory lock that wrote nothing, a lockfile that had gone missing, a node with no entry, a bare name that matched a different file — and each returned exit 0. The run now says what it locked, and `check` says when there is nothing to check against.
 
