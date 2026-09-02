@@ -2,7 +2,7 @@
 
 All notable changes to drft are documented here.
 
-## Unreleased
+## 0.17.0 (2026-09-01)
 
 Makes a lock's coverage observable. Every way of ending up with a baseline that does not cover what you think it covers was silent — a directory lock that wrote nothing, a lockfile that had gone missing, a node with no entry, a bare name that matched a different file — and each returned exit 0. The run now says what it locked, and `check` says when there is nothing to check against.
 
@@ -13,6 +13,24 @@ And it settles where a frontmatter block ends. Two parsers used to answer that q
 Which leaves the last thing drft reconstructed. A block whose YAML is invalid used to be recovered by blanking its code spans and reading what survived, and what survived was not what the file said: a value written `` `widget-loader` is the entry point `` came out as `is the entry point`. Such a block is now reported, with the keys it declared, and the author decides how to fix it.
 
 ### Breaking changes
+
+- **Each written link keeps its own occurrence metadata** (#108). Edges collapse
+  every link from one source to one target, so the former scalar `link` and `raw`
+  fields described only one spelling while `lines` listed all of them. A source
+  citing two fragments of the same target therefore published one fragment as
+  though every line used it. Edge metadata now carries
+  `occurrences: [{ line, link?, raw? }]`, pairing each source line with that
+  link's fragment-qualified target and literal spelling when those differ from
+  the resolved target. `line` is always present; `link` appears only for a
+  fragment-qualified target, and `raw` only when resolution changes the authored
+  spelling. JSON and JGF consumers reading `.metadata["@<graph>"].lines`, `.link`,
+  or `.raw` must read the corresponding optional field from `occurrences[]`
+  instead.
+
+  `--field` descends through lists of objects, so `--field line` reaches link
+  occurrences and a field inside authored frontmatter lists remains projectable.
+  Text output renders those lists as one `-`-marked block per entry, including
+  empty entries as `- {}`, rather than collapsing them onto one JSON line.
 
 - **`keys` is renamed `edge_keys`, and frontmatter edges no longer depend on what a value looks like** (#137, #134, #138, #112). The parser used to collect every string in the block and filter it through a shape heuristic — an explicit `./` prefix, a URI, or a plausible file extension, with anything containing a space rejected as prose. A value that failed produced no edge, no finding, and no record that the file had declared anything, so the commonest way to lose a derivation was to write one the heuristic did not recognize. Now the declared key is the whole of the signal: **every string value reachable through an `edge_keys` key is an edge**, and one naming nothing that resolves raises `unresolved-edge` exactly as a typo'd path does. The remedy is the reader's — fix the value, fix the config, or move the field to a key you did not declare. No alias for the old name, per no-backwards-compat.
 
@@ -75,6 +93,17 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 
 ### New
 
+- **Markdown anchors and `unresolved-fragment` findings** (#109). Markdown graphs
+  publish the addresses their files answer to under `anchors`: GitHub-style slugs
+  for rendered headings, with repeat disambiguation, plus raw `<a id>` and
+  `<a name>` values. `drft nodes <path> --field anchors` projects them.
+  `unresolved-fragment` reports a cross-document link whose target exists but
+  does not define the cited fragment, naming only the occurrence that is wrong.
+  Matching is case-sensitive, percent-encoded fragments are decoded, and a
+  case-only mismatch carries a cause naming the available anchor. Targets outside
+  a parser that publishes anchors remain unknown and quiet; anchor-only links
+  still produce no edge and are not checked.
+
 - **`unreadable-text` reports files that matched a text graph but are not valid UTF-8** (#135). The implicit `@fs` graph still records the file and hashes its raw bytes, while each configured markdown or frontmatter graph omits it because those parsers require text. That omission used to make a file with declared edges look like an empty filesystem node; `detached-node` was the only possible signal and could not say what was lost. The new finding names the file and every text graph that matched it. It does not guess whether arbitrary invalid bytes are Latin-1, Windows-1252, or another encoding. Files outside all text-graph globs stay quiet, so binary assets are unaffected. The rule defaults to `warn`; `[rules] unreadable-text = "error"` makes the loss fail a run.
 
 - **`no-baseline` reports a lockfile that is absent, empty, or unreadable** (#120). Staleness is derived by comparing the graph against the lockfile, so with no lockfile — or one with no entries — there is nothing to compare against and every staleness rule becomes a no-op. That was indistinguishable from a clean run: no findings, exit 0, either way. It is a rule rather than a hint because hints never change an exit code, and a hint-only answer would leave an automated caller exactly as blind as it was. At its default `warn` a first `check` in a new repo stays quiet; `[rules] no-baseline = "error"` makes a missing baseline fail the run. An **empty** lockfile still runs the staleness rules where an absent one does not: absent is the ordinary state of a repo that has never locked, while empty means a baseline was established and then emptied, so every lockable node really is unlocked and `unlocked-node` reports each one. Skipping them there would have disarmed every staleness gate, `new-edge` included, in the one state where they matter most.
@@ -92,8 +121,6 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 - **`edge-keys-matched-nothing` hint** (#137). A frontmatter graph declaring `edge_keys` that ends up with no edges. A misspelled key, a corpus that never uses it, or a `files` glob reaching nothing all produce a graph tracking nothing while the config says otherwise, at exit 0 with no output — the config-level twin of the silent value drop this release removes. The message names which of the two it is, because the remedy differs: a graph reaching no file at all says so and points at the globs, rather than blaming keys it never got to test. Declaring _no_ keys is deliberately not this state and says nothing: a frontmatter graph may exist purely to seed node metadata, and a graph that is as intended has nothing to report. `drft init`'s template declares `edge_keys` rather than scaffolding a graph that tracks nothing.
 
 - **`resolved-elsewhere` hint** (#127). A scoped lock whose argument names no node from the directory it was typed in, but which matches a fallback candidate, reports which node it locked.
-
-- **`directory-lock` hint** (#125). A directory named to `drft lock` resolves to the directory node, which carries no hash and no edges and so has nothing to snapshot. The run reports `locked 0 nodes` and names how many nodes beneath it were not locked.
 
 ### Fixed
 
