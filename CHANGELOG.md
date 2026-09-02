@@ -14,6 +14,21 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 
 ### Breaking changes
 
+- **Each written link keeps its own occurrence metadata** (#108). Edges collapse
+  every link from one source to one target, so the former scalar `link` and `raw`
+  fields described only one spelling while `lines` listed all of them. A source
+  citing two fragments of the same target therefore published one fragment as
+  though every line used it. Edge metadata now carries
+  `occurrences: [{ line, link, raw }]`, pairing each source line with that link's
+  fragment-qualified target and literal spelling. JSON and JGF consumers reading
+  `.metadata["@<graph>"].lines`, `.link`, or `.raw` must read the corresponding
+  field from `occurrences[]` instead.
+
+  `--field` descends through lists of objects, so `--field line` reaches link
+  occurrences and a field inside authored frontmatter lists remains projectable.
+  Text output renders those lists as one `-`-marked block per entry, including
+  empty entries as `- {}`, rather than collapsing them onto one JSON line.
+
 - **`keys` is renamed `edge_keys`, and frontmatter edges no longer depend on what a value looks like** (#137, #134, #138, #112). The parser used to collect every string in the block and filter it through a shape heuristic — an explicit `./` prefix, a URI, or a plausible file extension, with anything containing a space rejected as prose. A value that failed produced no edge, no finding, and no record that the file had declared anything, so the commonest way to lose a derivation was to write one the heuristic did not recognize. Now the declared key is the whole of the signal: **every string value reachable through an `edge_keys` key is an edge**, and one naming nothing that resolves raises `unresolved-edge` exactly as a typo'd path does. The remedy is the reader's — fix the value, fix the config, or move the field to a key you did not declare. No alias for the old name, per no-backwards-compat.
 
   Two classes of value change behaviour, and both were defects the heuristic was hiding. A value naming a **directory** now resolves: drft has directory nodes, so a derivation naming one is legitimate, and it was discarded for having no dot. A value written as **markdown link syntax** — `[Label](target.md)` — is now diagnosed rather than silently dropped, rather than being unwrapped, because deciding what the author meant is the inference this removes. The finding names the target as resolved against the declaring file, so a value under `docs/guide.md` reads `docs/[Label](target.md)`; the literal text is on the edge's occurrence as `raw`.
@@ -74,6 +89,17 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 - **A scoped lock over a lockfile carrying no usable baseline fails instead of proceeding** (#120). A `drft.lock` that cannot be parsed reads as absent, so `drft lock <path>` used to replace the entire baseline with just the paths named — every other entry gone, and the nodes behind them left as unlocked leaves whose loss no rule reported. A hint said the file was unreadable while the destruction happened anyway. A lockfile that _parses_ to zero entries is deliberately not refused: there is nothing in it to lose, so a scoped lock merges into it as it would in a repo never locked, and refusing would block a real sequence — a scoped lock clearing the last reviewed deletion empties the file, and the next one must still work. `no-baseline` reports that state at `check`, where it can be promoted to an error. `drft lock --all` is unaffected either way, since it rebuilds the baseline by design.
 
 ### New
+
+- **Markdown anchors and `unresolved-fragment` findings** (#109). Markdown graphs
+  publish the addresses their files answer to under `anchors`: GitHub-style slugs
+  for rendered headings, with repeat disambiguation, plus raw `<a id>` and
+  `<a name>` values. `drft nodes <path> --field anchors` projects them.
+  `unresolved-fragment` reports a cross-document link whose target exists but
+  does not define the cited fragment, naming only the occurrence that is wrong.
+  Matching is case-sensitive, percent-encoded fragments are decoded, and a
+  case-only mismatch carries a cause naming the available anchor. Targets outside
+  a parser that publishes anchors remain unknown and quiet; anchor-only links
+  still produce no edge and are not checked.
 
 - **`unreadable-text` reports files that matched a text graph but are not valid UTF-8** (#135). The implicit `@fs` graph still records the file and hashes its raw bytes, while each configured markdown or frontmatter graph omits it because those parsers require text. That omission used to make a file with declared edges look like an empty filesystem node; `detached-node` was the only possible signal and could not say what was lost. The new finding names the file and every text graph that matched it. It does not guess whether arbitrary invalid bytes are Latin-1, Windows-1252, or another encoding. Files outside all text-graph globs stay quiet, so binary assets are unaffected. The rule defaults to `warn`; `[rules] unreadable-text = "error"` makes the loss fail a run.
 
