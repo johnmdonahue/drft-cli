@@ -19,10 +19,13 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
   fields described only one spelling while `lines` listed all of them. A source
   citing two fragments of the same target therefore published one fragment as
   though every line used it. Edge metadata now carries
-  `occurrences: [{ line, link, raw }]`, pairing each source line with that link's
-  fragment-qualified target and literal spelling. JSON and JGF consumers reading
-  `.metadata["@<graph>"].lines`, `.link`, or `.raw` must read the corresponding
-  field from `occurrences[]` instead.
+  `occurrences: [{ line, link?, raw? }]`, pairing each source line with that
+  link's fragment-qualified target and literal spelling when those differ from
+  the resolved target. `line` is always present; `link` appears only for a
+  fragment-qualified target, and `raw` only when resolution changes the authored
+  spelling. JSON and JGF consumers reading `.metadata["@<graph>"].lines`, `.link`,
+  or `.raw` must read the corresponding optional field from `occurrences[]`
+  instead.
 
   `--field` descends through lists of objects, so `--field line` reaches link
   occurrences and a field inside authored frontmatter lists remains projectable.
@@ -118,8 +121,6 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 - **`edge-keys-matched-nothing` hint** (#137). A frontmatter graph declaring `edge_keys` that ends up with no edges. A misspelled key, a corpus that never uses it, or a `files` glob reaching nothing all produce a graph tracking nothing while the config says otherwise, at exit 0 with no output — the config-level twin of the silent value drop this release removes. The message names which of the two it is, because the remedy differs: a graph reaching no file at all says so and points at the globs, rather than blaming keys it never got to test. Declaring _no_ keys is deliberately not this state and says nothing: a frontmatter graph may exist purely to seed node metadata, and a graph that is as intended has nothing to report. `drft init`'s template declares `edge_keys` rather than scaffolding a graph that tracks nothing.
 
 - **`resolved-elsewhere` hint** (#127). A scoped lock whose argument names no node from the directory it was typed in, but which matches a fallback candidate, reports which node it locked.
-
-- **`directory-lock` hint** (#125). A directory named to `drft lock` resolves to the directory node, which carries no hash and no edges and so has nothing to snapshot. The run reports `locked 0 nodes` and names how many nodes beneath it were not locked.
 
 ### Fixed
 
