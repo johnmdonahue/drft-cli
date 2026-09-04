@@ -1253,12 +1253,9 @@ fn run_impact(
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(
-        &graph_root,
-        &config,
-        hints,
-        &mut Vec::new(),
-    )?);
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(&graph_root, &config, hints, &mut build_findings)?;
+    let composed = compose::compose(&set);
 
     let seeds: Vec<String> = paths
         .iter()
@@ -1272,56 +1269,92 @@ fn run_impact(
     };
     let impacted = impact::compute(&composed, &seeds, dir, depth.max_hops());
 
+    let has_construction_findings =
+        !rules::check::apply_policy(build_findings.clone(), &config).is_empty();
+    let lock = lock::read(&graph_root, hints)?;
+    let diagnostics = impact::diagnostics(
+        &composed,
+        &seeds,
+        dir,
+        depth.max_hops(),
+        &impacted,
+        lock.as_ref(),
+        &config,
+        build_findings,
+    );
+    let unit = if diagnostics.is_empty() {
+        "nodes"
+    } else {
+        "nodes plus diagnostics"
+    };
+    let controls = if has_construction_findings {
+        "increase --max-bytes or repair the read failures; narrow the seeds, --depth, or --direction for traversal output only, since construction diagnostics cover all configured graphs"
+    } else {
+        "increase --max-bytes or narrow the seeds, --depth, or --direction"
+    };
+
     match format {
         OutputFormat::Json => {
             let output = serde_json::to_value(policy::ImpactResult {
                 seeds: &seeds,
                 total: impacted.len(),
                 impacted: &impacted,
+                diagnostics: &diagnostics,
             })?;
             print_json_document(
                 output,
                 impacted.len(),
-                "nodes",
-                NARROW_WITH_READ_VERB,
+                unit,
+                controls,
                 hints,
                 max_bytes,
-                "narrow the seeds, --depth, or --direction",
+                controls,
             )?;
         }
         OutputFormat::Text => {
+            let mut text = String::new();
             if impacted.is_empty() {
-                let text = "no dependents found\n";
-                enforce_output_budget(
-                    text,
-                    max_bytes,
-                    "narrow the seeds, --depth, or --direction",
-                    false,
-                )?;
-                write_stdout(text)?;
+                let empty = match direction {
+                    Direction::Inbound => "no dependents found",
+                    Direction::Outbound => "no dependencies found",
+                    Direction::Both => "no connected nodes found",
+                };
+                let qualifier = if diagnostics.is_empty() {
+                    ""
+                } else {
+                    " in the current graph"
+                };
+                writeln!(text, "{empty}{qualifier}")?;
             } else {
-                let text = impacted
-                    .iter()
-                    .map(|i| {
-                        format!(
-                            "{} (via {}, depth {}, radius {})\n",
-                            drft::util::one_line(&i.location()),
-                            drft::util::one_line(&i.via),
-                            i.depth,
-                            i.impact_radius
-                        )
-                    })
-                    .collect::<String>();
-                print_text_projection(
-                    &text,
-                    impacted.len(),
-                    "nodes",
-                    NARROW_WITH_READ_VERB,
-                    hints,
-                    max_bytes,
-                    "narrow the seeds, --depth, or --direction",
+                for i in &impacted {
+                    writeln!(
+                        text,
+                        "{} (via {}, depth {}, radius {})",
+                        drft::util::one_line(&i.location()),
+                        drft::util::one_line(&i.via),
+                        i.depth,
+                        i.impact_radius
+                    )?;
+                }
+            }
+            if has_construction_findings {
+                writeln!(
+                    text,
+                    "graph read has diagnostics; dependency coverage may be incomplete"
                 )?;
             }
+            for finding in &diagnostics {
+                writeln!(text, "{}", finding.format_text())?;
+            }
+            print_text_projection(
+                &text,
+                impacted.len(),
+                unit,
+                controls,
+                hints,
+                max_bytes,
+                controls,
+            )?;
         }
     }
 

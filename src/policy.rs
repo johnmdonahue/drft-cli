@@ -22,7 +22,9 @@ impl ExitStatus {
 
     pub const fn meaning(self) -> &'static str {
         match self {
-            Self::Success => "Command completed; check may still report warnings.",
+            Self::Success => {
+                "Command completed; check may report warnings, and impact may report warnings or errors."
+            }
             Self::Violations => "check found at least one finding configured as an error.",
             Self::Failure => {
                 "Usage, configuration, path-resolution, output-budget, or runtime failure."
@@ -132,7 +134,7 @@ macro_rules! result_document {
 result_document!(LockResult { locked: &'a [String], dropped: &'a [String] });
 result_document!(NodesResult { total: usize, nodes: &'a [drft::nodes::NodeProjection] });
 result_document!(EdgesResult { total: usize, edges: &'a [drft::edges::EdgeProjection] });
-result_document!(ImpactResult { seeds: &'a [String], total: usize, impacted: &'a [drft::impact::Impacted] });
+result_document!(ImpactResult { seeds: &'a [String], total: usize, impacted: &'a [drft::impact::Impacted], diagnostics: &'a [Finding] });
 result_document!(CheckResult { diagnostics: &'a [Finding], summary: CheckSummary });
 
 #[derive(Serialize)]

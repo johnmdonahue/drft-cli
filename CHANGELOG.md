@@ -4,6 +4,20 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+- **Impact explains missing connections** (#147). Its text and JSON results
+  carry construction findings from all configured graphs, unresolved findings
+  on inspected edges, and adjacent historical losses from the optional lockfile.
+  Historical edges do not extend traversal. The always-present `diagnostics`
+  array uses the existing finding shape; `total` still counts impacted nodes.
+  Configured severity and ignores apply, while a completed impact read still
+  exits 0, including with error diagnostics. The guide describes these boundaries.
+
+  Output budgets include diagnostics. Empty text results use the requested
+  direction and qualify an answer with diagnostics as `in the current graph`.
+  Zero-edge hints advise repairing unreadable files matched by that graph before
+  checking other possible causes. File-read errors inform hint advice but remain
+  without a construction finding of their own.
+
 - **The installed binary describes its workflow** (#156). `drft guide` explains
   the edit, check, review, and scoped-lock loop in text or versioned JSON without
   reading a repository or config. Command syntax comes from clap; operational

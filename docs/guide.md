@@ -19,6 +19,11 @@ reviewed paths. An unchanged dependent can belong in that scope because its
 promise was reviewed. A warning-only check can exit 0; the exit code does not
 replace reading its findings.
 
+Impact's result also carries diagnostics. A completed impact read exits 0 even
+with error diagnostics; review them before treating its impacted set as complete.
+See [impact and missing connections](reading.md#impact-and-missing-connections)
+for construction scope and historical-edge limits.
+
 ## Structured consumers
 
 Use `drft guide --format json` for the same contract as structured data. Text

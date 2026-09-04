@@ -209,8 +209,15 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
             record.controls.push(semantics("depth", "traversal-bound", "A positive integer bounds hops; the unbounded form traverses the full reachable set."));
             record.controls.push(semantics("direction", "traversal-direction", "Inbound follows dependents; outbound follows dependencies; both follows either direction."));
             record.success_document = result("impact-result", ResultShape::Impact);
-            record.boundary =
-                vec!["No .md fallback, directory expansion, subtree expansion, or glob expansion."];
+            record.reads.push("drft.lock");
+            record.boundary = vec![
+                "No .md fallback, directory expansion, subtree expansion, or glob expansion. Seeds must exist in the current graph.",
+                "Diagnostics include construction findings from all configured graphs, including disconnected files and metadata-only graphs. They identify read failures, not inferred dependencies on seeds.",
+                "Traversal diagnostics cover every edge inspected within the requested direction and depth, including cycles and edges between seeds.",
+                "Historical pairs in the optional lock qualify losses beside the current expansion frontier; they never extend traversal, ranking, or total. Missing and empty baselines are quiet.",
+                "Configured severity and subject ignores apply. Only construction, unresolved-edge, unresolved-fragment, removed-edge, and applicable removed-node findings are included. A completed read exits 0 even with error diagnostics; check remains the rule gate.",
+                "Construction diagnostic scope is global: narrowing seeds, depth, or direction only shrinks traversal output. Increase --max-bytes or repair read failures when those diagnostics exceed the budget.",
+            ];
             guard(&mut record);
         }
         Commands::Nodes { .. } => {

@@ -28,6 +28,46 @@ These are projections, not traversals. `drft impact` walks the graph transitivel
 to answer "what depends on this?"; `drft check` gates the whole graph for drift.
 The read verbs just show a scoped slice of what is already there.
 
+## Impact and missing connections
+
+`drft impact <path>...` traverses the current graph from exact seed paths. Its
+default inbound direction finds dependents; `--direction outbound` finds
+dependencies, and `--direction both` follows either direction. `--depth` bounds
+the hops, with `--depth all` traversing the full reachable set. Seeds must exist
+in the current graph, even when the lockfile remembers a removed file.
+
+Impact carries diagnostics that qualify the answer:
+
+- Construction findings cover all configured graphs, including disconnected
+  files and metadata-only graphs. An unreadable declaration could name any
+  target, so current reachability cannot establish its relevance. These findings
+  identify read failures; they do not claim that a failed file depended on a seed.
+- `unresolved-edge` and `unresolved-fragment` cover every current edge inspected
+  in the requested direction. Nodes at the depth limit are reached but not
+  expanded. Inspected edges include cycles, alternate paths, and edges between
+  seeds.
+- `removed-edge` and applicable `removed-node` findings use historical pairs
+  from the optional `drft.lock` beside that same current expansion frontier.
+  Historical pairs never extend traversal or contribute to ranking or `total`.
+  A chain of removed declarations therefore does not reconstruct a historical
+  dependency graph.
+
+Configured severities and subject ignores apply as they do in `check`. Impact
+omits `stale-node`, `stale-edge`, `new-edge`, `detached-node`, `unlocked-node`,
+and `no-baseline`.
+A missing or empty baseline is quiet; an unparseable baseline carries the
+`unparseable-lock` hint. Impact reads the lockfile without updating it.
+
+JSON returns `{seeds, total, impacted, diagnostics, hints}`, with `diagnostics`
+always present and `total` counting impacted nodes only. Text appends ordinary
+findings after the traversal. When diagnostics accompany an empty traversal, its
+message says `in the current graph`. Displayed construction findings also add
+`graph read has diagnostics; dependency coverage may be incomplete`.
+
+A completed impact read exits 0 even when a diagnostic has severity `error`.
+Read the diagnostics before acting on the impacted set. Use `check` when errors
+must gate a caller; it exits 1 for findings configured as errors.
+
 ## Selectors
 
 Every read verb takes the same positional selector, matched against node keys —
@@ -161,6 +201,11 @@ before its first write. Narrow `nodes` and `edges` with selectors,
 `--namespace`, or `--field`; narrow `impact` with its seeds, `--depth`, or
 `--direction`; use a scoped `nodes` or `edges` read instead of `graph`.
 
+Impact's budget includes diagnostics and their explanatory text. Construction
+diagnostics cover all configured graphs, so narrowing seeds, depth, or direction
+only shrinks traversal output. Increase `--max-bytes` or repair the read failures
+when construction diagnostics exceed the budget.
+
 ## Hints
 
 Every command carries a `hints` channel: advisories about the **run** rather than
@@ -232,6 +277,13 @@ with no arguments refuses rather than locking everything, because a collapsed
 | `nothing-to-lock`           | A locked path carries no content to snapshot                                                           |
 | `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                             |
 | `edge-keys-matched-nothing` | A graph declares `edge_keys` and gets no edges — nothing yielded one, or no file was read              |
+
+When files matched by a zero-edge frontmatter graph cannot be read, the hint
+advises repairing those files first. If some matched files are readable, it also
+names the key, glob, ignore, and string-value checks to run if no edges remain
+after repair. This advice uses raw evidence for that graph even when a rule is
+off or its subjects are ignored. File-read errors influence this advice but do
+not have a construction finding of their own.
 
 ## Grounding an agent
 
