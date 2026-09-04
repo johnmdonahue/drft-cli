@@ -4,6 +4,26 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+## 0.18.0 (2026-09-04)
+
+Adds an installed workflow guide, explicit read scopes and output budgets, and
+diagnostics explaining missing impact connections.
+
+### Migration
+
+- Add `--all` to whole-graph `drft nodes` and `drft edges` calls, including calls
+  that specify only `--namespace` or `--field`. Otherwise, supply a selector.
+- Supply actual file extensions and cwd-relative paths to `impact`, `nodes`,
+  `edges`, and `lock`. A suggested correction is never selected automatically.
+- Update impact JSON consumers for the always-present `diagnostics` array and
+  text consumers for appended findings and revised empty-result messages.
+  Inspect diagnostics separately from the exit code: completed impact reads
+  exit 0 even when diagnostics have error severity.
+- Accept clap's text stderr for missing or conflicting `lock` scopes, including
+  when `--format json` is requested.
+
+### Changes
+
 - **Impact explains missing connections** (#147). Its text and JSON results
   carry construction findings from all configured graphs, unresolved findings
   on inspected edges, and adjacent historical losses from the optional lockfile.
@@ -42,6 +62,14 @@ All notable changes to drft are documented here.
   same-spelled node at the graph root. A unique likely correction is suggested
   without being selected. Directory and explicit glob selector behavior is
   unchanged.
+
+- **Closed stdout readers end commands quietly** (#161). When a downstream
+  reader closes stdout, drft exits 0 without a panic or pending text hints.
+  This includes text projections and check output.
+
+- **Text hints precede runtime errors** (#131, #162). Hints collected before a
+  command fails are printed before its error. JSON keeps the hints in the single
+  error envelope.
 
 ## 0.17.0 (2026-09-01)
 
