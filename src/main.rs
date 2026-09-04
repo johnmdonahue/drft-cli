@@ -1027,11 +1027,10 @@ fn resolve_selector(
     let mut matched: Vec<String> = Vec::new();
     let prefix = graph_key(root, graph_root, selector);
 
-    // Does the exact key (no `.md` fallback) name a directory node? Checking this
-    // before the fallback is what keeps a `docs.md` file from shadowing a `docs`
-    // directory when both exist. A trailing slash also declares a directory
-    // outright. Either way, a directory is represented by the subtree below, not the
-    // bare directory node — so `docs`, `docs/`, and `docs/**` name one set.
+    // Does the exact key name a directory node? A trailing slash also declares a
+    // directory outright. Either way, a directory is represented by the subtree
+    // below, not the bare directory node — so `docs`, `docs/`, and `docs/**` name
+    // one set, while a sibling `docs.md` remains separate.
     let names_dir = prefix
         .as_deref()
         .and_then(|key| composed.nodes.get(key))
