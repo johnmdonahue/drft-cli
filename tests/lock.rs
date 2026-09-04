@@ -482,9 +482,8 @@ fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
     );
 }
 
-/// An argument with an extension resolves to that exact node, not a `.md`-appended
-/// variant. With both `a.md` and `a.md.md` present, `lock a.md` must snapshot
-/// `a.md` — the `.md` fallback is only for a bare doc name.
+/// An argument with an extension resolves to that exact node. With both `a.md`
+/// and `a.md.md` present, `lock a.md` must snapshot only `a.md`.
 #[test]
 fn scoped_lock_of_an_extensioned_path_does_not_prefer_a_dot_md_variant() {
     let dir = TempDir::new().unwrap();
