@@ -156,7 +156,7 @@ fn glob_pattern_matches_node_keys() {
 
 /// With no selector, every node in the graph is returned.
 #[test]
-fn no_selector_returns_all_nodes() {
+fn all_returns_all_nodes() {
     let dir = fixture();
     let v = nodes_json(dir.path(), &[]);
     let keys = ids(&v);
@@ -176,7 +176,7 @@ fn no_selector_returns_all_nodes() {
 #[test]
 fn namespace_filters_node_set_and_metadata() {
     let dir = fixture();
-    let v = nodes_json(dir.path(), &["--namespace", "frontmatter"]);
+    let v = nodes_json(dir.path(), &["--all", "--namespace", "frontmatter"]);
     let keys = ids(&v);
     // index.md and drft.toml have no frontmatter block, so they drop out.
     assert!(
