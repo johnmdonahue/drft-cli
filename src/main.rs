@@ -242,13 +242,18 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
     // already uses, so a consumer parsing stderr as JSON keeps working. The error
     // path itself is left alone: `main` folds the hints into its envelope, and
     // emitting here would print them twice.
-    if !hints.is_empty() && !hints.delivered() && result.is_ok() {
+    if !hints.is_empty() && !hints.delivered() {
         match cli.format {
-            OutputFormat::Json => {
+            OutputFormat::Json if result.is_ok() => {
                 let envelope = serde_json::json!({ "hints": &*hints });
                 eprintln!("{}", serde_json::to_string(&envelope)?);
             }
-            OutputFormat::Text => {
+            OutputFormat::Text
+                if !matches!(
+                    &result,
+                    Err(e) if e.downcast_ref::<ClosedStdout>().is_some()
+                ) =>
+            {
                 let colorize = use_color_stderr(cli.color);
                 for hint in hints.as_slice() {
                     eprintln!(
@@ -261,6 +266,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
                     );
                 }
             }
+            _ => {}
         }
     }
 

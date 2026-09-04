@@ -189,7 +189,9 @@ format rather than drft's own envelope, where a sibling key would cost the
 translatability the format was chosen for. Those take a `{"hints": [...]}`
 envelope on stderr instead, the same shape the error envelope uses, so a consumer
 parsing stderr as JSON keeps working. Hints raised before a failure join that
-error envelope rather than vanishing.
+error envelope rather than vanishing. In text, a hint raised before a failure
+appears on stderr before the `error:` record. In JSON, it appears in the single
+error envelope; drft does not print a separate hints envelope first.
 
 `drft lock` prints a result document too, `{locked, dropped}`, naming the nodes it
 wrote and the entries it removed. Reporting the effect is what makes a lock that

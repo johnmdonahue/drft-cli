@@ -291,7 +291,21 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
             stderr.contains("could not be parsed"),
             "{format:?} refused without saying why: stderr={stderr:?}"
         );
-        if !format.is_empty() {
+        if format.is_empty() {
+            assert!(
+                output.stdout.is_empty(),
+                "a failed lock must not write stdout: {:?}",
+                output.stdout
+            );
+            let hint = stderr.find("hint[unparseable-lock]").unwrap();
+            let error = stderr.find("error:").unwrap();
+            assert!(
+                hint < error,
+                "the earlier hint must precede the error: {stderr:?}"
+            );
+            assert_eq!(stderr.matches("hint[unparseable-lock]").count(), 1);
+            assert_eq!(stderr.matches("error:").count(), 1);
+        } else {
             // JSON in, JSON out: hints raised before a failure ride the error
             // envelope on stderr, so a consumer parsing stderr keeps working.
             let v: serde_json::Value =
@@ -301,38 +315,51 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
     }
 }
 
-/// Hints raised before a failure ride the error envelope in JSON, rather than
-/// vanishing because no result document was ever printed.
+/// Hints raised before a failure precede a text error or ride the JSON error
+/// envelope, rather than vanishing because no result document was ever printed.
 #[test]
-fn error_envelope_carries_hints() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("drft.toml"),
-        format!(
-            "{}[rules]\nnot-a-rule = \"error\"\n",
-            common::DEFAULT_CONFIG
-        ),
-    )
-    .unwrap();
-    fs::write(dir.path().join("index.md"), "# Index").unwrap();
-
-    let output = drft_bin()
-        .args([
-            "-C",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-            "nodes",
-            "no-such-file.md",
-        ])
-        .output()
+fn errors_deliver_earlier_config_hints_once() {
+    for format in [vec!["--color", "never"], vec!["--format", "json"]] {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            format!(
+                "{}[rules]\nnot-a-rule = \"error\"\n",
+                common::MARKDOWN_ONLY_CONFIG
+            ),
+        )
         .unwrap();
+        fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
-    assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let v: serde_json::Value = serde_json::from_str(stderr.trim()).expect("JSON error envelope");
-    assert_eq!(v["exit_code"], 2);
-    assert_eq!(v["hints"][0]["name"], "unknown-rule");
+        let mut args = vec!["-C", dir.path().to_str().unwrap()];
+        args.extend(format.iter().copied());
+        args.extend(["nodes", "no-such-file.md"]);
+        let output = drft_bin().args(&args).output().unwrap();
+
+        assert_eq!(output.status.code(), Some(2));
+        assert!(
+            output.stdout.is_empty(),
+            "failed read wrote stdout: {:?}",
+            output.stdout
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if format.contains(&"json") {
+            let v: serde_json::Value =
+                serde_json::from_str(stderr.trim()).expect("one JSON error envelope");
+            assert_eq!(v["exit_code"], 2);
+            assert_eq!(v["hints"].as_array().unwrap().len(), 1);
+            assert_eq!(v["hints"][0]["name"], "unknown-rule");
+        } else {
+            let hint = stderr.find("hint[unknown-rule]").unwrap();
+            let error = stderr.find("error:").unwrap();
+            assert!(
+                hint < error,
+                "the earlier hint must precede the error: {stderr:?}"
+            );
+            assert_eq!(stderr.matches("hint[unknown-rule]").count(), 1);
+            assert_eq!(stderr.matches("error:").count(), 1);
+        }
+    }
 }
 
 /// The threshold has to hold in both directions: a small projection must stay
