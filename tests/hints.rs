@@ -15,8 +15,8 @@ fn json_documents_always_carry_a_hints_key() {
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     for command in [
-        vec!["nodes"],
-        vec!["edges"],
+        vec!["nodes", "--all"],
+        vec!["edges", "--all"],
         vec!["check"],
         vec!["impact", "index.md"],
         vec!["lock", "index.md"],
@@ -181,6 +181,7 @@ fn large_projection_hints_on_rendered_size() {
             "--format",
             "json",
             "nodes",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -199,7 +200,7 @@ fn large_projection_hints_on_rendered_size() {
     assert!(json.status.success());
 
     let text = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "nodes"])
+        .args(["-C", dir.path().to_str().unwrap(), "nodes", "--all"])
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&text.stderr);
@@ -377,6 +378,7 @@ fn small_projection_raises_no_hint() {
             "--format",
             "json",
             "nodes",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -439,7 +441,7 @@ fn large_projection_next_fits_the_command() {
     );
 
     let nodes = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "nodes"])
+        .args(["-C", dir.path().to_str().unwrap(), "nodes", "--all"])
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&nodes.stderr);
@@ -554,7 +556,7 @@ fn a_metadata_only_frontmatter_graph_is_silent_and_still_reads_metadata() {
     );
 
     let edges = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "--all"])
         .output()
         .unwrap();
     assert!(
@@ -589,6 +591,7 @@ fn declared_edge_keys_that_match_nothing_raise_a_hint() {
             "--format",
             "json",
             "edges",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -648,6 +651,7 @@ fn declared_edge_keys_that_match_raise_no_hint() {
             "--format",
             "json",
             "edges",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -683,6 +687,7 @@ fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
             "--format",
             "json",
             "edges",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -750,6 +755,7 @@ fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
             "--format",
             "json",
             "edges",
+            "--all",
         ])
         .output()
         .unwrap();

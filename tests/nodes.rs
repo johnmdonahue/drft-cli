@@ -30,6 +30,9 @@ fn fixture() -> TempDir {
 
 fn nodes_json(dir: &Path, extra: &[&str]) -> Value {
     let mut args = vec!["-C", dir.to_str().unwrap(), "--format", "json", "nodes"];
+    if extra.is_empty() {
+        args.push("--all");
+    }
     args.extend_from_slice(extra);
     let output = drft_bin().args(&args).output().unwrap();
     assert!(
@@ -213,6 +216,7 @@ fn unknown_namespace_errors_and_lists_declared() {
             "-C",
             dir.path().to_str().unwrap(),
             "nodes",
+            "--all",
             "--namespace",
             "bogus",
         ])

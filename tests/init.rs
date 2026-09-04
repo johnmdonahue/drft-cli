@@ -65,7 +65,7 @@ fn the_init_template_produces_a_graph_that_emits_frontmatter_edges() {
     .unwrap();
 
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "--all"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);

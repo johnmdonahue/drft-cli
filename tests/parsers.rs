@@ -520,6 +520,7 @@ fn a_byte_order_mark_is_still_hashed() {
             "--format",
             "json",
             "nodes",
+            "--all",
         ])
         .output()
         .unwrap();
@@ -1232,7 +1233,7 @@ fn a_declared_value_naming_a_directory_resolves() {
     .unwrap();
 
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "--all"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1392,7 +1393,7 @@ fn the_markdown_builder_draws_no_edge_for_an_anchor_only_link() {
     .unwrap();
 
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "--all"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1420,7 +1421,7 @@ fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
     .unwrap();
 
     let output = drft_bin()
-        .args(["-C", dir.path().to_str().unwrap(), "edges"])
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "--all"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1521,8 +1522,8 @@ fn no_command_splits_a_record_across_lines() {
         // The colored renderer is a second set of interpolations, and every one of
         // its escapes was unpinned until this ran it.
         vec!["check", "--color", "always"],
-        vec!["nodes"],
-        vec!["edges"],
+        vec!["nodes", "--all"],
+        vec!["edges", "--all"],
         vec![
             "impact",
             "doc.md",

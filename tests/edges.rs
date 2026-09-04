@@ -32,6 +32,9 @@ fn fixture() -> TempDir {
 
 fn edges_json(dir: &Path, extra: &[&str]) -> Value {
     let mut args = vec!["-C", dir.to_str().unwrap(), "--format", "json", "edges"];
+    if extra.is_empty() {
+        args.push("--all");
+    }
     args.extend_from_slice(extra);
     let output = drft_bin().args(&args).output().unwrap();
     assert!(
@@ -85,7 +88,7 @@ fn a_missing_extensionless_source_does_not_select_markdown() {
 
 /// With no selector, every edge in the graph is returned.
 #[test]
-fn no_selector_returns_all_edges() {
+fn all_returns_all_edges() {
     let dir = fixture();
     let v = edges_json(dir.path(), &[]);
     let p = pairs(&v);
@@ -169,6 +172,7 @@ fn unknown_namespace_errors_and_lists_declared() {
             "-C",
             dir.path().to_str().unwrap(),
             "edges",
+            "--all",
             "--namespace",
             "bogus",
         ])
