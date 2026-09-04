@@ -14,6 +14,7 @@ use drft::sources;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use std::fmt::Write as _;
 use std::path::Path;
 
 use cli::{Cli, ColorChoice, Commands, Depth, Direction, OutputFormat};
@@ -86,20 +87,25 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
     Ok(())
 }
 
-/// Write a line to stdout, treating a closed reader as success rather than as this
-/// command's failure.
+#[derive(Debug, thiserror::Error)]
+#[error("stdout reader closed")]
+struct ClosedStdout;
+
+/// Write rendered output to stdout, stopping the command when its reader closes.
 ///
 /// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
-/// Only callers of this function are covered: `lock` in both formats, and every
-/// JSON result document, since `print_json_document` routes through here. `check`
-/// and the text projections still print with `println!` and still abort — that is
-/// #121, and it predates this.
-fn write_stdout_line(line: &str) -> Result<()> {
+/// A distinct error stops result production before command-specific exit status or
+/// pending hints can turn the reader's choice into a failure on stderr.
+fn write_stdout(text: &str) -> Result<()> {
     use std::io::Write;
-    match writeln!(std::io::stdout(), "{line}") {
-        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+    match std::io::stdout().write_all(text.as_bytes()) {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Err(ClosedStdout.into()),
         other => other.map_err(Into::into),
     }
+}
+
+fn write_stdout_line(line: &str) -> Result<()> {
+    write_stdout(&format!("{line}\n"))
 }
 
 /// Print a JSON result document carrying the run's hints, raising the
@@ -131,11 +137,11 @@ fn print_json_document(
 /// Print a text projection, raising the large-projection hint on the rendered
 /// size. The hint itself lands on stderr after the command returns, so the
 /// result reads first and a pipe carries only the projection.
-fn print_text_projection(text: &str, count: usize, next: &str, hints: &mut Hints) {
+fn print_text_projection(text: &str, count: usize, next: &str, hints: &mut Hints) -> Result<()> {
     if let Some(hint) = large_projection_hint(count, text.len(), next) {
         hints.push(hint);
     }
-    print!("{text}");
+    write_stdout(text)
 }
 
 /// Load the config, folding its load-time advisories into the run's hints.
@@ -152,6 +158,7 @@ fn main() {
     let mut hints = Hints::default();
     let code = match try_main(&mut hints) {
         Ok(code) => code,
+        Err(e) if e.downcast_ref::<ClosedStdout>().is_some() => 0,
         Err(e) => {
             // A parse/usage error happens before clap resolves `--format`, so
             // scan the raw args to decide whether to emit a JSON error envelope.
@@ -267,25 +274,27 @@ fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
 
     match format {
         OutputFormat::Text => {
+            let mut output = String::new();
             if report.gitignore.enabled {
-                println!("repository .gitignore: enabled");
+                writeln!(output, "repository .gitignore: enabled")?;
                 if report.gitignore.files.is_empty() {
-                    println!("  files: none found");
+                    writeln!(output, "  files: none found")?;
                 } else {
-                    println!("  files:");
+                    writeln!(output, "  files:")?;
                     for path in &report.gitignore.files {
-                        println!("    {path}");
+                        writeln!(output, "    {path}")?;
                     }
                 }
             } else {
-                println!("repository .gitignore: disabled (no repository)");
+                writeln!(output, "repository .gitignore: disabled (no repository)")?;
             }
-            println!(".ignore: disabled");
-            println!(".git/info/exclude: disabled");
-            println!("global excludes: disabled");
+            writeln!(output, ".ignore: disabled")?;
+            writeln!(output, ".git/info/exclude: disabled")?;
+            writeln!(output, "global excludes: disabled")?;
+            write_stdout(&output)?;
         }
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&report)?);
+            write_stdout_line(&serde_json::to_string_pretty(&report)?)?;
         }
     }
 
@@ -790,7 +799,7 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
         if let Some(hint) = large_projection_hint(count, rendered.len(), NARROW_WITH_READ_VERB) {
             hints.push(hint);
         }
-        println!("{rendered}");
+        write_stdout_line(&rendered)?;
         return Ok(0);
     }
 
@@ -804,7 +813,7 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
             {
                 hints.push(hint);
             }
-            println!("{rendered}");
+            write_stdout_line(&rendered)?;
         }
         OutputFormat::Text => {
             // The whole composed graph as text: every node's metadata, then every
@@ -815,7 +824,7 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
             let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
             let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
             let text = projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)]);
-            print_text_projection(&text, node_count, NARROW_WITH_READ_VERB, hints);
+            print_text_projection(&text, node_count, NARROW_WITH_READ_VERB, hints)?;
         }
     }
     Ok(0)
@@ -864,7 +873,7 @@ fn run_nodes(
                 projected.len(),
                 NARROW_WITH_SELECTOR,
                 hints,
-            );
+            )?;
         }
     }
 
@@ -924,7 +933,7 @@ fn run_edges(
                 projected.len(),
                 NARROW_WITH_SELECTOR,
                 hints,
-            );
+            )?;
         }
     }
 
@@ -1142,7 +1151,7 @@ fn run_impact(
         }
         OutputFormat::Text => {
             if impacted.is_empty() {
-                println!("no dependents found");
+                write_stdout_line("no dependents found")?;
             } else {
                 let text = impacted
                     .iter()
@@ -1156,7 +1165,7 @@ fn run_impact(
                         )
                     })
                     .collect::<String>();
-                print_text_projection(&text, impacted.len(), NARROW_WITH_READ_VERB, hints);
+                print_text_projection(&text, impacted.len(), NARROW_WITH_READ_VERB, hints)?;
             }
         }
     }
@@ -1184,13 +1193,15 @@ fn run_check(
     let colorize = use_color(color, format);
     match format {
         OutputFormat::Text => {
+            let mut output = String::new();
             for f in &findings {
                 if colorize {
-                    println!("{}", f.format_text_color());
+                    writeln!(output, "{}", f.format_text_color())?;
                 } else {
-                    println!("{}", f.format_text());
+                    writeln!(output, "{}", f.format_text())?;
                 }
             }
+            write_stdout(&output)?;
         }
         OutputFormat::Json => {
             let errors = findings
@@ -1208,7 +1219,7 @@ fn run_check(
                 "summary": { "errors": errors, "warnings": warnings },
             });
             attach_hints(&mut output, hints)?;
-            println!("{}", serde_json::to_string_pretty(&output)?);
+            write_stdout_line(&serde_json::to_string_pretty(&output)?)?;
         }
     }
 
