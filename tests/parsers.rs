@@ -1469,7 +1469,7 @@ fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
 /// a finding's target, the `@namespace` header, a metadata key, the lock report's
 /// locked list, a hint's locus, and `impact`'s location. It does **not** reach a
 /// finding's cause, a hint's `next` (every one is a literal today), the dropped
-/// list, `resolved-elsewhere`, or the not-found error's own interpolations —
+/// list or the not-found error's own interpolations —
 /// several of those are pinned by their own tests nearby, and the rest are
 /// recorded in the queue. This is a net, not a proof.
 #[test]

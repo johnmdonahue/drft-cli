@@ -76,6 +76,47 @@ fn exact_path_projects_one_node() {
     assert!(m.get("_graphs").is_none());
 }
 
+#[test]
+fn exact_extensionless_path_is_not_replaced_by_markdown() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("guide"), "extensionless").unwrap();
+    fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
+
+    let v = nodes_json(dir.path(), &["guide"]);
+    assert_eq!(ids(&v), vec!["guide"]);
+}
+
+#[test]
+fn missing_extensionless_path_suggests_markdown_without_selecting_it() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "nodes", "guide"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean \"guide.md\"?"));
+}
+
+#[test]
+fn cwd_relative_miss_does_not_fall_through_to_the_graph_root() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("README.md"), "# Root").unwrap();
+    let sub = dir.path().join("docs");
+    fs::create_dir(&sub).unwrap();
+
+    let output = drft_bin()
+        .current_dir(&sub)
+        .args(["nodes", "README.md"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+}
+
 /// A bare directory is sugar for its recursive subtree: every node under `docs/`,
 /// including nested ones, and nothing above it.
 #[test]

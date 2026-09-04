@@ -6,8 +6,8 @@
 //! pure projection and rendering — narrowing each node's composed metadata by
 //! namespace (which lens) and field (which keys), then formatting it as compact
 //! text or JSON. Selector-to-key resolution and namespace validation live in
-//! `main.rs`, next to the shared `node_candidates`/`resolve_node` resolver and
-//! the loaded config they need.
+//! `main.rs`, next to the shared exact-path resolver and the loaded config it
+//! needs.
 
 use serde::Serialize;
 use serde_json::{Map, Value};

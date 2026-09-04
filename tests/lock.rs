@@ -212,6 +212,28 @@ fn scoped_lock_drops_a_removed_node() {
     );
 }
 
+#[test]
+fn a_bare_path_does_not_drop_a_removed_markdown_entry() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("guide.md"), "# Guide").unwrap();
+    lock_all(dir.path());
+    fs::remove_file(dir.path().join("guide.md")).unwrap();
+    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "lock", "guide"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean \"guide.md\"?"));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        before
+    );
+}
+
 /// A batch of a repaired live path and a deleted one locks in one atomic call: the
 /// live path re-snapshots, the deleted one drops. This is the workflow the earlier
 /// one-path-per-call form could not express without the forbidden bare `drft lock`.
@@ -794,13 +816,9 @@ fn lock_output_survives_a_closed_pipe() {
     }
 }
 
-/// A bare name that names no node from where it was typed says so.
-///
-/// Run from `docs/` with no `docs/README.md`, `drft lock README.md` falls through
-/// to the root `README.md`. Reporting the locked key cannot show that on its own,
-/// because the key is byte-identical to what the caller typed.
+/// A path names only the cwd-relative node the caller supplied.
 #[test]
-fn a_lock_path_resolving_elsewhere_says_so() {
+fn a_lock_path_does_not_fall_through_to_the_graph_root() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
@@ -821,36 +839,31 @@ fn a_lock_path_resolving_elsewhere_says_so() {
         ])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(2));
+    let after = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("hint[resolved-elsewhere]:"),
-        "the climb to the graph root must be reported: stderr={stderr:?}"
-    );
-
-    // The exact spelling stays quiet — the hint fires on a surprise, not on use.
+    // The same spelling from the graph root remains exact.
     let quiet = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "README.md"])
         .output()
         .unwrap();
-    let quiet_err = String::from_utf8_lossy(&quiet.stderr);
-    assert!(
-        !quiet_err.contains("resolved-elsewhere"),
-        "an exact path is not a surprise: stderr={quiet_err:?}"
-    );
+    assert!(quiet.status.success());
 
-    // Nor does the documented `.md` convenience. `drft lock guide` for `guide.md`
-    // is the feature working, not a resolution that crossed to another directory.
+    // Omitting `.md` never selects the Markdown file; it only suggests it.
     let convenience = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "README"])
         .output()
         .unwrap();
-    assert!(convenience.status.success());
+    assert_eq!(convenience.status.code(), Some(2));
     let convenience_err = String::from_utf8_lossy(&convenience.stderr);
     assert!(
-        !convenience_err.contains("resolved-elsewhere"),
-        "the .md fallback is documented, not a surprise: stderr={convenience_err:?}"
+        convenience_err.contains("did you mean \"README.md\"?"),
+        "the correction must not be selected: stderr={convenience_err:?}"
+    );
+    let final_lock = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    assert_eq!(
+        after, final_lock,
+        "failed locks must not rewrite the baseline"
     );
 }
 

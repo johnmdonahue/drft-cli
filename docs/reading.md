@@ -193,9 +193,9 @@ error envelope rather than vanishing.
 
 `drft lock` prints a result document too, `{locked, dropped}`, naming the nodes it
 wrote and the entries it removed. Reporting the effect is what makes a lock that
-covered nothing distinguishable from one that covered the files you meant — and
-what shows a resolution you did not expect, such as a bare name matching a file in
-another directory, at the moment it happens rather than at the next `check`.
+covered nothing distinguishable from one that covered the files you meant. Path
+operands select only the exact cwd-relative node they name. A missing bare path may
+suggest a unique `.md` correction, but the command exits 2 without selecting it.
 
 **Hints never change an exit code, and never replace a guard.** A hint annotates
 output and lets it stand — so anything that has to stop a caller is an error
@@ -210,7 +210,6 @@ with no arguments refuses rather than locking everything, because a collapsed
 | `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing                                      |
 | `unparseable-lock`          | `drft.lock` could not be read, so every node reads as unlocked                                         |
 | `directory-lock`            | A formerly lockable path is now a directory; its old entry was dropped, but no descendants were locked |
-| `resolved-elsewhere`        | A locked path names no node from here, so a fallback resolved it                                       |
 | `nothing-to-lock`           | A locked path carries no content to snapshot                                                           |
 | `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                             |
 | `edge-keys-matched-nothing` | A graph declares `edge_keys` and gets no edges — nothing yielded one, or no file was read              |
