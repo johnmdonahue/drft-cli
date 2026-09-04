@@ -437,14 +437,14 @@ fn lock_reports_what_it_wrote() {
     assert_eq!(v["dropped"].as_array().unwrap().len(), 0);
 }
 
-/// A bare name resolves to the directory the caller spelled before any `.md`
-/// variant invented from it, then fails because that exact node is not lockable.
+/// A bare name resolves to the exact directory the caller spelled, then fails
+/// because a directory node is not lockable.
 ///
 /// With both `docs/` and `docs.md` present, `drft lock docs` used to snapshot
 /// `docs.md` — clearing its `stale-node` finding and writing a durable "this was
 /// reviewed" claim against a file the caller never named, silently.
 #[test]
-fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
+fn a_bare_directory_remains_separate_from_a_dot_md_sibling() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
@@ -485,7 +485,7 @@ fn a_bare_name_prefers_the_exact_path_over_a_dot_md_sibling() {
 /// An argument with an extension resolves to that exact node. With both `a.md`
 /// and `a.md.md` present, `lock a.md` must snapshot only `a.md`.
 #[test]
-fn scoped_lock_of_an_extensioned_path_does_not_prefer_a_dot_md_variant() {
+fn scoped_lock_of_an_extensioned_path_selects_only_that_path() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
