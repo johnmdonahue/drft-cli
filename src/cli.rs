@@ -52,6 +52,10 @@ pub enum Commands {
         /// (JSON only; ignores --format)
         #[arg(long)]
         raw: bool,
+
+        /// Refuse when the complete stdout document would exceed this many bytes
+        #[arg(long)]
+        max_bytes: Option<usize>,
     },
 
     /// List the nodes that transitively depend on the given files
@@ -67,13 +71,22 @@ pub enum Commands {
         /// Traversal direction
         #[arg(long, default_value = "inbound")]
         direction: Direction,
+
+        /// Refuse when the complete stdout document would exceed this many bytes
+        #[arg(long)]
+        max_bytes: Option<usize>,
     },
 
     /// Project nodes and their metadata, scoped by selector and narrowed by namespace/field
     Nodes {
         /// Globset patterns matched against node keys; a bare directory is its
-        /// recursive subtree. With none, every node is returned.
+        /// recursive subtree (at least one required, or --all).
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
         selectors: Vec<String>,
+
+        /// Return every node in the graph
+        #[arg(long)]
+        all: bool,
 
         /// Restrict to a declared graph namespace (repeatable). Accepts the bare
         /// name (`frontmatter`) or the prefixed key (`@frontmatter`).
@@ -83,13 +96,22 @@ pub enum Commands {
         /// Restrict returned metadata to named fields (repeatable).
         #[arg(long = "field")]
         fields: Vec<String>,
+
+        /// Refuse when the complete stdout document would exceed this many bytes
+        #[arg(long)]
+        max_bytes: Option<usize>,
     },
 
     /// Project edges (matched on source), scoped by selector and narrowed by namespace/field
     Edges {
         /// Globset patterns matched against node keys (edge sources); a bare
-        /// directory is its recursive subtree. With none, every edge is returned.
+        /// directory is its recursive subtree (at least one required, or --all).
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
         selectors: Vec<String>,
+
+        /// Return every edge in the graph
+        #[arg(long)]
+        all: bool,
 
         /// Restrict to a declared graph namespace (repeatable). Accepts the bare
         /// name (`markdown`) or the prefixed key (`@markdown`).
@@ -99,6 +121,10 @@ pub enum Commands {
         /// Restrict returned metadata to named fields (repeatable).
         #[arg(long = "field")]
         fields: Vec<String>,
+
+        /// Refuse when the complete stdout document would exceed this many bytes
+        #[arg(long)]
+        max_bytes: Option<usize>,
     },
 
     /// Check the composed graph against the lockfile for drift and structural findings

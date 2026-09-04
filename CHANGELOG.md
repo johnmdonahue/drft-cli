@@ -4,6 +4,16 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+- **Read commands accept an exact output budget** (#110, #42). `nodes`,
+  `edges`, `graph`, and `impact` accept `--max-bytes <N>` and refuse before
+  writing stdout when the complete UTF-8 result would exceed it. The count
+  includes the final newline and JSON hints. Omitting the flag remains
+  unbounded, and drft never truncates or summarizes a result.
+
+  `nodes` and `edges` also require a selector or `--all`. A missing selector
+  can no longer widen an empty shell expansion to the whole graph. `--all` may
+  be combined with `--namespace` and `--field`, but not with a selector.
+
 - **Path operands resolve exactly** (#155). `impact`, `nodes`, `edges`, and
   `lock` no longer append `.md` or fall through from a cwd-relative miss to a
   same-spelled node at the graph root. A unique likely correction is suggested

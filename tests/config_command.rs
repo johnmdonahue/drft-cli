@@ -32,7 +32,14 @@ fn nested_fixture() -> (TempDir, std::path::PathBuf) {
 fn nodes_honor_repository_gitignore_above_graph_root() {
     let (_repo, root) = nested_fixture();
     let output = drft_bin()
-        .args(["-C", root.to_str().unwrap(), "--format", "json", "nodes"])
+        .args([
+            "-C",
+            root.to_str().unwrap(),
+            "--format",
+            "json",
+            "nodes",
+            "--all",
+        ])
         .output()
         .unwrap();
     assert!(

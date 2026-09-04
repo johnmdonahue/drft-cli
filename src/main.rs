@@ -65,11 +65,11 @@ const NARROW_WITH_READ_VERB: &str = "read a slice instead — `drft nodes <selec
 /// a byte count alone is opaque, and a node count alone does not say how much
 /// output it became. `next` varies by command — the flags that narrow a read
 /// verb do not exist on `graph` or `impact`.
-fn large_projection_hint(count: usize, bytes: usize, next: &str) -> Option<Hint> {
+fn large_projection_hint(count: usize, unit: &str, bytes: usize, next: &str) -> Option<Hint> {
     (bytes >= LARGE_PROJECTION_BYTES).then(|| {
         Hint::new(
             "large-projection",
-            format!("{count} nodes rendered to {}KB of output", bytes / 1024),
+            format!("{count} {unit} rendered to {}KB of output", bytes / 1024),
         )
         .with_next(next)
     })
@@ -91,6 +91,13 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
 #[error("stdout reader closed")]
 struct ClosedStdout;
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct OutputBudgetExceeded {
+    message: String,
+    json: bool,
+}
+
 /// Write rendered output to stdout, stopping the command when its reader closes.
 ///
 /// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
@@ -108,6 +115,25 @@ fn write_stdout_line(line: &str) -> Result<()> {
     write_stdout(&format!("{line}\n"))
 }
 
+fn enforce_output_budget(
+    rendered: &str,
+    max_bytes: Option<usize>,
+    controls: &str,
+    json: bool,
+) -> Result<()> {
+    let bytes = rendered.len();
+    if let Some(max) = max_bytes.filter(|max| bytes > *max) {
+        return Err(OutputBudgetExceeded {
+            message: format!(
+                "rendered output is {bytes} bytes, exceeding --max-bytes {max}; {controls}"
+            ),
+            json,
+        }
+        .into());
+    }
+    Ok(())
+}
+
 /// Print a JSON result document carrying the run's hints, raising the
 /// large-projection hint when the rendered document is big enough to warrant it.
 ///
@@ -118,18 +144,27 @@ fn write_stdout_line(line: &str) -> Result<()> {
 fn print_json_document(
     mut document: serde_json::Value,
     count: usize,
+    unit: &str,
     next: &str,
     hints: &mut Hints,
+    max_bytes: Option<usize>,
+    controls: &str,
 ) -> Result<()> {
     attach_hints(&mut document, hints)?;
     let rendered = serde_json::to_string_pretty(&document)?;
-    match large_projection_hint(count, rendered.len(), next) {
+    match large_projection_hint(count, unit, rendered.len(), next) {
         Some(hint) => {
             hints.push(hint);
             attach_hints(&mut document, hints)?;
-            write_stdout_line(&serde_json::to_string_pretty(&document)?)?;
+            let rendered = format!("{}\n", serde_json::to_string_pretty(&document)?);
+            enforce_output_budget(&rendered, max_bytes, controls, true)?;
+            write_stdout(&rendered)?;
         }
-        None => write_stdout_line(&rendered)?,
+        None => {
+            let rendered = format!("{rendered}\n");
+            enforce_output_budget(&rendered, max_bytes, controls, true)?;
+            write_stdout(&rendered)?;
+        }
     }
     Ok(())
 }
@@ -137,10 +172,19 @@ fn print_json_document(
 /// Print a text projection, raising the large-projection hint on the rendered
 /// size. The hint itself lands on stderr after the command returns, so the
 /// result reads first and a pipe carries only the projection.
-fn print_text_projection(text: &str, count: usize, next: &str, hints: &mut Hints) -> Result<()> {
-    if let Some(hint) = large_projection_hint(count, text.len(), next) {
+fn print_text_projection(
+    text: &str,
+    count: usize,
+    unit: &str,
+    next: &str,
+    hints: &mut Hints,
+    max_bytes: Option<usize>,
+    controls: &str,
+) -> Result<()> {
+    if let Some(hint) = large_projection_hint(count, unit, text.len(), next) {
         hints.push(hint);
     }
+    enforce_output_budget(text, max_bytes, controls, false)?;
     write_stdout(text)
 }
 
@@ -162,7 +206,10 @@ fn main() {
         Err(e) => {
             // A parse/usage error happens before clap resolves `--format`, so
             // scan the raw args to decide whether to emit a JSON error envelope.
-            if wants_json_output() {
+            let budget_json = e
+                .downcast_ref::<OutputBudgetExceeded>()
+                .is_some_and(|e| e.json);
+            if wants_json_output() || budget_json {
                 let err = serde_json::json!({
                     "error": format!("{e:#}"),
                     "exit_code": 2,
@@ -214,18 +261,29 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
             paths,
             depth,
             direction,
-        } => run_impact(&root, cli.format, paths, *depth, *direction, hints),
-        Commands::Graph { raw } => run_graph(&root, *raw, cli.format, hints),
+            max_bytes,
+        } => run_impact(
+            &root, cli.format, paths, *depth, *direction, *max_bytes, hints,
+        ),
+        Commands::Graph { raw, max_bytes } => run_graph(&root, *raw, cli.format, *max_bytes, hints),
         Commands::Nodes {
             selectors,
+            all: _,
             namespaces,
             fields,
-        } => run_nodes(&root, cli.format, selectors, namespaces, fields, hints),
+            max_bytes,
+        } => run_nodes(
+            &root, cli.format, selectors, namespaces, fields, *max_bytes, hints,
+        ),
         Commands::Edges {
             selectors,
+            all: _,
             namespaces,
             fields,
-        } => run_edges(&root, cli.format, selectors, namespaces, fields, hints),
+            max_bytes,
+        } => run_edges(
+            &root, cli.format, selectors, namespaces, fields, *max_bytes, hints,
+        ),
         Commands::Check => run_check(&root, cli.format, cli.color, hints),
     };
 
@@ -252,6 +310,8 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
                 if !matches!(
                     &result,
                     Err(e) if e.downcast_ref::<ClosedStdout>().is_some()
+                        || e.downcast_ref::<OutputBudgetExceeded>()
+                            .is_some_and(|e| e.json)
                 ) =>
             {
                 let colorize = use_color_stderr(cli.color);
@@ -619,8 +679,11 @@ fn report_lock(
         OutputFormat::Json => print_json_document(
             serde_json::json!({ "locked": locked, "dropped": dropped }),
             locked.len() + dropped.len(),
+            "nodes",
             "redirect stdout — drft.lock records the same set",
             hints,
+            None,
+            "",
         ),
         OutputFormat::Text => {
             fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
@@ -783,7 +846,13 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
     (!key.is_empty()).then_some(key)
 }
 
-fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) -> Result<i32> {
+fn run_graph(
+    root: &Path,
+    raw: bool,
+    format: OutputFormat,
+    max_bytes: Option<usize>,
+    hints: &mut Hints,
+) -> Result<i32> {
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
     let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
@@ -802,10 +871,19 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
             .collect::<std::collections::BTreeSet<_>>()
             .len();
         let rendered = serde_json::to_string_pretty(&set)?;
-        if let Some(hint) = large_projection_hint(count, rendered.len(), NARROW_WITH_READ_VERB) {
+        if let Some(hint) =
+            large_projection_hint(count, "nodes", rendered.len(), NARROW_WITH_READ_VERB)
+        {
             hints.push(hint);
         }
-        write_stdout_line(&rendered)?;
+        let rendered = format!("{rendered}\n");
+        enforce_output_budget(
+            &rendered,
+            max_bytes,
+            "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
+            true,
+        )?;
+        write_stdout(&rendered)?;
         return Ok(0);
     }
 
@@ -815,11 +893,18 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
         OutputFormat::Json => {
             let rendered = serde_json::to_string_pretty(&composed.into_document())?;
             if let Some(hint) =
-                large_projection_hint(node_count, rendered.len(), NARROW_WITH_READ_VERB)
+                large_projection_hint(node_count, "nodes", rendered.len(), NARROW_WITH_READ_VERB)
             {
                 hints.push(hint);
             }
-            write_stdout_line(&rendered)?;
+            let rendered = format!("{rendered}\n");
+            enforce_output_budget(
+                &rendered,
+                max_bytes,
+                "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
+                true,
+            )?;
+            write_stdout(&rendered)?;
         }
         OutputFormat::Text => {
             // The whole composed graph as text: every node's metadata, then every
@@ -830,7 +915,15 @@ fn run_graph(root: &Path, raw: bool, format: OutputFormat, hints: &mut Hints) ->
             let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
             let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
             let text = projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)]);
-            print_text_projection(&text, node_count, NARROW_WITH_READ_VERB, hints)?;
+            print_text_projection(
+                &text,
+                node_count,
+                "nodes",
+                NARROW_WITH_READ_VERB,
+                hints,
+                max_bytes,
+                "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
+            )?;
         }
     }
     Ok(0)
@@ -845,6 +938,7 @@ fn run_nodes(
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
+    max_bytes: Option<usize>,
     hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
@@ -869,7 +963,15 @@ fn run_nodes(
                 "total": projected.len(),
                 "nodes": projected,
             });
-            print_json_document(output, projected.len(), NARROW_WITH_SELECTOR, hints)?;
+            print_json_document(
+                output,
+                projected.len(),
+                "nodes",
+                NARROW_WITH_SELECTOR,
+                hints,
+                max_bytes,
+                "narrow it with selectors, --namespace, or --field",
+            )?;
         }
         OutputFormat::Text => {
             // One compact block per node — id, indented namespaces, fields — so a
@@ -877,8 +979,11 @@ fn run_nodes(
             print_text_projection(
                 &nodes::format_text(&projected),
                 projected.len(),
+                "nodes",
                 NARROW_WITH_SELECTOR,
                 hints,
+                max_bytes,
+                "narrow it with selectors, --namespace, or --field",
             )?;
         }
     }
@@ -896,6 +1001,7 @@ fn run_edges(
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
+    max_bytes: Option<usize>,
     hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
@@ -930,15 +1036,26 @@ fn run_edges(
                 "total": projected.len(),
                 "edges": projected,
             });
-            print_json_document(output, projected.len(), NARROW_WITH_SELECTOR, hints)?;
+            print_json_document(
+                output,
+                projected.len(),
+                "edges",
+                NARROW_WITH_SELECTOR,
+                hints,
+                max_bytes,
+                "narrow it with selectors, --namespace, or --field",
+            )?;
         }
         OutputFormat::Text => {
             // One compact block per edge — `source → target`, then its metadata.
             print_text_projection(
                 &edges::format_text(&projected),
                 projected.len(),
+                "edges",
                 NARROW_WITH_SELECTOR,
                 hints,
+                max_bytes,
+                "narrow it with selectors, --namespace, or --field",
             )?;
         }
     }
@@ -1123,6 +1240,7 @@ fn run_impact(
     paths: &[String],
     depth: Depth,
     direction: Direction,
+    max_bytes: Option<usize>,
     hints: &mut Hints,
 ) -> Result<i32> {
     let graph_root = find_graph_root(root);
@@ -1153,11 +1271,26 @@ fn run_impact(
                 "total": impacted.len(),
                 "impacted": impacted,
             });
-            print_json_document(output, impacted.len(), NARROW_WITH_READ_VERB, hints)?;
+            print_json_document(
+                output,
+                impacted.len(),
+                "nodes",
+                NARROW_WITH_READ_VERB,
+                hints,
+                max_bytes,
+                "narrow the seeds, --depth, or --direction",
+            )?;
         }
         OutputFormat::Text => {
             if impacted.is_empty() {
-                write_stdout_line("no dependents found")?;
+                let text = "no dependents found\n";
+                enforce_output_budget(
+                    text,
+                    max_bytes,
+                    "narrow the seeds, --depth, or --direction",
+                    false,
+                )?;
+                write_stdout(text)?;
             } else {
                 let text = impacted
                     .iter()
@@ -1171,7 +1304,15 @@ fn run_impact(
                         )
                     })
                     .collect::<String>();
-                print_text_projection(&text, impacted.len(), NARROW_WITH_READ_VERB, hints)?;
+                print_text_projection(
+                    &text,
+                    impacted.len(),
+                    "nodes",
+                    NARROW_WITH_READ_VERB,
+                    hints,
+                    max_bytes,
+                    "narrow the seeds, --depth, or --direction",
+                )?;
             }
         }
     }

@@ -49,10 +49,12 @@ carries no content to snapshot — the command fails rather than claiming a lock
 that changed nothing. Name the files you reviewed. Any recursive locking syntax
 must use an explicit selector rather than reinterpret a directory path as its subtree.
 
-The empty selector divides on the same line. A reader with no selector returns
-everything, because the cost is a large read. `drft lock` with no paths errors
-instead, and names the whole graph as `--all`, because the cost there is a
-durable claim that every node was reviewed.
+`drft nodes` and `drft edges` require at least one selector or an explicit
+`--all`. A missing selector errors in every environment, so an empty shell
+expansion cannot turn a scoped read into the whole graph. You may combine
+`--all` with `--namespace` and `--field`, but not with a selector. `drft lock`
+uses the same explicit spelling because the whole-graph form makes a durable
+claim that every node was reviewed.
 
 An exact path that matches nothing is a likely typo: the command errors (exit 2)
 with a suggestion. A glob that matches nothing is a legitimate empty result
@@ -143,6 +145,21 @@ set of per-graph fragments, which is JSON only.
 
 For the full flag list, run `drft nodes --help`, `drft edges --help`, or
 `drft graph --help`.
+
+## Refusing oversized output
+
+`nodes`, `edges`, `graph`, and `impact` accept `--max-bytes <N>`. The budget
+counts the complete UTF-8 document written to stdout, including its final
+newline and JSON hints. If the result exceeds the budget, drft writes no stdout
+and exits 2. Text commands explain the refusal on stderr; JSON commands emit one
+JSON error envelope there. `graph --raw` follows the JSON contract even when you
+omit `--format json`.
+
+Omitting `--max-bytes` remains unbounded. drft never truncates or summarizes a
+result: either the complete text or JSON document fits, or the command refuses
+before its first write. Narrow `nodes` and `edges` with selectors,
+`--namespace`, or `--field`; narrow `impact` with its seeds, `--depth`, or
+`--direction`; use a scoped `nodes` or `edges` read instead of `graph`.
 
 ## Hints
 
@@ -235,4 +252,4 @@ Because a selector expands to many nodes, one call can ground a whole subtree:
 stated purpose, and `drft nodes $(drft impact observations.md --format json | jq
 -r '.impacted[].node')` reads the metadata of exactly the files an edit puts in
 review. (The key is `.node`; `impact` reports no `.path`, and an empty expansion
-would collapse to a bare `drft nodes` that projects every node.)
+fails instead of widening the read.)
