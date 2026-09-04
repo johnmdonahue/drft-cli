@@ -86,7 +86,7 @@ fn a_missing_extensionless_source_does_not_select_markdown() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean \"index.md\"?"));
 }
 
-/// With no selector, every edge in the graph is returned.
+/// With `--all`, every edge in the graph is returned.
 #[test]
 fn all_returns_all_edges() {
     let dir = fixture();

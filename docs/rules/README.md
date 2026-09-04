@@ -106,12 +106,10 @@ finding per file would bury it. Unparseable means the baseline may be intact and
 merely unreadable, so reporting every node as unlocked would assert something drft
 cannot know. Empty means a baseline was established and then emptied — every
 lockable node really is unlocked, and `unlocked-node` says so per node, which is
-what keeps a promoted rule gating in the state where it matters most. The last also raises the
-`unparseable-lock` hint, which is what names the cause; the finding reports the
-consequence.
+what keeps a promoted rule gating in the state where it matters most.
 
 It is a rule and not a hint because hints never change an exit code. At its default
-`warn` a first `check` in a new repo stays quiet, and a repo that wants a missing
+`warn` a first `check` in a new repo reports a warning at exit 0, and a repo that wants a missing
 baseline to fail its run promotes it:
 
 ```toml

@@ -154,7 +154,7 @@ fn glob_pattern_matches_node_keys() {
     );
 }
 
-/// With no selector, every node in the graph is returned.
+/// With `--all`, every node in the graph is returned.
 #[test]
 fn all_returns_all_nodes() {
     let dir = fixture();

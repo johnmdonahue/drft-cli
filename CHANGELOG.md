@@ -4,6 +4,15 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+- **The installed binary describes its workflow** (#156). `drft guide` explains
+  the edit, check, review, and scoped-lock loop in text or versioned JSON without
+  reading a repository or config. Command syntax comes from clap; operational
+  records share exit policies and result fields with dispatch.
+
+  Lock's scope constraints are declared in clap alongside reader constraints.
+  Missing or conflicting lock scopes still exit 2 without writing a baseline;
+  their usage errors now use clap's text stderr format even with `--format json`.
+
 - **Read commands accept an exact output budget** (#110, #42). `nodes`,
   `edges`, `graph`, and `impact` accept `--max-bytes <N>` and refuse before
   writing stdout when the complete UTF-8 result would exceed it. The count

@@ -37,8 +37,10 @@ pub enum Commands {
     },
 
     /// Snapshot the current state to drft.lock
+    #[command(group(clap::ArgGroup::new("scope").args(["paths", "all"]).required(true).multiple(true)))]
     Lock {
         /// Lock these paths and their outbound edges (at least one required, or --all)
+        #[arg(conflicts_with = "all")]
         paths: Vec<String>,
 
         /// Lock every node in the graph
@@ -78,10 +80,11 @@ pub enum Commands {
     },
 
     /// Project nodes and their metadata, scoped by selector and narrowed by namespace/field
+    #[command(group(clap::ArgGroup::new("scope").args(["selectors", "all"]).required(true).multiple(true)))]
     Nodes {
         /// Globset patterns matched against node keys; a bare directory is its
         /// recursive subtree (at least one required, or --all).
-        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        #[arg(conflicts_with = "all")]
         selectors: Vec<String>,
 
         /// Return every node in the graph
@@ -103,10 +106,11 @@ pub enum Commands {
     },
 
     /// Project edges (matched on source), scoped by selector and narrowed by namespace/field
+    #[command(group(clap::ArgGroup::new("scope").args(["selectors", "all"]).required(true).multiple(true)))]
     Edges {
         /// Globset patterns matched against node keys (edge sources); a bare
         /// directory is its recursive subtree (at least one required, or --all).
-        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        #[arg(conflicts_with = "all")]
         selectors: Vec<String>,
 
         /// Return every edge in the graph
@@ -129,6 +133,9 @@ pub enum Commands {
 
     /// Check the composed graph against the lockfile for drift and structural findings
     Check,
+
+    /// Describe this installed binary's operational contract
+    Guide,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

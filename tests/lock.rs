@@ -534,7 +534,7 @@ fn lock_with_no_paths_errors_and_writes_nothing() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("drft lock <path>...") && stderr.contains("--all"),
+        stderr.contains("PATHS") && stderr.contains("--all"),
         "the error should name both remedies, got: {stderr}"
     );
 }
@@ -625,11 +625,10 @@ fn lock_all_with_paths_is_a_usage_error() {
     );
 }
 
-/// The refusal reaches a JSON consumer as an envelope, not as bare stderr prose.
-/// The `--format` scan that produces it runs before clap parses, so it is easy to
-/// break without noticing from the text path alone.
+/// Scope is a clap constraint, so its usage failure uses clap's stderr format
+/// even when the caller requests JSON results.
 #[test]
-fn lock_with_no_paths_errors_as_a_json_envelope() {
+fn lock_with_no_paths_uses_claps_usage_error_channel() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
@@ -647,15 +646,12 @@ fn lock_with_no_paths_errors_as_a_json_envelope() {
 
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let parsed: serde_json::Value =
-        serde_json::from_str(stderr.trim()).unwrap_or_else(|e| panic!("not JSON ({e}): {stderr}"));
-    assert_eq!(parsed["exit_code"], 2);
+    assert!(output.stdout.is_empty());
     assert!(
-        parsed["error"]
-            .as_str()
-            .is_some_and(|e| e.contains("--all")),
-        "the envelope should name the remedy, got: {parsed}"
+        stderr.contains("Usage:") && stderr.contains("--all"),
+        "{stderr}"
     );
+    assert!(!dir.path().join("drft.lock").exists());
 }
 
 /// `--all` has no short form. Spelling out the call that asserts whole-graph
