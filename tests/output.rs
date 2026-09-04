@@ -47,6 +47,7 @@ fn read_outputs_survive_a_closed_pipe() {
     )
     .unwrap();
     fs::write(dir.path().join("seed.md"), "# Seed").unwrap();
+    fs::write(dir.path().join("lonely.md"), "# Lonely").unwrap();
     for i in 0..1200 {
         let name = format!("node-{i:04}-{}.md", "x".repeat(72));
         fs::write(
@@ -57,6 +58,8 @@ fn read_outputs_survive_a_closed_pipe() {
     }
 
     for args in [
+        vec!["config", "--show-ignores"],
+        vec!["--format", "json", "config", "--show-ignores"],
         vec!["graph", "--raw"],
         vec!["graph"],
         vec!["--format", "json", "graph"],
@@ -66,6 +69,7 @@ fn read_outputs_survive_a_closed_pipe() {
         vec!["--format", "json", "edges"],
         vec!["impact", "seed.md"],
         vec!["--format", "json", "impact", "seed.md"],
+        vec!["impact", "lonely.md"],
         vec!["check"],
         vec!["--format", "json", "check"],
     ] {
