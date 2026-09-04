@@ -204,21 +204,48 @@ fn impact_resolves_file_under_nested_drft_toml() {
 }
 
 #[test]
-fn impact_md_extension_fallback() {
+fn impact_requires_the_exact_path_and_suggests_markdown() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
-    // "setup" without .md should resolve to "setup.md"
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "impact", "setup"])
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("index.md"));
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("did you mean \"setup.md\"?"),
+        "expected a non-mutating correction, got: {stderr}"
+    );
+}
+
+#[test]
+fn impact_prefers_an_exact_extensionless_node_to_markdown() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(dir.path().join("index.md"), "[guide](guide)").unwrap();
+    fs::write(dir.path().join("guide"), "# Extensionless").unwrap();
+    fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
+
+    let output = drft_bin()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+            "impact",
+            "guide",
+        ])
+        .output()
+        .unwrap();
+
     assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["seeds"], serde_json::json!(["guide"]));
 }
 
 /// Regression (#66): a path argument resolves relative to the current directory,

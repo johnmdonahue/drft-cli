@@ -591,8 +591,7 @@ fn run_lock(
 /// `lock` printed nothing at all until this landed, so a caller could not tell a
 /// lock that covered five files from one that covered none without reading
 /// `drft.lock` by hand. The count is what makes the difference observable; naming
-/// the nodes is what makes a resolution the caller did not expect — a bare name
-/// that matched a file in another directory — visible at the moment it happens
+/// the nodes makes a scoped lock's exact coverage visible at the moment it happens
 /// rather than at the next `check`.
 fn report_lock(
     format: OutputFormat,
@@ -626,12 +625,11 @@ fn report_lock(
             }
             // Name the nodes for a scoped lock, count them for `--all`.
             //
-            // The names are here so a resolution the caller did not expect — a
-            // bare name matching a file in another directory — is visible at the
-            // moment it happens. `--all` resolves nothing, so its listing would be
-            // a copy of `drft.lock` and, on a large graph, thousands of lines of
-            // it. `dropped` is always named: it is never long, and an entry
-            // leaving the baseline is the half worth reading.
+            // The names make a scoped lock's exact coverage visible. `--all`
+            // resolves nothing, so its listing would be a copy of `drft.lock` and,
+            // on a large graph, thousands of lines of it. `dropped` is always
+            // named: it is never long, and an entry leaving the baseline is the
+            // half worth reading.
             // One node, one line — a node key can carry whatever a path can, and
             // a raw newline here turns a lock report into a record nothing can read.
             if !all {
@@ -647,45 +645,33 @@ fn report_lock(
     }
 }
 
-/// Candidate node keys for a user-supplied path, most-specific first.
-///
-/// Nodes are keyed by graph-root-relative path, but the argument is relative to
-/// the current directory (`root`) like any other CLI path — so it is resolved
-/// against `root`, normalized, and made relative to `graph_root` first. This
-/// makes lookup cwd-agnostic: the same file resolves whether given
-/// project-relative from a subdirectory or root-relative from the top. A `.md`
-/// suffix is offered as a fallback, and the raw argument is tried last for back
-/// compatibility.
-fn node_candidates(root: &Path, graph_root: &Path, path: &str) -> Vec<String> {
-    // The `.md` fallback is for a bare doc name (`guide` → `guide.md`). An argument
-    // that already carries an extension names a specific file, so appending `.md`
-    // would only invent a bogus `guide.md.md` candidate — and, pushed first, try it
-    // ahead of the exact key.
-    let add_md = Path::new(path).extension().is_none();
-    let mut candidates = Vec::new();
-    if let Some(key) = graph_key(root, graph_root, path) {
-        if add_md {
-            candidates.push(format!("{key}.md"));
-        }
-        candidates.push(key);
-    }
-    if add_md {
-        candidates.push(format!("{path}.md"));
-    }
-    candidates.push(path.to_string());
-    candidates
-}
-
 /// Build a "node not found" error, suggesting a key that ends with the given path
-/// (the common "right file, wrong prefix" miss). The needle is normalized to match
-/// the graph's forward-slash keys, and a single suggestion is only offered when the
-/// suffix match is unambiguous — otherwise the candidates are listed, so an
-/// arbitrary pick is never presented as "the" one.
-fn not_found_error<'a>(keys: impl Iterator<Item = &'a String>, path: &str) -> anyhow::Error {
-    let needle = drft::util::normalize_relative_path(path);
-    let suffix = format!("/{needle}");
+/// (the common "right file, wrong prefix" miss). A bare missing path also considers
+/// the same key with `.md`, but suggestions never participate in selection.
+fn not_found_error<'a>(
+    keys: impl Iterator<Item = &'a String>,
+    path: &str,
+    exact: Option<&str>,
+) -> anyhow::Error {
+    let mut needles = exact.into_iter().map(str::to_owned).collect::<Vec<_>>();
+    if Path::new(path).extension().is_none()
+        && let Some(exact) = exact
+    {
+        needles.push(format!("{exact}.md"));
+    }
+    let raw = drft::util::normalize_relative_path(path);
+    if !needles.contains(&raw) {
+        needles.push(raw.clone());
+    }
+    if Path::new(path).extension().is_none() {
+        needles.push(format!("{raw}.md"));
+    }
     let mut matches: Vec<&String> = keys
-        .filter(|k| k.as_str() == needle || k.ends_with(&suffix))
+        .filter(|k| {
+            needles
+                .iter()
+                .any(|needle| k.as_str() == needle || k.ends_with(&format!("/{needle}")))
+        })
         .collect();
     matches.sort();
     matches.dedup();
@@ -723,12 +709,17 @@ fn resolve_node(
     graph_root: &Path,
     path: &str,
 ) -> Result<String> {
-    for candidate in node_candidates(root, graph_root, path) {
-        if composed.nodes.contains_key(&candidate) {
-            return Ok(candidate);
-        }
+    let exact = graph_key(root, graph_root, path);
+    if let Some(key) = &exact
+        && composed.nodes.contains_key(key)
+    {
+        return Ok(key.clone());
     }
-    Err(not_found_error(composed.nodes.keys(), path))
+    Err(not_found_error(
+        composed.nodes.keys(),
+        path,
+        exact.as_deref(),
+    ))
 }
 
 /// Resolve a lock path to a node key present in the graph or, when its file is
@@ -744,51 +735,18 @@ fn resolve_lock_node(
     root: &Path,
     graph_root: &Path,
     path: &str,
-    hints: &mut Hints,
+    _hints: &mut Hints,
 ) -> Result<String> {
-    // A writer resolves the exact path before any candidate invented from it.
-    //
-    // The shared candidate list offers `{key}.md` for a bare name, and offering it
-    // first meant that with both `docs/` and `docs.md` present, `drft lock docs`
-    // snapshotted `docs.md` — a durable "this was reviewed" claim against a file
-    // the caller never named, written silently. That ordering is harmless for a
-    // reader, which only ever produces a projection, so it is corrected here
-    // rather than in the shared helper: moving it there would change what
-    // `drft impact docs` seeds on, which is a different question nobody asked.
     let exact = graph_key(root, graph_root, path);
-    let ordered = exact
-        .iter()
-        .cloned()
-        .chain(node_candidates(root, graph_root, path));
-    for candidate in ordered {
-        if composed.nodes.contains_key(&candidate) || existing.nodes.contains_key(&candidate) {
-            // Say so when the resolved node is not the one the argument names
-            // from where it was typed. Run from `docs/` with no `docs/README.md`,
-            // `drft lock README.md` falls through to the root `README.md` — and
-            // reporting the locked key alone cannot show it, because the key is
-            // byte-identical to what the caller typed.
-            if let Some(exact) = &exact
-                && exact != &candidate
-                && format!("{exact}.md") != candidate
-            {
-                hints.push(
-                    Hint::new(
-                        "resolved-elsewhere",
-                        format!(
-                            "names no node from here; resolves to `{}`",
-                            drft::util::one_line(&candidate)
-                        ),
-                    )
-                    .at(path)
-                    .with_next("name the path from the graph root to be sure of the target"),
-                );
-            }
-            return Ok(candidate);
-        }
+    if let Some(key) = &exact
+        && (composed.nodes.contains_key(key) || existing.nodes.contains_key(key))
+    {
+        return Ok(key.clone());
     }
     Err(not_found_error(
         composed.nodes.keys().chain(existing.nodes.keys()),
         path,
+        exact.as_deref(),
     ))
 }
 
@@ -1005,8 +963,7 @@ fn resolve_namespaces(config: &Config, namespaces: &[String]) -> Result<Vec<Stri
 
 /// Resolve the positional selectors to node keys, sorted and deduped. With none,
 /// the whole node set. Each selector is a globset pattern over node keys, a bare
-/// directory (its recursive subtree), or an exact path — reusing `node_candidates`
-/// for the exact, cwd-aware resolution `impact`/`lock` already use.
+/// directory (its recursive subtree), or an exact cwd-aware path.
 fn resolve_selectors(
     composed: &drft::model::Graph,
     root: &Path,
@@ -1081,15 +1038,12 @@ fn resolve_selector(
         .is_some_and(|node| node.fs_type() == Some("directory"));
     let is_dir = names_dir || selector.ends_with('/');
 
-    // A non-directory selector resolves to an exact node, with the `.md` fallback
-    // impact/lock use, most-specific first. A file resolves to itself.
-    if !is_dir {
-        for candidate in node_candidates(root, graph_root, selector) {
-            if composed.nodes.contains_key(&candidate) {
-                matched.push(candidate);
-                break;
-            }
-        }
+    // A non-directory selector resolves only to the exact cwd-relative node.
+    if !is_dir
+        && let Some(key) = &prefix
+        && composed.nodes.contains_key(key)
+    {
+        matched.push(key.clone());
     }
 
     // Directory ⇒ recursive subtree (`docs/` ⇒ `docs/**`). `graph_key` normalizes
@@ -1106,7 +1060,11 @@ fn resolve_selector(
     // selector named a real directory that simply has no descendants, which is a
     // legitimate empty result.
     if matched.is_empty() && !names_dir {
-        return Err(not_found_error(composed.nodes.keys(), selector));
+        return Err(not_found_error(
+            composed.nodes.keys(),
+            selector,
+            prefix.as_deref(),
+        ));
     }
     // A real directory with nothing below it in the graph: a true empty result,
     // and the one case above that does not error. Say so rather than let it pass

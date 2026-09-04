@@ -72,6 +72,17 @@ fn edges_match_on_source() {
     );
 }
 
+#[test]
+fn a_missing_extensionless_source_does_not_select_markdown() {
+    let dir = fixture();
+    let output = drft_bin()
+        .args(["-C", dir.path().to_str().unwrap(), "edges", "index"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean \"index.md\"?"));
+}
+
 /// With no selector, every edge in the graph is returned.
 #[test]
 fn no_selector_returns_all_edges() {
