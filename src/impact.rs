@@ -148,6 +148,68 @@ pub fn compute(
     impacted
 }
 
+/// Findings qualifying this graph read and the edges inspected by this traversal.
+/// Historical pairs use the current expansion frontier and never extend reach.
+#[allow(clippy::too_many_arguments)]
+pub fn diagnostics(
+    graph: &Graph,
+    seeds: &[String],
+    direction: Direction,
+    max_depth: Option<usize>,
+    impacted: &[Impacted],
+    lock: Option<&crate::lock::Lock>,
+    config: &crate::config::Config,
+    build_findings: Vec<crate::diagnostic::Finding>,
+) -> Vec<crate::diagnostic::Finding> {
+    use crate::rules::{check, staleness, structural};
+
+    // Seeds have distance zero even when another seed can reach them. The
+    // existing multi-source traversal supplies shortest distances for all others.
+    let frontier: HashSet<&str> = seeds
+        .iter()
+        .filter(|seed| graph.nodes.contains_key(*seed))
+        .map(|seed| (seed.as_str(), 0))
+        .chain(impacted.iter().map(|item| (item.node.as_str(), item.depth)))
+        .filter(|(_, depth)| max_depth.is_none_or(|max| *depth < max))
+        .map(|(node, _)| node)
+        .collect();
+    let inspected = |source: &str, target: &str| match direction {
+        Direction::Inbound => frontier.contains(target),
+        Direction::Outbound => frontier.contains(source),
+        Direction::Both => frontier.contains(source) || frontier.contains(target),
+    };
+    let edges: Vec<_> = graph
+        .edges
+        .iter()
+        .filter(|edge| inspected(&edge.source, &edge.target))
+        .collect();
+    let mut findings = build_findings;
+    findings.extend(structural::evaluate_edges(
+        graph,
+        &edges,
+        &config.anchor_namespaces(),
+    ));
+    if let Some(lock) = lock {
+        findings.extend(
+            staleness::evaluate(graph, lock)
+                .into_iter()
+                .filter(|finding| match finding.name.as_str() {
+                    "removed-edge" => finding
+                        .target
+                        .as_deref()
+                        .is_some_and(|target| inspected(&finding.subject, target)),
+                    "removed-node" => lock.nodes.get(&finding.subject).is_some_and(|node| {
+                        node.edges
+                            .keys()
+                            .any(|target| inspected(&finding.subject, target))
+                    }),
+                    _ => false,
+                }),
+        );
+    }
+    check::apply_policy(findings, config)
+}
+
 /// Build forward (source → targets) and reverse (target → sources) adjacency
 /// from the composed graph's edges.
 fn adjacency(graph: &Graph) -> (Adjacency<'_>, Adjacency<'_>) {

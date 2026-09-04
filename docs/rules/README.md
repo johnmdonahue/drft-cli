@@ -15,6 +15,10 @@ Most rules are a function over the composed graph: graph in, findings out. `drft
 runs every rule, joins the lockfile for the staleness rules, and emits findings as
 warnings or errors.
 
+`drft impact` carries the findings that qualify a dependency read, using the same
+configured severities and subject ignores. Its diagnostic scope and exit policy
+are described in [impact and missing connections](../reading.md#impact-and-missing-connections).
+
 Configure rules in `drft.toml` under `[rules]`. Every rule has a severity:
 `"warn"`, `"error"`, or `"off"`. All rules default to `warn`; override to
 `error` for CI enforcement or `off` to suppress. A finding's `subject` is the

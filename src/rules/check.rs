@@ -71,6 +71,11 @@ pub fn run(
     }
     findings.extend(structural::evaluate(graph, &config.anchor_namespaces()));
 
+    apply_policy(findings, config)
+}
+
+/// Apply shared severity, subject ignores, subsumption, and deterministic ordering.
+pub fn apply_policy(mut findings: Vec<Finding>, config: &Config) -> Vec<Finding> {
     findings.retain_mut(|finding| {
         // Default severity is warn unless config overrides the rule.
         let severity = config
@@ -131,6 +136,7 @@ pub fn run(
             .cmp(&b.name)
             .then_with(|| a.subject.cmp(&b.subject))
             .then_with(|| a.lines.cmp(&b.lines))
+            .then_with(|| a.target.cmp(&b.target))
             .then_with(|| a.message.cmp(&b.message))
     });
     findings

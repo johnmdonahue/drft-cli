@@ -18,10 +18,47 @@ use crate::util::is_uri;
 /// graphs whose parser publishes the addresses a fragment may be checked
 /// against; with none, `unresolved-fragment` cannot fire.
 pub fn evaluate(graph: &Graph, anchor_namespaces: &[String]) -> Vec<Finding> {
+    let mut findings = evaluate_edges(
+        graph,
+        &graph.edges.iter().collect::<Vec<_>>(),
+        anchor_namespaces,
+    );
+    // detached-node: a file touched by no edge in either direction. Directories
+    // are structural scaffolding — links point at the files inside them, not at
+    // the directory — so a link-less directory is normal, not orphaned content.
+    let mut connected: HashSet<&str> = HashSet::new();
+    for edge in &graph.edges {
+        connected.insert(edge.source.as_str());
+        connected.insert(edge.target.as_str());
+    }
+    for (path, node) in &graph.nodes {
+        if node.fs_type() == Some("directory") {
+            continue;
+        }
+        if !connected.contains(path.as_str()) {
+            findings.push(Finding::warn(
+                "detached-node",
+                path,
+                provenance(&node.metadata),
+                "no connections",
+            ));
+        }
+    }
+
+    findings
+}
+
+/// Evaluate only these edges, retaining the full graph for target resolution.
+/// Edge selection precedes fragment rendering so literal `#` paths retain identity.
+pub fn evaluate_edges(
+    graph: &Graph,
+    edges: &[&crate::model::Edge],
+    anchor_namespaces: &[String],
+) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     // unresolved-edge: a non-URI edge target with no defining node.
-    for edge in &graph.edges {
+    for edge in edges {
         if is_uri(&edge.target) {
             continue;
         }
@@ -46,7 +83,7 @@ pub fn evaluate(graph: &Graph, anchor_namespaces: &[String]) -> Vec<Finding> {
     // define. Reported per fragment rather than per edge, because a source citing
     // two anchors of one target is one edge with two claims and only one of them
     // may be wrong.
-    for edge in &graph.edges {
+    for edge in edges {
         if is_uri(&edge.target) {
             continue;
         }
@@ -104,28 +141,6 @@ pub fn evaluate(graph: &Graph, anchor_namespaces: &[String]) -> Vec<Finding> {
                 finding = finding.with_cause(cause);
             }
             findings.push(finding);
-        }
-    }
-
-    // detached-node: a file touched by no edge in either direction. Directories
-    // are structural scaffolding — links point at the files inside them, not at
-    // the directory — so a link-less directory is normal, not orphaned content.
-    let mut connected: HashSet<&str> = HashSet::new();
-    for edge in &graph.edges {
-        connected.insert(edge.source.as_str());
-        connected.insert(edge.target.as_str());
-    }
-    for (path, node) in &graph.nodes {
-        if node.fs_type() == Some("directory") {
-            continue;
-        }
-        if !connected.contains(path.as_str()) {
-            findings.push(Finding::warn(
-                "detached-node",
-                path,
-                provenance(&node.metadata),
-                "no connections",
-            ));
         }
     }
 

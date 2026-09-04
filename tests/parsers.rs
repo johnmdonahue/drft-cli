@@ -1311,12 +1311,17 @@ fn an_impact_record_carrying_a_newline_stays_on_one_line() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
-        assert!(
-            line.contains("(via "),
-            "every record carries its suffix, so none was split: {line:?}"
-        );
-    }
+    let lines: Vec<_> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "one traversal and one diagnostic: {stdout}");
+    assert!(
+        lines[0].contains("(via doc.md, depth 1, radius 1)"),
+        "{}",
+        lines[0]
+    );
+    assert_eq!(
+        lines[1],
+        "warn[unresolved-edge]: doc.md:3 → first line\\nsecond line (no defining node)"
+    );
     assert!(
         stdout.contains("first line\\nsecond line"),
         "the newline is escaped rather than emitted: {stdout}"

@@ -44,8 +44,18 @@ pub fn build_set(
     ignore.push(LOCKFILE_IGNORE.to_string());
     let files = sources::fs::walk(root, &ignore)?;
 
-    let mut fs_graph = builders::fs::build(root, &files);
-    auto_hash(&mut fs_graph, &files);
+    build_from_files(root, config, hints, findings, &files)
+}
+
+fn build_from_files(
+    root: &Path,
+    config: &Config,
+    hints: &mut Hints,
+    findings: &mut Vec<Finding>,
+    files: &[SourceFile],
+) -> Result<GraphSet> {
+    let mut fs_graph = builders::fs::build(root, files);
+    auto_hash(&mut fs_graph, files);
 
     let mut graphs = vec![fs_graph];
 
@@ -136,31 +146,53 @@ pub fn build_set(
                     graph.edge_keys.clone(),
                     findings,
                 );
-                // Declaring keys states an expectation the corpus can fail to
-                // meet, and every way of failing it produces a graph tracking
-                // nothing while the config says otherwise, at exit 0.
-                //
-                // Two ways, and the message says which, because the remedy
-                // differs: the graph's globs reached no file at all, or they
-                // reached files and no value sat under a declared key.
-                //
-                // Declaring *no* keys is not this state: a frontmatter graph may
-                // exist purely to seed node metadata, and a graph that is as
-                // intended has nothing to report.
-                //
-                // There is deliberately no exemption for a repository with
-                // nothing in it yet. One was tried and it swallowed a misspelled
-                // `files` glob — a graph reaching no file looks identical whether
-                // the globs are wrong or the files are unwritten, so exempting
-                // the second hides the first. The first message covers both, and
-                // names the two remedies rather than assuming which applies.
-                let matched_any = texts.iter().any(|(path, _)| match &parser_files {
-                    Some(set) => set.is_match(path),
-                    None => true,
-                });
+                // Use walked regular files before decoding, and raw parser
+                // findings before configured severity or ignores. A hidden
+                // failure still makes speculative spelling advice misleading.
+                let provenance = format!("@{name}");
+                let failed_frontmatter: BTreeSet<&str> = findings
+                    .iter()
+                    .filter(|finding| {
+                        finding.name == "unreadable-frontmatter"
+                            && finding.graphs.contains(&provenance)
+                    })
+                    .map(|finding| finding.subject.as_str())
+                    .collect();
+                let mut candidates = 0;
+                let mut failures = 0;
+                for file in files.iter().filter(|file| {
+                    file.kind == NodeKind::File
+                        && parser_files
+                            .as_ref()
+                            .is_none_or(|patterns| patterns.is_match(&file.path))
+                }) {
+                    candidates += 1;
+                    // Missing bytes currently have no construction finding.
+                    // They still establish that this candidate was unreadable.
+                    if file.bytes.is_none()
+                        || invalid_text_paths.contains(&file.path)
+                        || failed_frontmatter.contains(file.path.as_str())
+                    {
+                        failures += 1;
+                    }
+                }
                 if !graph.edge_keys.is_empty() && fragment.edges.is_empty() {
                     let keys = render_keys(&graph.edge_keys);
-                    let (message, next) = if matched_any {
+                    let (message, next) = if failures > 0 && failures == candidates {
+                        (
+                            format!(
+                                "declares {keys} but yielded no edges; matched files could not be read"
+                            ),
+                            "repair the unreadable files matched by this graph, then rerun",
+                        )
+                    } else if failures > 0 {
+                        (
+                            format!(
+                                "declares {keys} but yielded no edges; some matched files could not be read"
+                            ),
+                            "repair the unreadable files matched by this graph, then rerun; if no edges remain, check the declared keys, files globs, ignore patterns, and string values",
+                        )
+                    } else if candidates > 0 {
                         (
                             // "Nothing yielded an edge" rather than "no value was
                             // found": a number, a boolean, an empty string or an
@@ -186,11 +218,8 @@ pub fn build_set(
                         )
                     } else {
                         (
-                            // "No file was read" rather than "the globs matched
-                            // nothing": a file the globs do reach can be ignored,
-                            // unreadable, or invalid UTF-8. `unreadable-text`
-                            // names the last case by file; this graph-level hint
-                            // still has to cover the others without guessing.
+                            // No candidates also covers an unwritten corpus or
+                            // files excluded by the walk's ignore patterns.
                             format!("declares {keys}, but no file was read for this graph"),
                             "check the `files` globs, any `ignore` patterns, and that the matched files are readable UTF-8 text",
                         )
@@ -250,6 +279,118 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    fn hint_fixture(files: &[SourceFile], findings: &mut Vec<Finding>) -> Hint {
+        let mut config = Config::defaults();
+        config.graphs.clear();
+        config.graphs.insert(
+            "fm".into(),
+            crate::config::GraphConfig {
+                parser: "frontmatter".into(),
+                files: vec!["*.md".into()],
+                edge_keys: vec!["sources".into()],
+            },
+        );
+        let mut hints = Hints::default();
+        build_from_files(Path::new("."), &config, &mut hints, findings, files).unwrap();
+        hints.as_slice()[0].clone()
+    }
+
+    fn source(path: &str, kind: NodeKind, bytes: Option<&[u8]>) -> SourceFile {
+        SourceFile {
+            path: path.into(),
+            kind,
+            bytes: bytes.map(Vec::from),
+        }
+    }
+
+    #[test]
+    fn zero_edge_hint_partitions_each_read_failure_before_decoding() {
+        for bytes in [
+            None,
+            Some(&b"\xff"[..]),
+            Some(&b"---\nsources: [\n---\n"[..]),
+        ] {
+            let mut findings = Vec::new();
+            let hint = hint_fixture(&[source("bad.md", NodeKind::File, bytes)], &mut findings);
+            assert_eq!(
+                hint.next.as_deref(),
+                Some("repair the unreadable files matched by this graph, then rerun")
+            );
+            assert!(hint.message.contains("matched files could not be read"));
+            if bytes.is_none() {
+                assert!(findings.is_empty(), "absent bytes add no diagnostic");
+            }
+            let mixed = hint_fixture(
+                &[
+                    source("bad.md", NodeKind::File, bytes),
+                    source("plain.md", NodeKind::File, Some(b"no metadata")),
+                ],
+                &mut Vec::new(),
+            );
+            assert!(
+                mixed
+                    .message
+                    .contains("some matched files could not be read")
+            );
+            assert_eq!(
+                mixed.next.as_deref(),
+                Some(
+                    "repair the unreadable files matched by this graph, then rerun; if no edges remain, check the declared keys, files globs, ignore patterns, and string values"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn zero_edge_hint_uses_only_regular_files_matching_this_graph() {
+        let hint = hint_fixture(
+            &[
+                source("folder.md", NodeKind::Dir, None),
+                source("link.md", NodeKind::Symlink, None),
+                source("other.txt", NodeKind::File, None),
+            ],
+            &mut Vec::new(),
+        );
+        assert!(hint.message.contains("no file was read"));
+        assert!(hint.next.unwrap().contains("globs"));
+        let hint = hint_fixture(
+            &[
+                source("bad.md", NodeKind::File, None),
+                source("folder.md", NodeKind::Dir, None),
+                source("link.md", NodeKind::Symlink, None),
+                source("other.txt", NodeKind::File, Some(b"readable")),
+            ],
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            hint.next.as_deref(),
+            Some("repair the unreadable files matched by this graph, then rerun")
+        );
+    }
+
+    #[test]
+    fn zero_edge_hint_requires_exact_graph_read_evidence() {
+        for (rule, graph) in [
+            ("unreadable-frontmatter", "@other"),
+            ("stale-node", "@fm"),
+            ("unresolved-edge", "@fm"),
+        ] {
+            let mut findings = vec![Finding::warn(
+                rule,
+                "plain.md",
+                vec![graph.into()],
+                "fixture",
+            )];
+            let hint = hint_fixture(
+                &[source("plain.md", NodeKind::File, Some(b"plain"))],
+                &mut findings,
+            );
+            assert!(hint.next.unwrap().contains("spelling"), "{rule} {graph}");
+        }
+        let hint = hint_fixture(&[], &mut Vec::new());
+        assert!(hint.message.contains("no file was read"));
+    }
 
     #[test]
     fn fs_graph_has_typed_hashed_nodes() {
