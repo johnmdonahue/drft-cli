@@ -210,7 +210,7 @@ error envelope rather than vanishing. In text, a hint raised before a failure
 appears on stderr before the `error:` record. In JSON, it appears in the single
 error envelope; drft does not print a separate hints envelope first.
 
-`drft lock` prints a result document too, `{locked, dropped}`, naming the nodes it
+`drft lock` prints a result document too, `{locked, dropped, hints}`, naming the nodes it
 wrote and the entries it removed. Reporting the effect is what makes a lock that
 covered nothing distinguishable from one that covered the files you meant. Path
 operands select only the exact cwd-relative node they name. A missing bare path may
@@ -227,7 +227,7 @@ with no arguments refuses rather than locking everything, because a collapsed
 | `zero-match-selector`       | A selector resolved to nothing — an empty answer, not a clean one                                      |
 | `large-projection`          | The rendered output is big enough to crowd a reader's context                                          |
 | `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing                                      |
-| `unparseable-lock`          | `drft.lock` could not be read, so every node reads as unlocked                                         |
+| `unparseable-lock`          | `drft.lock` could not be read, so staleness cannot be evaluated                                        |
 | `directory-lock`            | A formerly lockable path is now a directory; its old entry was dropped, but no descendants were locked |
 | `nothing-to-lock`           | A locked path carries no content to snapshot                                                           |
 | `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                             |

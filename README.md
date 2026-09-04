@@ -19,6 +19,10 @@ Or download a prebuilt binary from [GitHub Releases](https://github.com/johnmdon
 
 The binary is called `drft`.
 
+Run `drft guide` for the installed binary's edit workflow and command contracts,
+or `drft guide --format json` for structured guidance. It works without a
+repository or configuration file.
+
 ## Quick start
 
 ```bash
@@ -46,15 +50,17 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 
 ## Commands
 
-| Command       | What it does                                                   |
-| ------------- | -------------------------------------------------------------- |
-| `drft init`   | Create a default `drft.toml`                                   |
-| `drft graph`  | Render the composed graph as text or JGF (`--raw` for the set) |
-| `drft nodes`  | Project node metadata by path, subtree, or glob                |
-| `drft edges`  | Project edges (matched on source) by path, subtree, or glob    |
-| `drft impact` | Show what depends on given files, sorted by review priority    |
-| `drft check`  | Compare the graph against the lockfile for drift               |
-| `drft lock`   | Snapshot hashes to `drft.lock` for staleness tracking          |
+| Command                      | What it does                                                   |
+| ---------------------------- | -------------------------------------------------------------- |
+| `drft init`                  | Create a default `drft.toml`                                   |
+| `drft guide`                 | Describe the installed binary's workflow and command contracts |
+| `drft config --show-ignores` | Inspect the filesystem ignore sources                          |
+| `drft graph`                 | Render the composed graph as text or JGF (`--raw` for the set) |
+| `drft nodes`                 | Project node metadata by path, subtree, or glob                |
+| `drft edges`                 | Project edges (matched on source) by path, subtree, or glob    |
+| `drft impact`                | Show what depends on given files, sorted by review priority    |
+| `drft check`                 | Compare the graph against the lockfile for drift               |
+| `drft lock`                  | Snapshot hashes to `drft.lock` for staleness tracking          |
 
 `drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges,
 merging into the existing lockfile. A lock asserts the locked state was reviewed,
@@ -69,7 +75,8 @@ The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors
 (exit 2), so a scoped invocation whose shell expansion came back empty fails
 instead of widening to every node.
 
-All commands support `--format json`. Run `drft --help` for the full flag reference.
+All commands accept `--format json`; `init` emits no success document.
+Run `drft --help` for flags or `drft guide` for workflow and output contracts.
 
 `drft impact` reports the files that name the seed **directly** — one hop. That is
 the question an edit asks: each hit is a promise someone wrote down, so it lands
@@ -107,7 +114,7 @@ drft grounds an agent in a codebase's structure without making it open every fil
 - `drft edges <path>` returns what a file links to; `drft impact <path>` returns what depends on it, sorted by review priority.
 - `drft graph` renders the whole composed graph as compact text, so a model reads the structure in one call without parsing JSON.
 
-Every command also emits `--format json` — `drft impact` carries an actionable `fix` on each entry, naming the review the change asks for — and a `hints` channel carrying advisories about the run itself — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground. See [Reading the graph](docs/reading.md) for the selector grammar, the `--namespace` / `--field` filters, and the hint set.
+Use `--format json` for structured results — `drft impact` carries an actionable `fix` on each entry, naming the review the change asks for — and a `hints` channel carrying advisories about the run itself — a selector that matched nothing, a projection large enough to crowd the context it was meant to ground. See [Reading the graph](docs/reading.md) for the selector grammar, the `--namespace` / `--field` filters, and the hint set.
 
 This repo runs drft on itself, as a local authoring aid rather than a CI gate: an agent maps a change's blast radius with `drft impact` before editing, then reviews what `drft check` reports and locks only what it read. Nothing about that is harness-specific, and no hook configuration ships here — the commands above are the whole interface.
 

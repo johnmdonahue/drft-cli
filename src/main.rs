@@ -1,4 +1,6 @@
 mod cli;
+mod guide;
+mod policy;
 
 use drft::compose;
 use drft::config;
@@ -19,10 +21,11 @@ use std::path::Path;
 
 use cli::{Cli, ColorChoice, Commands, Depth, Direction, OutputFormat};
 use config::{Config, RuleSeverity};
+use policy::{ExitStatus, OutputMode};
 
 fn use_color(choice: ColorChoice, format: OutputFormat) -> bool {
     // Never colorize JSON output
-    if matches!(format, OutputFormat::Json) {
+    if !OutputMode::Envelope.allows_color(format) {
         return false;
     }
     match choice {
@@ -82,7 +85,10 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
     let obj = document
         .as_object_mut()
         .context("a result document must be a JSON object to carry hints")?;
-    obj.insert("hints".to_string(), serde_json::to_value(&*hints)?);
+    obj.insert(
+        policy::HINTS_FIELD.to_string(),
+        serde_json::to_value(&*hints)?,
+    );
     hints.mark_delivered();
     Ok(())
 }
@@ -122,7 +128,8 @@ fn enforce_output_budget(
     json: bool,
 ) -> Result<()> {
     let bytes = rendered.len();
-    if let Some(max) = max_bytes.filter(|max| bytes > *max) {
+    if policy::OUTPUT_GUARD.exceeds(bytes, max_bytes) {
+        let max = max_bytes.expect("an exceeded budget has a limit");
         return Err(OutputBudgetExceeded {
             message: format!(
                 "rendered output is {bytes} bytes, exceeding --max-bytes {max}; {controls}"
@@ -150,12 +157,16 @@ fn print_json_document(
     max_bytes: Option<usize>,
     controls: &str,
 ) -> Result<()> {
-    attach_hints(&mut document, hints)?;
+    if OutputMode::Envelope.embeds_hints() {
+        attach_hints(&mut document, hints)?;
+    }
     let rendered = serde_json::to_string_pretty(&document)?;
     match large_projection_hint(count, unit, rendered.len(), next) {
         Some(hint) => {
             hints.push(hint);
-            attach_hints(&mut document, hints)?;
+            if OutputMode::Envelope.embeds_hints() {
+                attach_hints(&mut document, hints)?;
+            }
             let rendered = format!("{}\n", serde_json::to_string_pretty(&document)?);
             enforce_output_budget(&rendered, max_bytes, controls, true)?;
             write_stdout(&rendered)?;
@@ -202,24 +213,24 @@ fn main() {
     let mut hints = Hints::default();
     let code = match try_main(&mut hints) {
         Ok(code) => code,
-        Err(e) if e.downcast_ref::<ClosedStdout>().is_some() => 0,
+        Err(e) if e.downcast_ref::<ClosedStdout>().is_some() => ExitStatus::Success.code(),
         Err(e) => {
-            // A parse/usage error happens before clap resolves `--format`, so
-            // scan the raw args to decide whether to emit a JSON error envelope.
+            // Dispatch errors use the requested format. Clap handles its own
+            // parse errors before dispatch, using its text usage-error format.
             let budget_json = e
                 .downcast_ref::<OutputBudgetExceeded>()
                 .is_some_and(|e| e.json);
             if wants_json_output() || budget_json {
                 let err = serde_json::json!({
                     "error": format!("{e:#}"),
-                    "exit_code": 2,
+                    "exit_code": ExitStatus::Failure.code(),
                     "hints": &hints,
                 });
                 eprintln!("{}", serde_json::to_string(&err).unwrap());
             } else {
                 eprintln!("error: {e:#}");
             }
-            2
+            ExitStatus::Failure.code()
         }
     };
     std::process::exit(code);
@@ -243,6 +254,18 @@ fn wants_json_output() -> bool {
 
 fn try_main(hints: &mut Hints) -> Result<i32> {
     let cli = Cli::parse();
+
+    // Compiled guidance is available even outside a repository or with an invalid -C.
+    if matches!(cli.command, Commands::Guide) {
+        let document = guide::document()?;
+        return match cli.format {
+            OutputFormat::Json => policy::emit_json(&document, write_stdout),
+            OutputFormat::Text => {
+                write_stdout(&guide::render_text(&document)?)?;
+                Ok(ExitStatus::Success.code())
+            }
+        };
+    }
 
     let root = match &cli.directory {
         Some(dir) => std::fs::canonicalize(dir)
@@ -285,6 +308,7 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
             &root, cli.format, selectors, namespaces, fields, *max_bytes, hints,
         ),
         Commands::Check => run_check(&root, cli.format, cli.color, hints),
+        Commands::Guide => unreachable!("guide dispatches before filesystem access"),
     };
 
     // A hint that reached nobody is worse than no hint, so delivery is tracked
@@ -364,7 +388,7 @@ fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
         }
     }
 
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 fn run_init(root: &Path) -> Result<i32> {
@@ -404,7 +428,7 @@ edge_keys = ["sources"]
     std::fs::write(&config_path, content)
         .with_context(|| format!("failed to write {}", config_path.display()))?;
 
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Snapshot the composed graph into `drft.lock`: node content hashes and each
@@ -427,23 +451,7 @@ fn run_lock(
     all: bool,
     hints: &mut Hints,
 ) -> Result<i32> {
-    // Both guards are pure argv, so they answer before any graph work.
-    if paths.is_empty() && !all {
-        anyhow::bail!(
-            "no paths given — name the paths you reviewed (`drft lock <path>...`), \
-             or pass `--all` to lock every node. An empty argument list is also \
-             what a shell substitution that matched nothing produces, so it is \
-             not read as the whole graph."
-        );
-    }
-    if !paths.is_empty() && all {
-        anyhow::bail!(
-            "`--all` locks every node, so it cannot be combined with paths — \
-             drop `--all` to lock only the paths you named, or drop the paths \
-             to lock the whole graph."
-        );
-    }
-
+    // Clap's required scope group and conflict reject ambiguous scopes before dispatch.
     let graph_root = find_graph_root(root);
     let config = load_config(&graph_root, hints)?;
     let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
@@ -500,7 +508,7 @@ fn run_lock(
             lock::write(&graph_root, &snapshot)?;
         }
         report_lock(format, all, &locked, &dropped, hints)?;
-        return Ok(0);
+        return Ok(ExitStatus::Success.code());
     }
 
     // `read` returns `None` for a lockfile that is absent and for one that cannot
@@ -658,7 +666,7 @@ fn run_lock(
         lock::write(&graph_root, &existing)?;
     }
     report_lock(format, all, &locked, &dropped, hints)?;
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Report what a lock actually wrote.
@@ -677,7 +685,7 @@ fn report_lock(
 ) -> Result<()> {
     match format {
         OutputFormat::Json => print_json_document(
-            serde_json::json!({ "locked": locked, "dropped": dropped }),
+            serde_json::to_value(policy::LockResult { locked, dropped })?,
             locked.len() + dropped.len(),
             "nodes",
             "redirect stdout — drft.lock records the same set",
@@ -881,10 +889,10 @@ fn run_graph(
             &rendered,
             max_bytes,
             "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
-            true,
+            OutputMode::RawGraphSet.is_json(format),
         )?;
         write_stdout(&rendered)?;
-        return Ok(0);
+        return Ok(ExitStatus::Success.code());
     }
 
     let composed = compose::compose(&set);
@@ -926,7 +934,7 @@ fn run_graph(
             )?;
         }
     }
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Project the composed graph's nodes and their metadata, scoped by `selectors`
@@ -959,10 +967,10 @@ fn run_nodes(
 
     match format {
         OutputFormat::Json => {
-            let output = serde_json::json!({
-                "total": projected.len(),
-                "nodes": projected,
-            });
+            let output = serde_json::to_value(policy::NodesResult {
+                total: projected.len(),
+                nodes: &projected,
+            })?;
             print_json_document(
                 output,
                 projected.len(),
@@ -988,7 +996,7 @@ fn run_nodes(
         }
     }
 
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Project the composed graph's edges, matched on source: the selector picks source
@@ -1032,10 +1040,10 @@ fn run_edges(
 
     match format {
         OutputFormat::Json => {
-            let output = serde_json::json!({
-                "total": projected.len(),
-                "edges": projected,
-            });
+            let output = serde_json::to_value(policy::EdgesResult {
+                total: projected.len(),
+                edges: &projected,
+            })?;
             print_json_document(
                 output,
                 projected.len(),
@@ -1060,7 +1068,7 @@ fn run_edges(
         }
     }
 
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Validate each requested namespace against the declared graphs (`fs` plus every
@@ -1266,11 +1274,11 @@ fn run_impact(
 
     match format {
         OutputFormat::Json => {
-            let output = serde_json::json!({
-                "seeds": seeds,
-                "total": impacted.len(),
-                "impacted": impacted,
-            });
+            let output = serde_json::to_value(policy::ImpactResult {
+                seeds: &seeds,
+                total: impacted.len(),
+                impacted: &impacted,
+            })?;
             print_json_document(
                 output,
                 impacted.len(),
@@ -1317,7 +1325,7 @@ fn run_impact(
         }
     }
 
-    Ok(0)
+    Ok(ExitStatus::Success.code())
 }
 
 /// Check the composed graph against the lockfile, reporting drift and structural
@@ -1361,17 +1369,18 @@ fn run_check(
                 .count();
             // Findings, not a projection, so no size hint — `check` reports what
             // the graph says rather than handing back a slice of it.
-            let mut output = serde_json::json!({
-                "diagnostics": findings,
-                "summary": { "errors": errors, "warnings": warnings },
-            });
-            attach_hints(&mut output, hints)?;
+            let mut output = serde_json::to_value(policy::CheckResult {
+                diagnostics: &findings,
+                summary: policy::CheckSummary { errors, warnings },
+            })?;
+            if OutputMode::Envelope.embeds_hints() {
+                attach_hints(&mut output, hints)?;
+            }
             write_stdout_line(&serde_json::to_string_pretty(&output)?)?;
         }
     }
 
-    let has_errors = findings.iter().any(|f| f.severity == RuleSeverity::Error);
-    Ok(if has_errors { 1 } else { 0 })
+    Ok(policy::check_status(&findings).code())
 }
 
 /// Walk up from `start` to find the nearest ancestor directory with `drft.toml`.

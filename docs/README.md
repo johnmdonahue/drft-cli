@@ -13,6 +13,7 @@ the composed graph to emit findings.
 
 ## Reference
 
+- [Installed-binary guidance](guide.md) — the edit workflow and versioned command contract from `drft guide`
 - [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`, and whether to commit the config and lockfile at all
 - [Parsers](parsers/README.md) — how parsers extract links and metadata
 - [Rules](rules/README.md) — the drift and structural findings `drft check` emits
