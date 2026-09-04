@@ -2,7 +2,7 @@
 
 ## The process
 
-1. **Bump version** in `Cargo.toml`
+1. **Bump version** in `Cargo.toml` and update the `drft-cli` entry in `Cargo.lock`
 2. **Update CHANGELOG.md** with the new version and date
 3. **Open a PR** from a release branch (e.g., `release/v0.x.x`) — main is protected
 4. **Merge** after CI passes
@@ -24,11 +24,16 @@ depends on.
 
 ## What happens automatically
 
+CI (`ci.yml`) runs on pushes to `main` and pull requests targeting `main`. It
+checks Rust and document formatting, clippy, tests, and benchmark compilation.
+Require release-branch CI to pass before merging; version tags do not trigger CI.
+
 When you push a version tag (`v*`):
 
-1. **CI** (`ci.yml`) — runs fmt, clippy, tests
-2. **Release** (`release.yml`) — cargo-dist builds binaries for macOS (arm64, x64), Linux (arm64, x64), and Windows (x64), then uploads to GitHub Releases
-3. **Publish** (`publish.yml`) — after Release succeeds, publishes to crates.io and npm with the version from `Cargo.toml`
+1. **Release** (`release.yml`) — cargo-dist builds binaries for macOS (arm64, x64), Linux (arm64, x64), and Windows (x64), then uploads to GitHub Releases
+2. **Publish** (`publish.yml`) — after a tag-push Release succeeds, publishes to crates.io and npm with the version from `Cargo.toml`
+
+Release also runs on pull requests without publishing.
 
 ## Secrets required
 
@@ -48,6 +53,7 @@ npm uses **trusted publishing** (OIDC) — no token needed. Configure at https:/
 
 ```bash
 # Edit Cargo.toml: version = "0.3.0"
+# Update the drft-cli version in Cargo.lock to match
 # Edit CHANGELOG.md: add ## 0.3.0 section
 git checkout -b release/v0.3.0
 drft lock Cargo.toml CHANGELOG.md # local bookkeeping only — see above
