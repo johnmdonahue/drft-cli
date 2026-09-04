@@ -224,7 +224,7 @@ fn impact_requires_the_exact_path_and_suggests_markdown() {
 }
 
 #[test]
-fn impact_prefers_an_exact_extensionless_node_to_markdown() {
+fn impact_selects_an_exact_extensionless_node() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[guide](guide)").unwrap();
