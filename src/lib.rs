@@ -16,4 +16,6 @@ pub mod parsers;
 pub mod projection;
 pub mod rules;
 pub mod sources;
+#[doc(hidden)]
+pub mod usage;
 pub mod util;

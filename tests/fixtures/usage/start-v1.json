@@ -1,0 +1,70 @@
+{
+  "schema": "drft-usage",
+  "revision": 1,
+  "event": "start",
+  "id": "12121212121212121212121212121212",
+  "entry_wall_time": {
+    "status": "available",
+    "value": {
+      "seconds": 100,
+      "nanoseconds": 123
+    }
+  },
+  "collected_wall_time": {
+    "status": "available",
+    "value": {
+      "seconds": 101,
+      "nanoseconds": 456
+    }
+  },
+  "binary_version": "0.18.0",
+  "original_cwd": {
+    "os_encoding": "unix-bytes",
+    "encoding": "utf8",
+    "value": "/work"
+  },
+  "effective_directory": {
+    "os_encoding": "unix-bytes",
+    "encoding": "utf8",
+    "value": "/work/project"
+  },
+  "canonical_graph_root": {
+    "os_encoding": "unix-bytes",
+    "encoding": "utf8",
+    "value": "/work/project"
+  },
+  "command": "graph",
+  "requested_format": "json",
+  "argv": [
+    {
+      "os_encoding": "unix-bytes",
+      "encoding": "utf8",
+      "value": "drft"
+    },
+    {
+      "os_encoding": "unix-bytes",
+      "encoding": "utf8",
+      "value": "graph"
+    },
+    {
+      "os_encoding": "unix-bytes",
+      "encoding": "utf8",
+      "value": "--raw"
+    },
+    {
+      "os_encoding": "unix-bytes",
+      "encoding": "base64",
+      "value": "/w=="
+    }
+  ],
+  "config_fingerprint": "b3:b756e64ea90c4036e88f3f07ff9a708666dc0527bf14a015249e84ff6daabaa7",
+  "caller": {
+    "label": {
+      "os_encoding": "unix-bytes",
+      "encoding": "utf8",
+      "value": "caller-example"
+    },
+    "authenticated": false,
+    "unique_to_invocation": false
+  }
+}
