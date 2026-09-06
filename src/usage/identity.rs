@@ -304,6 +304,14 @@ mod tests {
         unix.update(b"a\0");
         windows.update(b"a\0");
         assert_ne!(unix.finalize(), windows.finalize());
+        assert_eq!(
+            unix.finalize(),
+            blake3::hash(b"drft-usage-partition\0unix-bytes\0a\0")
+        );
+        assert_eq!(
+            windows.finalize(),
+            blake3::hash(b"drft-usage-partition\0windows-utf16le\0a\0")
+        );
     }
 
     #[cfg(unix)]
@@ -344,7 +352,13 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn native_random_source_returns_a_full_id() {
-        assert_eq!(InvocationId::generate().unwrap().as_str().len(), 32);
+        let first = InvocationId::generate().unwrap();
+        let second = InvocationId::generate().unwrap();
+        assert_eq!(first.as_str().len(), 32);
+        assert_eq!(second.as_str().len(), 32);
+        // Smoke-check the production wiring for a fixed-value stub. This is
+        // not an entropy assessment; a random collision has probability 2^-128.
+        assert_ne!(first, second);
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]

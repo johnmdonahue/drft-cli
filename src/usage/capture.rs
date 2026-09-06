@@ -27,6 +27,8 @@ impl ByteCount {
     }
 }
 
+/// Acceptance reported by the supplied writer, which may buffer its input.
+/// This never establishes OS acceptance or downstream consumption.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", content = "bytes", rename_all = "snake_case")]
 pub enum AcceptedBytes {
@@ -56,7 +58,8 @@ pub struct CaptureSnapshot {
     pub retained_bytes: usize,
     pub truncated: bool,
     pub write_outcome: WriteOutcome,
-    pub accepted_bytes: AcceptedBytes,
+    /// Bytes accepted by `write_all`; OS acceptance remains unobserved.
+    pub writer_accepted_bytes: AcceptedBytes,
     pub downstream_consumption: DownstreamConsumption,
 }
 
@@ -122,7 +125,7 @@ impl StreamCapture {
         } else {
             WriteOutcome::AllSucceeded
         };
-        let accepted_bytes = match write_outcome {
+        let writer_accepted_bytes = match write_outcome {
             WriteOutcome::NotAttempted => AcceptedBytes::NotAttempted,
             WriteOutcome::AllSucceeded => AcceptedBytes::Known(self.observed),
             WriteOutcome::UnknownAcceptance { .. } => AcceptedBytes::Unknown,
@@ -133,7 +136,7 @@ impl StreamCapture {
             retained_bytes: self.prefix.len(),
             truncated: self.truncated,
             write_outcome,
-            accepted_bytes,
+            writer_accepted_bytes,
             downstream_consumption: DownstreamConsumption::Unknown,
         }
     }
@@ -171,20 +174,59 @@ mod tests {
     fn unattempted_differs_from_empty_success() {
         let mut capture = StreamCapture::stdout();
         assert_eq!(
-            capture.snapshot().accepted_bytes,
+            capture.snapshot().writer_accepted_bytes,
             AcceptedBytes::NotAttempted
         );
         capture.begin_write(b"").finish(&Ok(()));
         let snapshot = capture.snapshot();
         assert_eq!(snapshot.write_outcome, WriteOutcome::AllSucceeded);
         assert_eq!(
-            snapshot.accepted_bytes,
+            snapshot.writer_accepted_bytes,
             AcceptedBytes::Known(ByteCount::Exact(0))
         );
         assert_eq!(
             snapshot.downstream_consumption,
             DownstreamConsumption::Unknown
         );
+    }
+
+    #[test]
+    fn snapshot_retained_count_and_truncation_survive_empty_writes() {
+        let mut capture = StreamCapture::stderr();
+        capture.begin_write(b"abc").finish(&Ok(()));
+        assert_eq!(capture.snapshot().retained_bytes, 3);
+        capture
+            .begin_write(&vec![b'x'; STDERR_LIMIT])
+            .finish(&Ok(()));
+        assert!(capture.snapshot().truncated);
+        capture.begin_write(b"").finish(&Ok(()));
+        let snapshot = capture.snapshot();
+        assert_eq!(snapshot.retained_bytes, STDERR_LIMIT);
+        assert_eq!(
+            STANDARD.decode(snapshot.prefix_base64).unwrap().len(),
+            snapshot.retained_bytes
+        );
+        assert!(snapshot.truncated);
+    }
+
+    #[test]
+    fn successful_buffering_writer_does_not_establish_os_acceptance() {
+        let mut writer = io::BufWriter::with_capacity(32, Vec::new());
+        let mut capture = StreamCapture::stdout();
+        let attempt = capture.begin_write(b"abc");
+        let result = writer.write_all(b"abc");
+        attempt.finish(&result);
+        result.unwrap();
+        assert!(writer.get_ref().is_empty());
+        let snapshot = serde_json::to_value(capture.snapshot()).unwrap();
+        assert_eq!(
+            snapshot["writer_accepted_bytes"],
+            serde_json::json!({
+                "status": "known", "bytes": { "status": "exact", "bytes": 3 }
+            })
+        );
+        assert!(snapshot.get("accepted_bytes").is_none());
+        assert_eq!(snapshot["downstream_consumption"], "unknown");
     }
 
     #[test]
@@ -241,7 +283,7 @@ mod tests {
         assert_eq!(writer.accepted, b"ab");
         capture.begin_write(b"later").finish(&Ok(()));
         let snapshot = capture.snapshot();
-        assert_eq!(snapshot.accepted_bytes, AcceptedBytes::Unknown);
+        assert_eq!(snapshot.writer_accepted_bytes, AcceptedBytes::Unknown);
         assert_eq!(snapshot.observed_input_bytes, ByteCount::Exact(11));
         assert_eq!(
             STANDARD.decode(snapshot.prefix_base64).unwrap(),
@@ -270,9 +312,15 @@ mod tests {
         );
         let mut forgotten = StreamCapture::stdout();
         std::mem::forget(forgotten.begin_write(b"x"));
-        assert_eq!(forgotten.snapshot().accepted_bytes, AcceptedBytes::Unknown);
+        assert_eq!(
+            forgotten.snapshot().writer_accepted_bytes,
+            AcceptedBytes::Unknown
+        );
         forgotten.begin_write(b"y").finish(&Ok(()));
-        assert_eq!(forgotten.snapshot().accepted_bytes, AcceptedBytes::Unknown);
+        assert_eq!(
+            forgotten.snapshot().writer_accepted_bytes,
+            AcceptedBytes::Unknown
+        );
     }
 
     #[test]
@@ -284,7 +332,7 @@ mod tests {
         assert_eq!(capture.prefix.len(), STDERR_LIMIT);
         assert_eq!(capture.prefix.capacity(), STDERR_LIMIT);
         assert_eq!(
-            capture.snapshot().accepted_bytes,
+            capture.snapshot().writer_accepted_bytes,
             AcceptedBytes::Known(ByteCount::Exact(300_000))
         );
     }
@@ -297,7 +345,7 @@ mod tests {
         capture.begin_write(b"").finish(&Ok(()));
         assert_eq!(capture.snapshot().observed_input_bytes, ByteCount::Overflow);
         assert_eq!(
-            capture.snapshot().accepted_bytes,
+            capture.snapshot().writer_accepted_bytes,
             AcceptedBytes::Known(ByteCount::Overflow)
         );
     }
