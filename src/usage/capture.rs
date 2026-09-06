@@ -199,6 +199,22 @@ mod tests {
     }
 
     #[test]
+    fn trimming_a_complete_capture_preserves_observations_and_marks_truncation() {
+        let mut capture = StreamCapture::stdout();
+        capture.begin_write(b"abc").finish(&Ok(()));
+        assert!(!capture.snapshot().truncated);
+        let trimmed = capture.snapshot_prefix(2);
+        assert!(trimmed.truncated);
+        assert_eq!(STANDARD.decode(&trimmed.prefix_base64).unwrap(), b"ab");
+        assert_eq!(trimmed.observed_input_bytes, ByteCount::Exact(3));
+        assert_eq!(trimmed.retained_bytes, 2);
+        assert_eq!(
+            trimmed.writer_accepted_bytes,
+            AcceptedBytes::Known(ByteCount::Exact(3))
+        );
+    }
+
+    #[test]
     fn snapshot_retained_count_and_truncation_survive_empty_writes() {
         let mut capture = StreamCapture::stderr();
         capture.begin_write(b"abc").finish(&Ok(()));

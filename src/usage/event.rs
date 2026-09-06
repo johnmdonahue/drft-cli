@@ -928,6 +928,19 @@ mod tests {
     }
 
     #[test]
+    fn stream_admission_reserves_counter_growth_across_base64_boundaries() {
+        let id = id();
+        let mut stdout = StreamCapture::stdout();
+        let stderr = StreamCapture::stderr();
+        stdout.begin_write(&vec![b'x'; 10_000]).finish(&Ok(()));
+        for limit in 5000..5100 {
+            let bytes = finish_with_limit(input(&id, &stdout, &stderr), limit)
+                .unwrap_or_else(|error| panic!("limit {limit}: {error}"));
+            assert!(bytes.len() <= limit);
+        }
+    }
+
+    #[test]
     fn unavailable_reasons_survive_observation_admission() {
         let id = id();
         let stdout = StreamCapture::stdout();
@@ -937,6 +950,10 @@ mod tests {
         i.hints = Availability::Unavailable(UnavailableReason::ExecutionStopped);
         i.error = Availability::Unavailable(UnavailableReason::NotObserved);
         let event = value(i);
+        assert_eq!(
+            event["structured"]["findings"]["coverage"]["value"],
+            "execution_stopped"
+        );
         assert_eq!(
             event["structured"]["findings"]["prefix"]["total"]["value"],
             "execution_stopped"
