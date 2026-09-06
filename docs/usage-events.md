@@ -6,6 +6,10 @@ export, and lifecycle integration remain unimplemented. This document describes 
 producer contract; it does not establish collection availability, command parity,
 filesystem safety, or measured overhead.
 
+The inactive [storage handle layer](../src/usage/store.rs) opens existing
+infrastructure and acquires its stable lock. Its scope is described in
+[storage infrastructure](usage-storage.md).
+
 The literal [start fixture](../tests/fixtures/usage/start-v1.json) and
 [finish fixture](../tests/fixtures/usage/finish-v1.json) fix field names and example
 values. JSON object order and whitespace are not significant. Unsupported revisions

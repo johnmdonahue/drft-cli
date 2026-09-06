@@ -155,7 +155,7 @@ fn identity_hasher(encoding: OsEncoding) -> blake3::Hasher {
 }
 
 /// Digest a caller-supplied canonical root without resolving or normalizing it.
-/// Canonicalization and placement validation belong to the future storage layer.
+/// Canonicalization and placement validation belong to the storage layer.
 pub fn partition_id(canonical_root: &OsStr) -> Result<String, IdentityError> {
     #[cfg(unix)]
     {

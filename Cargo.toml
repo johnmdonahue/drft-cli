@@ -38,6 +38,7 @@ url = "2.5.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 getrandom = "0.4.2"
+rustix = { version = "1.1.4", features = ["fs", "process"] }
 
 [dev-dependencies]
 tempfile = "3"

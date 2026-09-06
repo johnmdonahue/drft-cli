@@ -260,6 +260,7 @@ dependencies = [
  "notify",
  "notify-debouncer-mini",
  "pulldown-cmark",
+ "rustix",
  "saphyr",
  "serde",
  "serde_json",
