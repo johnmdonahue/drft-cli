@@ -285,6 +285,15 @@ fn read_refuses_substitution_between_stat_and_open() {
             || {},
         );
         assert!(result.is_err(), "{kind}");
+        if kind == "symlink" {
+            // Refusal must come from the no-follow open. A later metadata
+            // rejection would also return an error after following the link.
+            assert!(matches!(
+                result,
+                Err(StoreError::Io(ref error))
+                    if error.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
+            ));
+        }
         assert_eq!(stdfs::read(f.root.join("old")).unwrap(), b"data");
     }
 }
