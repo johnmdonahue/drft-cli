@@ -1,0 +1,180 @@
+{
+  "schema": "drft-usage",
+  "revision": 1,
+  "event": "finish",
+  "id": "12121212121212121212121212121212",
+  "entry_wall_time": {
+    "status": "available",
+    "value": {
+      "seconds": 100,
+      "nanoseconds": 123
+    }
+  },
+  "collected_wall_time": {
+    "status": "available",
+    "value": {
+      "seconds": 99,
+      "nanoseconds": 456
+    }
+  },
+  "elapsed": {
+    "status": "available",
+    "value": {
+      "seconds": 2,
+      "nanoseconds": 345
+    }
+  },
+  "collector_work_through_preparation": {
+    "status": "available",
+    "value": {
+      "seconds": 0,
+      "nanoseconds": 789
+    }
+  },
+  "finish_publication_duration": {
+    "status": "unavailable",
+    "value": "publication_not_yet_performed"
+  },
+  "comparison_requires_start": true,
+  "intended_exit": "usage_error",
+  "completion": "output_budget_refused",
+  "output_mode": "json",
+  "graph_sizes": {
+    "status": "available",
+    "value": {
+      "graphs": 2,
+      "nodes": 3,
+      "edges": 1
+    }
+  },
+  "result_sizes": {
+    "status": "unavailable",
+    "value": "not_observed"
+  },
+  "hint_observation": {
+    "embedding": "result_document",
+    "route": "stdout_document",
+    "suppression": "budget_refusal",
+    "write_attempt": "not_attempted",
+    "writer_acceptance": "unknown",
+    "os_acceptance": "unknown",
+    "downstream_consumption": "unknown"
+  },
+  "budget_refusal": {
+    "rendered_bytes": 5000,
+    "budget_bytes": 1000
+  },
+  "structured": {
+    "findings": {
+      "availability": "available",
+      "coverage": {
+        "status": "available",
+        "value": "full_policy_filtered_evaluation"
+      },
+      "prefix": {
+        "total": {
+          "status": "available",
+          "value": 1
+        },
+        "included": 1,
+        "omitted": {
+          "status": "available",
+          "value": 0
+        },
+        "records": [
+          {
+            "name": "stale-edge",
+            "severity": "warn",
+            "subject": "index.md",
+            "target": "source.md",
+            "lines": [
+              7
+            ],
+            "_graphs": [
+              "@fs"
+            ],
+            "message": "source changed",
+            "cause": "review source"
+          }
+        ]
+      }
+    },
+    "hints": {
+      "total": {
+        "status": "available",
+        "value": 1
+      },
+      "included": 1,
+      "omitted": {
+        "status": "available",
+        "value": 0
+      },
+      "records": [
+        {
+          "name": "large-projection",
+          "message": "too large",
+          "locus": "graph",
+          "next": "narrow selection"
+        }
+      ]
+    },
+    "error": {
+      "availability": "available",
+      "present": {
+        "status": "available",
+        "value": true
+      },
+      "traversal": "complete",
+      "prefix": {
+        "total": {
+          "status": "available",
+          "value": 1
+        },
+        "included": 1,
+        "omitted": {
+          "status": "available",
+          "value": 0
+        },
+        "records": [
+          "output exceeds budget"
+        ]
+      }
+    }
+  },
+  "stdout": {
+    "prefix_base64": "",
+    "observed_input_bytes": {
+      "status": "exact",
+      "bytes": 0
+    },
+    "retained_bytes": 0,
+    "truncated": false,
+    "write_outcome": {
+      "status": "not_attempted"
+    },
+    "writer_accepted_bytes": {
+      "status": "not_attempted"
+    },
+    "os_accepted_bytes": "unknown",
+    "downstream_consumption": "unknown"
+  },
+  "stderr": {
+    "prefix_base64": "b3V0cHV0IGV4Y2VlZHMgYnVkZ2V0Cg==",
+    "observed_input_bytes": {
+      "status": "exact",
+      "bytes": 22
+    },
+    "retained_bytes": 22,
+    "truncated": false,
+    "write_outcome": {
+      "status": "unknown_acceptance",
+      "failed": true,
+      "unfinished": false
+    },
+    "writer_accepted_bytes": {
+      "status": "unknown"
+    },
+    "os_accepted_bytes": "unknown",
+    "downstream_consumption": "unknown"
+  }
+}

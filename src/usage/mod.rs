@@ -1,9 +1,9 @@
 //! Inactive building blocks for experimental local usage collection.
 //!
-//! No command calls this module. Event envelopes, filesystem storage, and
-//! activation are separate integration work; these primitives do not qualify
-//! collection or define the complete event schema.
+//! No command calls this module. Revision-1 envelopes are constructed in memory;
+//! filesystem storage and activation remain separate, unqualified work.
 
 pub mod bounded;
 pub mod capture;
+pub mod event;
 pub mod identity;

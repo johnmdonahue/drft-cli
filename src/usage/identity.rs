@@ -203,7 +203,7 @@ impl InvocationId {
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux", test))]
-    fn generate_with<E>(
+    pub(crate) fn generate_with<E>(
         fill: impl FnOnce(&mut [u8]) -> Result<(), E>,
     ) -> Result<Self, IdentityError> {
         use std::fmt::Write as _;

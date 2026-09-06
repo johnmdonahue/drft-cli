@@ -60,6 +60,7 @@ pub struct CaptureSnapshot {
     pub write_outcome: WriteOutcome,
     /// Bytes accepted by `write_all`; OS acceptance remains unobserved.
     pub writer_accepted_bytes: AcceptedBytes,
+    pub os_accepted_bytes: DownstreamConsumption,
     pub downstream_consumption: DownstreamConsumption,
 }
 
@@ -114,6 +115,12 @@ impl StreamCapture {
     }
 
     pub fn snapshot(&self) -> CaptureSnapshot {
+        self.snapshot_prefix(self.prefix.len())
+    }
+
+    /// Preserve observations while retaining only the requested raw-byte prefix.
+    pub(crate) fn snapshot_prefix(&self, retained: usize) -> CaptureSnapshot {
+        let retained = retained.min(self.prefix.len());
         let unfinished = self.unfinished || self.pending;
         let write_outcome = if !self.attempted {
             WriteOutcome::NotAttempted
@@ -131,12 +138,13 @@ impl StreamCapture {
             WriteOutcome::UnknownAcceptance { .. } => AcceptedBytes::Unknown,
         };
         CaptureSnapshot {
-            prefix_base64: STANDARD.encode(&self.prefix),
+            prefix_base64: STANDARD.encode(&self.prefix[..retained]),
             observed_input_bytes: self.observed,
-            retained_bytes: self.prefix.len(),
-            truncated: self.truncated,
+            retained_bytes: retained,
+            truncated: self.truncated || retained < self.prefix.len(),
             write_outcome,
             writer_accepted_bytes,
+            os_accepted_bytes: DownstreamConsumption::Unknown,
             downstream_consumption: DownstreamConsumption::Unknown,
         }
     }
