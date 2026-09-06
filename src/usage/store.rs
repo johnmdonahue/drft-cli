@@ -1,7 +1,7 @@
-//! Inactive storage infrastructure. Opens existing infrastructure only.
+//! Inactive storage infrastructure with explicit bootstrap.
 //!
 //! A guard establishes placement and synchronization, not record validity.
-//! Bootstrap, record scans, quotas, publication, and utility operations remain
+//! Record scans, quotas, publication, and utility operations remain
 //! separate work. No command calls this module.
 
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ pub enum StoreError {
     Io(#[from] std::io::Error),
 }
 
-/// Existing cache/partition/lock handles. This does not initialize storage.
+/// Cache/partition/lock handles. Initialization is explicit.
 ///
 /// Cache ancestry must be stable and owner-controlled during use. Existing
 /// symlink ancestors resolve once; the cache entry, partition, and lock may not
@@ -40,6 +40,24 @@ pub struct Partition {
 }
 
 impl Partition {
+    /// Create missing cache directories and a new partition with its stable
+    /// lock. Existing partitions must already have a valid lock. An interrupted
+    /// creator can leave an unavailable partition; this never repairs it.
+    /// Missing suffix directories are private, and parent traversal is refused.
+    /// Successfully created directories remain after later failures.
+    pub fn open_or_create(cache: &Path, graph_root: &Path) -> Result<Self, StoreError> {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            let (native, root, id) = native::Partition::bootstrap(cache, graph_root)?;
+            Ok(Self { native, root, id })
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (cache, graph_root);
+            Err(StoreError::Unsupported)
+        }
+    }
+
     /// Open an existing `<cache>/<partition digest>/.lock` without creating,
     /// truncating, or removing anything. The stable lock must be an empty,
     /// singly linked regular file owned by the effective user, with no group
@@ -112,6 +130,10 @@ mod tests {
 
     #[test]
     fn unsupported_open_precedes_path_access() {
+        assert!(matches!(
+            Partition::open_or_create(Path::new("\0"), Path::new("\0")),
+            Err(StoreError::Unsupported)
+        ));
         assert!(matches!(
             Partition::open_existing(Path::new("\0"), Path::new("\0")),
             Err(StoreError::Unsupported)
