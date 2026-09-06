@@ -189,6 +189,9 @@ fn changed_suffix_identity_or_permissions_stops_next_creation() {
         );
         assert_eq!(stdfs::read_dir(&f.graph).unwrap().count(), 0);
         assert!(!f.cache.exists());
+        if change_identity {
+            assert!(!parent.with_extension("old").join("cache").exists());
+        }
     }
 }
 
@@ -244,4 +247,37 @@ fn graph_replacement_before_creation_leaves_cache_absent() {
     );
     assert!(!f.cache.parent().unwrap().exists());
     assert_eq!(stdfs::read_dir(&f.graph).unwrap().count(), 0);
+}
+
+#[test]
+fn parent_traversal_through_existing_ancestor_is_rejected_before_writes() {
+    let f = Fixture::new();
+    stdfs::create_dir_all(&f.cache).unwrap();
+    assert!(matches!(
+        Partition::bootstrap(&f.cache.join("../other"), &f.graph),
+        Err(StoreError::Placement)
+    ));
+    assert!(!f.cache.parent().unwrap().join("other").exists());
+}
+
+#[test]
+fn created_lock_identity_is_retained_when_original_inode_is_still_held() {
+    let f = Fixture::new();
+    let mut original = None;
+    let result = Partition::bootstrap_with(&f.cache, &f.graph, |path| {
+        if path == f.lock() {
+            let fd = fs::open(path, LOCK, Mode::empty()).unwrap();
+            fs::flock(&fd, FlockOperation::NonBlockingLockExclusive).unwrap();
+            stdfs::rename(path, path.with_extension("old")).unwrap();
+            stdfs::write(path, []).unwrap();
+            original = Some(fd);
+        }
+        Ok(())
+    });
+    assert!(original.is_some());
+    assert!(matches!(result, Err(StoreError::IdentityChanged)));
+    assert_eq!(stdfs::read(f.lock()).unwrap(), b"");
+    // Explicit unlock keeps inherited descriptors from extending this test's
+    // lock lifetime when the test harness runs process fixtures concurrently.
+    fs::flock(original.as_ref().unwrap(), FlockOperation::Unlock).unwrap();
 }

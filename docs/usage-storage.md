@@ -28,6 +28,8 @@ creation returns an error and can succeed on a later invocation. If the creator
 stops before creating the lock, the partition remains unavailable. Recovery
 requires deliberate external maintenance while collection is inactive; automatic
 repair could replace an established lock still held by another process.
+The creator retains its new lock descriptor and identity through the returned
+handle, so final validation rejects a replacement after creation.
 Bootstrap creates no record or staging file. Its empty lock contributes one file
 and zero bytes to the future partition accounting.
 

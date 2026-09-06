@@ -99,7 +99,7 @@ impl Partition {
         };
         let partition = open_directory(cache.last(), id.clone().into())?;
         owner_controlled(&partition.identity)?;
-        if created {
+        let lock = if created {
             checkpoint(&current_path.join(&id))?;
             graph.validate()?;
             cache.validate()?;
@@ -120,9 +120,19 @@ impl Partition {
                 Mode::from_raw_mode(0o600),
             )
             .map_err(io)?;
-            lock_file(&fs::fstat(&fd).map_err(io)?)?;
-        }
-        let lock = open_lock(&partition.fd)?;
+            let identity = fs::fstat(&fd).map_err(io)?;
+            lock_file(&identity)?;
+            checkpoint(&current_path.join(&id).join(LOCK_NAME))?;
+            // Retain the identity we created. Reopening here could adopt a
+            // replacement while another process still holds the original lock.
+            Link {
+                name: LOCK_NAME.into(),
+                fd,
+                identity,
+            }
+        } else {
+            open_lock(&partition.fd)?
+        };
         let result = Self {
             graph,
             cache,
