@@ -1,8 +1,9 @@
 # Usage storage infrastructure (inactive)
 
 The [storage module](../src/usage/store.rs) opens or initializes cache infrastructure
-and acquires an exclusive lock on macOS and Linux. Commands do not call it.
-Record validation, quotas, publication, pruning, export, and
+and acquires an exclusive lock on macOS and Linux. Its bounded inventory accounts
+for safe regular files and reads individual entries. Commands do not call it.
+Event validation, write reservations, publication, pruning, export, and
 configuration integration remain unimplemented. A successful guard establishes
 infrastructure identity and synchronization only.
 
@@ -31,7 +32,7 @@ repair could replace an established lock still held by another process.
 The creator retains its new lock descriptor and identity through the returned
 handle, so final validation rejects a replacement after creation.
 Bootstrap creates no record or staging file. Its empty lock contributes one file
-and zero bytes to the future partition accounting.
+and zero bytes to partition accounting.
 
 The [native backend](../src/usage/store/native.rs) retains directory handles from
 the filesystem root through the resolved graph and cache ancestry. It opens each
@@ -62,3 +63,38 @@ creator/contender interleaving, interrupted initialization, lock removal while a
 guard survives, creation collisions, and directory substitution before writes.
 Other platforms return `Unsupported` before path access. Native platform coverage
 must be recorded separately from source availability.
+
+## Bounded physical inventory
+
+`PartitionGuard::inventory` uses the [native scanner](../src/usage/store/native/scan.rs)
+to enumerate the locked partition without writing or removing entries. It counts
+every regular file, including the empty lock, malformed content, temporary files,
+and arbitrary names. Symlinks, directories, special files, multiply linked files,
+and entries failing the ownership/permission checks invalidate the scan.
+Successful inventory does not establish recognized filenames, supported envelopes,
+time coverage, or authority to prune. A transaction must validate those separately.
+
+The scan refuses more than 10,000 files or more than 100 MiB of logical file
+lengths, including sparse files. Externally oversized partitions return
+`ScanLimit` without cleanup. It retains at most 10,000 names of at most 255 native
+bytes each, plus stat metadata and fixed per-entry bookkeeping. It holds no
+per-entry open descriptors or payload buffers. Results sort by native filename
+bytes; names remain exact OS strings.
+
+An inventory borrows its guard, keeping the advisory lock alive. `read` accepts
+an entry index and a byte limit up to 256 KiB. If the measured file exceeds that
+limit, it returns `Oversized` without reading a prefix. Otherwise it opens the
+entry relative to the retained partition descriptor with no-follow and nonblocking
+flags. It allocates at most the measured size and probes for growth with a stack
+buffer. A short read or observed identity, size, ownership, mode, link-count, or
+modification/change-time difference rejects the result. `validate` rechecks all
+retained entries; scans and reads also recheck infrastructure and directory
+mutation metadata. Each scan uses an independent directory stream.
+
+These are observations under an advisory lock. A process ignoring that lock can
+rewrite bytes in place; metadata checks do not promise detection of every transient
+rewrite or timestamp collision. The inventory does not freeze an export snapshot.
+The [scan fixtures](../src/usage/store/native/scan/tests.rs) exercise quota boundaries,
+safe and unsafe entry types, bounded reads, and substitutions or changes at
+deterministic scan/open/read checkpoints. They qualify neither event analysis
+nor mutation transactions.

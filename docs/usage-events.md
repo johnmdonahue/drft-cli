@@ -7,7 +7,8 @@ producer contract; it does not establish collection availability, command parity
 filesystem safety, or measured overhead.
 
 The inactive [storage handle layer](../src/usage/store.rs) opens or initializes
-infrastructure and acquires its stable lock. Its scope is described in
+infrastructure, acquires its stable lock, and provides bounded physical inventory
+and reads. Its scope is described in
 [storage infrastructure](usage-storage.md).
 
 The literal [start fixture](../tests/fixtures/usage/start-v1.json) and

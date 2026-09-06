@@ -294,3 +294,6 @@ impl Guard<'_> {
 mod tests;
 
 mod bootstrap;
+
+mod scan;
+pub(super) use scan::Inventory;

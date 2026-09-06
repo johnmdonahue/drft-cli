@@ -1,8 +1,8 @@
 //! Inactive building blocks for experimental local usage collection.
 //!
 //! No command calls this module. Revision-1 envelopes are constructed in memory;
-//! storage infrastructure can be initialized, opened, and locked. Record persistence
-//! and activation remain separate, unqualified work.
+//! storage can be initialized, opened, locked, and physically inventoried with
+//! bounded reads. Event validation, persistence, and activation remain separate work.
 
 pub mod bounded;
 pub mod capture;

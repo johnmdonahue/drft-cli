@@ -1,10 +1,14 @@
 //! Inactive storage infrastructure with explicit bootstrap.
 //!
 //! A guard establishes placement and synchronization, not record validity.
-//! Record scans, quotas, publication, and utility operations remain
-//! separate work. No command calls this module.
+//! Bounded physical inventories do not validate event contents or authorize
+//! retention/publication. No command calls this module.
 
 use std::path::{Path, PathBuf};
+
+/// Includes synchronization, temporary, malformed, and final files.
+pub const PARTITION_FILE_LIMIT: usize = 10_000;
+pub const PARTITION_BYTE_LIMIT: u64 = 100 * 1024 * 1024;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod native;
@@ -15,12 +19,16 @@ pub enum StoreError {
     Unsupported,
     #[error("usage cache must be an absolute path outside the graph")]
     Placement,
-    #[error("usage storage contains unsafe infrastructure")]
+    #[error("usage storage contains an unsafe entry")]
     UnsafeEntry,
-    #[error("usage storage infrastructure identity changed")]
+    #[error("usage storage identity or observed metadata changed")]
     IdentityChanged,
     #[error("usage storage is busy")]
     Busy,
+    #[error("usage partition exceeds bounded scan limits")]
+    ScanLimit,
+    #[error("usage inventory read index or byte limit is invalid")]
+    InvalidRead,
     #[error("usage storage I/O failed: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -110,6 +118,21 @@ pub struct PartitionGuard<'a> {
 }
 
 impl PartitionGuard<'_> {
+    /// Inventory safe regular files under this lock without parsing records.
+    /// Unknown names are included for accounting, not authorized for mutation.
+    pub fn inventory(&self) -> Result<Inventory<'_>, StoreError> {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            Ok(Inventory {
+                native: self.native.inventory()?,
+            })
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            Err(StoreError::Unsupported)
+        }
+    }
+
     /// Recheck the retained ancestry and synchronization identities. This
     /// detects persistent substitutions; it does not inspect record contents.
     pub fn validate(&self) -> Result<(), StoreError> {
@@ -119,6 +142,92 @@ impl PartitionGuard<'_> {
         }
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
+            Err(StoreError::Unsupported)
+        }
+    }
+}
+
+/// Physical file metadata. Names are exact native OS values and grant no path
+/// authority. Entries are sorted by native filename bytes on supported systems.
+#[derive(Debug)]
+pub struct InventoryEntry {
+    name: std::ffi::OsString,
+    bytes: u64,
+}
+
+impl InventoryEntry {
+    pub fn name(&self) -> &std::ffi::OsStr {
+        &self.name
+    }
+
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum InventoryRead {
+    Complete(Vec<u8>),
+    /// No bytes were read. The entry remains accounted for in the inventory.
+    Oversized {
+        bytes: u64,
+    },
+}
+
+/// Bounded metadata inventory borrowing the exclusive guard. Payloads remain
+/// external and mutable; this is not a frozen export or a validated event set.
+pub struct Inventory<'a> {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    native: native::Inventory<'a>,
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    _borrow: std::marker::PhantomData<&'a ()>,
+}
+
+impl Inventory<'_> {
+    pub fn entries(&self) -> &[InventoryEntry] {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.entries()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            &[]
+        }
+    }
+
+    pub fn bytes(&self) -> u64 {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.bytes()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            0
+        }
+    }
+
+    /// Recheck all retained metadata and infrastructure. Does not read payloads.
+    pub fn validate(&self) -> Result<(), StoreError> {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.validate()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            Err(StoreError::Unsupported)
+        }
+    }
+
+    /// Read one entry with a caller limit at most the fixed event limit.
+    /// Refuses observed metadata changes and never follows a supplied path.
+    pub fn read(&self, index: usize, limit: usize) -> Result<InventoryRead, StoreError> {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.read(index, limit)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (index, limit);
             Err(StoreError::Unsupported)
         }
     }
