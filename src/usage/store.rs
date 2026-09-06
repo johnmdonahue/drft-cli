@@ -67,7 +67,7 @@ impl Partition {
 
     /// Attempt once, without waiting or retrying. Each acquisition opens an
     /// independent lock descriptor; the guard also exclusively borrows this
-    /// handle. No lock survives guard drop.
+    /// handle. Guard drop explicitly unlocks, then closes its descriptor.
     pub fn try_lock(&mut self) -> Result<PartitionGuard<'_>, StoreError> {
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {

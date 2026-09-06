@@ -25,8 +25,10 @@ requires stable, owner-controlled local ancestry.
 
 Every acquisition opens an independent lock descriptor and attempts nonblocking
 exclusive `flock` once. Contention returns `Busy` without retry. The guard
-exclusively borrows the partition handle; dropping it closes the descriptor and
-releases the lock. Detectable partition or lock replacement invalidates the old
+exclusively borrows the partition handle; dropping it explicitly unlocks and
+closes the descriptor. Explicit unlock also covers rejected acquisitions and
+prevents an inherited descriptor from extending the guard's lock lifetime.
+If unlock fails, descriptor closure remains the fallback. Detectable partition or lock replacement invalidates the old
 handle. No operation repairs a missing lock by creating a new inode.
 
 The [native tests](../src/usage/store/native/tests.rs) cover persistent path

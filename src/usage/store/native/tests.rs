@@ -249,7 +249,7 @@ fn replacement_after_flock_is_rejected_and_old_lock_is_released() {
     let fixture = Fixture::new();
     let mut opened = fixture.open();
     let old = fixture.lock().with_extension("old");
-    let result = opened.try_lock_with(|| {
+    let result = opened.try_lock_with(|_| {
         stdfs::rename(fixture.lock(), &old).unwrap();
         stdfs::write(fixture.lock(), []).unwrap();
     });
@@ -284,6 +284,78 @@ fn independently_opened_handles_contend_and_drop_releases() {
     drop(guard);
     second.try_lock().unwrap().validate().unwrap();
     first.try_lock().unwrap().validate().unwrap();
+}
+
+#[test]
+fn retained_duplicate_does_not_extend_guard_lock() {
+    let fixture = Fixture::new();
+    let mut first = fixture.open();
+    let mut second = fixture.open();
+    let guard = first.try_lock().unwrap();
+    // A dup shares the same open-file description, as an inherited descriptor
+    // does between fork and exec. Keep it open across guard drop deliberately.
+    let inherited = rustix::io::dup(&guard._lock).unwrap();
+    drop(guard);
+    second.try_lock().unwrap().validate().unwrap();
+    drop(inherited);
+}
+
+#[test]
+fn rejected_acquisition_unlocks_even_with_a_retained_duplicate() {
+    let fixture = Fixture::new();
+    let mut opened = fixture.open();
+    let mut inherited = None;
+    let old = fixture.lock().with_extension("old");
+    let result = opened.try_lock_with(|fd| {
+        inherited = Some(rustix::io::dup(fd).unwrap());
+        stdfs::rename(fixture.lock(), &old).unwrap();
+        stdfs::write(fixture.lock(), []).unwrap();
+    });
+    assert!(matches!(result, Err(StoreError::IdentityChanged)));
+    let old_fd = fs::open(&old, LOCK, Mode::empty()).unwrap();
+    fs::flock(&old_fd, FlockOperation::NonBlockingLockExclusive).unwrap();
+    drop(inherited);
+}
+
+#[test]
+fn owner_check_rejects_a_foreign_uid_independently_of_permissions() {
+    let fixture = Fixture::new();
+    let opened = fixture.open();
+    let mut metadata = fs::fstat(&opened.lock.fd).unwrap();
+    owner_controlled(&metadata).unwrap();
+    // Synthetic metadata isolates this check without requiring chown authority.
+    metadata.st_uid = rustix::process::geteuid().as_raw().wrapping_add(1);
+    assert!(matches!(
+        owner_controlled(&metadata),
+        Err(StoreError::UnsafeEntry)
+    ));
+}
+
+#[test]
+fn nofollow_rejects_symlinks_inserted_after_metadata_validation() {
+    let fixture = Fixture::new();
+    let opened = fixture.open();
+    let lock_old = fixture.lock().with_extension("old");
+    let result = open_lock_with(&opened.partition.fd, || {
+        stdfs::rename(fixture.lock(), &lock_old).unwrap();
+        symlink(&lock_old, fixture.lock()).unwrap();
+    });
+    assert!(result.is_err());
+    assert_eq!(stdfs::read(&lock_old).unwrap(), b"");
+
+    let partition_old = fixture.partition.with_extension("old");
+    let result = open_directory_with(opened.cache.last(), opened.partition.name.clone(), || {
+        stdfs::rename(&fixture.partition, &partition_old).unwrap();
+        symlink(&partition_old, &fixture.partition).unwrap();
+    });
+    assert!(result.is_err());
+    assert!(
+        partition_old
+            .join(LOCK_NAME)
+            .symlink_metadata()
+            .unwrap()
+            .is_symlink()
+    );
 }
 
 #[test]

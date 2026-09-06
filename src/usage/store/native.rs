@@ -205,10 +205,10 @@ impl Partition {
     }
 
     pub(super) fn try_lock(&mut self) -> Result<Guard<'_>, StoreError> {
-        self.try_lock_with(|| {})
+        self.try_lock_with(|_| {})
     }
 
-    fn try_lock_with(&mut self, acquired: impl FnOnce()) -> Result<Guard<'_>, StoreError> {
+    fn try_lock_with(&mut self, acquired: impl FnOnce(&OwnedFd)) -> Result<Guard<'_>, StoreError> {
         self.validate()?;
         // Reopening gives flock an independent open-file description. Reusing
         // the retained descriptor could turn overlapping acquisitions into one.
@@ -221,18 +221,28 @@ impl Partition {
             Err(rustix::io::Errno::WOULDBLOCK) => return Err(StoreError::Busy),
             Err(error) => return Err(io(error)),
         }
-        acquired();
-        self.validate()?;
-        Ok(Guard {
+        let guard = Guard {
             partition: self,
             _lock: lock.fd,
-        })
+        };
+        acquired(&guard._lock);
+        guard.validate()?;
+        Ok(guard)
     }
 }
 
 fn open_directory(parent: &OwnedFd, name: OsString) -> Result<Link, StoreError> {
+    open_directory_with(parent, name, || {})
+}
+
+fn open_directory_with(
+    parent: &OwnedFd,
+    name: OsString,
+    checked: impl FnOnce(),
+) -> Result<Link, StoreError> {
     let before = stat_entry(parent, &name)?;
     directory(&before)?;
+    checked();
     let fd = fs::openat(parent, &name, DIRECTORY, Mode::empty()).map_err(io)?;
     let identity = fs::fstat(&fd).map_err(io)?;
     if !same(&before, &identity) {
@@ -242,9 +252,14 @@ fn open_directory(parent: &OwnedFd, name: OsString) -> Result<Link, StoreError> 
 }
 
 fn open_lock(parent: &OwnedFd) -> Result<Link, StoreError> {
+    open_lock_with(parent, || {})
+}
+
+fn open_lock_with(parent: &OwnedFd, checked: impl FnOnce()) -> Result<Link, StoreError> {
     let name = OsString::from(LOCK_NAME);
     let before = stat_entry(parent, &name)?;
     lock_file(&before)?;
+    checked();
     let fd = fs::openat(parent, &name, LOCK, Mode::empty()).map_err(io)?;
     let identity = fs::fstat(&fd).map_err(io)?;
     lock_file(&identity)?;
@@ -256,9 +271,17 @@ fn open_lock(parent: &OwnedFd) -> Result<Link, StoreError> {
 
 pub(super) struct Guard<'a> {
     partition: &'a mut Partition,
-    // Closing this independent descriptor releases flock on success, failure,
-    // unwind, and process death. The stable on-disk entry is never removed.
+    // Explicit unlock matters if a concurrent fork inherited this open-file
+    // description before exec closes its CLOEXEC copy.
     _lock: OwnedFd,
+}
+
+impl Drop for Guard<'_> {
+    fn drop(&mut self) {
+        // Drop cannot report an unlock failure; closing remains the fallback.
+        // Construct the guard before any fallible post-acquisition work.
+        let _ = fs::flock(&self._lock, FlockOperation::Unlock);
+    }
 }
 
 impl Guard<'_> {
