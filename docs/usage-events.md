@@ -47,16 +47,17 @@ An available zero is evidence distinct from an unavailable count.
 Each envelope has its own `collected_wall_time` and the invocation's
 `entry_wall_time`. Wall timestamps use signed integer Unix seconds and nanoseconds
 in `0..1000000000`. Finish `elapsed` uses unsigned seconds and nanoseconds from a
-monotonic clock. The caller must measure it from process entry through finalization,
-including start-publication overhead. Clock rollback may put finish wall time
-before start wall time without changing elapsed time.
+monotonic clock. The command lifecycle samples it when finish preparation starts,
+after ordinary command output and hint/error handling. It includes start
+publication, but excludes finish-envelope construction, admission, serialization,
+and publication. Clock rollback may put finish wall time before start wall time
+without changing elapsed time.
 
-`collector_work_through_preparation` covers completed collector work through
-finish preparation. `finish_publication_duration` is always unavailable because
-an immutable finish cannot include its own subsequent write duration. The command lifecycle leaves collector-work timing unavailable with reason
-`not_observed`; it measures elapsed time from entry through finish preparation.
-The producer itself does not read clocks. External process
-measurements are needed for full latency.
+`collector_work_through_preparation` can describe separately measured collector
+work; the command lifecycle leaves it unavailable with reason `not_observed`.
+`finish_publication_duration` is always unavailable because an immutable finish
+cannot include its own subsequent write duration. The producer itself does not
+read clocks. External process measurements are needed for full latency.
 
 ## Result and output evidence
 
