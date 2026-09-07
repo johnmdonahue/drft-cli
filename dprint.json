@@ -1,5 +1,7 @@
 {
-  "markdown": {},
+  "markdown": {
+    "textWrap": "never"
+  },
   "toml": {},
   "excludes": [
     "**/target",

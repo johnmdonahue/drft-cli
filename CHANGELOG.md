@@ -10,70 +10,34 @@ All notable changes to drft are documented here.
 
 ## 0.18.0 (2026-09-04)
 
-Adds an installed workflow guide, explicit read scopes and output budgets, and
-diagnostics explaining missing impact connections.
+Adds an installed workflow guide, explicit read scopes and output budgets, and diagnostics explaining missing impact connections.
 
 ### Migration
 
-- Add `--all` to whole-graph `drft nodes` and `drft edges` calls, including calls
-  that specify only `--namespace` or `--field`. Otherwise, supply a selector.
-- Supply actual file extensions and cwd-relative paths to `impact`, `nodes`,
-  `edges`, and `lock`. A suggested correction is never selected automatically.
-- Update impact JSON consumers for the always-present `diagnostics` array and
-  text consumers for appended findings and revised empty-result messages.
-  Inspect diagnostics separately from the exit code: completed impact reads
-  exit 0 even when diagnostics have error severity.
-- Accept clap's text stderr for missing or conflicting `lock` scopes, including
-  when `--format json` is requested.
+- Add `--all` to whole-graph `drft nodes` and `drft edges` calls, including calls that specify only `--namespace` or `--field`. Otherwise, supply a selector.
+- Supply actual file extensions and cwd-relative paths to `impact`, `nodes`, `edges`, and `lock`. A suggested correction is never selected automatically.
+- Update impact JSON consumers for the always-present `diagnostics` array and text consumers for appended findings and revised empty-result messages. Inspect diagnostics separately from the exit code: completed impact reads exit 0 even when diagnostics have error severity.
+- Accept clap's text stderr for missing or conflicting `lock` scopes, including when `--format json` is requested.
 
 ### Changes
 
-- **Impact explains missing connections** (#147). Its text and JSON results
-  carry construction findings from all configured graphs, unresolved findings
-  on inspected edges, and adjacent historical losses from the optional lockfile.
-  Historical edges do not extend traversal. The always-present `diagnostics`
-  array uses the existing finding shape; `total` still counts impacted nodes.
-  Configured severity and ignores apply, while a completed impact read still
-  exits 0, including with error diagnostics. The guide describes these boundaries.
+- **Impact explains missing connections** (#147). Its text and JSON results carry construction findings from all configured graphs, unresolved findings on inspected edges, and adjacent historical losses from the optional lockfile. Historical edges do not extend traversal. The always-present `diagnostics` array uses the existing finding shape; `total` still counts impacted nodes. Configured severity and ignores apply, while a completed impact read still exits 0, including with error diagnostics. The guide describes these boundaries.
 
-  Output budgets include diagnostics. Empty text results use the requested
-  direction and qualify an answer with diagnostics as `in the current graph`.
-  Zero-edge hints advise repairing unreadable files matched by that graph before
-  checking other possible causes. File-read errors inform hint advice but remain
-  without a construction finding of their own.
+  Output budgets include diagnostics. Empty text results use the requested direction and qualify an answer with diagnostics as `in the current graph`. Zero-edge hints advise repairing unreadable files matched by that graph before checking other possible causes. File-read errors inform hint advice but remain without a construction finding of their own.
 
-- **The installed binary describes its workflow** (#156). `drft guide` explains
-  the edit, check, review, and scoped-lock loop in text or versioned JSON without
-  reading a repository or config. Command syntax comes from clap; operational
-  records share exit policies and result fields with dispatch.
+- **The installed binary describes its workflow** (#156). `drft guide` explains the edit, check, review, and scoped-lock loop in text or versioned JSON without reading a repository or config. Command syntax comes from clap; operational records share exit policies and result fields with dispatch.
 
-  Lock's scope constraints are declared in clap alongside reader constraints.
-  Missing or conflicting lock scopes still exit 2 without writing a baseline;
-  their usage errors now use clap's text stderr format even with `--format json`.
+  Lock's scope constraints are declared in clap alongside reader constraints. Missing or conflicting lock scopes still exit 2 without writing a baseline; their usage errors now use clap's text stderr format even with `--format json`.
 
-- **Read commands accept an exact output budget** (#110, #42). `nodes`,
-  `edges`, `graph`, and `impact` accept `--max-bytes <N>` and refuse before
-  writing stdout when the complete UTF-8 result would exceed it. The count
-  includes the final newline and JSON hints. Omitting the flag remains
-  unbounded, and drft never truncates or summarizes a result.
+- **Read commands accept an exact output budget** (#110, #42). `nodes`, `edges`, `graph`, and `impact` accept `--max-bytes <N>` and refuse before writing stdout when the complete UTF-8 result would exceed it. The count includes the final newline and JSON hints. Omitting the flag remains unbounded, and drft never truncates or summarizes a result.
 
-  `nodes` and `edges` also require a selector or `--all`. A missing selector
-  can no longer widen an empty shell expansion to the whole graph. `--all` may
-  be combined with `--namespace` and `--field`, but not with a selector.
+  `nodes` and `edges` also require a selector or `--all`. A missing selector can no longer widen an empty shell expansion to the whole graph. `--all` may be combined with `--namespace` and `--field`, but not with a selector.
 
-- **Path operands resolve exactly** (#155). `impact`, `nodes`, `edges`, and
-  `lock` no longer append `.md` or fall through from a cwd-relative miss to a
-  same-spelled node at the graph root. A unique likely correction is suggested
-  without being selected. Directory and explicit glob selector behavior is
-  unchanged.
+- **Path operands resolve exactly** (#155). `impact`, `nodes`, `edges`, and `lock` no longer append `.md` or fall through from a cwd-relative miss to a same-spelled node at the graph root. A unique likely correction is suggested without being selected. Directory and explicit glob selector behavior is unchanged.
 
-- **Closed stdout readers end commands quietly** (#161). When a downstream
-  reader closes stdout, drft exits 0 without a panic or pending text hints.
-  This includes text projections and check output.
+- **Closed stdout readers end commands quietly** (#161). When a downstream reader closes stdout, drft exits 0 without a panic or pending text hints. This includes text projections and check output.
 
-- **Text hints precede runtime errors** (#131, #162). Hints collected before a
-  command fails are printed before its error. JSON keeps the hints in the single
-  error envelope.
+- **Text hints precede runtime errors** (#131, #162). Hints collected before a command fails are printed before its error. JSON keeps the hints in the single error envelope.
 
 ## 0.17.0 (2026-09-01)
 
@@ -87,23 +51,9 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 
 ### Breaking changes
 
-- **Each written link keeps its own occurrence metadata** (#108). Edges collapse
-  every link from one source to one target, so the former scalar `link` and `raw`
-  fields described only one spelling while `lines` listed all of them. A source
-  citing two fragments of the same target therefore published one fragment as
-  though every line used it. Edge metadata now carries
-  `occurrences: [{ line, link?, raw? }]`, pairing each source line with that
-  link's fragment-qualified target and literal spelling when those differ from
-  the resolved target. `line` is always present; `link` appears only for a
-  fragment-qualified target, and `raw` only when resolution changes the authored
-  spelling. JSON and JGF consumers reading `.metadata["@<graph>"].lines`, `.link`,
-  or `.raw` must read the corresponding optional field from `occurrences[]`
-  instead.
+- **Each written link keeps its own occurrence metadata** (#108). Edges collapse every link from one source to one target, so the former scalar `link` and `raw` fields described only one spelling while `lines` listed all of them. A source citing two fragments of the same target therefore published one fragment as though every line used it. Edge metadata now carries `occurrences: [{ line, link?, raw? }]`, pairing each source line with that link's fragment-qualified target and literal spelling when those differ from the resolved target. `line` is always present; `link` appears only for a fragment-qualified target, and `raw` only when resolution changes the authored spelling. JSON and JGF consumers reading `.metadata["@<graph>"].lines`, `.link`, or `.raw` must read the corresponding optional field from `occurrences[]` instead.
 
-  `--field` descends through lists of objects, so `--field line` reaches link
-  occurrences and a field inside authored frontmatter lists remains projectable.
-  Text output renders those lists as one `-`-marked block per entry, including
-  empty entries as `- {}`, rather than collapsing them onto one JSON line.
+  `--field` descends through lists of objects, so `--field line` reaches link occurrences and a field inside authored frontmatter lists remains projectable. Text output renders those lists as one `-`-marked block per entry, including empty entries as `- {}`, rather than collapsing them onto one JSON line.
 
 - **`keys` is renamed `edge_keys`, and frontmatter edges no longer depend on what a value looks like** (#137, #134, #138, #112). The parser used to collect every string in the block and filter it through a shape heuristic — an explicit `./` prefix, a URI, or a plausible file extension, with anything containing a space rejected as prose. A value that failed produced no edge, no finding, and no record that the file had declared anything, so the commonest way to lose a derivation was to write one the heuristic did not recognize. Now the declared key is the whole of the signal: **every string value reachable through an `edge_keys` key is an edge**, and one naming nothing that resolves raises `unresolved-edge` exactly as a typo'd path does. The remedy is the reader's — fix the value, fix the config, or move the field to a key you did not declare. No alias for the old name, per no-backwards-compat.
 
@@ -166,16 +116,7 @@ Which leaves the last thing drft reconstructed. A block whose YAML is invalid us
 
 ### New
 
-- **Markdown anchors and `unresolved-fragment` findings** (#109). Markdown graphs
-  publish the addresses their files answer to under `anchors`: GitHub-style slugs
-  for rendered headings, with repeat disambiguation, plus raw `<a id>` and
-  `<a name>` values. `drft nodes <path> --field anchors` projects them.
-  `unresolved-fragment` reports a cross-document link whose target exists but
-  does not define the cited fragment, naming only the occurrence that is wrong.
-  Matching is case-sensitive, percent-encoded fragments are decoded, and a
-  case-only mismatch carries a cause naming the available anchor. Targets outside
-  a parser that publishes anchors remain unknown and quiet; anchor-only links
-  still produce no edge and are not checked.
+- **Markdown anchors and `unresolved-fragment` findings** (#109). Markdown graphs publish the addresses their files answer to under `anchors`: GitHub-style slugs for rendered headings, with repeat disambiguation, plus raw `<a id>` and `<a name>` values. `drft nodes <path> --field anchors` projects them. `unresolved-fragment` reports a cross-document link whose target exists but does not define the cited fragment, naming only the occurrence that is wrong. Matching is case-sensitive, percent-encoded fragments are decoded, and a case-only mismatch carries a cause naming the available anchor. Targets outside a parser that publishes anchors remain unknown and quiet; anchor-only links still produce no edge and are not checked.
 
 - **`unreadable-text` reports files that matched a text graph but are not valid UTF-8** (#135). The implicit `@fs` graph still records the file and hashes its raw bytes, while each configured markdown or frontmatter graph omits it because those parsers require text. That omission used to make a file with declared edges look like an empty filesystem node; `detached-node` was the only possible signal and could not say what was lost. The new finding names the file and every text graph that matched it. It does not guess whether arbitrary invalid bytes are Latin-1, Windows-1252, or another encoding. Files outside all text-graph globs stay quiet, so binary assets are unaffected. The rule defaults to `warn`; `[rules] unreadable-text = "error"` makes the loss fail a run.
 

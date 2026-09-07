@@ -4,10 +4,7 @@
 
 The crate is `drft-cli` on crates.io and npm; the binary users type is `drft`.
 
-Spelled out, "drift" refers only to the concept — what a file does when its
-source changes underneath it. The tool is always `drft`. This holds in prose,
-identifiers, and commit messages alike, so that searching for either word finds
-what you meant.
+Spelled out, "drift" refers only to the concept — what a file does when its source changes underneath it. The tool is always `drft`. This holds in prose, identifiers, and commit messages alike, so that searching for either word finds what you meant.
 
 ## Development setup
 
@@ -29,22 +26,18 @@ Rust, 2024 edition. The dependencies that shape the design:
 - `clap` (derive) for CLI parsing
 - `serde` + `toml` for the config and lockfile, `serde_json` for JSON output
 - `blake3` for content hashing, written with a `b3:` prefix
-- `pulldown-cmark` for markdown, `saphyr` for YAML frontmatter — the marked AST
-  is what gives links their line numbers
+- `pulldown-cmark` for markdown, `saphyr` for YAML frontmatter — the marked AST is what gives links their line numbers
 - `ignore` for the gitignore-aware walk, `globset` for ignore and glob patterns
 - `notify` for watch mode
 
-Graph algorithms are not on that list, and deliberately — see the design
-principles below.
+Graph algorithms are not on that list, and deliberately — see the design principles below.
 
 ## Code style
 
 - Run `cargo fmt` and `dprint fmt` before committing
 - Run `cargo clippy -- -D warnings` (must pass cleanly)
 - `anyhow` for application errors, `thiserror` for typed library errors
-- Write diagnostics to stdout, errors to stderr. Run-level advisories are `hints`:
-  a key on the JSON result document, or — for a command that prints no document —
-  a JSON envelope on stderr; text output puts them on stderr after the result
+- Write diagnostics to stdout, errors to stderr. Run-level advisories are `hints`: a key on the JSON result document, or — for a command that prints no document — a JSON envelope on stderr; text output puts them on stderr after the result
 - Exit codes: 0 clean, 1 violations, 2 usage error
 
 ## Testing
@@ -108,10 +101,8 @@ Parsers are built in — there's no plugin mechanism.
 
 ## Git workflow
 
-`main` is protected. Every change goes through a branch and a pull request —
-never push directly to main.
+`main` is protected. Every change goes through a branch and a pull request — never push directly to main.
 
 ## Releasing
 
-See [RELEASING.md](RELEASING.md). A release goes through a PR, then a tag on main
-after the merge.
+See [RELEASING.md](RELEASING.md). A release goes through a PR, then a tag on main after the merge.
