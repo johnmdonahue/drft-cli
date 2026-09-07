@@ -1,4 +1,4 @@
-//! Serialization budgets for inactive usage primitives, not event envelopes.
+//! Serialization budgets shared by local usage records.
 
 use std::io::{self, Write};
 

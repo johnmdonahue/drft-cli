@@ -1,9 +1,9 @@
-//! Inactive storage infrastructure with explicit bootstrap.
+//! Native storage infrastructure with explicit bootstrap.
 //!
 //! A guard establishes placement and synchronization, not record validity.
 //! Bounded physical inventories do not validate event contents or authorize
 //! retention/publication. Native publication completes classification and uses
-//! successful-start receipts; no command calls this module.
+//! successful-start receipts for the command lifecycle.
 
 use std::path::{Path, PathBuf};
 

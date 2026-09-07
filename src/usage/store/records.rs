@@ -1,4 +1,4 @@
-//! Inactive record inventory and retention planning. Plans never mutate files.
+//! Record inventory and retention planning. Plans never mutate files.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;

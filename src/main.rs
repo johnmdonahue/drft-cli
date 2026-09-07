@@ -13,6 +13,12 @@ use drft::nodes;
 use drft::projection;
 use drft::rules;
 use drft::sources;
+use drft::usage::event::{
+    Availability, Command as UsageCommand, Completion as UsageCompletion, FindingCoverage,
+    HintRoute, HintSuppression, OutputMode as UsageOutputMode, RequestedFormat, ResultSizes,
+    UnavailableReason,
+};
+use drft::usage::lifecycle::Invocation;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -64,6 +70,22 @@ const NARROW_WITH_SELECTOR: &str =
 const NARROW_WITH_READ_VERB: &str = "read a slice instead — `drft nodes <selector>` or `drft edges <selector>` \
      project the same graph scoped to what you need";
 
+struct ProjectionOptions<'a> {
+    count: usize,
+    unit: &'a str,
+    next: &'a str,
+    max_bytes: Option<usize>,
+    controls: &'a str,
+}
+
+struct RunContext<'a> {
+    root: &'a Path,
+    graph_root: &'a Path,
+    config: &'a Config,
+    hints: &'a mut Hints,
+    invocation: &'a mut Invocation,
+}
+
 /// Flag a projection large enough to crowd its reader. Reports both numbers:
 /// a byte count alone is opaque, and a node count alone does not say how much
 /// output it became. `next` varies by command — the flags that narrow a read
@@ -81,7 +103,11 @@ fn large_projection_hint(count: usize, unit: &str, bytes: usize, next: &str) -> 
 /// Attach the run's hints to a result document under `hints`, and record that
 /// they reached the reader. The key is always present, empty included, so a
 /// consumer can read `.hints[]` without a guard.
-fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<()> {
+fn attach_hints(
+    document: &mut serde_json::Value,
+    hints: &mut Hints,
+    invocation: &mut Invocation,
+) -> Result<()> {
     let obj = document
         .as_object_mut()
         .context("a result document must be a JSON object to carry hints")?;
@@ -90,6 +116,7 @@ fn attach_hints(document: &mut serde_json::Value, hints: &mut Hints) -> Result<(
         serde_json::to_value(&*hints)?,
     );
     hints.mark_delivered();
+    invocation.observe_hints_embedded();
     Ok(())
 }
 
@@ -109,16 +136,23 @@ struct OutputBudgetExceeded {
 /// `println!` panics on a broken pipe, so `drft … | head` aborts with exit 101.
 /// A distinct error stops result production before command-specific exit status or
 /// pending hints can turn the reader's choice into a failure on stderr.
-fn write_stdout(text: &str) -> Result<()> {
-    use std::io::Write;
-    match std::io::stdout().write_all(text.as_bytes()) {
+fn write_stdout(text: &str, mode: UsageOutputMode, invocation: &mut Invocation) -> Result<()> {
+    let mut stdout = std::io::stdout().lock();
+    match invocation.write_stdout(&mut stdout, mode, text.as_bytes()) {
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Err(ClosedStdout.into()),
         other => other.map_err(Into::into),
     }
 }
 
-fn write_stdout_line(line: &str) -> Result<()> {
-    write_stdout(&format!("{line}\n"))
+fn write_stdout_line(line: &str, mode: UsageOutputMode, invocation: &mut Invocation) -> Result<()> {
+    write_stdout(&format!("{line}\n"), mode, invocation)
+}
+
+fn write_stderr(arguments: std::fmt::Arguments<'_>, invocation: &mut Invocation) {
+    let mut stderr = std::io::stderr().lock();
+    invocation
+        .write_stderr(&mut stderr, arguments)
+        .unwrap_or_else(|error| panic!("failed printing to stderr: {error}"));
 }
 
 fn enforce_output_budget(
@@ -126,10 +160,12 @@ fn enforce_output_budget(
     max_bytes: Option<usize>,
     controls: &str,
     json: bool,
+    invocation: &mut Invocation,
 ) -> Result<()> {
     let bytes = rendered.len();
     if policy::OUTPUT_GUARD.exceeds(bytes, max_bytes) {
         let max = max_bytes.expect("an exceeded budget has a limit");
+        invocation.observe_budget_refusal(bytes, max);
         return Err(OutputBudgetExceeded {
             message: format!(
                 "rendered output is {bytes} bytes, exceeding --max-bytes {max}; {controls}"
@@ -150,31 +186,40 @@ fn enforce_output_budget(
 /// rough budget rather than a promise.
 fn print_json_document(
     mut document: serde_json::Value,
-    count: usize,
-    unit: &str,
-    next: &str,
     hints: &mut Hints,
-    max_bytes: Option<usize>,
-    controls: &str,
+    invocation: &mut Invocation,
+    options: ProjectionOptions<'_>,
 ) -> Result<()> {
     if OutputMode::Envelope.embeds_hints() {
-        attach_hints(&mut document, hints)?;
+        attach_hints(&mut document, hints, invocation)?;
     }
     let rendered = serde_json::to_string_pretty(&document)?;
-    match large_projection_hint(count, unit, rendered.len(), next) {
+    match large_projection_hint(options.count, options.unit, rendered.len(), options.next) {
         Some(hint) => {
             hints.push(hint);
             if OutputMode::Envelope.embeds_hints() {
-                attach_hints(&mut document, hints)?;
+                attach_hints(&mut document, hints, invocation)?;
             }
             let rendered = format!("{}\n", serde_json::to_string_pretty(&document)?);
-            enforce_output_budget(&rendered, max_bytes, controls, true)?;
-            write_stdout(&rendered)?;
+            enforce_output_budget(
+                &rendered,
+                options.max_bytes,
+                options.controls,
+                true,
+                invocation,
+            )?;
+            write_stdout(&rendered, UsageOutputMode::Json, invocation)?;
         }
         None => {
             let rendered = format!("{rendered}\n");
-            enforce_output_budget(&rendered, max_bytes, controls, true)?;
-            write_stdout(&rendered)?;
+            enforce_output_budget(
+                &rendered,
+                options.max_bytes,
+                options.controls,
+                true,
+                invocation,
+            )?;
+            write_stdout(&rendered, UsageOutputMode::Json, invocation)?;
         }
     }
     Ok(())
@@ -185,18 +230,16 @@ fn print_json_document(
 /// result reads first and a pipe carries only the projection.
 fn print_text_projection(
     text: &str,
-    count: usize,
-    unit: &str,
-    next: &str,
     hints: &mut Hints,
-    max_bytes: Option<usize>,
-    controls: &str,
+    invocation: &mut Invocation,
+    options: ProjectionOptions<'_>,
 ) -> Result<()> {
-    if let Some(hint) = large_projection_hint(count, unit, text.len(), next) {
+    if let Some(hint) = large_projection_hint(options.count, options.unit, text.len(), options.next)
+    {
         hints.push(hint);
     }
-    enforce_output_budget(text, max_bytes, controls, false)?;
-    write_stdout(text)
+    enforce_output_budget(text, options.max_bytes, options.controls, false, invocation)?;
+    write_stdout(text, UsageOutputMode::Text, invocation)
 }
 
 /// Load the config, folding its load-time advisories into the run's hints.
@@ -211,9 +254,14 @@ fn main() {
     // whatever was raised before the failure — a run-level advisory is often what
     // explains it.
     let mut hints = Hints::default();
-    let code = match try_main(&mut hints) {
-        Ok(code) => code,
-        Err(e) if e.downcast_ref::<ClosedStdout>().is_some() => ExitStatus::Success.code(),
+    let mut invocation = Invocation::capture();
+    let result = try_main(&mut hints, &mut invocation);
+    let (code, completion) = match &result {
+        Ok(code) => (*code, UsageCompletion::Returned),
+        Err(e) if e.downcast_ref::<ClosedStdout>().is_some() => (
+            ExitStatus::Success.code(),
+            UsageCompletion::StdoutWriteFailed,
+        ),
         Err(e) => {
             // Dispatch errors use the requested format. Clap handles its own
             // parse errors before dispatch, using its text usage-error format.
@@ -226,13 +274,32 @@ fn main() {
                     "exit_code": ExitStatus::Failure.code(),
                     "hints": &hints,
                 });
-                eprintln!("{}", serde_json::to_string(&err).unwrap());
+                if !hints.is_empty() {
+                    invocation.observe_hint_stderr_attempt(HintRoute::StderrJson);
+                }
+                write_stderr(
+                    format_args!("{}\n", serde_json::to_string(&err).unwrap()),
+                    &mut invocation,
+                );
             } else {
-                eprintln!("error: {e:#}");
+                write_stderr(format_args!("error: {e:#}\n"), &mut invocation);
             }
-            ExitStatus::Failure.code()
+            let completion = if e.downcast_ref::<OutputBudgetExceeded>().is_some() {
+                UsageCompletion::OutputBudgetRefused
+            } else if invocation.stdout_write_failed() {
+                UsageCompletion::StdoutWriteFailed
+            } else {
+                UsageCompletion::CommandError
+            };
+            (ExitStatus::Failure.code(), completion)
         }
     };
+    invocation.finish(
+        code,
+        completion,
+        result.as_ref().err().map(|error| error.as_ref()),
+        hints.as_slice(),
+    );
     std::process::exit(code);
 }
 
@@ -252,16 +319,22 @@ fn wants_json_output() -> bool {
     false
 }
 
-fn try_main(hints: &mut Hints) -> Result<i32> {
-    let cli = Cli::parse();
+fn try_main(hints: &mut Hints, invocation: &mut Invocation) -> Result<i32> {
+    let cli = Cli::parse_from(invocation.argv().iter().cloned());
 
     // Compiled guidance is available even outside a repository or with an invalid -C.
     if matches!(cli.command, Commands::Guide) {
         let document = guide::document()?;
         return match cli.format {
-            OutputFormat::Json => policy::emit_json(&document, write_stdout),
+            OutputFormat::Json => policy::emit_json(&document, |text| {
+                write_stdout(text, UsageOutputMode::Json, invocation)
+            }),
             OutputFormat::Text => {
-                write_stdout(&guide::render_text(&document)?)?;
+                write_stdout(
+                    &guide::render_text(&document)?,
+                    UsageOutputMode::Text,
+                    invocation,
+                )?;
                 Ok(ExitStatus::Success.code())
             }
         };
@@ -273,22 +346,57 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
         None => std::env::current_dir()?,
     };
 
+    let covered = usage_command(&cli.command);
+    let loaded = if let Some(command) = covered {
+        let graph_root = find_graph_root(&root);
+        let config = load_config(&graph_root, hints)?;
+        invocation.activate(
+            config.usage_enabled,
+            config.usage_config_fingerprint.as_ref(),
+            &root,
+            &graph_root,
+            command,
+            match cli.format {
+                OutputFormat::Text => RequestedFormat::Text,
+                OutputFormat::Json => RequestedFormat::Json,
+            },
+        );
+        Some((graph_root, config))
+    } else {
+        None
+    };
+
     let result = match &cli.command {
-        Commands::Init => run_init(&root),
+        Commands::Init => run_init(&root, invocation),
         Commands::Config { show_ignores } => {
             debug_assert!(*show_ignores);
-            run_config_show_ignores(&root, cli.format)
+            run_config_show_ignores(&root, cli.format, invocation)
         }
-        Commands::Lock { paths, all } => run_lock(&root, cli.format, paths, *all, hints),
+        Commands::Lock { paths, all } => run_lock(
+            &mut covered_context(&root, &loaded, hints, invocation),
+            cli.format,
+            paths,
+            *all,
+        ),
         Commands::Impact {
             paths,
             depth,
             direction,
             max_bytes,
         } => run_impact(
-            &root, cli.format, paths, *depth, *direction, *max_bytes, hints,
+            &mut covered_context(&root, &loaded, hints, invocation),
+            cli.format,
+            paths,
+            *depth,
+            *direction,
+            *max_bytes,
         ),
-        Commands::Graph { raw, max_bytes } => run_graph(&root, *raw, cli.format, *max_bytes, hints),
+        Commands::Graph { raw, max_bytes } => run_graph(
+            &mut covered_context(&root, &loaded, hints, invocation),
+            *raw,
+            cli.format,
+            *max_bytes,
+        ),
         Commands::Nodes {
             selectors,
             all: _,
@@ -296,7 +404,12 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
             fields,
             max_bytes,
         } => run_nodes(
-            &root, cli.format, selectors, namespaces, fields, *max_bytes, hints,
+            &mut covered_context(&root, &loaded, hints, invocation),
+            cli.format,
+            selectors,
+            namespaces,
+            fields,
+            *max_bytes,
         ),
         Commands::Edges {
             selectors,
@@ -305,9 +418,18 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
             fields,
             max_bytes,
         } => run_edges(
-            &root, cli.format, selectors, namespaces, fields, *max_bytes, hints,
+            &mut covered_context(&root, &loaded, hints, invocation),
+            cli.format,
+            selectors,
+            namespaces,
+            fields,
+            *max_bytes,
         ),
-        Commands::Check => run_check(&root, cli.format, cli.color, hints),
+        Commands::Check => run_check(
+            &mut covered_context(&root, &loaded, hints, invocation),
+            cli.format,
+            cli.color,
+        ),
         Commands::Guide => unreachable!("guide dispatches before filesystem access"),
     };
 
@@ -328,7 +450,11 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
         match cli.format {
             OutputFormat::Json if result.is_ok() => {
                 let envelope = serde_json::json!({ "hints": &*hints });
-                eprintln!("{}", serde_json::to_string(&envelope)?);
+                invocation.observe_hint_stderr_attempt(HintRoute::StderrJson);
+                write_stderr(
+                    format_args!("{}\n", serde_json::to_string(&envelope)?),
+                    invocation,
+                );
             }
             OutputFormat::Text
                 if !matches!(
@@ -340,15 +466,22 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
             {
                 let colorize = use_color_stderr(cli.color);
                 for hint in hints.as_slice() {
-                    eprintln!(
-                        "{}",
-                        if colorize {
-                            hint.format_text_color()
-                        } else {
-                            hint.format_text()
-                        }
+                    invocation.observe_hint_stderr_attempt(HintRoute::StderrText);
+                    write_stderr(
+                        format_args!(
+                            "{}\n",
+                            if colorize {
+                                hint.format_text_color()
+                            } else {
+                                hint.format_text()
+                            }
+                        ),
+                        invocation,
                     );
                 }
+            }
+            _ if invocation.stdout_write_failed() => {
+                invocation.observe_hint_suppression(HintSuppression::EarlierWriteFailure);
             }
             _ => {}
         }
@@ -357,7 +490,41 @@ fn try_main(hints: &mut Hints) -> Result<i32> {
     result
 }
 
-fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
+fn usage_command(command: &Commands) -> Option<UsageCommand> {
+    Some(match command {
+        Commands::Check => UsageCommand::Check,
+        Commands::Graph { .. } => UsageCommand::Graph,
+        Commands::Nodes { .. } => UsageCommand::Nodes,
+        Commands::Edges { .. } => UsageCommand::Edges,
+        Commands::Impact { .. } => UsageCommand::Impact,
+        Commands::Lock { .. } => UsageCommand::Lock,
+        Commands::Init | Commands::Config { .. } | Commands::Guide => return None,
+    })
+}
+
+fn covered_context<'a>(
+    root: &'a Path,
+    loaded: &'a Option<(std::path::PathBuf, Config)>,
+    hints: &'a mut Hints,
+    invocation: &'a mut Invocation,
+) -> RunContext<'a> {
+    let (graph_root, config) = loaded
+        .as_ref()
+        .expect("covered commands load configuration before dispatch");
+    RunContext {
+        root,
+        graph_root,
+        config,
+        hints,
+        invocation,
+    }
+}
+
+fn run_config_show_ignores(
+    root: &Path,
+    format: OutputFormat,
+    invocation: &mut Invocation,
+) -> Result<i32> {
     let graph_root = find_graph_root(root);
     Config::load(&graph_root)?;
     let report = sources::fs::ignore_sources(&graph_root)?;
@@ -381,17 +548,21 @@ fn run_config_show_ignores(root: &Path, format: OutputFormat) -> Result<i32> {
             writeln!(output, ".ignore: disabled")?;
             writeln!(output, ".git/info/exclude: disabled")?;
             writeln!(output, "global excludes: disabled")?;
-            write_stdout(&output)?;
+            write_stdout(&output, UsageOutputMode::Text, invocation)?;
         }
         OutputFormat::Json => {
-            write_stdout_line(&serde_json::to_string_pretty(&report)?)?;
+            write_stdout_line(
+                &serde_json::to_string_pretty(&report)?,
+                UsageOutputMode::Json,
+                invocation,
+            )?;
         }
     }
 
     Ok(ExitStatus::Success.code())
 }
 
-fn run_init(root: &Path) -> Result<i32> {
+fn run_init(root: &Path, _invocation: &mut Invocation) -> Result<i32> {
     let config_path = root.join("drft.toml");
     if config_path.exists() {
         anyhow::bail!("drft.toml already exists");
@@ -445,17 +616,23 @@ edge_keys = ["sources"]
 /// from an empty argument list would turn a scoped invocation into a whole-graph
 /// assertion silently, in a file that outlives the session.
 fn run_lock(
-    root: &Path,
+    context: &mut RunContext<'_>,
     format: OutputFormat,
     paths: &[String],
     all: bool,
-    hints: &mut Hints,
 ) -> Result<i32> {
+    let root = context.root;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
     // Clap's required scope group and conflict reject ambiguous scopes before dispatch.
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
     let composed = compose::compose(&set);
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
     let snapshot = lock::Lock::from_composed(&composed);
 
     if all {
@@ -468,7 +645,7 @@ fn run_lock(
         // Read quietly: this is a rebuild, so `unparseable-lock`'s advice to run
         // `drft lock --all` would reach the caller attached to the successful run
         // of that very command.
-        let previous = lock::read_quiet(&graph_root);
+        let previous = lock::read_quiet(graph_root);
         let dropped: Vec<String> = previous
             .as_ref()
             .map(|existing| {
@@ -485,7 +662,7 @@ fn run_lock(
         // held, and reporting `[]` for that is the silent loss this report exists
         // to remove — so say the list is incomplete rather than let it read as
         // complete.
-        if previous.is_none() && lock::exists(&graph_root) {
+        if previous.is_none() && lock::exists(graph_root) {
             hints.push(
                 Hint::new(
                     "replaced-unreadable-lock",
@@ -504,10 +681,10 @@ fn run_lock(
         // The only case it skips is a repo with nothing to baseline and no
         // lockfile yet, where writing would create a `node = []` file asserting
         // coverage of nothing.
-        if !snapshot.nodes.is_empty() || lock::exists(&graph_root) {
-            lock::write(&graph_root, &snapshot)?;
+        if !snapshot.nodes.is_empty() || lock::exists(graph_root) {
+            lock::write(graph_root, &snapshot)?;
         }
-        report_lock(format, all, &locked, &dropped, hints)?;
+        report_lock(format, all, &locked, &dropped, hints, invocation)?;
         return Ok(ExitStatus::Success.code());
     }
 
@@ -517,7 +694,7 @@ fn run_lock(
     // every other entry was gone, and the nodes behind them became unlocked leaves
     // whose loss no rule reports. Absent is the ordinary pre-lock state and is
     // fine; unreadable is not something a scoped lock can preserve, so it refuses.
-    let read = lock::read(&graph_root, hints)?;
+    let read = lock::read(graph_root, hints)?;
 
     // Refuse only when the file holds entries drft cannot read.
     //
@@ -534,7 +711,7 @@ fn run_lock(
     // next scoped lock then hit a guard complaining about drft's own valid output.
     // `no-baseline` is what reports an empty baseline, at `check`, where a finding
     // can be promoted to an error.
-    if read.is_none() && lock::exists(&graph_root) {
+    if read.is_none() && lock::exists(graph_root) {
         anyhow::bail!(
             "drft.lock exists but could not be parsed, so locking named paths \
              would replace a baseline drft cannot read with just those paths, \
@@ -552,7 +729,7 @@ fn run_lock(
     // lockfile — so a deleted node can be named to clear its `removed-node` finding.
     let nodes = paths
         .iter()
-        .map(|p| resolve_lock_node(&composed, &existing, root, &graph_root, p, hints))
+        .map(|p| resolve_lock_node(&composed, &existing, root, graph_root, p, hints))
         .collect::<Result<Vec<_>>>()?;
 
     // A directory is a graph node, but not a lockable one: it has no content hash
@@ -663,9 +840,9 @@ fn run_lock(
     // command that reported success, which made every staleness rule a no-op while
     // the file's presence made it look established.
     if !locked.is_empty() || !dropped.is_empty() {
-        lock::write(&graph_root, &existing)?;
+        lock::write(graph_root, &existing)?;
     }
-    report_lock(format, all, &locked, &dropped, hints)?;
+    report_lock(format, all, &locked, &dropped, hints, invocation)?;
     Ok(ExitStatus::Success.code())
 }
 
@@ -682,16 +859,25 @@ fn report_lock(
     locked: &[String],
     dropped: &[String],
     hints: &mut Hints,
+    invocation: &mut Invocation,
 ) -> Result<()> {
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Available(locked.len()),
+        edges: Availability::Unavailable(UnavailableReason::NotObserved),
+        findings: Availability::Unavailable(UnavailableReason::NotObserved),
+    });
     match format {
         OutputFormat::Json => print_json_document(
             serde_json::to_value(policy::LockResult { locked, dropped })?,
-            locked.len() + dropped.len(),
-            "nodes",
-            "redirect stdout — drft.lock records the same set",
             hints,
-            None,
-            "",
+            invocation,
+            ProjectionOptions {
+                count: locked.len() + dropped.len(),
+                unit: "nodes",
+                next: "redirect stdout — drft.lock records the same set",
+                max_bytes: None,
+                controls: "",
+            },
         ),
         OutputFormat::Text => {
             fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
@@ -726,7 +912,7 @@ fn report_lock(
             for node in dropped {
                 line.push_str(&format!("\n  dropped {}", drft::util::one_line(node)));
             }
-            write_stdout_line(&line)
+            write_stdout_line(&line, UsageOutputMode::Text, invocation)
         }
     }
 }
@@ -855,15 +1041,20 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
 }
 
 fn run_graph(
-    root: &Path,
+    context: &mut RunContext<'_>,
     raw: bool,
     format: OutputFormat,
     max_bytes: Option<usize>,
-    hints: &mut Hints,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
-    let set = graphs::build_set(&graph_root, &config, hints, &mut Vec::new())?;
+    let root = context.root;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
 
     // `--raw` dumps the per-graph fragment set — a JSON structure with no text
     // projection — so it is JSON-only and ignores `--format`. The composed views
@@ -878,6 +1069,11 @@ fn run_graph(
             .flat_map(|g| g.nodes.keys())
             .collect::<std::collections::BTreeSet<_>>()
             .len();
+        invocation.observe_result_sizes(ResultSizes {
+            nodes: Availability::Available(count),
+            edges: Availability::Unavailable(UnavailableReason::NotObserved),
+            findings: Availability::Unavailable(UnavailableReason::NotObserved),
+        });
         let rendered = serde_json::to_string_pretty(&set)?;
         if let Some(hint) =
             large_projection_hint(count, "nodes", rendered.len(), NARROW_WITH_READ_VERB)
@@ -890,13 +1086,20 @@ fn run_graph(
             max_bytes,
             "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
             OutputMode::RawGraphSet.is_json(format),
+            invocation,
         )?;
-        write_stdout(&rendered)?;
+        write_stdout(&rendered, UsageOutputMode::RawGraphSet, invocation)?;
         return Ok(ExitStatus::Success.code());
     }
 
     let composed = compose::compose(&set);
     let node_count = composed.nodes.len();
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Available(composed.nodes.len()),
+        edges: Availability::Available(composed.edges.len()),
+        findings: Availability::Unavailable(UnavailableReason::NotObserved),
+    });
     match format {
         OutputFormat::Json => {
             let rendered = serde_json::to_string_pretty(&composed.into_document())?;
@@ -911,26 +1114,30 @@ fn run_graph(
                 max_bytes,
                 "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
                 true,
+                invocation,
             )?;
-            write_stdout(&rendered)?;
+            write_stdout(&rendered, UsageOutputMode::BareJgf, invocation)?;
         }
         OutputFormat::Text => {
             // The whole composed graph as text: every node's metadata, then every
             // edge. `# nodes` / `# edges` headers keep the two sections legible
             // for a model reading the graph without parsing JSON. Reuses the same
             // per-node/per-edge rendering as `drft nodes` and `drft edges`.
-            let keys = resolve_selectors(&composed, root, &graph_root, &[], hints)?;
+            let keys = resolve_selectors(&composed, root, graph_root, &[], hints)?;
             let node_text = nodes::format_text(&nodes::project(&composed, &keys, &[], &[]));
             let edge_text = edges::format_text(&edges::project(&composed, None, &[], &[]));
             let text = projection::join_sections(&[("nodes", &node_text), ("edges", &edge_text)]);
             print_text_projection(
                 &text,
-                node_count,
-                "nodes",
-                NARROW_WITH_READ_VERB,
                 hints,
-                max_bytes,
-                "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
+                invocation,
+                ProjectionOptions {
+                    count: node_count,
+                    unit: "nodes",
+                    next: NARROW_WITH_READ_VERB,
+                    max_bytes,
+                    controls: "read a scoped result with `drft nodes <selector>` or `drft edges <selector>`",
+                },
             )?;
         }
     }
@@ -941,29 +1148,36 @@ fn run_graph(
 /// and narrowed by `namespaces`/`fields`. A reader: expanding a selector to many
 /// nodes is expected and has no side effect.
 fn run_nodes(
-    root: &Path,
+    context: &mut RunContext<'_>,
     format: OutputFormat,
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
     max_bytes: Option<usize>,
-    hints: &mut Hints,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(
-        &graph_root,
-        &config,
-        hints,
-        &mut Vec::new(),
-    )?);
+    let root = context.root;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
+    let composed = compose::compose(&set);
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
 
     // Validate namespaces up front: a typo must error, not read as an empty
     // answer. Normalize to the `@<graph>` keys the projection matches on.
-    let requested_ns = resolve_namespaces(&config, namespaces)?;
+    let requested_ns = resolve_namespaces(config, namespaces)?;
 
-    let keys = resolve_selectors(&composed, root, &graph_root, selectors, hints)?;
+    let keys = resolve_selectors(&composed, root, graph_root, selectors, hints)?;
     let projected = nodes::project(&composed, &keys, &requested_ns, fields);
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Available(projected.len()),
+        edges: Availability::Unavailable(UnavailableReason::NotObserved),
+        findings: Availability::Unavailable(UnavailableReason::NotObserved),
+    });
 
     match format {
         OutputFormat::Json => {
@@ -973,12 +1187,15 @@ fn run_nodes(
             })?;
             print_json_document(
                 output,
-                projected.len(),
-                "nodes",
-                NARROW_WITH_SELECTOR,
                 hints,
-                max_bytes,
-                "narrow it with selectors, --namespace, or --field",
+                invocation,
+                ProjectionOptions {
+                    count: projected.len(),
+                    unit: "nodes",
+                    next: NARROW_WITH_SELECTOR,
+                    max_bytes,
+                    controls: "narrow it with selectors, --namespace, or --field",
+                },
             )?;
         }
         OutputFormat::Text => {
@@ -986,12 +1203,15 @@ fn run_nodes(
             // model can read it for grounding without parsing JSON.
             print_text_projection(
                 &nodes::format_text(&projected),
-                projected.len(),
-                "nodes",
-                NARROW_WITH_SELECTOR,
                 hints,
-                max_bytes,
-                "narrow it with selectors, --namespace, or --field",
+                invocation,
+                ProjectionOptions {
+                    count: projected.len(),
+                    unit: "nodes",
+                    next: NARROW_WITH_SELECTOR,
+                    max_bytes,
+                    controls: "narrow it with selectors, --namespace, or --field",
+                },
             )?;
         }
     }
@@ -1004,24 +1224,26 @@ fn run_nodes(
 /// reader, so expanding a selector to many sources is expected and has no side
 /// effect. With no selector, every edge is projected.
 fn run_edges(
-    root: &Path,
+    context: &mut RunContext<'_>,
     format: OutputFormat,
     selectors: &[String],
     namespaces: &[String],
     fields: &[String],
     max_bytes: Option<usize>,
-    hints: &mut Hints,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
-    let composed = compose::compose(&graphs::build_set(
-        &graph_root,
-        &config,
-        hints,
-        &mut Vec::new(),
-    )?);
+    let root = context.root;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
+    let mut build_findings = Vec::new();
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
+    let composed = compose::compose(&set);
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
 
-    let requested_ns = resolve_namespaces(&config, namespaces)?;
+    let requested_ns = resolve_namespaces(config, namespaces)?;
     // Edges match on source, so a selector resolves to the source node set. No
     // selector means every edge — passed as `None` so it never rides on the node
     // set, keeping the "every edge" guarantee independent of that coupling.
@@ -1029,14 +1251,15 @@ fn run_edges(
         None
     } else {
         Some(resolve_selectors(
-            &composed,
-            root,
-            &graph_root,
-            selectors,
-            hints,
+            &composed, root, graph_root, selectors, hints,
         )?)
     };
     let projected = edges::project(&composed, sources.as_deref(), &requested_ns, fields);
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Unavailable(UnavailableReason::NotObserved),
+        edges: Availability::Available(projected.len()),
+        findings: Availability::Unavailable(UnavailableReason::NotObserved),
+    });
 
     match format {
         OutputFormat::Json => {
@@ -1046,24 +1269,30 @@ fn run_edges(
             })?;
             print_json_document(
                 output,
-                projected.len(),
-                "edges",
-                NARROW_WITH_SELECTOR,
                 hints,
-                max_bytes,
-                "narrow it with selectors, --namespace, or --field",
+                invocation,
+                ProjectionOptions {
+                    count: projected.len(),
+                    unit: "edges",
+                    next: NARROW_WITH_SELECTOR,
+                    max_bytes,
+                    controls: "narrow it with selectors, --namespace, or --field",
+                },
             )?;
         }
         OutputFormat::Text => {
             // One compact block per edge — `source → target`, then its metadata.
             print_text_projection(
                 &edges::format_text(&projected),
-                projected.len(),
-                "edges",
-                NARROW_WITH_SELECTOR,
                 hints,
-                max_bytes,
-                "narrow it with selectors, --namespace, or --field",
+                invocation,
+                ProjectionOptions {
+                    count: projected.len(),
+                    unit: "edges",
+                    next: NARROW_WITH_SELECTOR,
+                    max_bytes,
+                    controls: "narrow it with selectors, --namespace, or --field",
+                },
             )?;
         }
     }
@@ -1243,23 +1472,28 @@ fn glob_match_keys(composed: &drft::model::Graph, pattern: &str) -> Result<Vec<S
 /// List nodes that transitively depend on `paths` (a structural query; `paths`
 /// is required by the CLI).
 fn run_impact(
-    root: &Path,
+    context: &mut RunContext<'_>,
     format: OutputFormat,
     paths: &[String],
     depth: Depth,
     direction: Direction,
     max_bytes: Option<usize>,
-    hints: &mut Hints,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
+    let root = context.root;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
     let mut build_findings = Vec::new();
-    let set = graphs::build_set(&graph_root, &config, hints, &mut build_findings)?;
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
     let composed = compose::compose(&set);
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
 
     let seeds: Vec<String> = paths
         .iter()
-        .map(|p| resolve_node(&composed, root, &graph_root, p))
+        .map(|p| resolve_node(&composed, root, graph_root, p))
         .collect::<Result<_>>()?;
 
     let dir = match direction {
@@ -1270,8 +1504,8 @@ fn run_impact(
     let impacted = impact::compute(&composed, &seeds, dir, depth.max_hops());
 
     let has_construction_findings =
-        !rules::check::apply_policy(build_findings.clone(), &config).is_empty();
-    let lock = lock::read(&graph_root, hints)?;
+        !rules::check::apply_policy(build_findings.clone(), config).is_empty();
+    let lock = lock::read(graph_root, hints)?;
     let diagnostics = impact::diagnostics(
         &composed,
         &seeds,
@@ -1279,9 +1513,15 @@ fn run_impact(
         depth.max_hops(),
         &impacted,
         lock.as_ref(),
-        &config,
+        config,
         build_findings,
     );
+    invocation.observe_findings(FindingCoverage::SelectedImpactDiagnostics, &diagnostics);
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Available(impacted.len()),
+        edges: Availability::Unavailable(UnavailableReason::NotObserved),
+        findings: Availability::Available(diagnostics.len()),
+    });
     let unit = if diagnostics.is_empty() {
         "nodes"
     } else {
@@ -1303,12 +1543,15 @@ fn run_impact(
             })?;
             print_json_document(
                 output,
-                impacted.len(),
-                unit,
-                controls,
                 hints,
-                max_bytes,
-                controls,
+                invocation,
+                ProjectionOptions {
+                    count: impacted.len(),
+                    unit,
+                    next: controls,
+                    max_bytes,
+                    controls,
+                },
             )?;
         }
         OutputFormat::Text => {
@@ -1348,12 +1591,15 @@ fn run_impact(
             }
             print_text_projection(
                 &text,
-                impacted.len(),
-                unit,
-                controls,
                 hints,
-                max_bytes,
-                controls,
+                invocation,
+                ProjectionOptions {
+                    count: impacted.len(),
+                    unit,
+                    next: controls,
+                    max_bytes,
+                    controls,
+                },
             )?;
         }
     }
@@ -1364,19 +1610,29 @@ fn run_impact(
 /// Check the composed graph against the lockfile, reporting drift and structural
 /// findings. Errors exit 1, warnings exit 0.
 fn run_check(
-    root: &Path,
+    context: &mut RunContext<'_>,
     format: OutputFormat,
     color: ColorChoice,
-    hints: &mut Hints,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
-    let config = load_config(&graph_root, hints)?;
+    let graph_root = context.graph_root;
+    let config = context.config;
+    let hints = &mut *context.hints;
+    let invocation = &mut *context.invocation;
     let mut build_findings = Vec::new();
-    let set = graphs::build_set(&graph_root, &config, hints, &mut build_findings)?;
+    let set = graphs::build_set(graph_root, config, hints, &mut build_findings);
+    invocation.observe_findings(FindingCoverage::ConstructionDiagnostics, &build_findings);
+    let set = set?;
     let composed = compose::compose(&set);
-    let lock = lock::read(&graph_root, hints)?;
+    invocation.observe_graph_sizes(set.graphs.len(), composed.nodes.len(), composed.edges.len());
+    let lock = lock::read(graph_root, hints)?;
 
-    let findings = rules::check::run(&composed, lock.as_ref(), &config, build_findings);
+    let findings = rules::check::run(&composed, lock.as_ref(), config, build_findings);
+    invocation.observe_findings(FindingCoverage::FullPolicyFilteredEvaluation, &findings);
+    invocation.observe_result_sizes(ResultSizes {
+        nodes: Availability::Unavailable(UnavailableReason::NotObserved),
+        edges: Availability::Unavailable(UnavailableReason::NotObserved),
+        findings: Availability::Available(findings.len()),
+    });
 
     let colorize = use_color(color, format);
     match format {
@@ -1389,7 +1645,7 @@ fn run_check(
                     writeln!(output, "{}", f.format_text())?;
                 }
             }
-            write_stdout(&output)?;
+            write_stdout(&output, UsageOutputMode::Text, invocation)?;
         }
         OutputFormat::Json => {
             let errors = findings
@@ -1407,9 +1663,13 @@ fn run_check(
                 summary: policy::CheckSummary { errors, warnings },
             })?;
             if OutputMode::Envelope.embeds_hints() {
-                attach_hints(&mut output, hints)?;
+                attach_hints(&mut output, hints, invocation)?;
             }
-            write_stdout_line(&serde_json::to_string_pretty(&output)?)?;
+            write_stdout_line(
+                &serde_json::to_string_pretty(&output)?,
+                UsageOutputMode::Json,
+                invocation,
+            )?;
         }
     }
 

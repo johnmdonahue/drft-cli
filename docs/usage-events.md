@@ -1,16 +1,15 @@
-# Usage event envelopes (inactive)
+# Usage event envelopes
 
-The [event producer](../src/usage/event.rs) can construct revision-1 `drft-usage` start and finish JSON records in
-memory. Commands do not call this producer. Configuration and command lifecycle integration remain unimplemented. This document describes the
-producer contract; it does not establish collection availability, command parity,
-filesystem safety, or measured overhead.
+The [event producer](../src/usage/event.rs) constructs revision-1 `drft-usage`
+start and finish JSON records. The [command lifecycle](../src/usage/lifecycle.rs)
+activates after successful configuration loading for the covered commands and
+finalizes after normal stdout and stderr handling. See [local usage records](usage.md)
+to enable collection and locate files.
 
-The inactive [storage handle layer](../src/usage/store.rs) opens or initializes
-infrastructure, acquires its stable lock, and provides bounded physical inventory
-and reads. An independent record reader validates revision-1 wire shapes and a
-retention planner calculates grouped removals. Native publication applies those
-plans and binds finishes to successful-start receipts. Their scope is described in
-[storage infrastructure](usage-storage.md).
+The [storage layer](../src/usage/store.rs) publishes records under short native
+locks on macOS and Linux. Finish publication requires the successful start's
+receipt. The [storage reference](usage-storage.md) defines identity checks,
+retention, and failure behavior.
 
 The literal [start fixture](../tests/fixtures/usage/start-v1.json) and
 [finish fixture](../tests/fixtures/usage/finish-v1.json) fix field names and example
@@ -54,8 +53,9 @@ before start wall time without changing elapsed time.
 
 `collector_work_through_preparation` covers completed collector work through
 finish preparation. `finish_publication_duration` is always unavailable because
-an immutable finish cannot include its own subsequent write duration. These are
-supplied observations; the producer does not read clocks. External process
+an immutable finish cannot include its own subsequent write duration. The command lifecycle leaves collector-work timing unavailable with reason
+`not_observed`; it measures elapsed time from entry through finish preparation.
+The producer itself does not read clocks. External process
 measurements are needed for full latency.
 
 ## Result and output evidence
@@ -71,12 +71,18 @@ validate consistency between independently supplied observations.
 
 `graph_sizes` contains available graph/node/edge counts. `result_sizes` separately
 reports counts for the returned result. Neither causes additional traversal or
-rule evaluation. Finding coverage distinguishes `full_policy_filtered_evaluation`,
+rule evaluation. For `lock`, result node count is the number locked; dropped paths remain in the
+command output. Raw graph result node count uses the command's existing unique
+node count; composed graph sizes remain unavailable on that route.
+Finding coverage distinguishes `full_policy_filtered_evaluation`,
 `construction_diagnostics`, and `selected_impact_diagnostics`. Availability,
 coverage, and payload omission are separate: complete storage of construction
 findings does not establish a full rule evaluation.
 
-Finding and hint records keep their existing typed fields and input order.
+The lifecycle retains a bounded finding prefix while command-local findings are
+available, with their exact source total and coverage. Finish construction can
+admit a smaller prefix against the shared event budget while preserving that
+total. Finding and hint records keep their existing typed fields and input order.
 Prefixes expose known `total`, `included`, and `omitted` counts. Error records
 are complete `Display` strings in source-chain order. Chain totals stay unavailable
 when formatting, payload limits, or the 64-record traversal limit stop collection;

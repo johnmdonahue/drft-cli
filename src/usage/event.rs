@@ -1,8 +1,11 @@
-//! Inactive revision-1 producers. Inputs are observations, never instructions to
+//! Revision-1 event producers. Inputs are observations, never instructions to
 //! evaluate a graph, write output, read config, or access the filesystem.
 
 use super::{
-    bounded::{BoundedError, EVENT_LIMIT, STRUCTURED_PAYLOAD_LIMIT, to_json_bounded},
+    bounded::{
+        BoundedError, EVENT_LIMIT, RecordPrefix, STRUCTURED_PAYLOAD_LIMIT, record_prefix,
+        to_json_bounded,
+    },
     capture::{CaptureSnapshot, StreamCapture},
     identity::{EncodedOs, InvocationId},
 };
@@ -121,7 +124,7 @@ discriminants!(AttemptObservation {
 discriminants!(Unknown { Unknown });
 
 /// Compute from the exact bytes already parsed by normal config loading.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(transparent)]
 pub struct ConfigFingerprint(String);
 impl ConfigFingerprint {
@@ -250,6 +253,21 @@ pub struct BudgetRefusal {
 pub struct Findings<'a> {
     pub coverage: FindingCoverage,
     pub records: &'a [Finding],
+}
+#[derive(Debug)]
+pub struct RetainedFindings {
+    coverage: FindingCoverage,
+    prefix: RecordPrefix,
+}
+impl RetainedFindings {
+    /// Capture a bounded serialized prefix while command-local findings remain
+    /// available. The exact source total is retained without cloning records.
+    pub fn capture(coverage: FindingCoverage, records: &[Finding]) -> Result<Self, BoundedError> {
+        Ok(Self {
+            coverage,
+            prefix: record_prefix(records, STRUCTURED_PAYLOAD_LIMIT)?,
+        })
+    }
 }
 pub struct FinishInput<'a> {
     pub id: &'a InvocationId,
@@ -446,20 +464,53 @@ pub fn finish(input: FinishInput<'_>) -> Result<Vec<u8>, BoundedError> {
 }
 
 fn finish_with_limit(input: FinishInput<'_>, event_limit: usize) -> Result<Vec<u8>, BoundedError> {
-    let (finding_availability, coverage, finding_records, finding_total) = match input.findings {
-        Availability::Available(f) => (
-            "available",
-            Availability::Available(f.coverage),
-            Some(f.records),
-            Availability::Available(f.records.len()),
-        ),
-        Availability::Unavailable(reason) => (
-            "unavailable",
-            Availability::Unavailable(reason),
-            None,
-            Availability::Unavailable(reason),
-        ),
-    };
+    finish_with_limit_and_retained(input, None, event_limit)
+}
+
+/// Construct a bounded finish using a snapshot captured before command-local
+/// findings were dropped. The retained availability, coverage, and exact total
+/// override `input.findings`.
+pub fn finish_retained(
+    input: FinishInput<'_>,
+    retained: &RetainedFindings,
+) -> Result<Vec<u8>, BoundedError> {
+    finish_with_limit_and_retained(input, Some(retained), EVENT_LIMIT)
+}
+
+fn finish_with_limit_and_retained(
+    input: FinishInput<'_>,
+    retained: Option<&RetainedFindings>,
+    event_limit: usize,
+) -> Result<Vec<u8>, BoundedError> {
+    let retained_records: Option<Vec<Value>> = retained
+        .map(|retained| {
+            serde_json::from_slice(retained.prefix.json()).map_err(BoundedError::Serialization)
+        })
+        .transpose()?;
+    let (finding_availability, coverage, finding_records, finding_total) =
+        if let Some(retained) = retained {
+            (
+                "available",
+                Availability::Available(retained.coverage),
+                None,
+                Availability::Available(retained.prefix.total()),
+            )
+        } else {
+            match input.findings {
+                Availability::Available(f) => (
+                    "available",
+                    Availability::Available(f.coverage),
+                    Some(f.records),
+                    Availability::Available(f.records.len()),
+                ),
+                Availability::Unavailable(reason) => (
+                    "unavailable",
+                    Availability::Unavailable(reason),
+                    None,
+                    Availability::Unavailable(reason),
+                ),
+            }
+        };
     let (error_availability, present, traversal, error_total) = match input.error {
         Availability::Unavailable(reason) => (
             "unavailable",
@@ -528,6 +579,12 @@ fn finish_with_limit(input: FinishInput<'_>, event_limit: usize) -> Result<Vec<u
         .checked_sub(COUNTER_HEADROOM)
         .ok_or(BoundedError::LimitExceeded)?;
     if let Some(records) = finding_records {
+        admit_records(
+            records,
+            &mut remaining,
+            &mut event.structured.findings.prefix,
+        )?;
+    } else if let Some(records) = retained_records.as_deref() {
         admit_records(
             records,
             &mut remaining,
@@ -610,6 +667,9 @@ mod tests {
     fn value(input: FinishInput<'_>) -> Value {
         serde_json::from_slice(&finish(input).unwrap()).unwrap()
     }
+    fn retained_value(input: FinishInput<'_>, retained: &RetainedFindings) -> Value {
+        serde_json::from_slice(&finish_retained(input, retained).unwrap()).unwrap()
+    }
 
     #[test]
     fn timestamp_range_and_monotonic_duration_are_independent() {
@@ -638,6 +698,27 @@ mod tests {
         assert_eq!(
             absent["structured"]["findings"]["availability"],
             "unavailable"
+        );
+        let retained =
+            RetainedFindings::capture(FindingCoverage::SelectedImpactDiagnostics, &[]).unwrap();
+        let ignored = [Finding::warn("ignored", "subject", vec![], "message")];
+        let mut retained_input = input(&id, &stdout, &stderr);
+        retained_input.findings = Availability::Available(Findings {
+            coverage: FindingCoverage::FullPolicyFilteredEvaluation,
+            records: &ignored,
+        });
+        let available_empty = retained_value(retained_input, &retained);
+        assert_eq!(
+            available_empty["structured"]["findings"]["availability"],
+            "available"
+        );
+        assert_eq!(
+            available_empty["structured"]["findings"]["coverage"]["value"],
+            "selected_impact_diagnostics"
+        );
+        assert_eq!(
+            available_empty["structured"]["findings"]["prefix"]["total"]["value"],
+            0
         );
         for (coverage, name) in [
             (
@@ -754,6 +835,122 @@ mod tests {
             20_000
         );
         assert_eq!(event["stdout"]["truncated"], true);
+    }
+    #[test]
+    fn retained_findings_keep_exact_bounded_prefix_after_source_is_dropped() {
+        let findings: Vec<_> = (0..3)
+            .map(|index| {
+                Finding::warn(
+                    format!("finding-{index}"),
+                    format!("subject-{index}"),
+                    vec![],
+                    "x".repeat(60_000),
+                )
+            })
+            .collect();
+        let retained =
+            RetainedFindings::capture(FindingCoverage::FullPolicyFilteredEvaluation, &findings)
+                .unwrap();
+        assert!(retained.prefix.json().len() <= STRUCTURED_PAYLOAD_LIMIT);
+        assert_eq!(retained.prefix.total(), 3);
+        assert_eq!(retained.prefix.included(), 2);
+        assert_eq!(retained.prefix.omitted(), 1);
+        drop(findings);
+
+        let id = id();
+        let stdout = StreamCapture::stdout();
+        let stderr = StreamCapture::stderr();
+        let event = retained_value(input(&id, &stdout, &stderr), &retained);
+        let prefix = &event["structured"]["findings"]["prefix"];
+        assert_eq!(prefix["total"]["value"], 3);
+        assert_eq!(prefix["included"], 2);
+        assert_eq!(prefix["omitted"]["value"], 1);
+        assert_eq!(prefix["records"][0]["name"], "finding-0");
+        assert_eq!(prefix["records"][1]["name"], "finding-1");
+
+        let bytes =
+            finish_with_limit_and_retained(input(&id, &stdout, &stderr), Some(&retained), 100_000)
+                .unwrap();
+        let event: Value = serde_json::from_slice(&bytes).unwrap();
+        let prefix = &event["structured"]["findings"]["prefix"];
+        assert_eq!(prefix["total"]["value"], 3);
+        assert_eq!(prefix["included"], 1);
+        assert_eq!(prefix["omitted"]["value"], 2);
+        assert_eq!(prefix["records"][0]["name"], "finding-0");
+    }
+    #[test]
+    fn retained_findings_stop_when_the_first_record_is_oversized() {
+        let mut findings = Vec::with_capacity(10_000);
+        findings.push(Finding::warn(
+            "oversized",
+            "first",
+            vec![],
+            "x".repeat(STRUCTURED_PAYLOAD_LIMIT * 2),
+        ));
+        findings.extend(
+            (1..10_000).map(|index| Finding::warn("small", index.to_string(), vec![], "would fit")),
+        );
+        let retained =
+            RetainedFindings::capture(FindingCoverage::ConstructionDiagnostics, &findings).unwrap();
+        assert_eq!(retained.prefix.json(), b"[]");
+        assert_eq!(retained.prefix.total(), 10_000);
+        assert_eq!(retained.prefix.included(), 0);
+        drop(findings);
+
+        let id = id();
+        let stdout = StreamCapture::stdout();
+        let stderr = StreamCapture::stderr();
+        let event = retained_value(input(&id, &stdout, &stderr), &retained);
+        let prefix = &event["structured"]["findings"]["prefix"];
+        assert_eq!(prefix["total"]["value"], 10_000);
+        assert_eq!(prefix["included"], 0);
+        assert_eq!(prefix["omitted"]["value"], 10_000);
+    }
+    #[test]
+    fn retained_findings_share_final_budget_with_later_payloads() {
+        let id = id();
+        let mut stdout = StreamCapture::stdout();
+        let mut stderr = StreamCapture::stderr();
+        stdout
+            .begin_write(&vec![b'a'; 100_000])
+            .finish(&Err(io::ErrorKind::BrokenPipe.into()));
+        stderr.begin_write(&vec![b'b'; 20_000]).finish(&Ok(()));
+        let findings = vec![Finding::warn(
+            "retained",
+            "subject",
+            vec![],
+            "x".repeat(90_000),
+        )];
+        let retained =
+            RetainedFindings::capture(FindingCoverage::FullPolicyFilteredEvaluation, &findings)
+                .unwrap();
+        drop(findings);
+        let hints = [
+            Hint::new("oversized-hint", "x".repeat(90_000)),
+            Hint::new("small-hint", "not visited after refusal"),
+        ];
+        let error = io::Error::other("later error");
+        let mut i = input(&id, &stdout, &stderr);
+        i.hints = Availability::Available(&hints);
+        i.error = Availability::Available(Some(&error));
+        let bytes = finish_with_limit_and_retained(i, Some(&retained), 100_000).unwrap();
+        assert!(bytes.len() <= 100_000);
+        let event: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(event["structured"]["findings"]["prefix"]["included"], 1);
+        assert_eq!(event["structured"]["hints"]["included"], 0);
+        assert_eq!(event["structured"]["hints"]["omitted"]["value"], 2);
+        assert_eq!(event["structured"]["error"]["prefix"]["included"], 1);
+        let stdout_bytes = STANDARD
+            .decode(event["stdout"]["prefix_base64"].as_str().unwrap())
+            .unwrap();
+        assert!(!stdout_bytes.is_empty());
+        assert!(stdout_bytes.len() < 64 * 1024);
+        assert_eq!(event["stderr"]["retained_bytes"], 0);
+        assert_eq!(event["stdout"]["observed_input_bytes"]["bytes"], 100_000);
+        assert_eq!(
+            event["stderr"]["writer_accepted_bytes"]["bytes"]["bytes"],
+            20_000
+        );
     }
     #[test]
     fn admission_stops_at_first_rejected_record() {

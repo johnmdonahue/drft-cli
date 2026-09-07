@@ -156,3 +156,17 @@ otherwise configure nothing in silence. The warning is an `unknown-rule`
 [hint](reading.md#hints), carrying the config key as its locus.
 
 See [rules](rules/README.md) for the full set.
+
+## experimental.usage
+
+```toml
+[experimental.usage]
+enabled = true
+```
+
+Opt in to bounded local command records on macOS and Linux. The default is
+`false`; missing or empty tables leave collection disabled. Unknown experimental
+keys and incorrect types are configuration errors, including when disabled.
+See [local usage records](usage.md) for coverage, cache paths, retention, and
+manual copying. A shared config opt-in applies to every user of that config;
+records stay in each user's local cache.

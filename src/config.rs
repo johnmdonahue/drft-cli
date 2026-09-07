@@ -118,6 +118,19 @@ struct RawRules {
     rules: HashMap<String, RawRuleValue>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawUsage {
+    #[serde(default)]
+    enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawExperimental {
+    usage: Option<RawUsage>,
+}
+
 // ── Config ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -128,6 +141,10 @@ pub struct Config {
     /// Configured graphs, keyed by name. `fs` is implicit and always built.
     pub graphs: BTreeMap<String, GraphConfig>,
     pub rules: HashMap<String, RuleConfig>,
+    /// Whether experimental local usage collection was explicitly enabled.
+    pub usage_enabled: bool,
+    /// BLAKE3 fingerprint of the exact config bytes, present only when usage is enabled.
+    pub usage_config_fingerprint: Option<crate::usage::event::ConfigFingerprint>,
     /// Globs from `[rules].ignore` — subjects suppressed across *every* rule
     /// (configured or not), unioned with each rule's own `ignore`. Unlike the
     /// top-level `ignore`, the paths stay in the graph; only findings are dropped.
@@ -146,6 +163,7 @@ struct RawConfig {
     ignore: Option<Vec<String>>,
     graphs: Option<HashMap<String, RawGraph>>,
     rules: Option<RawRules>,
+    experimental: Option<RawExperimental>,
 }
 
 /// Names of all built-in rules (for the `unknown-rule` hint).
@@ -191,6 +209,8 @@ impl Config {
             ignore: Vec::new(),
             graphs: BTreeMap::new(),
             rules: HashMap::new(),
+            usage_enabled: false,
+            usage_config_fingerprint: None,
             rule_ignore: None,
             config_dir: None,
             hints: Vec::new(),
@@ -217,6 +237,11 @@ impl Config {
             .with_context(|| format!("failed to read {}", config_path.display()))?;
         let raw: RawConfig = toml::from_str(&content)
             .with_context(|| format!("failed to parse {}", config_path.display()))?;
+        let usage_enabled = raw
+            .experimental
+            .as_ref()
+            .and_then(|experimental| experimental.usage.as_ref())
+            .is_some_and(|usage| usage.enabled);
 
         let mut config = Self::defaults();
         config.config_dir = config_path.parent().map(|p| p.to_path_buf());
@@ -304,6 +329,13 @@ impl Config {
             }
         }
 
+        if usage_enabled {
+            config.usage_enabled = true;
+            config.usage_config_fingerprint = Some(
+                crate::usage::event::ConfigFingerprint::from_parsed_bytes(content.as_bytes()),
+            );
+        }
+
         Ok(config)
     }
 
@@ -354,6 +386,80 @@ mod tests {
     fn defaults_have_no_graphs() {
         // No runtime defaults — the drft.toml declares the full set.
         assert!(Config::defaults().graphs.is_empty());
+        assert!(!Config::defaults().usage_enabled);
+        assert!(Config::defaults().usage_config_fingerprint.is_none());
+    }
+
+    #[test]
+    fn usage_is_disabled_when_setting_is_absent_or_false() {
+        for contents in [
+            "",
+            "[experimental]\n",
+            "[experimental.usage]\n",
+            "[experimental.usage]\nenabled = false\n",
+        ] {
+            let dir = TempDir::new().unwrap();
+            fs::write(dir.path().join("drft.toml"), contents).unwrap();
+            let config = Config::load(dir.path()).unwrap();
+            assert!(!config.usage_enabled, "contents: {contents:?}");
+            assert!(config.usage_config_fingerprint.is_none());
+        }
+    }
+
+    #[test]
+    fn usage_enabled_fingerprints_exact_config_bytes() {
+        // Comments, CRLFs, and trailing whitespace are part of the exact parsed
+        // input and therefore part of the fingerprint.
+        let contents = b"# opt in\r\n[experimental.usage]\r\nenabled = true\r\n \r\n";
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("drft.toml");
+        fs::write(&path, contents).unwrap();
+        let config = Config::load(dir.path()).unwrap();
+        assert!(config.usage_enabled);
+        let fingerprint =
+            serde_json::to_string(config.usage_config_fingerprint.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            fingerprint,
+            format!("\"b3:{}\"", blake3::hash(contents).to_hex())
+        );
+
+        fs::write(&path, "[experimental.usage]\nenabled = false\n").unwrap();
+        assert_eq!(
+            fingerprint,
+            serde_json::to_string(config.usage_config_fingerprint.as_ref().unwrap()).unwrap()
+        );
+    }
+
+    #[test]
+    fn usage_table_rejects_unknown_keys_and_types_even_when_disabled() {
+        for contents in [
+            "experimental = true\n",
+            "experimental = []\n",
+            "experimental = { usage = false }\n",
+            "[experimental.usage]\nenabled = 1\n",
+            "[experimental.usage]\nenabled = []\n",
+            "[experimental]\nunknown = true\n",
+            "[experimental.usage]\nunknown = true\n",
+            "[experimental.usage]\nenabled = \"false\"\n",
+            "[experimental.usage]\nenabled = false\nunknown = true\n",
+            "[experimental.other]\nenabled = false\n",
+            "[experimental.usage.extra]\nenabled = false\n",
+        ] {
+            let dir = TempDir::new().unwrap();
+            fs::write(dir.path().join("drft.toml"), contents).unwrap();
+            assert!(Config::load(dir.path()).is_err(), "contents: {contents:?}");
+        }
+    }
+
+    #[test]
+    fn invalid_config_cannot_return_enabled_config() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("drft.toml"),
+            "[experimental.usage]\nenabled = true\n\n[graphs.bad]\nparser = \"unknown\"\n",
+        )
+        .unwrap();
+        assert!(Config::load(dir.path()).is_err());
     }
 
     #[test]

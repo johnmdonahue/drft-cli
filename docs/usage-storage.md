@@ -1,11 +1,11 @@
-# Usage storage infrastructure (inactive)
+# Usage storage infrastructure
 
 The [storage module](../src/usage/store.rs) opens or initializes cache infrastructure
 and acquires an exclusive lock on macOS and Linux. Its bounded inventory accounts
 for safe regular files and reads individual entries. A record inventory classifies
-envelopes and calculates grouped retention and start-write reservations. Commands do not call it.
-Native start/finish publication applies retention under that lock. Configuration
-and command lifecycle integration remain unimplemented. A successful guard alone
+envelopes and calculates grouped retention and start-write reservations.
+The [command lifecycle](../src/usage/lifecycle.rs) uses native start/finish
+publication after config opt-in, applying retention under that lock. A successful guard alone
 establishes infrastructure identity and synchronization, not record validity.
 
 `Partition::open_existing` requires an absolute cache path outside the canonical
@@ -234,5 +234,4 @@ copy does not acquire the collector's lock and is not a consistent snapshot;
 concurrent publication or cleanup may leave missing or unmatched records in the
 copy. Keep those gaps explicit during analysis. No inspect, prune, or export
 command is required. Never remove or replace partition or lock infrastructure
-while a collector may be using it. Conventional per-user paths and integrated
-configuration remain outside these inactive primitives.
+while a collector may be using it. See [local usage records](usage.md) for per-user paths and configuration.
