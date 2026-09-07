@@ -249,6 +249,20 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
             ];
         }
     }
+    if matches!(
+        command,
+        Commands::Check
+            | Commands::Graph { .. }
+            | Commands::Nodes { .. }
+            | Commands::Edges { .. }
+            | Commands::Impact { .. }
+            | Commands::Lock { .. }
+    ) {
+        record
+            .writes
+            .push("per-user-usage-cache (when experimental.usage.enabled)");
+        record.boundary.push("Experimental usage opt-in records bounded local evidence after valid config loading on macOS/Linux; cache failures silently skip evidence.");
+    }
     record
 }
 fn exact_paths() -> Semantics {

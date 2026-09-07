@@ -40,6 +40,9 @@ including argument IDs, flag spellings, defaults, allowed values, and scope
 constraints. Argument IDs such as `paths` differ from displayed metavars such as
 `PATHS`. Global controls appear once and are inherited by every command.
 
+The covered commands list a conditional per-user cache write when
+[local usage collection](usage.md) is enabled. `guide` itself does not collect.
+
 An empty `possible_values` list means clap does not enumerate a finite set.
 Consult the control's help and operational semantics for custom parsers such as
 the traversal depth. Examples are checked against the CLI parser.
