@@ -2,9 +2,10 @@
 
 The [storage module](../src/usage/store.rs) opens or initializes cache infrastructure
 and acquires an exclusive lock on macOS and Linux. Its bounded inventory accounts
-for safe regular files and reads individual entries. Commands do not call it.
-Event validation, write reservations, publication, pruning, export, and
-configuration integration remain unimplemented. A successful guard establishes
+for safe regular files and reads individual entries. A record inventory classifies
+envelopes and calculates grouped retention and start-write reservations. Commands do not call it.
+Native publication, pruning, export, and configuration integration remain
+unimplemented. A successful guard establishes
 infrastructure identity and synchronization only.
 
 `Partition::open_existing` requires an absolute cache path outside the canonical
@@ -98,3 +99,66 @@ The [scan fixtures](../src/usage/store/native/scan/tests.rs) exercise quota boun
 safe and unsafe entry types, bounded reads, and substitutions or changes at
 deterministic scan/open/read checkpoints. They qualify neither event analysis
 nor mutation transactions.
+
+## Record classification and retention plans
+
+`Inventory::records` uses the [record inventory](../src/usage/store/records.rs)
+and independent [wire reader](../src/usage/record.rs) to classify the complete
+physical inventory. It recognizes `.lock`, `<id>.start.json`, `<id>.finish.json`,
+and `.tmp.<id>`, with exactly 32 lowercase hexadecimal characters in each ID.
+Other names invalidate classification, including unrecognized control names.
+Health records have no reserved name or schema yet. Recognized temporary contents
+are abandoned staging bytes and are not parsed as envelopes.
+
+Finals are grouped by filename ID. Supported revision-1 envelopes must match the
+filename ID and event kind and satisfy the complete wire shape, required fields,
+encoding rules, and producer-established count/capture invariants. Duplicate JSON
+keys, unknown revision-1 fields, invalid timestamps, and malformed encodings are
+rejected. Caller-supplied observations are not verified against command execution.
+Matching headers with later positive integer revisions are unsupported for analysis.
+Malformed, unsupported, and oversized finals stay accounted for in their groups;
+their original files remain available for a future raw export implementation.
+
+Classification reads one capped payload at a time and retains only bounded group
+metadata, inventory indices, sizes, and validated wall times. JSON parsing retains
+the recursion limit and rejects duplicate keys at every depth. Its allocations are
+bounded by the event byte limit, with JSON representation overhead; the event limit
+is not a peak-memory measurement. Record paths never become filesystem authority.
+The inventory and plans borrow the physical snapshot and its lock. Metadata is
+revalidated after classification, before planning, and on `plan.validate()`.
+
+Pairing and time coverage are separate. A filename pair has known coverage only
+when both envelopes validate, all entry/collection times are available, entry times
+agree, and entry ≤ start collection ≤ finish collection. Everything else has unknown
+coverage, including incomplete starts, orphan finishes, and clock rollback. This
+classification neither compares findings nor proves shared provenance.
+
+The planner expires a known group when its latest endpoint is at least seven days
+older than the supplied current time, including the exact nanosecond boundary.
+An unavailable current time disables age expiration. Unknown-coverage groups
+survive age expiration but remain eligible for quota eviction. Quota eviction takes
+known groups first by latest endpoint, then unknown groups by ID; equal known times
+also use ID order. ID order expresses an eviction policy, never inferred chronology.
+Each selected group loses all its retained members together in the plan.
+
+Plans remove recognized abandoned temporaries first. Start reservations reject a
+collision with either existing group member before proposing any cleanup, including
+an expired or rejected record. They reserve one staging file and the complete event
+length within the partition's byte/file limits; its later rename needs no second
+slot. `PruneAll` plans record and temporary removal while retaining the stable
+empty lock. Externally excessive accounting fails without a cleanup plan.
+
+Plans return indices into their retained physical inventory and predicted retained
+and peak occupancy. They perform no writes or removals. A native transaction must
+recheck identities and track each successful mutation because its own deletions
+invalidate the original snapshot. Finish reservations require a future opaque
+successful-start receipt bound to the partition and published start. Native
+publication, partial-deletion reporting, health replacement, and frozen export
+snapshots remain separate work.
+
+The [reader fixtures](../src/usage/record/tests.rs) and
+[planner fixtures](../src/usage/store/records/tests.rs) cover hostile wire data,
+recognized rejected finals, complete-scan refusal, pairing, uncertain coverage,
+expiry boundaries, collision refusal, quota ordering, staging occupancy, and
+snapshot changes. These checks qualify calculation and classification, not native
+mutation or usable collection.

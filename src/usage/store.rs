@@ -6,6 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod records;
+
 /// Includes synchronization, temporary, malformed, and final files.
 pub const PARTITION_FILE_LIMIT: usize = 10_000;
 pub const PARTITION_BYTE_LIMIT: u64 = 100 * 1024 * 1024;
@@ -29,6 +31,14 @@ pub enum StoreError {
     ScanLimit,
     #[error("usage inventory read index or byte limit is invalid")]
     InvalidRead,
+    #[error("usage partition contains an unrecognized filename")]
+    UnknownName,
+    #[error("usage invocation identity already exists")]
+    Collision,
+    #[error("usage write reservation is invalid")]
+    InvalidReservation,
+    #[error("usage write cannot fit within partition quota")]
+    Capacity,
     #[error("usage storage I/O failed: {0}")]
     Io(#[from] std::io::Error),
 }

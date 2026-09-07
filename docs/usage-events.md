@@ -8,7 +8,8 @@ filesystem safety, or measured overhead.
 
 The inactive [storage handle layer](../src/usage/store.rs) opens or initializes
 infrastructure, acquires its stable lock, and provides bounded physical inventory
-and reads. Its scope is described in
+and reads. An independent record reader validates revision-1 wire shapes and a
+retention planner calculates grouped removals without mutating files. Their scope is described in
 [storage infrastructure](usage-storage.md).
 
 The literal [start fixture](../tests/fixtures/usage/start-v1.json) and
