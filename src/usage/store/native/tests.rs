@@ -61,6 +61,49 @@ fn existing_open_preserves_infrastructure_and_exact_root() {
 }
 
 #[test]
+fn transient_reopened_lock_replacement_is_rejected_after_original_is_restored() {
+    let fixture = Fixture::new();
+    let mut partition = fixture.open();
+    let saved = fixture.cache.join("saved-lock");
+    let result = partition.try_lock_with_reopen(
+        || {
+            stdfs::rename(fixture.lock(), &saved).unwrap();
+            stdfs::write(fixture.lock(), []).unwrap();
+        },
+        || {
+            stdfs::remove_file(fixture.lock()).unwrap();
+            stdfs::rename(&saved, fixture.lock()).unwrap();
+        },
+        |_| {},
+    );
+    assert!(matches!(result, Err(StoreError::IdentityChanged)));
+}
+
+#[test]
+fn lock_open_requests_nonblocking_independently_of_fifo_behavior() {
+    // A read/write FIFO open need not block on Linux. This assertion qualifies
+    // the requested flag; the separate race fixture qualifies type refusal.
+    assert!(LOCK.contains(OFlags::NONBLOCK));
+}
+
+#[test]
+fn fifo_replacing_lock_after_stat_is_refused_as_a_special_file() {
+    let fixture = Fixture::new();
+    let partition = fixture.open();
+    let result = open_lock_with(&partition.partition.fd, || {
+        stdfs::remove_file(fixture.lock()).unwrap();
+        assert!(
+            Command::new("mkfifo")
+                .arg(fixture.lock())
+                .status()
+                .unwrap()
+                .success()
+        );
+    });
+    assert!(matches!(result, Err(StoreError::UnsafeEntry)));
+}
+
+#[test]
 fn missing_infrastructure_never_creates_entries() {
     let fixture = Fixture::new();
     let missing = fixture.cache.join("missing");

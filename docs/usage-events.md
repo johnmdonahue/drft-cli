@@ -1,15 +1,15 @@
 # Usage event envelopes (inactive)
 
 The [event producer](../src/usage/event.rs) can construct revision-1 `drft-usage` start and finish JSON records in
-memory. Commands do not call this producer. Configuration, persistence, inspection,
-export, and lifecycle integration remain unimplemented. This document describes the
+memory. Commands do not call this producer. Configuration and command lifecycle integration remain unimplemented. This document describes the
 producer contract; it does not establish collection availability, command parity,
 filesystem safety, or measured overhead.
 
 The inactive [storage handle layer](../src/usage/store.rs) opens or initializes
 infrastructure, acquires its stable lock, and provides bounded physical inventory
 and reads. An independent record reader validates revision-1 wire shapes and a
-retention planner calculates grouped removals without mutating files. Their scope is described in
+retention planner calculates grouped removals. Native publication applies those
+plans and binds finishes to successful-start receipts. Their scope is described in
 [storage infrastructure](usage-storage.md).
 
 The literal [start fixture](../tests/fixtures/usage/start-v1.json) and
@@ -21,8 +21,8 @@ must be preserved as original records and rejected for analysis.
 
 Both envelopes carry `schema`, integer `revision`, `event` (`start` or `finish`),
 and a 32-character hexadecimal invocation `id` representing 128 OS-random bits.
-Random failure has no fallback. Future storage must still refuse replacement when
-an ID collides.
+Random failure has no fallback. Native storage refuses replacement when an ID
+collides.
 
 Start carries the binary version, original cwd, effective directory, canonical
 graph root, command, requested format, exact argv, and a BLAKE3 fingerprint of the
@@ -34,8 +34,8 @@ or `lock`; requested format is `text` or `json`.
 Every OS string carries `os_encoding` (`unix-bytes` or `windows-utf16le`),
 `encoding` (`utf8` or `base64`), and `value`. Exact UTF-8 is preferred; otherwise
 base64 preserves native units, including unpaired Windows surrogates. No path
-normalization occurs. The optional `caller` contains only the supplied
-`DRFT_USAGE_CALLER_ID` value. `authenticated: false` and
+normalization occurs. The optional `caller` contains a caller-supplied correlation label; the producer
+reads no environment value. Command integration leaves caller identity unavailable. `authenticated: false` and
 `unique_to_invocation: false` prohibit treating that label as trusted or unique.
 An oversized caller label fails required-metadata admission just like argv.
 

@@ -228,6 +228,19 @@ impl RecordSet {
                 }
                 (bytes, 1usize)
             }
+            Request::ReserveFinish { id, bytes } => {
+                if !valid_id(id) || bytes == 0 || bytes > EVENT_LIMIT as u64 {
+                    return Err(StoreError::InvalidReservation);
+                }
+                let group = self.groups.get(id).ok_or(StoreError::MissingStart)?;
+                if group.finish.is_some() {
+                    return Err(StoreError::Collision);
+                }
+                if group.start.is_none() {
+                    return Err(StoreError::MissingStart);
+                }
+                (bytes, 1usize)
+            }
             _ => (0, 0),
         };
         // These limits also gate externally oversized state: planning cannot
@@ -237,6 +250,7 @@ impl RecordSet {
         }
         let mut plan = Planned {
             remove: Vec::new(),
+            groups: Vec::new(),
             retained_bytes: self.bytes,
             retained_files: self.files,
             peak_bytes: 0,
@@ -249,6 +263,9 @@ impl RecordSet {
         groups.sort_by_key(|group| group.eviction_key());
         let mut remaining = Vec::new();
         for group in groups {
+            if matches!(request, Request::ReserveFinish { id, .. } if id == group.id) {
+                continue;
+            }
             let expired = match (now, group.coverage()) {
                 (Some(now), Coverage::Known { last, .. }) => {
                     nanos(now) - nanos(last) >= RETENTION_SECONDS * 1_000_000_000
@@ -291,17 +308,26 @@ fn fits(plan: &Planned, bytes: u64, files: usize, byte_limit: u64, file_limit: u
 }
 
 /// Reservation includes one staging file of the final event's full byte length.
-/// Rename consumes no additional slot. Finish requires a future native receipt
-/// protocol and cannot be requested through this planner.
+/// Rename consumes no additional slot. Finish calculation protects its start;
+/// native publication independently requires the opaque successful-start receipt.
 #[derive(Debug, Clone, Copy)]
 pub enum Request<'a> {
     PruneExpired,
     PruneAll,
-    ReserveStart { id: &'a str, bytes: u64 },
+    ReserveStart {
+        id: &'a str,
+        bytes: u64,
+    },
+    /// Calculation only; publication additionally requires a native receipt.
+    ReserveFinish {
+        id: &'a str,
+        bytes: u64,
+    },
 }
 
 struct Planned {
     remove: Vec<usize>,
+    groups: Vec<Vec<usize>>,
     retained_bytes: u64,
     retained_files: usize,
     peak_bytes: u64,
@@ -314,6 +340,8 @@ impl Planned {
         self.retained_files -= 1;
     }
     fn remove_group(&mut self, group: &Group) {
+        self.groups
+            .push(group.records().map(|record| record.index).collect());
         for record in group.records() {
             self.remove(record.index, record.bytes);
         }
@@ -366,6 +394,9 @@ pub struct RetentionPlan<'a> {
     planned: Planned,
 }
 impl RetentionPlan<'_> {
+    pub(super) fn removal_groups(&self) -> &[Vec<usize>] {
+        &self.planned.groups
+    }
     pub fn removal_indices(&self) -> &[usize] {
         &self.planned.remove
     }

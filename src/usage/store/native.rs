@@ -209,10 +209,21 @@ impl Partition {
     }
 
     fn try_lock_with(&mut self, acquired: impl FnOnce(&OwnedFd)) -> Result<Guard<'_>, StoreError> {
+        self.try_lock_with_reopen(|| {}, || {}, acquired)
+    }
+
+    fn try_lock_with_reopen(
+        &mut self,
+        before_reopen: impl FnOnce(),
+        reopened: impl FnOnce(),
+        acquired: impl FnOnce(&OwnedFd),
+    ) -> Result<Guard<'_>, StoreError> {
         self.validate()?;
+        before_reopen();
         // Reopening gives flock an independent open-file description. Reusing
         // the retained descriptor could turn overlapping acquisitions into one.
         let lock = open_lock(&self.partition.fd)?;
+        reopened();
         if !same(&lock.identity, &self.lock.identity) {
             return Err(StoreError::IdentityChanged);
         }
@@ -297,3 +308,6 @@ mod bootstrap;
 
 mod scan;
 pub(super) use scan::Inventory;
+
+mod transaction;
+pub(super) use transaction::Receipt;

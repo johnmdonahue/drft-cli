@@ -14,7 +14,7 @@ const READ: OFlags = OFlags::RDONLY
     .union(OFlags::NONBLOCK)
     .union(OFlags::CLOEXEC);
 
-fn regular(stat: &Stat) -> Result<(), StoreError> {
+pub(super) fn regular(stat: &Stat) -> Result<(), StoreError> {
     if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
         || stat.st_nlink != 1
         || stat.st_size < 0
@@ -26,7 +26,7 @@ fn regular(stat: &Stat) -> Result<(), StoreError> {
 
 // atime is excluded because this reader can update it. These are observation
 // checks, not protection against arbitrary same-owner in-place rewrites.
-fn unchanged(a: &Stat, b: &Stat) -> bool {
+pub(super) fn unchanged(a: &Stat, b: &Stat) -> bool {
     same(a, b)
         && a.st_size == b.st_size
         && a.st_mode == b.st_mode
@@ -115,7 +115,7 @@ pub(in crate::usage::store) struct Inventory<'a> {
     guard: &'a Guard<'a>,
     directory: Stat,
     entries: Vec<InventoryEntry>,
-    identities: Vec<Stat>,
+    pub(super) identities: Vec<Stat>,
     bytes: u64,
 }
 

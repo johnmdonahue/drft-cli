@@ -4,9 +4,9 @@ The [storage module](../src/usage/store.rs) opens or initializes cache infrastru
 and acquires an exclusive lock on macOS and Linux. Its bounded inventory accounts
 for safe regular files and reads individual entries. A record inventory classifies
 envelopes and calculates grouped retention and start-write reservations. Commands do not call it.
-Native publication, pruning, export, and configuration integration remain
-unimplemented. A successful guard establishes
-infrastructure identity and synchronization only.
+Native start/finish publication applies retention under that lock. Configuration
+and command lifecycle integration remain unimplemented. A successful guard alone
+establishes infrastructure identity and synchronization, not record validity.
 
 `Partition::open_existing` requires an absolute cache path outside the canonical
 graph root. Existing cache ancestors resolve once; the cache entry itself must
@@ -107,7 +107,7 @@ and independent [wire reader](../src/usage/record.rs) to classify the complete
 physical inventory. It recognizes `.lock`, `<id>.start.json`, `<id>.finish.json`,
 and `.tmp.<id>`, with exactly 32 lowercase hexadecimal characters in each ID.
 Other names invalidate classification, including unrecognized control names.
-Health records have no reserved name or schema yet. Recognized temporary contents
+Health records have no reserved name or schema; the collector does not write them. Recognized temporary contents
 are abandoned staging bytes and are not parsed as envelopes.
 
 Finals are grouped by filename ID. Supported revision-1 envelopes must match the
@@ -117,7 +117,7 @@ keys, unknown revision-1 fields, invalid timestamps, and malformed encodings are
 rejected. Caller-supplied observations are not verified against command execution.
 Matching headers with later positive integer revisions are unsupported for analysis.
 Malformed, unsupported, and oversized finals stay accounted for in their groups;
-their original files remain available for a future raw export implementation.
+their original files can be copied manually while retained.
 
 Classification reads one capped payload at a time and retains only bounded group
 metadata, inventory indices, sizes, and validated wall times. JSON parsing retains
@@ -151,14 +151,88 @@ empty lock. Externally excessive accounting fails without a cleanup plan.
 Plans return indices into their retained physical inventory and predicted retained
 and peak occupancy. They perform no writes or removals. A native transaction must
 recheck identities and track each successful mutation because its own deletions
-invalidate the original snapshot. Finish reservations require a future opaque
-successful-start receipt bound to the partition and published start. Native
-publication, partial-deletion reporting, health replacement, and frozen export
-snapshots remain separate work.
+invalidate the original snapshot. Finish reservations protect their matching start from eviction and reserve the
+finish staging file. A calculation alone grants no publication authority; native
+finish publication requires the successful-start receipt described below.
 
 The [reader fixtures](../src/usage/record/tests.rs) and
 [planner fixtures](../src/usage/store/records/tests.rs) cover hostile wire data,
 recognized rejected finals, complete-scan refusal, pairing, uncertain coverage,
 expiry boundaries, collision refusal, quota ordering, staging occupancy, and
-snapshot changes. These checks qualify calculation and classification, not native
-mutation or usable collection.
+snapshot changes. These checks cover calculation and classification; the native
+transaction fixtures below cover their filesystem effects.
+
+## Native publication transactions
+
+`PartitionGuard::publish_start` and `publish_finish` call the
+[native transaction module](../src/usage/store/native/transaction.rs). Incoming
+bytes must pass the independent supported-envelope reader for the requested ID
+and event kind before any mutation. Complete partition classification and plan
+validation also precede cleanup. Unknown names, unsafe entries, excessive external
+occupancy, and invocation collisions refuse publication without earning cleanup.
+
+Start returns an opaque, process-local `StartReceipt` only after no-replace
+publication and verification succeed. It binds partition and lock identities,
+invocation ID, start metadata including length, and a BLAKE3 digest of the exact
+bytes. It retains neither payload nor a file descriptor across command execution.
+A receipt therefore does not retain deleted payload allocation after eviction.
+Its native identity observations inherit the transient-change limitations above.
+
+Finish requires a receipt and a surviving start whose metadata and bounded byte
+read match it. Missing starts return `MissingStart`; absence does not establish
+why the file disappeared. Changed starts, foreign receipts, and existing finishes
+refuse before cleanup. The finish plan protects its matching start from eviction
+and skips publication if the remaining quota cannot hold the finish. Records still
+can become incomplete or orphaned through interrupted cleanup or external changes;
+readers must preserve that uncertainty.
+
+The transaction copies bounded names and stat metadata into a mutable ledger.
+After each confirmed unlink it removes only that entry from the expected set.
+Fresh scans compare exact membership and surviving metadata with the ledger around
+mutations, so its own directory changes do not authorize unrelated changes.
+These full scans can make large cleanup expensive; their overhead is unmeasured.
+A process ignoring the advisory lock can still race the interval between a final
+identity check and its filesystem operation. Stable owner-controlled ancestry and
+cooperating publishers remain required.
+
+Retention stops at the first failure and preserves confirmed deletions. Removing
+an invocation pair is not physically atomic: failure between its unlinks can leave
+one member. `PublishOutcome` reports retention removal counts and observed lengths,
+whether a group was partially removed, staging disposition, publication status,
+and the primary error. Occupancy is available only when a final scan agrees with
+the ledger; unexplained changes leave it unknown. Staging cleanup is reported
+separately from retention removals. No rollback or complete loss history is implied.
+
+Publication reserves the complete event length and one staging slot. It creates
+an internally generated `.tmp.<id>` exclusively with mode `0600`, subject to
+umask, through no-follow/nonblocking descriptor-relative access. It handles short
+and interrupted writes, rejects failed or zero writes, and verifies completed
+size, attributes, and bytes. Native `NOREPLACE` rename moves staging to the final
+name without a second quota slot; a destination that appears immediately before
+rename survives unchanged.
+
+Successful rename is the publication commit point. A later verification failure
+returns `Published` with an error and no usable start receipt. Finals are never
+removed as rollback. Before publication, failed work removes staging only when its
+retained descriptor and named entry agree; failed or unsafe cleanup leaves
+`MayRemain` for a later transaction to inspect. `Published` reports the observed
+rename, not power-loss durability or continuing visibility.
+
+The [transaction fixtures](../src/usage/store/native/transaction/tests.rs) cover
+late invalid entries, collision races, partial deletion, external membership
+changes, short/failed writes, pre/post-rename failures, receipt rejection,
+quota boundaries, and abrupt subprocess exits. Native lock fixtures isolate a
+transient independent-reopen substitution. The lock open's `NONBLOCK` flag is
+checked separately from FIFO rejection: a read/write FIFO need not block on Linux.
+Native platform results must be recorded separately; these fixtures do not
+establish command integration or measured collection overhead.
+
+## Manual copying
+
+Copy retained raw start/finish files during a quiet period. An ordinary filesystem
+copy does not acquire the collector's lock and is not a consistent snapshot;
+concurrent publication or cleanup may leave missing or unmatched records in the
+copy. Keep those gaps explicit during analysis. No inspect, prune, or export
+command is required. Never remove or replace partition or lock infrastructure
+while a collector may be using it. Conventional per-user paths and integrated
+configuration remain outside these inactive primitives.

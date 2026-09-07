@@ -380,6 +380,37 @@ fn temporaries_are_reserved_once_and_clear_preserves_lock() {
 }
 
 #[test]
+fn finish_reservation_protects_start_and_rejects_missing_collision_and_capacity() {
+    let id = "11111111111111111111111111111111";
+    let start = group(id, Some(supported(1, 2)), None, 1);
+    let records = set(vec![start], vec![]);
+    let request = Request::ReserveFinish { id, bytes: 50 };
+    let plan = records.plan(request, Some(time(i64::MAX)), 60, 3).unwrap();
+    assert!(plan.remove.is_empty());
+    assert_eq!((plan.peak_bytes, plan.peak_files), (60, 3));
+    assert!(matches!(
+        records.plan(request, None, 59, 3),
+        Err(StoreError::Capacity)
+    ));
+    assert!(matches!(
+        records.plan(request, None, 60, 2),
+        Err(StoreError::Capacity)
+    ));
+    assert!(matches!(
+        set(vec![], vec![]).plan(request, None, 150, 3),
+        Err(StoreError::MissingStart)
+    ));
+    let paired = set(
+        vec![group(id, Some(supported(1, 2)), Some(supported(1, 3)), 1)],
+        vec![],
+    );
+    assert!(matches!(
+        paired.plan(request, None, 1000, 10),
+        Err(StoreError::Collision)
+    ));
+}
+
+#[test]
 fn collisions_precede_any_cleanup_and_invalid_state_cannot_be_pruned_to_fit() {
     for existing in [
         group(A, Some(supported(0, 1)), Some(supported(0, 2)), 1),

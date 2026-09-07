@@ -2,7 +2,8 @@
 //!
 //! A guard establishes placement and synchronization, not record validity.
 //! Bounded physical inventories do not validate event contents or authorize
-//! retention/publication. No command calls this module.
+//! retention/publication. Native publication completes classification and uses
+//! successful-start receipts; no command calls this module.
 
 use std::path::{Path, PathBuf};
 
@@ -35,6 +36,14 @@ pub enum StoreError {
     UnknownName,
     #[error("usage invocation identity already exists")]
     Collision,
+    #[error("usage finish has no surviving start")]
+    MissingStart,
+    #[error("usage start receipt does not match the retained start or partition")]
+    ReceiptMismatch,
+    #[error("usage publication requires a supported bounded event")]
+    InvalidEvent,
+    #[error("usage staging identity could not be generated")]
+    RandomUnavailable,
     #[error("usage write reservation is invalid")]
     InvalidReservation,
     #[error("usage write cannot fit within partition quota")]
@@ -118,8 +127,8 @@ impl Partition {
     }
 }
 
-/// Exclusive infrastructure lock. Future record operations must additionally
-/// validate the complete partition and reserve quota before mutation.
+/// Exclusive infrastructure lock. Publication additionally validates the
+/// complete partition and reserves quota before mutation.
 pub struct PartitionGuard<'a> {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     native: native::Guard<'a>,
@@ -127,7 +136,108 @@ pub struct PartitionGuard<'a> {
     _borrow: std::marker::PhantomData<&'a mut Partition>,
 }
 
+/// Successful native publication evidence. This value is process-local and
+/// retains no payload or file descriptor. It is not a serialized resume token.
+#[derive(Debug)]
+pub struct StartReceipt {
+    id: String,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    native: native::Receipt,
+}
+
+impl StartReceipt {
+    pub fn invocation_id(&self) -> &str {
+        &self.id
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Publication {
+    #[default]
+    NotPublished,
+    /// The no-replace rename succeeded. A subsequent verification may fail;
+    /// this does not promise durability or continuing visibility.
+    Published,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Staging {
+    #[default]
+    NotCreated,
+    Removed,
+    Published,
+    /// Cleanup was unsafe or failed; a recognized staging entry may remain.
+    MayRemain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Occupancy {
+    pub bytes: u64,
+    pub files: usize,
+}
+
+/// Confirmed effects even when the transaction fails. Deletions are not rolled
+/// back and a record pair can be partially removed. Unexplained changes make
+/// occupancy unknown. Collector callers must preserve the command's result.
+#[derive(Debug, Default)]
+pub struct PublishOutcome {
+    pub publication: Publication,
+    pub staging: Staging,
+    /// Confirmed retention unlinks, excluding this write's staging cleanup.
+    pub removed_files: usize,
+    /// Last validated logical lengths of the entries removed by retention.
+    pub removed_bytes: u64,
+    pub partial_group: bool,
+    pub occupancy: Option<Occupancy>,
+    pub receipt: Option<StartReceipt>,
+    pub error: Option<StoreError>,
+}
+
 impl PartitionGuard<'_> {
+    /// Publish a supported bounded start under this nonblocking transaction
+    /// lock. A receipt exists only after verified no-replace publication.
+    pub fn publish_start(
+        &self,
+        id: &crate::usage::identity::InvocationId,
+        bytes: &[u8],
+        now: Option<crate::usage::record::WallTime>,
+    ) -> PublishOutcome {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.publish(id.as_str(), bytes, now, None)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (id, bytes, now);
+            PublishOutcome {
+                error: Some(StoreError::Unsupported),
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Require the unchanged surviving start and refuse replay before cleanup.
+    /// A missing start skips publication; absence does not establish pruning.
+    pub fn publish_finish(
+        &self,
+        receipt: &StartReceipt,
+        bytes: &[u8],
+        now: Option<crate::usage::record::WallTime>,
+    ) -> PublishOutcome {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            self.native.publish(&receipt.id, bytes, now, Some(receipt))
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (receipt, bytes, now);
+            PublishOutcome {
+                error: Some(StoreError::Unsupported),
+                ..Default::default()
+            }
+        }
+    }
+
     /// Inventory safe regular files under this lock without parsing records.
     /// Unknown names are included for accounting, not authorized for mutation.
     pub fn inventory(&self) -> Result<Inventory<'_>, StoreError> {
