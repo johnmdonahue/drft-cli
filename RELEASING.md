@@ -11,22 +11,15 @@
 
 That's it. Everything else is automated.
 
-`main` also requires branches to be up to date before merging, so a release
-branch that falls behind needs `git merge origin/main` before it can land.
+`main` also requires branches to be up to date before merging, so a release branch that falls behind needs `git merge origin/main` before it can land.
 
 ### drft does not gate the release
 
-Neither the config nor the lockfile is tracked, so CI has no graph to check and a
-release commit cannot fail on drift. Bumping `Cargo.toml` and `CHANGELOG.md` still
-makes them stale in a maintainer's local graph — `drft lock Cargo.toml CHANGELOG.md`
-clears that, and it is bookkeeping on one machine rather than a step the release
-depends on.
+Neither the config nor the lockfile is tracked, so CI has no graph to check and a release commit cannot fail on drift. Bumping `Cargo.toml` and `CHANGELOG.md` still makes them stale in a maintainer's local graph — `drft lock Cargo.toml CHANGELOG.md` clears that, and it is bookkeeping on one machine rather than a step the release depends on.
 
 ## What happens automatically
 
-CI (`ci.yml`) runs on pushes to `main` and pull requests targeting `main`. It
-checks Rust and document formatting, clippy, tests, and benchmark compilation.
-Require release-branch CI to pass before merging; version tags do not trigger CI.
+CI (`ci.yml`) runs on pushes to `main` and pull requests targeting `main`. It checks Rust and document formatting, clippy, tests, and benchmark compilation. Require release-branch CI to pass before merging; version tags do not trigger CI.
 
 When you push a version tag (`v*`):
 

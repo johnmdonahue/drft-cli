@@ -7,31 +7,17 @@ sources:
 
 # Configuration
 
-`drft.toml` in the graph root configures the walk, the graphs, and the rules.
-The directory containing `drft.toml` is the graph root; nested `drft.toml` files
-found while walking are ordinary files on disk, not graph boundaries.
+`drft.toml` in the graph root configures the walk, the graphs, and the rules. The directory containing `drft.toml` is the graph root; nested `drft.toml` files found while walking are ordinary files on disk, not graph boundaries.
 
 ## Committing the config and lockfile
 
-drft has no setup mode and no flag for this. Whether `drft.toml` and `drft.lock`
-are tracked is your decision, expressed the ordinary way — by what your
-`.gitignore` says and whether your CI runs `drft check`. The two shapes it
-produces:
+drft has no setup mode and no flag for this. Whether `drft.toml` and `drft.lock` are tracked is your decision, expressed the ordinary way — by what your `.gitignore` says and whether your CI runs `drft check`. The two shapes it produces:
 
-**Tracked.** The graph and its reviewed baseline are shared, `drft check` in CI
-gates on drift, and staleness is a claim the repository makes to everyone who
-clones it. This is the right default for a team that has adopted drft together.
+**Tracked.** The graph and its reviewed baseline are shared, `drft check` in CI gates on drift, and staleness is a claim the repository makes to everyone who clones it. This is the right default for a team that has adopted drft together.
 
-**Untracked.** A clone gets no graph, nothing gates, and staleness is a fact
-about one working tree. Use it to run drft on a repository whose owners have not
-adopted it, or when drft is an authoring aid you reach for while writing rather
-than a check the project enforces. This repository is the second case; its
-`.gitignore` names both files with a comment saying so.
+**Untracked.** A clone gets no graph, nothing gates, and staleness is a fact about one working tree. Use it to run drft on a repository whose owners have not adopted it, or when drft is an authoring aid you reach for while writing rather than a check the project enforces. This repository is the second case; its `.gitignore` names both files with a comment saying so.
 
-Untracked has one consequence worth stating: because drft honors the committed
-`.gitignore`, a `drft.toml` ignored there is also outside its own graph. That is
-usually what you want — nothing links to the config by path — but it means
-`drft nodes` will not list it.
+Untracked has one consequence worth stating: because drft honors the committed `.gitignore`, a `drft.toml` ignored there is also outside its own graph. That is usually what you want — nothing links to the config by path — but it means `drft nodes` will not list it.
 
 ## ignore
 
@@ -39,39 +25,17 @@ usually what you want — nothing links to the config by path — but it means
 ignore = ["target/**", "drafts/**"]
 ```
 
-The `fs` graph walks every file under the graph root, including dot-directories
-like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are
-pruned. `ignore` removes paths from that walk by glob; drft also respects
-`.gitignore` automatically. There is no `include` — the graph is everything
-under the root minus what `ignore` and repository `.gitignore` files remove.
-drft reads `.gitignore` files from the graph root through the Git root, plus
-nested files under the graph root. It excludes its own `drft.lock` from the
-graph.
+The `fs` graph walks every file under the graph root, including dot-directories like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are pruned. `ignore` removes paths from that walk by glob; drft also respects `.gitignore` automatically. There is no `include` — the graph is everything under the root minus what `ignore` and repository `.gitignore` files remove. drft reads `.gitignore` files from the graph root through the Git root, plus nested files under the graph root. It excludes its own `drft.lock` from the graph.
 
-drft reads the working-tree contents of each repository `.gitignore`, matching
-Git. An uncommitted edit to one therefore affects discovery.
-Outside a Git or Jujutsu repository, drft does not consult `.gitignore` files.
+drft reads the working-tree contents of each repository `.gitignore`, matching Git. An uncommitted edit to one therefore affects discovery. Outside a Git or Jujutsu repository, drft does not consult `.gitignore` files.
 
-Other ignore sources do not change the graph: drft disregards `.ignore`, the
-per-clone `.git/info/exclude`, and global excludes. Run
-`drft config --show-ignores` to list the repository `.gitignore` files drft
-consults and confirm which source classes are enabled. Add `--format json` for
-structured output. The command only reads configuration and ignore policy; it
-does not build the graph or update `drft.lock`.
+Other ignore sources do not change the graph: drft disregards `.ignore`, the per-clone `.git/info/exclude`, and global excludes. Run `drft config --show-ignores` to list the repository `.gitignore` files drft consults and confirm which source classes are enabled. Add `--format json` for structured output. The command only reads configuration and ignore policy; it does not build the graph or update `drft.lock`.
 
-This top-level `ignore` is a **discovery** filter: matching paths never become
-nodes, so nothing links to them and nothing is validated against them. To keep
-files in the graph (so your links to them resolve and stay drift-tracked) but
-skip _validating_ them, use the rule-level `ignore` instead — see
-[rules](rules/README.md).
+This top-level `ignore` is a **discovery** filter: matching paths never become nodes, so nothing links to them and nothing is validated against them. To keep files in the graph (so your links to them resolve and stay drift-tracked) but skip _validating_ them, use the rule-level `ignore` instead — see [rules](rules/README.md).
 
 ## graphs
 
-A graph pairs a file scope (`files`) with a parser that interprets the matched
-files. The `fs` graph is implicit and always built — it owns the identity space
-(paths) and contributes each file's `type` and `hash`. There are no default
-graphs: declare each one you want under `[graphs.<name>]`, and that set is the
-whole set.
+A graph pairs a file scope (`files`) with a parser that interprets the matched files. The `fs` graph is implicit and always built — it owns the identity space (paths) and contributes each file's `type` and `hash`. There are no default graphs: declare each one you want under `[graphs.<name>]`, and that set is the whole set.
 
 ```toml
 [graphs.markdown]
@@ -89,40 +53,21 @@ files = ["**/*.md"]
 | `files`     | no       | `["**/*.md"]` | Globs scoping which files the parser reads                         |
 | `edge_keys` | no       | none          | `frontmatter` only — the frontmatter keys whose values yield edges |
 
-`edge_keys` names what the graph tracks: every string value reachable through one
-of those keys is an edge, and every other field is node metadata. drft never
-decides whether a value looks like a path, so a value naming nothing that resolves
-raises `unresolved-edge` rather than disappearing.
+`edge_keys` names what the graph tracks: every string value reachable through one of those keys is an edge, and every other field is node metadata. drft never decides whether a value looks like a path, so a value naming nothing that resolves raises `unresolved-edge` rather than disappearing.
 
-Omitting it is a supported shape — a frontmatter graph may exist purely to seed
-node metadata — so the graph loads, emits no edges, and says nothing about it.
-`edge_keys = []` is that same state written out: an empty set names nowhere to
-look, so it behaves identically.
+Omitting it is a supported shape — a frontmatter graph may exist purely to seed node metadata — so the graph loads, emits no edges, and says nothing about it. `edge_keys = []` is that same state written out: an empty set names nowhere to look, so it behaves identically.
 
-Declaring keys states an expectation the corpus can fail to meet, and that is the
-state worth reporting: a graph declaring `edge_keys` that ends up with no edges
-raises an `edge-keys-matched-nothing` hint. A misspelled key
-otherwise produces a graph tracking nothing while the config says otherwise, at
-exit 0.
+Declaring keys states an expectation the corpus can fail to meet, and that is the state worth reporting: a graph declaring `edge_keys` that ends up with no edges raises an `edge-keys-matched-nothing` hint. A misspelled key otherwise produces a graph tracking nothing while the config says otherwise, at exit 0.
 
-It applies to the `frontmatter` parser only — `markdown` has no keyed structure —
-and declaring it elsewhere is a config error. See
-[the frontmatter parser](parsers/frontmatter.md#naming-the-keys-that-yield-edges).
+It applies to the `frontmatter` parser only — `markdown` has no keyed structure — and declaring it elsewhere is a config error. See [the frontmatter parser](parsers/frontmatter.md#naming-the-keys-that-yield-edges).
 
-These are the only accepted keys. Any other key is a config error naming the key
-and the accepted set. A graph table that parses is read as a graph that works, so
-an option drft does not support fails loudly rather than being silently discarded.
+These are the only accepted keys. Any other key is a config error naming the key and the accepted set. A graph table that parses is read as a graph that works, so an option drft does not support fails loudly rather than being silently discarded.
 
-The graph's name is its compose-time namespace: its facts nest under `@<name>`
-in the composed graph. A name must not contain `@`, start with `_`, or be `fs` —
-all reserved. `fs` is always built without being declared, and is a provider
-rather than a parser, so `parser = "fs"` is rejected too. With no `[graphs.*]`,
-only the `fs` graph is built.
+The graph's name is its compose-time namespace: its facts nest under `@<name>` in the composed graph. A name must not contain `@`, start with `_`, or be `fs` — all reserved. `fs` is always built without being declared, and is a provider rather than a parser, so `parser = "fs"` is rejected too. With no `[graphs.*]`, only the `fs` graph is built.
 
 ## rules
 
-Every built-in rule is on at `warn`. Configure severity and ignore globs under
-`[rules.<name>]`:
+Every built-in rule is on at `warn`. Configure severity and ignore globs under `[rules.<name>]`:
 
 ```toml
 [rules]
@@ -137,23 +82,14 @@ severity = "off"
 ignore = ["CHANGELOG.md"] # globs matched against the finding's subject
 ```
 
-The `ignore` key directly under `[rules]` is a **diagnostic** filter applied to
-_every_ rule, unioned with each rule's own `ignore`. Unlike the top-level
-`ignore`, matching paths stay in the graph — they still resolve links and carry
-drift hashes — so a file of yours that links a suppressed one is still flagged
-when that target changes (the finding's subject is your file, not the suppressed
-one). Use it for whole groups you depend on but don't own: "validate my files,
-not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
+The `ignore` key directly under `[rules]` is a **diagnostic** filter applied to _every_ rule, unioned with each rule's own `ignore`. Unlike the top-level `ignore`, matching paths stay in the graph — they still resolve links and carry drift hashes — so a file of yours that links a suppressed one is still flagged when that target changes (the finding's subject is your file, not the suppressed one). Use it for whole groups you depend on but don't own: "validate my files, not theirs." (`ignore` is a reserved key here; no rule may be named `ignore`.)
 
 | Field      | Required | Default | Description                                     |
 | ---------- | -------- | ------- | ----------------------------------------------- |
 | `severity` | no       | `warn`  | `"error"`, `"warn"`, or `"off"`                 |
 | `ignore`   | no       | none    | Globs — suppress findings whose subject matches |
 
-Any other key in a `[rules.<name>]` table is a config error. An unknown rule
-_name_ only warns, since both fields default and a misspelled rule would
-otherwise configure nothing in silence. The warning is an `unknown-rule`
-[hint](reading.md#hints), carrying the config key as its locus.
+Any other key in a `[rules.<name>]` table is a config error. An unknown rule _name_ only warns, since both fields default and a misspelled rule would otherwise configure nothing in silence. The warning is an `unknown-rule` [hint](reading.md#hints), carrying the config key as its locus.
 
 See [rules](rules/README.md) for the full set.
 
@@ -164,9 +100,4 @@ See [rules](rules/README.md) for the full set.
 enabled = true
 ```
 
-Opt in to bounded local command records on macOS and Linux. The default is
-`false`; missing or empty tables leave collection disabled. Unknown experimental
-keys and incorrect types are configuration errors, including when disabled.
-See [local usage records](usage.md) for coverage, cache paths, retention, and
-manual copying. A shared config opt-in applies to every user of that config;
-records stay in each user's local cache.
+Opt in to bounded local command records on macOS and Linux. The default is `false`; missing or empty tables leave collection disabled. Unknown experimental keys and incorrect types are configuration errors, including when disabled. See [local usage records](usage.md) for coverage, cache paths, retention, and manual copying. A shared config opt-in applies to every user of that config; records stay in each user's local cache.

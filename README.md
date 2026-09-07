@@ -19,9 +19,7 @@ Or download a prebuilt binary from [GitHub Releases](https://github.com/johnmdon
 
 The binary is called `drft`.
 
-Run `drft guide` for the installed binary's edit workflow and command contracts,
-or `drft guide --format json` for structured guidance. It works without a
-repository or configuration file.
+Run `drft guide` for the installed binary's edit workflow and command contracts, or `drft guide --format json` for structured guidance. It works without a repository or configuration file.
 
 ## Quick start
 
@@ -62,28 +60,13 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft check`                 | Compare the graph against the lockfile for drift               |
 | `drft lock`                  | Snapshot hashes to `drft.lock` for staleness tracking          |
 
-`drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges,
-merging into the existing lockfile. A lock asserts the locked state was reviewed,
-so scope it to what you actually read: a bulk lock also clears staleness you
-never looked at, including someone else's unfinished work. Paths all resolve
-before anything is written, so a typo fails the command rather than leaving a
-partial lock behind. The command reports what it wrote — `locked 2 nodes` and the
-names — so a lock that covered nothing is distinguishable from one that covered
-the files you meant.
+`drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges, merging into the existing lockfile. A lock asserts the locked state was reviewed, so scope it to what you actually read: a bulk lock also clears staleness you never looked at, including someone else's unfinished work. Paths all resolve before anything is written, so a typo fails the command rather than leaving a partial lock behind. The command reports what it wrote — `locked 2 nodes` and the names — so a lock that covered nothing is distinguishable from one that covered the files you meant.
 
-The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors
-(exit 2), so a scoped invocation whose shell expansion came back empty fails
-instead of widening to every node.
+The whole-graph lock is `drft lock --all`. `drft lock` with no paths errors (exit 2), so a scoped invocation whose shell expansion came back empty fails instead of widening to every node.
 
-All commands accept `--format json`; `init` emits no success document.
-Run `drft --help` for flags or `drft guide` for workflow and output contracts.
+All commands accept `--format json`; `init` emits no success document. Run `drft --help` for flags or `drft guide` for workflow and output contracts.
 
-`drft impact` reports the files that name the seed **directly** — one hop. That is
-the question an edit asks: each hit is a promise someone wrote down, so it lands
-a specific thing to check. Every result also carries a `radius`, the count of
-nodes reachable behind it, so a wider set is reported without being enumerated.
-Widen with `--depth <n>` when a hit turns out to restate the change, or
-`--depth all` for the full reachable set — what a rename sweep wants.
+`drft impact` reports the files that name the seed **directly** — one hop. That is the question an edit asks: each hit is a promise someone wrote down, so it lands a specific thing to check. Every result also carries a `radius`, the count of nodes reachable behind it, so a wider set is reported without being enumerated. Widen with `--depth <n>` when a hit turns out to restate the change, or `--depth all` for the full reachable set — what a rename sweep wants.
 
 ## Configuration
 

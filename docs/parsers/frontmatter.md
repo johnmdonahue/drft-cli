@@ -100,11 +100,7 @@ Only values reachable through one of those keys become edges. A matched key hand
 
 **Omitting it is a supported shape.** A frontmatter graph may exist purely to seed node metadata, with no provenance edges at all, so a graph without `edge_keys` loads, emits none, and says nothing about it. `edge_keys = []` is that same state written out — an empty set names nowhere to look — so it behaves identically.
 
-A graph that declares `edge_keys` and emits no edges raises an
-`edge-keys-matched-nothing` hint. Its advice distinguishes unreadable files from
-other possible causes, including unmatched keys, globs, and non-string values.
-See [hints](../reading.md#hints) for the graph-specific remediation policy.
-Hints are advisory and do not change the exit code.
+A graph that declares `edge_keys` and emits no edges raises an `edge-keys-matched-nothing` hint. Its advice distinguishes unreadable files from other possible causes, including unmatched keys, globs, and non-string values. See [hints](../reading.md#hints) for the graph-specific remediation policy. Hints are advisory and do not change the exit code.
 
 ## Metadata
 

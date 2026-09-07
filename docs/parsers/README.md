@@ -6,11 +6,7 @@ sources:
 
 # Parsers
 
-A parser interprets the files a graph's `files` globs select, emitting links that
-become edges. Each parser also emits node metadata about the file it read: the
-markdown parser the `#fragment` anchors that file answers to, the frontmatter
-parser the parsed frontmatter block. A graph names its parser with
-`parser = "..."`.
+A parser interprets the files a graph's `files` globs select, emitting links that become edges. Each parser also emits node metadata about the file it read: the markdown parser the `#fragment` anchors that file answers to, the frontmatter parser the parsed frontmatter block. A graph names its parser with `parser = "..."`.
 
 | Parser                        | Emits                                                        |
 | ----------------------------- | ------------------------------------------------------------ |
