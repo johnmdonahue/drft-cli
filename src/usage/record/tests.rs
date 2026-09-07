@@ -182,7 +182,9 @@ fn malformed_timestamps_identity_and_native_units_are_rejected() {
         state(&v, EventKind::Start),
         RecordState::Supported { .. }
     ));
-    for s in ["YQ==", "YQA=", "%%=="] {
+    // ANhh decodes to an unpaired surrogate plus one trailing byte. Ignoring
+    // that remainder would accept it as a valid base64 UTF-16 representation.
+    for s in ["YQ==", "YQA=", "%%==", "ANhh"] {
         v["argv"][3]["value"] = json!(s);
         assert_eq!(state(&v, EventKind::Start), RecordState::Malformed);
     }
@@ -192,6 +194,45 @@ fn malformed_timestamps_identity_and_native_units_are_rejected() {
         state(&v, EventKind::Start),
         RecordState::Supported { entry: None, .. }
     ));
+}
+
+#[test]
+fn included_count_matches_records_independently_of_balanced_totals() {
+    for category in ["findings", "hints", "error"] {
+        let mut value = fixture(EventKind::Finish);
+        let prefix = json!({
+            "total": {"status":"available","value":2},
+            "included":2,
+            "omitted": {"status":"available","value":0},
+            "records":[]
+        });
+        match category {
+            "findings" => {
+                value["structured"][category] = json!({
+                    "availability":"available",
+                    "coverage":{"status":"available","value":"construction_diagnostics"},
+                    "prefix":prefix
+                })
+            }
+            "hints" => value["structured"][category] = prefix,
+            "error" => {
+                value["structured"][category] = json!({
+                    "availability":"available",
+                    "present":{"status":"available","value":true},
+                    "traversal":"complete",
+                    "prefix":prefix
+                })
+            }
+            _ => unreachable!(),
+        }
+        // Every other count relationship is valid, so another arithmetic
+        // guard cannot substitute for checking the actual array length.
+        assert_eq!(
+            state(&value, EventKind::Finish),
+            RecordState::Malformed,
+            "{category}"
+        );
+    }
 }
 #[test]
 fn structured_records_counts_and_traversal_are_validated() {

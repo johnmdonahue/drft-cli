@@ -204,7 +204,9 @@ fn os(v: &Value) -> Option<()> {
                 require(raw.len() % 2 == 0)?;
                 require(
                     char::decode_utf16(
-                        raw.chunks_exact(2)
+                        raw.as_chunks::<2>()
+                            .0
+                            .iter()
                             .map(|p| u16::from_le_bytes([p[0], p[1]])),
                     )
                     .any(|c| c.is_err()),
