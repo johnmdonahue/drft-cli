@@ -74,9 +74,9 @@ sources:
 The last one catches people out: a path written against the graph root resolves under `docs/` and fails. Because the reported target is a path nobody wrote, the finding reads as a typo rather than a wrong base, so `unresolved-edge` names the cause when the literal text would resolve from the root:
 
 ```
-warn[unresolved-edge]: docs/taxonomy.md:3 → docs/predicated/artifact/src/lib.rs (no defining node)
-  cause: `predicated/artifact/src/lib.rs` resolves from the graph root, but paths resolve
-         relative to the declaring file (did you mean `../predicated/artifact/src/lib.rs`?)
+warn[unresolved-edge]: docs/taxonomy.md:3 → docs/synthetic-repo/package-a/src/lib.rs (no defining node)
+  cause: `synthetic-repo/package-a/src/lib.rs` resolves from the graph root, but paths resolve
+         relative to the declaring file (did you mean `../synthetic-repo/package-a/src/lib.rs`?)
 ```
 
 The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
