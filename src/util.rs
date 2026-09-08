@@ -132,8 +132,8 @@ mod tests {
     #[test]
     fn relative_from_walks_up_to_shared_root() {
         assert_eq!(
-            relative_from("docs/taxonomy.md", "synthetic-repo/artifact/src/lib.rs"),
-            "../synthetic-repo/artifact/src/lib.rs"
+            relative_from("docs/taxonomy.md", "synthetic-repo/package-a/src/lib.rs"),
+            "../synthetic-repo/package-a/src/lib.rs"
         );
         assert_eq!(relative_from("a/b/c.md", "a/d.md"), "../d.md");
         assert_eq!(relative_from("a/b/c.md", "x.md"), "../../x.md");
@@ -150,7 +150,7 @@ mod tests {
     fn relative_from_round_trips_through_resolve_link() {
         // The suggestion must actually resolve to the target it names.
         for (source, target) in [
-            ("docs/taxonomy.md", "synthetic-repo/artifact/src/lib.rs"),
+            ("docs/taxonomy.md", "synthetic-repo/package-a/src/lib.rs"),
             ("docs/a.md", "docs/b.md"),
             ("a/b/c.md", "x.md"),
             ("README.md", "src/lib.rs"),

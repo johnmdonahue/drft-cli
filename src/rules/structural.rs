@@ -310,10 +310,10 @@ mod tests {
         // The #72 case: a repo-relative path in a doc one level down. The target
         // reported is a path nobody wrote, so the finding reads as a typo.
         let composed = graph_with_raw_edge(
-            &["docs/taxonomy.md", "synthetic-repo/artifact/src/lib.rs"],
+            &["docs/taxonomy.md", "synthetic-repo/package-a/src/lib.rs"],
             "docs/taxonomy.md",
-            "docs/synthetic-repo/artifact/src/lib.rs",
-            "synthetic-repo/artifact/src/lib.rs",
+            "docs/synthetic-repo/package-a/src/lib.rs",
+            "synthetic-repo/package-a/src/lib.rs",
         );
         let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let cause = findings
@@ -326,7 +326,7 @@ mod tests {
             "got: {cause}"
         );
         assert!(
-            cause.contains("../synthetic-repo/artifact/src/lib.rs"),
+            cause.contains("../synthetic-repo/package-a/src/lib.rs"),
             "suggestion missing: {cause}"
         );
     }

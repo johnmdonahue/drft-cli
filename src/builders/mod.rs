@@ -236,18 +236,18 @@ mod tests {
         // The defect per-occurrence metadata exists to fix: two anchors of one
         // target must not collapse to whichever spelling came first.
         let links = vec![
-            link("./owners.md#synthetic-console", Some(53)),
-            link("./owners.md#synthetic-edge", Some(77)),
-            link("./owners.md#synthetic-console", Some(89)),
+            link("./owners.md#synthetic-console", Some(3)),
+            link("./owners.md#synthetic-edge", Some(7)),
+            link("./owners.md#synthetic-console", Some(9)),
         ];
         let edges = link_edges("registers/work-items.md", &links, LinkPolicy::Body);
         assert_eq!(edges.len(), 1, "one edge, three occurrences");
         assert_eq!(
             edges[0].metadata["occurrences"],
             json!([
-                { "line": 53, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
-                { "line": 77, "link": "registers/owners.md#synthetic-edge", "raw": "./owners.md" },
-                { "line": 89, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
+                { "line": 3, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
+                { "line": 7, "link": "registers/owners.md#synthetic-edge", "raw": "./owners.md" },
+                { "line": 9, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
             ])
         );
     }

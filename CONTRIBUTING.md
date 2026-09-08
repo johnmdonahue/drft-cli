@@ -44,7 +44,7 @@ Graph algorithms are not on that list, and deliberately — see the design princ
 
 Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in `tests/` and run the binary as a subprocess against temp directories.
 
-Use explicitly synthetic fixture names such as `example-service-a`, `synthetic-team`, and `example.com`. Never copy names or topology from another project into a fixture or example.
+Use explicitly synthetic fixture names and topology, such as `example-service-a`, `synthetic-team`, and `example.com`. Generic role names are fine when the test exercises that role; do not preserve incidental structure or measurements from another project.
 
 ```bash
 cargo test                    # all tests
