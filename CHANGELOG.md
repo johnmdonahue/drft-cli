@@ -4,6 +4,8 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+## 0.19.0 (2026-09-07)
+
 ### Added
 
 - Experimental opt-in local usage records for check, graph, nodes, edges, impact, and lock on macOS/Linux, with bounded retention and manual-copy documentation (#168).
