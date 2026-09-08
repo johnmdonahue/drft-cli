@@ -281,8 +281,8 @@ mod tests {
         push_metadata_lines(
             &mut lines,
             &obj(json!({ "@markdown": { "occurrences": [
-                { "line": 53, "link": "owners.md#security-console" },
-                { "line": 77, "link": "owners.md#ngwaf-edge" },
+                { "line": 53, "link": "owners.md#synthetic-console" },
+                { "line": 77, "link": "owners.md#synthetic-edge" },
             ] } })),
         );
         assert_eq!(
@@ -291,9 +291,9 @@ mod tests {
                 "  @markdown",
                 "    occurrences",
                 "      - line: 53",
-                "        link: owners.md#security-console",
+                "        link: owners.md#synthetic-console",
                 "      - line: 77",
-                "        link: owners.md#ngwaf-edge",
+                "        link: owners.md#synthetic-edge",
             ]
         );
     }

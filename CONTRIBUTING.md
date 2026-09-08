@@ -44,6 +44,8 @@ Graph algorithms are not on that list, and deliberately — see the design princ
 
 Unit tests are inline (`#[cfg(test)]` modules). Integration tests are in `tests/` and run the binary as a subprocess against temp directories.
 
+Use explicitly synthetic fixture names such as `example-service-a`, `synthetic-team`, and `example.com`. Never copy names or topology from another project into a fixture or example.
+
 ```bash
 cargo test                    # all tests
 cargo test scenario_5         # specific test
@@ -51,7 +53,7 @@ cargo test scenario_5         # specific test
 
 ## Examples
 
-See the `examples/` directory for sample projects used in manual testing. Each is its own graph with a `drft.toml`.
+See the `examples/` directory for sample projects used in manual testing. Each is its own graph with a `drft.toml`. Apply the synthetic fixture naming rule from the testing section.
 
 ## Codebase structure
 

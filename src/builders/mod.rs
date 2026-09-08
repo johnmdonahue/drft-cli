@@ -111,7 +111,7 @@ fn occurrence(source: &str, link: &Link, policy: LinkPolicy) -> Option<(String, 
 /// `occurrences` array, sorted by line.
 ///
 /// Per-occurrence is the point. A source citing two anchors of one target — six
-/// lines naming `#security-console` and one naming `#ngwaf-edge` — is one edge
+/// lines naming `#synthetic-console` and one naming `#synthetic-edge` — is one edge
 /// with two spellings, and a scalar `link` would attribute the first to all
 /// seven. Identical occurrences dedup; distinct ones both survive.
 pub fn link_edges(source: &str, links: &[Link], policy: LinkPolicy) -> Vec<Edge> {
@@ -236,18 +236,18 @@ mod tests {
         // The defect per-occurrence metadata exists to fix: two anchors of one
         // target must not collapse to whichever spelling came first.
         let links = vec![
-            link("./owners.md#security-console", Some(53)),
-            link("./owners.md#ngwaf-edge", Some(77)),
-            link("./owners.md#security-console", Some(89)),
+            link("./owners.md#synthetic-console", Some(53)),
+            link("./owners.md#synthetic-edge", Some(77)),
+            link("./owners.md#synthetic-console", Some(89)),
         ];
         let edges = link_edges("registers/work-items.md", &links, LinkPolicy::Body);
         assert_eq!(edges.len(), 1, "one edge, three occurrences");
         assert_eq!(
             edges[0].metadata["occurrences"],
             json!([
-                { "line": 53, "link": "registers/owners.md#security-console", "raw": "./owners.md" },
-                { "line": 77, "link": "registers/owners.md#ngwaf-edge", "raw": "./owners.md" },
-                { "line": 89, "link": "registers/owners.md#security-console", "raw": "./owners.md" },
+                { "line": 53, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
+                { "line": 77, "link": "registers/owners.md#synthetic-edge", "raw": "./owners.md" },
+                { "line": 89, "link": "registers/owners.md#synthetic-console", "raw": "./owners.md" },
             ])
         );
     }

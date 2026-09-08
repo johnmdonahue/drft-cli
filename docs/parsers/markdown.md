@@ -89,9 +89,9 @@ files = ["**/*.md", "**/*.mdx"]
 
 ## Directory targets
 
-A link whose target is a directory (`[services](edge/)`) creates an edge to the directory node. Directories are nodes, so the link resolves — but they carry no hash, so nothing inside is tracked: editing `edge/src/main.rs` leaves the linking file clean, and `drft impact` on that file does not report it.
+A link whose target is a directory (`[services](example-service-a/)`) creates an edge to the directory node. Directories are nodes, so the link resolves — but they carry no hash, so nothing inside is tracked: editing `example-service-a/src/main.rs` leaves the linking file clean, and `drft impact` on that file does not report it.
 
-This matters most where it reads like coverage. A layout table citing `` `edge/` ``, `` `tenant/` ``, `` `console/api/` `` looks to a reader like an inventory of those trees and tracks none of them. Point each link at the file carrying what the prose claims — `edge/src/main.rs` — and the promise becomes one drft can check.
+This matters most where it reads like coverage. A layout table citing `` `example-service-a/` ``, `` `example-service-b/` ``, `` `example-service-c/api/` `` looks to a reader like an inventory of those trees and tracks none of them. Point each link at the file carrying what the prose claims — `example-service-a/src/main.rs` — and the promise becomes one drft can check.
 
 ## External URLs
 

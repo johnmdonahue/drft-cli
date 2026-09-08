@@ -71,14 +71,14 @@ fn fragments_are_checked_against_the_targets_anchors() {
     fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("owners.md"),
-        "# Owners\n\n## security-console\n\nAna.\n\n## ngwaf-edge\n\nBo.\n",
+        "# Owners\n\n## synthetic-console\n\nAna.\n\n## synthetic-edge\n\nBo.\n",
     )
     .unwrap();
     fs::write(
         dir.path().join("work-items.md"),
         "# Work\n\n\
-         - [W-01](./owners.md#security-console)\n\
-         - [W-02](./owners.md#NGWAF-Edge)\n\
+         - [W-01](./owners.md#synthetic-console)\n\
+         - [W-02](./owners.md#SYNTHETIC-Edge)\n\
          - [W-03](./owners.md#no-such-team)\n\
          - [W-04](./owners.md)\n",
     )
@@ -91,7 +91,7 @@ fn fragments_are_checked_against_the_targets_anchors() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        !stdout.contains("#security-console"),
+        !stdout.contains("#synthetic-console"),
         "an anchor the target defines is quiet, got: {stdout}"
     );
     assert!(
@@ -99,8 +99,8 @@ fn fragments_are_checked_against_the_targets_anchors() {
         "a missing anchor fires on its own line, got: {stdout}"
     );
     assert!(
-        stdout.contains("work-items.md:4 → owners.md#NGWAF-Edge")
-            && stdout.contains("differs only in case from `#ngwaf-edge`"),
+        stdout.contains("work-items.md:4 → owners.md#SYNTHETIC-Edge")
+            && stdout.contains("differs only in case from `#synthetic-edge`"),
         "a case-only mismatch names the anchor it meant, got: {stdout}"
     );
 }

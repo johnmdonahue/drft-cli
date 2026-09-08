@@ -310,10 +310,10 @@ mod tests {
         // The #72 case: a repo-relative path in a doc one level down. The target
         // reported is a path nobody wrote, so the finding reads as a typo.
         let composed = graph_with_raw_edge(
-            &["docs/taxonomy.md", "predicated/artifact/src/lib.rs"],
+            &["docs/taxonomy.md", "synthetic-repo/artifact/src/lib.rs"],
             "docs/taxonomy.md",
-            "docs/predicated/artifact/src/lib.rs",
-            "predicated/artifact/src/lib.rs",
+            "docs/synthetic-repo/artifact/src/lib.rs",
+            "synthetic-repo/artifact/src/lib.rs",
         );
         let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let cause = findings
@@ -326,7 +326,7 @@ mod tests {
             "got: {cause}"
         );
         assert!(
-            cause.contains("../predicated/artifact/src/lib.rs"),
+            cause.contains("../synthetic-repo/artifact/src/lib.rs"),
             "suggestion missing: {cause}"
         );
     }
@@ -392,8 +392,8 @@ mod tests {
     #[test]
     fn a_fragment_the_target_defines_is_quiet() {
         let composed = graph_with_fragments(
-            &["security-console"],
-            json!([{ "line": 3, "link": "owners.md#security-console" }]),
+            &["synthetic-console"],
+            json!([{ "line": 3, "link": "owners.md#synthetic-console" }]),
         );
         assert!(
             !names(&evaluate(&composed, &[crate::model::namespace("markdown")]))
@@ -408,9 +408,9 @@ mod tests {
         // anchors, only one of them wrong. The finding names the wrong one's line
         // and leaves the other alone.
         let composed = graph_with_fragments(
-            &["security-console"],
+            &["synthetic-console"],
             json!([
-                { "line": 3, "link": "owners.md#security-console" },
+                { "line": 3, "link": "owners.md#synthetic-console" },
                 { "line": 7, "link": "owners.md#no-such-team" },
             ]),
         );
@@ -427,7 +427,7 @@ mod tests {
     #[test]
     fn one_fragment_cited_from_several_lines_is_one_finding() {
         let composed = graph_with_fragments(
-            &["security-console"],
+            &["synthetic-console"],
             json!([
                 { "line": 3, "link": "owners.md#typo" },
                 { "line": 9, "link": "owners.md#typo" },
@@ -444,8 +444,8 @@ mod tests {
     #[test]
     fn a_case_mismatch_names_the_anchor_it_meant() {
         let composed = graph_with_fragments(
-            &["ngwaf-edge"],
-            json!([{ "line": 5, "link": "owners.md#NGWAF-Edge" }]),
+            &["synthetic-edge"],
+            json!([{ "line": 5, "link": "owners.md#SYNTHETIC-Edge" }]),
         );
         let findings = evaluate(&composed, &[crate::model::namespace("markdown")]);
         let f = findings
@@ -453,7 +453,7 @@ mod tests {
             .find(|f| f.name == "unresolved-fragment")
             .expect("resolution is exact, so a case mismatch still fires");
         let cause = f.cause.as_deref().expect("expected a cause");
-        assert!(cause.contains("`#ngwaf-edge`"), "got: {cause}");
+        assert!(cause.contains("`#synthetic-edge`"), "got: {cause}");
     }
 
     #[test]
