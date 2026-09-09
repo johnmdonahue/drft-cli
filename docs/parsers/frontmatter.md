@@ -75,8 +75,7 @@ The last one catches people out: a path written against the graph root resolves 
 
 ```
 warn[unresolved-edge]: docs/taxonomy.md:3 → docs/synthetic-repo/package-a/src/lib.rs (no defining node)
-  cause: `synthetic-repo/package-a/src/lib.rs` resolves from the graph root, but paths resolve
-         relative to the declaring file (did you mean `../synthetic-repo/package-a/src/lib.rs`?)
+  cause: `synthetic-repo/package-a/src/lib.rs` on line 3 resolves from the graph root, but paths resolve relative to the declaring file (did you mean `../synthetic-repo/package-a/src/lib.rs`?)
 ```
 
 The `cause` is withheld for paths written `./`, `../`, or `/` — those are relative by intent, so a same-named file at the root is a coincidence rather than the mistake.
