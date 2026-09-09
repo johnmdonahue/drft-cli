@@ -201,16 +201,36 @@ fn case_mismatch_cause(anchors: &[&str], fragment: &str, decoded: &str) -> Optio
 /// coincidence rather than the mistake. That leaves the bare-path case, where a
 /// hit is all but certainly a wrong base.
 fn wrong_base_cause(graph: &Graph, edge: &crate::model::Edge) -> Option<String> {
+    // Preserve the established spelling choice: raw links are sorted and
+    // deduplicated. Occurrences then recover every line carrying that spelling.
     let raw = edge.raw_links().into_iter().find(|raw| {
         !(raw.starts_with("./") || raw.starts_with("../") || raw.starts_with('/'))
             && graph.nodes.get(*raw).is_some_and(Node::is_resolved)
     })?;
+    let lines: BTreeSet<_> = edge
+        .occurrences()
+        .filter(|occurrence| occurrence.get("raw").and_then(Value::as_str) == Some(raw))
+        .filter_map(|occurrence| occurrence.get("line").and_then(Value::as_u64))
+        .map(|line| line as usize)
+        .collect();
     let suggestion = crate::util::relative_from(&edge.source, raw);
+    let location = match lines.len() {
+        0 => String::new(),
+        1 => format!(" on line {}", lines.first().expect("one line")),
+        _ => format!(
+            " on lines {}",
+            lines
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
     // Not escaped here. A cause is data on the finding and is serialised to JSON,
     // where the value has to survive exactly as written; escaping belongs to the
     // text rendering, which applies it in `Finding::format_text`.
     Some(format!(
-        "`{raw}` resolves from the graph root, but paths resolve relative to the declaring file (did you mean `{suggestion}`?)"
+        "`{raw}`{location} resolves from the graph root, but paths resolve relative to the declaring file (did you mean `{suggestion}`?)"
     ))
 }
 
@@ -282,6 +302,10 @@ mod tests {
                 target: "config.md".into(),
                 line: Some(5),
             },
+            crate::parsers::Link {
+                target: "config.md".into(),
+                line: Some(8),
+            },
         ];
         let mut markdown = Graph::labeled("markdown");
         for edge in
@@ -296,13 +320,14 @@ mod tests {
             .iter()
             .find(|f| f.name == "unresolved-edge")
             .expect("docs/config.md does not exist");
-        assert_eq!(f.lines, vec![3, 5]);
-        let cause = f.cause.as_deref().expect("expected a cause");
-        assert!(
-            cause.contains("`config.md` resolves from the graph root"),
-            "got: {cause}"
+        assert_eq!(f.lines, vec![3, 5, 8]);
+        assert_eq!(
+            f.cause.as_deref(),
+            Some(
+                "`config.md` on lines 5, 8 resolves from the graph root, but paths resolve relative to the declaring file (did you mean `../config.md`?)"
+            ),
+            "line 3 is explicitly relative and is not among the cause's loci"
         );
-        assert!(cause.contains("../config.md"), "got: {cause}");
     }
 
     #[test]
@@ -321,13 +346,9 @@ mod tests {
             .find(|f| f.name == "unresolved-edge")
             .and_then(|f| f.cause.as_deref())
             .expect("expected a cause");
-        assert!(
-            cause.contains("resolves from the graph root"),
-            "got: {cause}"
-        );
-        assert!(
-            cause.contains("../synthetic-repo/package-a/src/lib.rs"),
-            "suggestion missing: {cause}"
+        assert_eq!(
+            cause,
+            "`synthetic-repo/package-a/src/lib.rs` resolves from the graph root, but paths resolve relative to the declaring file (did you mean `../synthetic-repo/package-a/src/lib.rs`?)"
         );
     }
 

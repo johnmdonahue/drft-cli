@@ -456,11 +456,12 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
     fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
     fs::write(dir.path().join("lib.rs"), "// root file").unwrap();
-    // A root-relative path from inside docs/: resolves from the graph root, not
-    // from the declaring file, which is the case that earns a cause.
+    // Two spellings aggregate onto one missing target. The explicitly relative
+    // occurrence stays in the finding's line list, but only the bare occurrence
+    // earns the wrong-base cause.
     fs::write(
         dir.path().join("docs/guide.md"),
-        "---\nsources:\n  - lib.rs\n---\n\n# Guide\n",
+        "---\nsources:\n  - ./lib.rs\n---\n\n# Guide\n[Library](lib.rs)\n",
     )
     .unwrap();
 
@@ -483,11 +484,11 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
         .find(|f| f["name"] == "unresolved-edge")
         .expect("expected an unresolved-edge finding");
     assert!(finding.get("hint").is_none(), "renamed away: {finding}");
+    let cause = finding["cause"].as_str().unwrap();
+    assert_eq!(finding["lines"], serde_json::json!([3, 7]));
+    assert!(cause.contains("on line 7"), "got: {finding}");
     assert!(
-        finding["cause"]
-            .as_str()
-            .unwrap()
-            .contains("resolves from the graph root"),
+        cause.contains("resolves from the graph root"),
         "got: {finding}"
     );
 
@@ -503,6 +504,11 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&text.stdout);
     assert!(stdout.contains("  cause: "), "got: {stdout}");
+    assert!(
+        stdout.contains("docs/guide.md:3,7 → docs/lib.rs"),
+        "got: {stdout}"
+    );
+    assert!(stdout.contains("on line 7"), "got: {stdout}");
 }
 
 /// A frontmatter graph declaring no `edge_keys` emits no edges, and says nothing
