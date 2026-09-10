@@ -149,7 +149,7 @@ pub struct Config {
     /// (configured or not), unioned with each rule's own `ignore`. Unlike the
     /// top-level `ignore`, the paths stay in the graph; only findings are dropped.
     rule_ignore: Option<GlobSet>,
-    /// Directory containing the `drft.toml` this config was loaded from.
+    /// Graph root containing the `.drft/config.toml` this config was loaded from.
     pub config_dir: Option<std::path::PathBuf>,
     /// Advisories raised while loading — a misspelled rule name, say. Carried on
     /// the config rather than printed at the point of discovery so the caller
@@ -202,7 +202,7 @@ const RESERVED_GRAPH_NAMES: &[&str] = &["fs"];
 const DEFAULT_FILES: &str = "**/*.md";
 
 impl Config {
-    /// The base config: no graphs (the `drft.toml` declares the full set), no
+    /// The base config: no graphs (the project config declares the full set), no
     /// ignores, every rule at `warn`. `fs` is always built regardless.
     pub fn defaults() -> Self {
         Config {
@@ -228,10 +228,11 @@ impl Config {
     }
 
     pub fn load(root: &Path) -> Result<Self> {
-        let config_path = match Self::find_config(root) {
-            Some(p) => p,
-            None => anyhow::bail!("no drft.toml found (run `drft init` to create one)"),
-        };
+        crate::layout::reject_legacy(root)?;
+        let config_path = crate::layout::config_path(root);
+        if !crate::layout::current_config_exists(root)? {
+            anyhow::bail!("no .drft/config.toml found (run `drft init` to create one)");
+        }
 
         let content = std::fs::read_to_string(&config_path)
             .with_context(|| format!("failed to read {}", config_path.display()))?;
@@ -244,17 +245,17 @@ impl Config {
             .is_some_and(|usage| usage.enabled);
 
         let mut config = Self::defaults();
-        config.config_dir = config_path.parent().map(|p| p.to_path_buf());
+        config.config_dir = Some(root.to_path_buf());
 
         if let Some(ignore) = raw.ignore {
             config.ignore = ignore;
         }
 
-        // The drft.toml declares the full graph set — there are no defaults.
+        // The project config declares the full graph set — there are no defaults.
         if let Some(raw_graphs) = raw.graphs {
             for (name, raw) in raw_graphs {
                 crate::model::validate_label(&name)
-                    .map_err(|e| anyhow::anyhow!("invalid graph name in drft.toml: {e}"))?;
+                    .map_err(|e| anyhow::anyhow!("invalid graph name in .drft/config.toml: {e}"))?;
                 if RESERVED_GRAPH_NAMES.contains(&name.as_str()) {
                     anyhow::bail!("graph name \"{name}\" is reserved (the implicit base graph)");
                 }
@@ -339,13 +340,6 @@ impl Config {
         Ok(config)
     }
 
-    /// Find `drft.toml` in `root`. No directory walking — if it's not here, the
-    /// caller falls back to defaults or errors.
-    fn find_config(root: &Path) -> Option<std::path::PathBuf> {
-        let candidate = root.join("drft.toml");
-        candidate.exists().then_some(candidate)
-    }
-
     /// Glob patterns the `fs` walk removes from the graph.
     pub fn ignore_patterns(&self) -> &[String] {
         &self.ignore
@@ -369,6 +363,11 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    fn config_path(root: &Path) -> std::path::PathBuf {
+        std::fs::create_dir_all(crate::layout::state_dir(root)).unwrap();
+        crate::layout::config_path(root)
+    }
+
     #[test]
     fn errors_when_no_config() {
         let dir = TempDir::new().unwrap();
@@ -378,13 +377,13 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("no drft.toml found")
+                .contains("no .drft/config.toml found")
         );
     }
 
     #[test]
     fn defaults_have_no_graphs() {
-        // No runtime defaults — the drft.toml declares the full set.
+        // No runtime defaults — the project config declares the full set.
         assert!(Config::defaults().graphs.is_empty());
         assert!(!Config::defaults().usage_enabled);
         assert!(Config::defaults().usage_config_fingerprint.is_none());
@@ -399,7 +398,7 @@ mod tests {
             "[experimental.usage]\nenabled = false\n",
         ] {
             let dir = TempDir::new().unwrap();
-            fs::write(dir.path().join("drft.toml"), contents).unwrap();
+            fs::write(config_path(dir.path()), contents).unwrap();
             let config = Config::load(dir.path()).unwrap();
             assert!(!config.usage_enabled, "contents: {contents:?}");
             assert!(config.usage_config_fingerprint.is_none());
@@ -412,7 +411,7 @@ mod tests {
         // input and therefore part of the fingerprint.
         let contents = b"# opt in\r\n[experimental.usage]\r\nenabled = true\r\n \r\n";
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("drft.toml");
+        let path = config_path(dir.path());
         fs::write(&path, contents).unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert!(config.usage_enabled);
@@ -446,7 +445,7 @@ mod tests {
             "[experimental.usage.extra]\nenabled = false\n",
         ] {
             let dir = TempDir::new().unwrap();
-            fs::write(dir.path().join("drft.toml"), contents).unwrap();
+            fs::write(config_path(dir.path()), contents).unwrap();
             assert!(Config::load(dir.path()).is_err(), "contents: {contents:?}");
         }
     }
@@ -455,7 +454,7 @@ mod tests {
     fn invalid_config_cannot_return_enabled_config() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[experimental.usage]\nenabled = true\n\n[graphs.bad]\nparser = \"unknown\"\n",
         )
         .unwrap();
@@ -465,7 +464,7 @@ mod tests {
     #[test]
     fn loads_ignore() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), "ignore = [\"target/**\"]\n").unwrap();
+        fs::write(config_path(dir.path()), "ignore = [\"target/**\"]\n").unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.ignore, vec!["target/**"]);
     }
@@ -474,7 +473,7 @@ mod tests {
     fn declares_graphs() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.docs]\nparser = \"markdown\"\nfiles = [\"docs/**/*.md\"]\n",
         )
         .unwrap();
@@ -488,7 +487,7 @@ mod tests {
     fn files_defaults_to_markdown_when_omitted() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.markdown]\nparser = \"markdown\"\n",
         )
         .unwrap();
@@ -500,7 +499,7 @@ mod tests {
     fn unknown_parser_errors() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.x]\nparser = \"markdwn\"\n",
         )
         .unwrap();
@@ -512,11 +511,7 @@ mod tests {
     fn parser_fs_value_errors() {
         // `fs` is a provider, not a parser, so it's not a valid parser value.
         let dir = TempDir::new().unwrap();
-        fs::write(
-            dir.path().join("drft.toml"),
-            "[graphs.x]\nparser = \"fs\"\n",
-        )
-        .unwrap();
+        fs::write(config_path(dir.path()), "[graphs.x]\nparser = \"fs\"\n").unwrap();
         assert!(Config::load(dir.path()).is_err());
     }
 
@@ -525,7 +520,7 @@ mod tests {
         // Naming a graph `fs` would clobber the implicit base graph's @fs block.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.fs]\nparser = \"markdown\"\n",
         )
         .unwrap();
@@ -538,7 +533,7 @@ mod tests {
         // Leading underscore is reserved.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs._internal]\nparser = \"markdown\"\n",
         )
         .unwrap();
@@ -549,7 +544,7 @@ mod tests {
     fn loads_rule_severity_and_ignore() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nstale-node = \"error\"\n\n[rules.detached-node]\nignore = [\"README.md\"]\n",
         )
         .unwrap();
@@ -563,7 +558,7 @@ mod tests {
     fn global_rule_ignore_applies_to_every_rule() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nignore = [\"vendor/**\"]\n\n[rules.stale-node]\nseverity = \"error\"\n",
         )
         .unwrap();
@@ -584,7 +579,7 @@ mod tests {
         // the error names the key and the accepted set.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.x]\nparser = \"frontmatter\"\ninclude_keys = [\"sources\"]\n",
         )
         .unwrap();
@@ -597,7 +592,7 @@ mod tests {
     fn frontmatter_graph_accepts_edge_keys() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = [\"sources\"]\n",
         )
         .unwrap();
@@ -609,7 +604,7 @@ mod tests {
     fn declaring_edge_keys_raises_no_hint() {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = [\"sources\"]\n",
         )
         .unwrap();
@@ -623,7 +618,7 @@ mod tests {
         // configured, and the config layer has nothing to say about it.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.fm]\nparser = \"frontmatter\"\n",
         )
         .unwrap();
@@ -638,7 +633,7 @@ mod tests {
         // the silent no-op this option exists to remove.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.md]\nparser = \"markdown\"\nedge_keys = [\"sources\"]\n",
         )
         .unwrap();
@@ -656,7 +651,7 @@ mod tests {
         // make the config say two things with one meaning.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[graphs.fm]\nparser = \"frontmatter\"\nedge_keys = []\n",
         )
         .unwrap();
@@ -668,7 +663,7 @@ mod tests {
     #[test]
     fn unknown_top_level_key_errors() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), "ignores = [\"target/**\"]\n").unwrap();
+        fs::write(config_path(dir.path()), "ignores = [\"target/**\"]\n").unwrap();
         let err = format!("{:#}", Config::load(dir.path()).unwrap_err());
         assert!(err.contains("unknown field `ignores`"), "got: {err}");
     }
@@ -680,7 +675,7 @@ mod tests {
         // captured. Distinct from an unknown *rule name*, which only warns.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules.stale-node]\nseverty = \"error\"\n",
         )
         .unwrap();
@@ -694,7 +689,7 @@ mod tests {
         // Guard against the flatten capture swallowing the real fields.
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules.detached-node]\nseverity = \"error\"\nignore = [\"README.md\"]\n",
         )
         .unwrap();
@@ -706,7 +701,7 @@ mod tests {
     #[test]
     fn invalid_toml_errors() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), "not valid toml {{{{").unwrap();
+        fs::write(config_path(dir.path()), "not valid toml {{{{").unwrap();
         assert!(Config::load(dir.path()).is_err());
     }
 
@@ -714,7 +709,7 @@ mod tests {
     fn unknown_rule_name_becomes_a_hint_on_the_config() {
         let dir = TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nstale-nodes = \"error\"\n",
         )
         .unwrap();
@@ -730,11 +725,7 @@ mod tests {
     #[test]
     fn a_valid_config_raises_no_hints() {
         let dir = TempDir::new().unwrap();
-        std::fs::write(
-            dir.path().join("drft.toml"),
-            "[rules]\nstale-node = \"error\"\n",
-        )
-        .unwrap();
+        std::fs::write(config_path(dir.path()), "[rules]\nstale-node = \"error\"\n").unwrap();
         assert!(Config::load(dir.path()).unwrap().hints.is_empty());
     }
 }

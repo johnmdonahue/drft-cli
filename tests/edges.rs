@@ -14,7 +14,7 @@ use tempfile::TempDir;
 /// - `docs/b.md` has no outbound edges
 fn fixture() -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "# Index\n\n[a](docs/a.md) and [b](docs/b.md)\n",
@@ -255,7 +255,7 @@ fn text_format_is_source_arrow_target() {
 #[test]
 fn external_and_unresolved_targets_are_projected() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("a.md"),
         "[home](https://example.com) and [gone](./missing.md)\n",

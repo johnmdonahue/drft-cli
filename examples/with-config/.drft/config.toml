@@ -1,4 +1,4 @@
-# drft.toml
+# .drft/config.toml
 
 ignore = ["drafts/**"]
 

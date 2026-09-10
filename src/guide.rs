@@ -147,16 +147,16 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
             record.role = "configure";
             record.capability = "write-configuration";
             record.reads = vec![];
-            record.writes = vec!["drft.toml"];
+            record.writes = vec![".drft/config.toml"];
             record.boundary = vec![
-                "Refuses when drft.toml exists; never overwrites it.",
+                "Refuses current, legacy, and conflicting layouts; never overwrites project state.",
                 "Accepts the global format control but emits no success document.",
             ];
         }
         Commands::Config { .. } => {
             record.role = "inspect-configuration";
             record.reads = vec![
-                "drft.toml",
+                ".drft/config.toml",
                 "repository-.gitignore",
                 ".git/info/exclude",
                 "core.excludesFile",
@@ -170,13 +170,13 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
                 kind: "ignore-source-report",
                 fields: vec![],
             });
-            record.boundary = vec!["Does not build the graph or update drft.lock."];
+            record.boundary = vec!["Does not build the graph or update .drft/lock.toml."];
         }
         Commands::Lock { .. } => {
             record.role = "record-reviewed-state";
             record.capability = "write-baseline";
-            record.reads.push("drft.lock");
-            record.writes = vec!["drft.lock"];
+            record.reads.push(".drft/lock.toml");
+            record.writes = vec![".drft/lock.toml"];
             record.operands.push(exact_paths());
             record.controls.push(semantics("all", "whole-graph-acknowledgement", "Affirm every lockable node after whole-graph review, or deliberately establish or rebuild the whole baseline."));
             record.success_document = result("lock-result", ResultShape::Lock);
@@ -214,7 +214,7 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
             record.controls.push(semantics("depth", "traversal-bound", "A positive integer bounds hops; the unbounded form traverses the full reachable set."));
             record.controls.push(semantics("direction", "traversal-direction", "Inbound follows dependents; outbound follows dependencies; both follows either direction."));
             record.success_document = result("impact-result", ResultShape::Impact);
-            record.reads.push("drft.lock");
+            record.reads.push(".drft/lock.toml");
             record.boundary = vec![
                 "No .md fallback, directory expansion, subtree expansion, or glob expansion. Seeds must exist in the current graph.",
                 "Diagnostics include construction findings from all configured graphs, including disconnected files and metadata-only graphs. They identify read failures, not inferred dependencies on seeds.",
@@ -233,7 +233,7 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
         }
         Commands::Check => {
             record.role = "gate";
-            record.reads.extend(["configuration", "drft.lock"]);
+            record.reads.extend(["configuration", ".drft/lock.toml"]);
             record.success_document = result("check-result", ResultShape::Check);
             record.exit_codes.insert(1, ExitStatus::Violations.code());
             record.boundary = vec![
@@ -250,7 +250,7 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
             });
             record.boundary = vec![
                 "Requires no repository or config.",
-                "Does not walk the repository, load drft.toml, read drft.lock, or build the graph.",
+                "Does not walk the repository, load .drft/config.toml, read .drft/lock.toml, or build the graph.",
             ];
         }
     }
@@ -795,7 +795,7 @@ mod tests {
         assert_eq!(
             command(&guide, "config")["reads"],
             json!([
-                "drft.toml",
+                ".drft/config.toml",
                 "repository-.gitignore",
                 ".git/info/exclude",
                 "core.excludesFile"

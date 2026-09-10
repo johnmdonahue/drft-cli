@@ -9,7 +9,7 @@ const INVALID: &str = "---\nnote: `unquoted span`\nsources:\n  - ./target.md\n--
 
 fn fixture(config: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), config).unwrap();
+    fs::write(common::config_path(dir.path()), config).unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
     dir
 }
@@ -55,7 +55,7 @@ fn unreadable_declaration_explains_empty_impact_with_and_without_history() {
             assert!(run(&dir, &["lock", "doc.md", "target.md"]).status.success());
         }
         fs::write(dir.path().join("doc.md"), INVALID).unwrap();
-        let before = fs::read(dir.path().join("drft.lock")).ok();
+        let before = fs::read(common::lock_path(dir.path())).ok();
         let result = impact(&dir, "inbound");
         assert_eq!(result["impacted"], json!([]));
         assert_eq!(result["total"], 0);
@@ -87,7 +87,7 @@ fn unreadable_declaration_explains_empty_impact_with_and_without_history() {
         );
         assert!(text.contains("unreadable-frontmatter]: doc.md:1"));
         assert!(!String::from_utf8(output.stderr).unwrap().contains("warn["));
-        assert_eq!(fs::read(dir.path().join("drft.lock")).ok(), before);
+        assert_eq!(fs::read(common::lock_path(dir.path())).ok(), before);
     }
 }
 
@@ -148,7 +148,7 @@ fn isolated_seed_is_quiet_with_missing_or_empty_baseline() {
     let dir = fixture(common::MARKDOWN_ONLY_CONFIG);
     for baseline in [None, Some("")] {
         if let Some(content) = baseline {
-            fs::write(dir.path().join("drft.lock"), content).unwrap();
+            fs::write(common::lock_path(dir.path()), content).unwrap();
         }
         for (direction, empty) in [
             ("inbound", "no dependents"),
@@ -363,16 +363,16 @@ fn large_global_diagnostics_keep_their_scope_in_size_advice() {
 fn corrupt_lock_is_a_hint_and_lock_io_failure_is_an_error() {
     let dir = fixture(common::MARKDOWN_ONLY_CONFIG);
     let corrupt = "not valid toml {{{";
-    fs::write(dir.path().join("drft.lock"), corrupt).unwrap();
+    fs::write(common::lock_path(dir.path()), corrupt).unwrap();
     let result = impact(&dir, "inbound");
     assert_eq!(result["diagnostics"], json!([]));
     assert_eq!(result["hints"][0]["name"], "unparseable-lock");
     assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        fs::read_to_string(common::lock_path(dir.path())).unwrap(),
         corrupt
     );
-    fs::remove_file(dir.path().join("drft.lock")).unwrap();
-    fs::create_dir(dir.path().join("drft.lock")).unwrap();
+    fs::remove_file(common::lock_path(dir.path())).unwrap();
+    fs::create_dir(common::lock_path(dir.path())).unwrap();
     let output = run(&dir, &["impact", "target.md"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
@@ -395,7 +395,7 @@ fn historical_pairs_report_losses_without_extending_traversal() {
     fs::remove_file(dir.path().join("doc.md")).unwrap();
     fs::write(dir.path().join("older.md"), "# Older").unwrap();
     fs::write(dir.path().join("peer.md"), "# Peer").unwrap();
-    let before = fs::read(dir.path().join("drft.lock")).unwrap();
+    let before = fs::read(common::lock_path(dir.path())).unwrap();
     let result = document(&run(
         &dir,
         &["impact", "target.md", "--depth", "all", "--format", "json"],
@@ -413,7 +413,7 @@ fn historical_pairs_report_losses_without_extending_traversal() {
     let absent = run(&dir, &["impact", "doc.md"]);
     assert_eq!(absent.status.code(), Some(2));
     assert!(absent.stdout.is_empty());
-    assert_eq!(fs::read(dir.path().join("drft.lock")).unwrap(), before);
+    assert_eq!(fs::read(common::lock_path(dir.path())).unwrap(), before);
 }
 
 #[cfg(unix)]
@@ -444,7 +444,7 @@ fn guide_advertises_diagnostics_lock_reads_and_non_gating_errors() {
         command["reads"]
             .as_array()
             .unwrap()
-            .contains(&json!("drft.lock"))
+            .contains(&json!(".drft/lock.toml"))
     );
     assert!(command.to_string().contains("diagnostics"));
     let boundary = command["boundary"].to_string();

@@ -9,7 +9,7 @@ sources:
 
 # Local usage records
 
-Experimental usage collection saves bounded command records locally for later analysis. Enable it in a project's `drft.toml`:
+Experimental usage collection saves bounded command records locally for later analysis. Enable it in a project's `.drft/config.toml`:
 
 ```toml
 [experimental.usage]
@@ -42,7 +42,7 @@ Records retain exact arguments and project identity, binary version, config fing
 
 Unavailable observations differ from empty results. Truncation and omitted-record counts describe retained prefixes. A successful write does not establish that another program consumed its output. A missing finish can follow a panic, signal, kill, contention, or storage failure; it does not prove no lock mutation occurred. Storage failures skip evidence without replacing command errors.
 
-Compare findings only across complete, nonoverlapping observations with compatible project, config, binary, schema, and coverage. Changing the opt-in changes the exact config fingerprint; if `drft.toml` is graph-visible, its content hash also changes. Observed deltas alone establish neither causality nor semantic correctness. The [event reference](usage-events.md) defines the fields and limits.
+Compare findings only across complete, nonoverlapping observations with compatible project, config, binary, schema, and coverage. Changing the opt-in changes the exact config fingerprint but not the graph because `.drft` state is always excluded. Observed deltas alone establish neither causality nor semantic correctness. The [event reference](usage-events.md) defines the fields and limits.
 
 ## Retention and cleanup
 

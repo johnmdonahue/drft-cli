@@ -30,7 +30,7 @@ Impact carries diagnostics that qualify the answer:
 
 - Construction findings cover all configured graphs, including disconnected files and metadata-only graphs. An unreadable declaration could name any target, so current reachability cannot establish its relevance. These findings identify read failures; they do not claim that a failed file depended on a seed.
 - `unresolved-edge` and `unresolved-fragment` cover every current edge inspected in the requested direction. Nodes at the depth limit are reached but not expanded. Inspected edges include cycles, alternate paths, and edges between seeds.
-- `removed-edge` and applicable `removed-node` findings use historical pairs from the optional `drft.lock` beside that same current expansion frontier. Historical pairs never extend traversal or contribute to ranking or `total`. A chain of removed declarations therefore does not reconstruct a historical dependency graph.
+- `removed-edge` and applicable `removed-node` findings use historical pairs from the optional `.drft/lock.toml` beside that same current expansion frontier. Historical pairs never extend traversal or contribute to ranking or `total`. A chain of removed declarations therefore does not reconstruct a historical dependency graph.
 
 Configured severities and subject ignores apply as they do in `check`. Impact omits `stale-node`, `stale-edge`, `new-edge`, `detached-node`, `unlocked-node`, and `no-baseline`. A missing or empty baseline is quiet; an unparseable baseline carries the `unparseable-lock` hint. Impact reads the lockfile without updating it.
 
@@ -40,7 +40,7 @@ A completed impact read exits 0 even when a diagnostic has severity `error`. Rea
 
 ## Selectors
 
-Every read verb takes the same positional selector, matched against node keys — the same vocabulary as `drft.toml`'s `files` and `ignore`. A selector is one of:
+Every read verb takes the same positional selector, matched against node keys — the same vocabulary as `.drft/config.toml`'s `files` and `ignore`. A selector is one of:
 
 - An **exact path** — `docs/config.md` — resolving to that node.
 - A **bare directory** — `docs/` — standing for its recursive subtree.
@@ -156,8 +156,8 @@ In JSON they are a key on the result document, always present so `.hints[]` read
 | --------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `zero-match-selector`       | A selector resolved to nothing — an empty answer, not a clean one                                      |
 | `large-projection`          | The rendered output is big enough to crowd a reader's context                                          |
-| `unknown-rule`              | A `drft.toml` rule name is not built in, so it configures nothing                                      |
-| `unparseable-lock`          | `drft.lock` could not be read, so staleness cannot be evaluated                                        |
+| `unknown-rule`              | A `.drft/config.toml` rule name is not built in, so it configures nothing                              |
+| `unparseable-lock`          | `.drft/lock.toml` could not be read, so staleness cannot be evaluated                                  |
 | `directory-lock`            | A formerly lockable path is now a directory; its old entry was dropped, but no descendants were locked |
 | `nothing-to-lock`           | A locked path carries no content to snapshot                                                           |
 | `replaced-unreadable-lock`  | A rebuild replaced a lockfile it could not read, so its drops are unlisted                             |

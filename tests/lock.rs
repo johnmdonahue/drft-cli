@@ -20,18 +20,18 @@ fn lock_all(dir: &std::path::Path) {
     assert!(output.status.success(), "lock should exit 0");
 }
 
-/// First lock writes drft.lock in the path-keyed format (node hashes + nested
+/// First lock writes `.drft/lock.toml` in the path-keyed format (node hashes + nested
 /// edge target hashes), with no version field. A subsequent check is clean.
 #[test]
 fn first_lock_then_clean_check() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
     lock_all(dir.path());
 
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let lockfile = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     assert!(lockfile.contains("[[node]]"));
     assert!(lockfile.contains("path = \"index.md\""));
     assert!(lockfile.contains("[[node.edge]]"));
@@ -41,9 +41,9 @@ fn first_lock_then_clean_check() {
         !lockfile.contains("version"),
         "lockfile should carry no version field"
     );
-    // drft.lock is drft's own artifact, never a graph node.
+    // `.drft/lock.toml` is drft's own artifact, never a graph node.
     assert!(
-        !lockfile.contains("path = \"drft.lock\""),
+        !lockfile.contains("path = \".drft/lock.toml\""),
         "the lockfile should not list itself as a node"
     );
 
@@ -59,7 +59,7 @@ fn first_lock_then_clean_check() {
 #[test]
 fn edit_dependency_reports_stale_node_and_stale_edge() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -81,7 +81,7 @@ fn edit_dependency_reports_stale_node_and_stale_edge() {
 #[test]
 fn relock_clears_staleness() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -101,7 +101,7 @@ fn relock_clears_staleness() {
 #[test]
 fn deleted_file_reports_unresolved_and_removed_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -125,7 +125,7 @@ fn deleted_file_reports_unresolved_and_removed_node() {
 #[test]
 fn scoped_lock_accepts_several_paths() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     for name in ["a", "b", "c"] {
         fs::write(dir.path().join(format!("{name}.md")), format!("# {name}")).unwrap();
     }
@@ -159,7 +159,7 @@ fn scoped_lock_accepts_several_paths() {
 #[test]
 fn scoped_lock_writes_nothing_when_a_path_is_unresolvable() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
     lock_all(dir.path());
     fs::write(dir.path().join("a.md"), "# a edited").unwrap();
@@ -189,7 +189,7 @@ fn scoped_lock_writes_nothing_when_a_path_is_unresolvable() {
 #[test]
 fn scoped_lock_drops_a_removed_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[doomed](doomed.md)").unwrap();
     fs::write(dir.path().join("doomed.md"), "# Doomed").unwrap();
     lock_all(dir.path());
@@ -215,11 +215,11 @@ fn scoped_lock_drops_a_removed_node() {
 #[test]
 fn a_bare_path_does_not_drop_a_removed_markdown_entry() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("guide.md"), "# Guide").unwrap();
     lock_all(dir.path());
     fs::remove_file(dir.path().join("guide.md")).unwrap();
-    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let before = fs::read_to_string(common::lock_path(dir.path())).unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "guide"])
@@ -229,7 +229,7 @@ fn a_bare_path_does_not_drop_a_removed_markdown_entry() {
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean \"guide.md\"?"));
     assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        fs::read_to_string(common::lock_path(dir.path())).unwrap(),
         before
     );
 }
@@ -240,7 +240,7 @@ fn a_bare_path_does_not_drop_a_removed_markdown_entry() {
 #[test]
 fn scoped_lock_batches_a_live_update_with_a_drop() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[guide](guide.md) [doomed](doomed.md)",
@@ -281,12 +281,12 @@ fn scoped_lock_batches_a_live_update_with_a_drop() {
 #[test]
 fn scoped_lock_of_a_directory_errors_and_writes_nothing() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
     lock_all(dir.path());
-    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let before = fs::read_to_string(common::lock_path(dir.path())).unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "sub"])
@@ -302,7 +302,7 @@ fn scoped_lock_of_a_directory_errors_and_writes_nothing() {
         "stderr={stderr:?}"
     );
     assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        fs::read_to_string(common::lock_path(dir.path())).unwrap(),
         before,
         "a directory lock must not rewrite the baseline"
     );
@@ -314,7 +314,7 @@ fn scoped_lock_of_a_directory_errors_and_writes_nothing() {
 fn every_directory_spelling_errors() {
     for spelling in ["sub", "sub/", "./sub"] {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
         fs::create_dir(dir.path().join("sub")).unwrap();
         fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
         fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
@@ -342,7 +342,7 @@ fn every_directory_spelling_errors() {
 #[test]
 fn a_directory_lock_does_not_manufacture_an_empty_baseline() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("index.md"), "[sub](sub)").unwrap();
@@ -353,7 +353,7 @@ fn a_directory_lock_does_not_manufacture_an_empty_baseline() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(
-        !dir.path().join("drft.lock").exists(),
+        !common::lock_path(dir.path()).exists(),
         "a lock that wrote nothing must not create a lockfile"
     );
 }
@@ -363,13 +363,13 @@ fn a_directory_lock_does_not_manufacture_an_empty_baseline() {
 #[test]
 fn a_directory_in_a_batch_prevents_every_write() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("b.md"), "# B").unwrap();
     lock_all(dir.path());
     fs::write(dir.path().join("a.md"), "# A changed").unwrap();
-    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let before = fs::read_to_string(common::lock_path(dir.path())).unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md", "sub/"])
@@ -378,7 +378,7 @@ fn a_directory_in_a_batch_prevents_every_write() {
 
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        fs::read_to_string(common::lock_path(dir.path())).unwrap(),
         before,
         "a failed batch must leave the baseline byte-identical"
     );
@@ -390,11 +390,11 @@ fn a_directory_in_a_batch_prevents_every_write() {
 
 /// `lock` reports what it wrote, in both formats. Without it, a lock covering
 /// five files and one covering none are indistinguishable without reading
-/// `drft.lock` by hand.
+/// `.drft/lock.toml` by hand.
 #[test]
 fn lock_reports_what_it_wrote() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -403,9 +403,9 @@ fn lock_reports_what_it_wrote() {
         .output()
         .unwrap();
     // `--all` reports the count alone: it resolves nothing, so a per-node listing
-    // would be a copy of `drft.lock` and, on a large graph, thousands of lines.
+    // would copy `.drft/lock.toml` and, on a large graph, contain thousands of lines.
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(stdout, "locked 3 nodes\n", "stdout={stdout:?}");
+    assert_eq!(stdout, "locked 2 nodes\n", "stdout={stdout:?}");
 
     // A scoped lock names what it locked, which is how a resolution the caller did
     // not expect becomes visible at the moment it happens.
@@ -446,7 +446,7 @@ fn lock_reports_what_it_wrote() {
 #[test]
 fn a_bare_directory_remains_separate_from_a_dot_md_sibling() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
     fs::write(dir.path().join("docs.md"), "# Sibling").unwrap();
     fs::write(dir.path().join("docs").join("a.md"), "# A").unwrap();
@@ -487,7 +487,7 @@ fn a_bare_directory_remains_separate_from_a_dot_md_sibling() {
 #[test]
 fn scoped_lock_of_an_extensioned_path_selects_only_that_path() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("a.md.md"), "# A dot md").unwrap();
     lock_all(dir.path());
@@ -519,7 +519,7 @@ fn scoped_lock_of_an_extensioned_path_selects_only_that_path() {
 #[test]
 fn lock_with_no_paths_errors_and_writes_nothing() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
 
     let output = drft_bin()
@@ -529,7 +529,7 @@ fn lock_with_no_paths_errors_and_writes_nothing() {
 
     assert_eq!(output.status.code(), Some(2), "usage error exits 2");
     assert!(
-        !dir.path().join("drft.lock").exists(),
+        !common::lock_path(dir.path()).exists(),
         "a refused lock must not write a lockfile"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -544,10 +544,10 @@ fn lock_with_no_paths_errors_and_writes_nothing() {
 #[test]
 fn lock_with_no_paths_leaves_an_existing_lockfile_alone() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
     lock_all(dir.path());
-    let before = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let before = fs::read_to_string(common::lock_path(dir.path())).unwrap();
 
     fs::write(dir.path().join("a.md"), "# a edited").unwrap();
     let output = drft_bin()
@@ -557,7 +557,7 @@ fn lock_with_no_paths_leaves_an_existing_lockfile_alone() {
     assert_eq!(output.status.code(), Some(2));
 
     assert_eq!(
-        fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+        fs::read_to_string(common::lock_path(dir.path())).unwrap(),
         before,
         "the lockfile should be byte-identical after a refused lock"
     );
@@ -573,7 +573,7 @@ fn lock_with_no_paths_leaves_an_existing_lockfile_alone() {
 #[test]
 fn lock_all_locks_every_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     for name in ["a", "b", "c"] {
         fs::write(dir.path().join(format!("{name}.md")), format!("# {name}")).unwrap();
     }
@@ -605,7 +605,7 @@ fn lock_all_locks_every_node() {
 #[test]
 fn lock_all_with_paths_is_a_usage_error() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
     fs::write(dir.path().join("b.md"), "# b").unwrap();
     lock_all(dir.path());
@@ -630,7 +630,7 @@ fn lock_all_with_paths_is_a_usage_error() {
 #[test]
 fn lock_with_no_paths_uses_claps_usage_error_channel() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
 
     let output = drft_bin()
@@ -651,7 +651,7 @@ fn lock_with_no_paths_uses_claps_usage_error_channel() {
         stderr.contains("Usage:") && stderr.contains("--all"),
         "{stderr}"
     );
-    assert!(!dir.path().join("drft.lock").exists());
+    assert!(!common::lock_path(dir.path()).exists());
 }
 
 /// `--all` has no short form. Spelling out the call that asserts whole-graph
@@ -660,7 +660,7 @@ fn lock_with_no_paths_uses_claps_usage_error_channel() {
 #[test]
 fn lock_all_has_no_short_form() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# a").unwrap();
 
     let output = drft_bin()
@@ -673,7 +673,7 @@ fn lock_all_has_no_short_form() {
         "-a must not be an alias for --all"
     );
     assert!(
-        !dir.path().join("drft.lock").exists(),
+        !common::lock_path(dir.path()).exists(),
         "-a must not have locked anything"
     );
 }
@@ -685,7 +685,7 @@ fn lock_all_has_no_short_form() {
 fn locking_a_path_that_became_a_directory_drops_its_entry() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*\"]\n",
     )
     .unwrap();
@@ -724,10 +724,10 @@ fn locking_a_path_that_became_a_directory_drops_its_entry() {
 #[test]
 fn a_scoped_lock_merges_into_an_empty_baseline() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     lock_all(dir.path());
-    fs::write(dir.path().join("drft.lock"), "").unwrap();
+    fs::write(common::lock_path(dir.path()), "").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "a.md"])
@@ -738,7 +738,7 @@ fn a_scoped_lock_merges_into_an_empty_baseline() {
         "an empty baseline has nothing to lose: stderr={:?}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let lockfile = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     assert!(
         lockfile.contains("path = \"a.md\""),
         "lockfile={lockfile:?}"
@@ -753,8 +753,8 @@ fn a_scoped_lock_merges_into_an_empty_baseline() {
 fn lock_all_rebuilds_even_when_nothing_is_lockable() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
-        "ignore = [\"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+        common::config_path(dir.path()),
+        "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
@@ -781,7 +781,7 @@ fn lock_all_rebuilds_even_when_nothing_is_lockable() {
 fn lock_output_survives_a_closed_pipe() {
     for format in [vec![], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+        fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
         // Enough nodes that either rendering comfortably exceeds the pipe buffer.
         for i in 0..8000 {
             fs::write(dir.path().join(format!("n{i}.md")), "# Note").unwrap();
@@ -815,7 +815,7 @@ fn lock_output_survives_a_closed_pipe() {
 #[test]
 fn a_lock_path_does_not_fall_through_to_the_graph_root() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
     fs::write(dir.path().join("README.md"), "# Root").unwrap();
     fs::write(
@@ -835,7 +835,7 @@ fn a_lock_path_does_not_fall_through_to_the_graph_root() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
-    let after = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let after = fs::read_to_string(common::lock_path(dir.path())).unwrap();
 
     // The same spelling from the graph root remains exact.
     let quiet = drft_bin()
@@ -855,7 +855,7 @@ fn a_lock_path_does_not_fall_through_to_the_graph_root() {
         convenience_err.contains("did you mean \"README.md\"?"),
         "the correction must not be selected: stderr={convenience_err:?}"
     );
-    let final_lock = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let final_lock = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     assert_eq!(
         after, final_lock,
         "failed locks must not rewrite the baseline"
@@ -871,17 +871,16 @@ fn a_lock_path_does_not_fall_through_to_the_graph_root() {
 #[test]
 fn lock_all_reports_the_entries_it_drops() {
     let dir = TempDir::new().unwrap();
-    let base =
-        "ignore = [\"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n";
-    fs::write(dir.path().join("drft.toml"), base).unwrap();
+    let base = "[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n";
+    fs::write(common::config_path(dir.path()), base).unwrap();
     for name in ["a.md", "b.md", "c.md"] {
         fs::write(dir.path().join(name), "# Note").unwrap();
     }
     lock_all(dir.path());
 
     fs::write(
-        dir.path().join("drft.toml"),
-        "ignore = [\"drft.toml\", \"b.md\", \"c.md\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+        common::config_path(dir.path()),
+        "ignore = [\"b.md\", \"c.md\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
 
@@ -917,7 +916,7 @@ fn lock_all_reports_the_entries_it_drops() {
 #[test]
 fn duplicate_paths_are_locked_once() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     lock_all(dir.path());
 
@@ -940,10 +939,10 @@ fn duplicate_paths_are_locked_once() {
 #[test]
 fn a_rebuild_over_an_unreadable_lockfile_says_its_drops_are_unlisted() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     lock_all(dir.path());
-    fs::write(dir.path().join("drft.lock"), "not valid toml {{{").unwrap();
+    fs::write(common::lock_path(dir.path()), "not valid toml {{{").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "lock", "--all"])
@@ -971,7 +970,7 @@ fn a_rebuild_over_an_unreadable_lockfile_says_its_drops_are_unlisted() {
 #[test]
 fn locking_a_path_with_nothing_to_snapshot_says_why() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let outside = TempDir::new().unwrap();

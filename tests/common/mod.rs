@@ -1,7 +1,26 @@
 use std::process::Command;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
+#[allow(dead_code)]
 pub fn drft_bin() -> Command {
     Command::new(env!("CARGO_BIN_EXE_drft"))
+}
+
+#[allow(dead_code)]
+pub fn config_path(root: &Path) -> PathBuf {
+    let state = root.join(".drft");
+    fs::create_dir_all(&state).unwrap();
+    state.join("config.toml")
+}
+
+#[allow(dead_code)]
+pub fn lock_path(root: &Path) -> PathBuf {
+    let state = root.join(".drft");
+    fs::create_dir_all(&state).unwrap();
+    state.join("lock.toml")
 }
 
 /// Declares the markdown + frontmatter graphs — the former built-in defaults,

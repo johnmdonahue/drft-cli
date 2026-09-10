@@ -9,6 +9,7 @@ pub mod edges;
 pub mod graphs;
 pub mod hints;
 pub mod impact;
+pub mod layout;
 pub mod lock;
 pub mod model;
 pub mod nodes;

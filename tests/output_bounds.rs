@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 fn fixture() -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("seed.md"), "# Sééd\n").unwrap();
     fs::write(dir.path().join("dependent.md"), "[seed](seed.md)\n").unwrap();
     dir
@@ -128,7 +128,7 @@ fn nodes_and_edges_require_an_explicit_base_set() {
 fn budget_errors_preserve_hints_in_the_formats_error_channel() {
     let dir = fixture();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!(
             "{}\n[rules]\nnot-a-rule = \"warn\"\n",
             common::DEFAULT_CONFIG

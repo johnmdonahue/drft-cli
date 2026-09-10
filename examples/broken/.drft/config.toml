@@ -1,5 +1,8 @@
-# drft.toml
+# .drft/config.toml
 
 [graphs.markdown]
 parser = "markdown"
 files = ["**/*.md"]
+
+[rules]
+unresolved-edge = "error"

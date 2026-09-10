@@ -10,12 +10,10 @@ use std::process::{Command, Output};
 
 use crate::config::compile_globs;
 
-/// VCS metadata entries pruned from the walk. The hidden filter is off so that
-/// ordinary dot-directories (`.github/`, `.config/`) join the graph, but a
-/// version-control store is internal bookkeeping, never graph content — so it
-/// is excluded by name. ripgrep skips these via its hidden filter; drft keeps
-/// dot-dirs and names the exclusions instead.
-const VCS_DIRS: [&str; 4] = [".git", ".hg", ".svn", ".jj"];
+/// Project metadata entries pruned from the walk. The hidden filter is off so
+/// ordinary dot-directories (`.github/`, `.config/`) join the graph, but version
+/// control and drft state stores are internal bookkeeping, never graph content.
+const PRUNED_DIRS: [&str; 5] = [".git", ".hg", ".svn", ".jj", crate::layout::STATE_DIR];
 
 /// What kind of filesystem entry a [`SourceFile`] is. Derived from `lstat`, so a
 /// symlink-to-directory is [`Symlink`](NodeKind::Symlink) (indirection wins over
@@ -69,8 +67,8 @@ struct IgnorePolicy {
 /// Paths are relative to `root`, sorted.
 ///
 /// Hidden entries are *not* skipped: a dot-directory like `.github/` is part of
-/// the graph. The lone exception is VCS metadata ([`VCS_DIRS`]), pruned from
-/// traversal — `.git/` would otherwise flood the graph with internal state.
+/// the graph. Version-control metadata and `.drft` state ([`PRUNED_DIRS`]) are
+/// pruned from traversal.
 ///
 /// Repository `.gitignore` rules from the graph root through the repository
 /// root prune the walk. Nested `.gitignore` files also apply to their subtrees.
@@ -170,14 +168,14 @@ fn filesystem_walker(root: &Path, policy: &IgnorePolicy) -> Walk {
 
     builder
         .filter_entry(|entry| {
-            // With the hidden filter off, dot-directories are walked. Prune VCS
-            // metadata explicitly so it never enters the graph. `.git` can be a
-            // file (submodules, linked worktrees) as well as a directory, so
-            // match by name regardless of kind.
+            // With the hidden filter off, dot-directories are walked. Prune
+            // internal metadata explicitly so it never enters the graph. `.git`
+            // can be a file (submodules, linked worktrees) as well as a directory,
+            // so match by name regardless of kind.
             entry
                 .file_name()
                 .to_str()
-                .is_none_or(|name| !VCS_DIRS.contains(&name))
+                .is_none_or(|name| !PRUNED_DIRS.contains(&name))
         })
         .build()
 }

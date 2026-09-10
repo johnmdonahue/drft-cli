@@ -23,8 +23,8 @@ fn guide_needs_no_repository_config_or_accessible_directory() {
     let dir = TempDir::new().unwrap();
     for invalid_config in [false, true] {
         if invalid_config {
-            fs::write(dir.path().join("drft.toml"), "[broken").unwrap();
-            fs::write(dir.path().join("drft.lock"), "do not touch").unwrap();
+            fs::write(common::config_path(dir.path()), "[broken").unwrap();
+            fs::write(common::lock_path(dir.path()), "do not touch").unwrap();
         }
         for format in ["text", "json"] {
             let output = drft_bin()
@@ -55,11 +55,11 @@ fn guide_needs_no_repository_config_or_accessible_directory() {
         }
         if invalid_config {
             assert_eq!(
-                fs::read_to_string(dir.path().join("drft.toml")).unwrap(),
+                fs::read_to_string(common::config_path(dir.path())).unwrap(),
                 "[broken"
             );
             assert_eq!(
-                fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+                fs::read_to_string(common::lock_path(dir.path())).unwrap(),
                 "do not touch"
             );
         } else {
@@ -86,7 +86,11 @@ fn guide_is_discoverable_and_has_no_graph_controls() {
 fn guide_result_fields_match_the_actual_serializers() {
     let document = guide();
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::write(dir.path().join("a.md"), "# A\n").unwrap();
     fs::write(dir.path().join("b.md"), "# B\n[A](a.md)\n").unwrap();
     for (name, args) in [
@@ -139,7 +143,7 @@ fn check_status_and_graph_channel_exceptions_match_the_guide() {
     fs::write(dir.path().join("a.md"), "# A\n").unwrap();
     for (severity, expected) in [("warn", 0), ("error", 1)] {
         fs::write(
-            dir.path().join("drft.toml"),
+            common::config_path(dir.path()),
             format!("[rules]\nno-baseline = \"{severity}\"\n"),
         )
         .unwrap();
@@ -166,7 +170,7 @@ fn check_status_and_graph_channel_exceptions_match_the_guide() {
         );
     }
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[rules]\nunknown-test-rule = \"warn\"\n",
     )
     .unwrap();

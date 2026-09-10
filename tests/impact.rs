@@ -6,7 +6,7 @@ use tempfile::TempDir;
 #[test]
 fn impact_shows_transitive_dependents() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
@@ -39,7 +39,7 @@ fn impact_defaults_to_one_hop() {
     // a promise someone wrote down. `index.md` sits a hop further back and is
     // reported only by its radius, not enumerated.
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "[config](config.md)").unwrap();
     fs::write(dir.path().join("config.md"), "# Config").unwrap();
@@ -66,7 +66,7 @@ fn impact_defaults_to_one_hop() {
 #[test]
 fn impact_depth_zero_is_a_usage_error() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -89,7 +89,7 @@ fn impact_depth_zero_is_a_usage_error() {
 #[test]
 fn impact_json_format() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -117,7 +117,7 @@ fn impact_json_format() {
 #[test]
 fn impact_requires_a_subject() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Hello").unwrap();
 
     let output = drft_bin()
@@ -132,7 +132,7 @@ fn impact_requires_a_subject() {
 #[test]
 fn scoped_lock_refreshes_only_one_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -166,19 +166,19 @@ fn scoped_lock_refreshes_only_one_node() {
     );
 }
 
-/// v0.7 regression: a file inside a subdirectory containing a stray
-/// `drft.toml` must still be resolvable by `drft impact`. Under v0.6 the
+/// A file inside a subdirectory containing nested drft state remains resolvable
+/// by `drft impact`; only the nested `.drft` directory is pruned from the parent.
 /// subdirectory would have been treated as a child graph and the file
 /// excluded from the parent's graph.
 #[test]
-fn impact_resolves_file_under_nested_drft_toml() {
+fn impact_resolves_file_beside_nested_drft_state() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[inner](nested/inner.md)").unwrap();
 
     let nested = dir.path().join("nested");
     fs::create_dir(&nested).unwrap();
-    fs::write(nested.join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(&nested), common::DEFAULT_CONFIG).unwrap();
     fs::write(nested.join("inner.md"), "# Inner").unwrap();
 
     let output = drft_bin()
@@ -206,7 +206,7 @@ fn impact_resolves_file_under_nested_drft_toml() {
 #[test]
 fn impact_requires_the_exact_path_and_suggests_markdown() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -226,7 +226,7 @@ fn impact_requires_the_exact_path_and_suggests_markdown() {
 #[test]
 fn impact_selects_an_exact_extensionless_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[guide](guide)").unwrap();
     fs::write(dir.path().join("guide"), "# Extensionless").unwrap();
     fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
@@ -254,7 +254,7 @@ fn impact_selects_an_exact_extensionless_node() {
 #[test]
 fn impact_resolves_path_relative_to_cwd() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[model](projects/api/domain-model.md)",
@@ -288,7 +288,7 @@ fn impact_resolves_path_relative_to_cwd() {
 #[test]
 fn impact_missing_path_suggests_suffix_match() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[model](projects/api/domain-model.md)",
@@ -322,7 +322,7 @@ fn impact_missing_path_suggests_suffix_match() {
 #[test]
 fn impact_ambiguous_suffix_lists_matches() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[a](a/README.md) [b](b/README.md)",

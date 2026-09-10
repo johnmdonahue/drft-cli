@@ -22,8 +22,6 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::process::CommandExt;
 
 const GRAPH: &str = "\
-ignore = [\"drft.toml\", \"drft.lock\"]
-
 [graphs.markdown]
 parser = \"markdown\"
 files = [\"**/*.md\"]
@@ -62,7 +60,7 @@ impl Fixture {
         fs::create_dir_all(&graph).unwrap();
         fs::create_dir_all(&home).unwrap();
         fs::create_dir_all(&xdg).unwrap();
-        fs::write(graph.join("drft.toml"), config(enabled)).unwrap();
+        fs::write(common::config_path(&graph), config(enabled)).unwrap();
         fs::write(graph.join("seed.md"), "# Seed\n").unwrap();
         fs::write(graph.join("dependent.md"), "[seed](seed.md)\n").unwrap();
         Self {
@@ -75,16 +73,16 @@ impl Fixture {
     }
 
     fn write_config(&self, enabled: bool) {
-        fs::write(self.graph.join("drft.toml"), config(enabled)).unwrap();
+        fs::write(common::config_path(&self.graph), config(enabled)).unwrap();
     }
 
     fn lock_bytes(&self) -> Option<Vec<u8>> {
-        let path = self.graph.join("drft.lock");
+        let path = common::lock_path(&self.graph);
         path.exists().then(|| fs::read(path).unwrap())
     }
 
     fn restore_lock(&self, bytes: Option<Vec<u8>>) {
-        let path = self.graph.join("drft.lock");
+        let path = common::lock_path(&self.graph);
         match bytes {
             Some(bytes) => fs::write(path, bytes).unwrap(),
             None if path.exists() => fs::remove_file(path).unwrap(),
@@ -232,7 +230,7 @@ fn assert_success_pair(
     coverage: &str,
 ) {
     let (start, finish) = pair_for_args(fixture, args);
-    let source = fs::read(fixture.graph.join("drft.toml")).unwrap();
+    let source = fs::read(common::config_path(&fixture.graph)).unwrap();
     assert_eq!(start["schema"], "drft-usage");
     assert_eq!(start["revision"], 1);
     assert_eq!(start["id"], finish["id"]);
@@ -452,13 +450,13 @@ fn excluded_commands_and_preconfig_failures_never_create_usage_cache() {
     }
 
     let invalid_config = Fixture::new(true);
-    fs::write(invalid_config.graph.join("drft.toml"), "[broken").unwrap();
+    fs::write(common::config_path(&invalid_config.graph), "[broken").unwrap();
     assert_eq!(invalid_config.run(&["graph"]).status.code(), Some(2));
     assert!(!selected_cache(&invalid_config).exists());
 
     let strict_config = Fixture::new(true);
     fs::write(
-        strict_config.graph.join("drft.toml"),
+        common::config_path(&strict_config.graph),
         format!("{GRAPH}\n[experimental.usage]\nenabled = true\nnot-an-option = true\n"),
     )
     .unwrap();
@@ -484,7 +482,7 @@ fn enabled_records_preserve_error_statuses_and_result_modes() {
     let fixture = Fixture::new(true);
 
     fs::write(
-        fixture.graph.join("drft.toml"),
+        common::config_path(&fixture.graph),
         format!("{GRAPH}unresolved-edge = \"error\"\n\n[experimental.usage]\nenabled = true\n"),
     )
     .unwrap();
@@ -539,7 +537,7 @@ fn enabled_records_preserve_error_statuses_and_result_modes() {
 fn stderr_hints_are_captured_without_changing_the_result_mode() {
     let fixture = Fixture::new(true);
     fs::write(
-        fixture.graph.join("drft.toml"),
+        common::config_path(&fixture.graph),
         format!("{GRAPH}not-a-rule = \"warn\"\n\n[experimental.usage]\nenabled = true\n"),
     )
     .unwrap();
@@ -561,7 +559,7 @@ fn stderr_hints_are_captured_without_changing_the_result_mode() {
 fn hint_observation_distinguishes_document_delivery_and_budget_error_routes() {
     let fixture = Fixture::new(true);
     fs::write(
-        fixture.graph.join("drft.toml"),
+        common::config_path(&fixture.graph),
         format!("{GRAPH}not-a-rule = \"warn\"\n\n[experimental.usage]\nenabled = true\n"),
     )
     .unwrap();
@@ -629,12 +627,12 @@ fn collection_toggle_is_observable_but_disabled_or_absent_never_creates_cache() 
     }
 
     let absent = Fixture::new(false);
-    fs::write(absent.graph.join("drft.toml"), GRAPH).unwrap();
+    fs::write(common::config_path(&absent.graph), GRAPH).unwrap();
     assert!(absent.run(&["graph"]).status.success());
     assert!(!selected_cache(&absent).exists());
 
     let toggled = Fixture::new(true);
-    let first_config = fs::read(toggled.graph.join("drft.toml")).unwrap();
+    let first_config = fs::read(common::config_path(&toggled.graph)).unwrap();
     let first = toggled.run(&["graph"]);
     assert!(first.status.success());
     let (first_start, _) = pair_for_config(&toggled, &first_config);
@@ -647,7 +645,7 @@ fn collection_toggle_is_observable_but_disabled_or_absent_never_creates_cache() 
     let after_disable = events(&toggled).len();
     assert_eq!(after_disable, 2);
     fs::write(
-        toggled.graph.join("drft.toml"),
+        common::config_path(&toggled.graph),
         format!(
             "{}# enabled again after an observable toggle\n",
             config(true)
@@ -657,7 +655,7 @@ fn collection_toggle_is_observable_but_disabled_or_absent_never_creates_cache() 
     let reenabled = toggled.run(&["graph"]);
     assert_eq!(reenabled.stdout, first.stdout);
     assert!(reenabled.status.success());
-    let second_config = fs::read(toggled.graph.join("drft.toml")).unwrap();
+    let second_config = fs::read(common::config_path(&toggled.graph)).unwrap();
     let (second_start, _) = pair_for_config(&toggled, &second_config);
     assert_ne!(
         first_start["config_fingerprint"],
@@ -667,37 +665,25 @@ fn collection_toggle_is_observable_but_disabled_or_absent_never_creates_cache() 
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
-fn graph_visible_usage_toggle_changes_only_the_config_node_hash() {
+fn usage_config_is_never_graph_visible() {
     let fixture = Fixture::new(true);
-    fs::write(fixture.graph.join("drft.toml"), visible_config(true)).unwrap();
+    fs::write(common::config_path(&fixture.graph), visible_config(true)).unwrap();
     let enabled = fixture.run(&["--format", "json", "graph"]);
     assert!(enabled.status.success());
     let enabled: Value = serde_json::from_slice(&enabled.stdout).unwrap();
 
-    fs::write(fixture.graph.join("drft.toml"), visible_config(false)).unwrap();
+    fs::write(common::config_path(&fixture.graph), visible_config(false)).unwrap();
     let disabled = fixture.run(&["--format", "json", "graph"]);
     assert!(disabled.status.success());
     let disabled: Value = serde_json::from_slice(&disabled.stdout).unwrap();
 
-    assert_eq!(enabled["graph"]["edges"], disabled["graph"]["edges"]);
-    let enabled_nodes = enabled["graph"]["nodes"].as_object().unwrap();
-    let disabled_nodes = disabled["graph"]["nodes"].as_object().unwrap();
-    assert_eq!(enabled_nodes.len(), disabled_nodes.len());
-    assert_eq!(
-        enabled_nodes.keys().collect::<Vec<_>>(),
-        disabled_nodes.keys().collect::<Vec<_>>()
-    );
-    for path in ["seed.md", "dependent.md"] {
-        assert_eq!(
-            enabled_nodes[path]["metadata"]["@fs"]["hash"],
-            disabled_nodes[path]["metadata"]["@fs"]["hash"],
-            "ordinary graph input changed for {path}"
-        );
-    }
-    assert_ne!(
-        enabled_nodes["drft.toml"]["metadata"]["@fs"]["hash"],
-        disabled_nodes["drft.toml"]["metadata"]["@fs"]["hash"],
-        "the true/false configuration bytes must remain graph-visible when unignored"
+    assert_eq!(enabled["graph"], disabled["graph"]);
+    assert!(
+        enabled["graph"]["nodes"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|path| path != ".drft" && !path.starts_with(".drft/"))
     );
 }
 
@@ -782,7 +768,7 @@ fn collector_failures_and_lock_contention_leave_command_results_unchanged() {
 fn large_findings_are_bounded_and_report_omission() {
     let fixture = Fixture::new(true);
     fs::write(
-        fixture.graph.join("drft.toml"),
+        common::config_path(&fixture.graph),
         format!("{GRAPH}unresolved-edge = \"error\"\n\n[experimental.usage]\nenabled = true\n"),
     )
     .unwrap();
@@ -906,7 +892,7 @@ fn fixed_config_collection_preserves_output_status_and_lock_mutations() {
             "[experimental.usage]",
             "[rules.misspelled]\nseverity = \"warn\"\n\n[experimental.usage]",
         );
-        fs::write(fixture.graph.join("drft.toml"), &config_bytes).unwrap();
+        fs::write(common::config_path(&fixture.graph), &config_bytes).unwrap();
         let original_lock = fixture.lock_bytes();
         let inactive = fixture
             .command(&args)
@@ -925,7 +911,7 @@ fn fixed_config_collection_preserves_output_status_and_lock_mutations() {
         assert_eq!(active.stderr, inactive.stderr, "{args:?}");
         assert_eq!(fixture.lock_bytes(), inactive_lock, "{args:?}");
         assert_eq!(
-            fs::read(fixture.graph.join("drft.toml")).unwrap(),
+            fs::read(common::config_path(&fixture.graph)).unwrap(),
             config_bytes.as_bytes()
         );
         let (start, _) = pair_for_args(&fixture, &args);

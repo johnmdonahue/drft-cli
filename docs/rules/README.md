@@ -15,7 +15,7 @@ Most rules are a function over the composed graph: graph in, findings out. `drft
 
 `drft impact` carries the findings that qualify a dependency read, using the same configured severities and subject ignores. Its diagnostic scope and exit policy are described in [impact and missing connections](../reading.md#impact-and-missing-connections).
 
-Configure rules in `drft.toml` under `[rules]`. Every rule has a severity: `"warn"`, `"error"`, or `"off"`. All rules default to `warn`; override to `error` for CI enforcement or `off` to suppress. A finding's `subject` is the implicated path (the source node for edge-level findings). Edge-level findings also report the source `lines` where the link appears, annotating the subject in text output as `subject:line → target`.
+Configure rules in `.drft/config.toml` under `[rules]`. Every rule has a severity: `"warn"`, `"error"`, or `"off"`. All rules default to `warn`; override to `error` for CI enforcement or `off` to suppress. A finding's `subject` is the implicated path (the source node for edge-level findings). Edge-level findings also report the source `lines` where the link appears, annotating the subject in text output as `subject:line → target`.
 
 ```toml
 [rules]

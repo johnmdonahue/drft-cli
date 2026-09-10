@@ -12,7 +12,7 @@ fn init_creates_config() {
         .unwrap();
 
     assert!(output.status.success(), "expected exit code 0");
-    let config = fs::read_to_string(dir.path().join("drft.toml")).unwrap();
+    let config = fs::read_to_string(common::config_path(dir.path())).unwrap();
     assert!(config.contains("[rules]"));
     assert!(config.contains("stale"));
     // Template scaffolds graphs explicitly with the current field vocabulary.
@@ -29,7 +29,7 @@ fn init_creates_config() {
 #[test]
 fn init_fails_if_exists() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "# existing").unwrap();
+    fs::write(common::config_path(dir.path()), "# existing").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "init"])

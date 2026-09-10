@@ -24,11 +24,6 @@ use crate::sources::{
 };
 use crate::util::hash_bytes;
 
-/// drft's own lockfile is never graph content — hashing it would be circular
-/// (its bytes change every time it's written). The wiring layer always excludes
-/// it from the `fs` walk.
-const LOCKFILE_IGNORE: &str = "drft.lock";
-
 /// Build the raw set of per-graph fragments for the graph rooted at `root`.
 ///
 /// `fs` is implicit and always builds first — it owns the identity space. Each
@@ -40,9 +35,7 @@ pub fn build_set(
     hints: &mut Hints,
     findings: &mut Vec<Finding>,
 ) -> Result<GraphSet> {
-    let mut ignore = config.ignore_patterns().to_vec();
-    ignore.push(LOCKFILE_IGNORE.to_string());
-    let files = sources::fs::walk(root, &ignore)?;
+    let files = sources::fs::walk(root, config.ignore_patterns())?;
 
     build_from_files(root, config, hints, findings, &files)
 }
@@ -280,6 +273,11 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    fn config_path(root: &Path) -> std::path::PathBuf {
+        std::fs::create_dir_all(crate::layout::state_dir(root)).unwrap();
+        crate::layout::config_path(root)
+    }
+
     fn hint_fixture(files: &[SourceFile], findings: &mut Vec<Finding>) -> Hint {
         let mut config = Config::defaults();
         config.graphs.clear();
@@ -395,7 +393,7 @@ mod tests {
     #[test]
     fn fs_graph_has_typed_hashed_nodes() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), "").unwrap();
+        fs::write(config_path(dir.path()), "").unwrap();
         fs::write(dir.path().join("index.md"), "# Index").unwrap();
         let config = Config::defaults();
 
@@ -418,7 +416,7 @@ mod tests {
         let outer = TempDir::new().unwrap();
         let root = outer.path().join("project");
         fs::create_dir(&root).unwrap();
-        fs::write(root.join("drft.toml"), "").unwrap();
+        fs::write(config_path(&root), "").unwrap();
         fs::write(outer.path().join("secret.md"), "secret").unwrap();
         std::os::unix::fs::symlink(outer.path().join("secret.md"), root.join("trap.md")).unwrap();
 
@@ -443,7 +441,7 @@ mod tests {
         // A symlink is untrackable even when its target is in-graph: it carries no
         // hash. Staleness reaches it through the edge to the (hashed) target.
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), "").unwrap();
+        fs::write(config_path(dir.path()), "").unwrap();
         fs::write(dir.path().join("real.md"), "content").unwrap();
         std::os::unix::fs::symlink(dir.path().join("real.md"), dir.path().join("alias.md"))
             .unwrap();
