@@ -1162,18 +1162,46 @@ fn windows_absolute_graph_key(candidate: &Path, graph_root: &Path) -> Option<Str
         Some((prefix, parts))
     }
 
-    let (candidate_prefix, candidate_parts) = split(candidate)?;
     let (root_prefix, root_parts) = split(graph_root)?;
-    if candidate_prefix != root_prefix || !candidate_parts.starts_with(&root_parts) {
-        return None;
+    let compare = |path: &Path| {
+        let (candidate_prefix, candidate_parts) = split(path)?;
+        if candidate_prefix != root_prefix || !candidate_parts.starts_with(&root_parts) {
+            return None;
+        }
+        let key = candidate_parts[root_parts.len()..]
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        (!key.is_empty()).then_some(key)
+    };
+
+    if let Some(key) = compare(candidate) {
+        return Some(key);
     }
 
-    let key = candidate_parts[root_parts.len()..]
-        .iter()
-        .map(|part| part.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
-    (!key.is_empty()).then_some(key)
+    // Canonicalizing `-C` can expand an 8.3 ancestor name even after equivalent
+    // disk prefixes have been normalized. Resolve the nearest existing ancestor
+    // to the same spelling, but never canonicalize the leaf: it may be a symlink
+    // node or a removed lock entry. If directories were removed too, retain them
+    // as a lexical suffix beneath the first ancestor that still exists.
+    let mut ancestor = candidate.parent()?.to_path_buf();
+    let mut suffix = vec![candidate.file_name()?.to_os_string()];
+    loop {
+        match std::fs::canonicalize(&ancestor) {
+            Ok(mut resolved) => {
+                for part in suffix.iter().rev() {
+                    resolved.push(part);
+                }
+                return compare(&resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                suffix.push(ancestor.file_name()?.to_os_string());
+                ancestor = ancestor.parent()?.to_path_buf();
+            }
+            Err(_) => return None,
+        }
+    }
 }
 
 fn run_graph(

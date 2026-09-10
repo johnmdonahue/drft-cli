@@ -269,22 +269,35 @@ fn absolute_operands_match_a_canonicalized_graph_root() {
     // canonical spelling so this test stays about graph-root matching rather
     // than an ancestor-directory symlink such as macOS's `/var`.
     let native = if cfg!(windows) {
-        document
+        document.clone()
     } else {
-        fs::canonicalize(document).unwrap()
+        fs::canonicalize(&document).unwrap()
     }
     .to_str()
     .unwrap()
     .to_owned();
     let forward = native.replace('\\', "/");
-    for operand in [native, forward] {
-        let output = run(&child, home.path(), &["lock", &operand]);
+    for operand in [&native, &forward] {
+        let output = run(&child, home.path(), &["lock", operand]);
         assert!(
             output.status.success(),
             "operand={operand:?}, stderr={}",
             String::from_utf8_lossy(&output.stderr)
         );
     }
+
+    fs::remove_file(&document).unwrap();
+    let removed = run(&child, home.path(), &["lock", &native]);
+    assert!(
+        removed.status.success(),
+        "removed operand={native:?}, stderr={}",
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(
+        !fs::read_to_string(common::lock_path(dir.path()))
+            .unwrap()
+            .contains("path = \"doc.md\"")
+    );
 }
 
 #[cfg(unix)]
