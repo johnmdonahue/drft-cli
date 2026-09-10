@@ -1,11 +1,12 @@
 //! The `fs` source: a `.gitignore`-aware filesystem walk that yields one
 //! [`SourceFile`] per file, symlink, and directory under the graph root.
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use globset::GlobSet;
 use ignore::{Walk, WalkBuilder};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
 
 use crate::config::compile_globs;
 
@@ -54,17 +55,27 @@ pub struct IgnoreSource {
     pub files: Vec<String>,
 }
 
-/// Walk the tree under `root`, honoring `.gitignore` and the `ignore` globs,
-/// yielding one [`SourceFile`] per file, symlink, and directory. Paths are
-/// relative to `root`, sorted.
+/// Resolved ignore policy shared by traversal and `config --show-ignores`.
+/// Git supplies the effective machine-local paths; the `ignore` crate supplies
+/// matching and source precedence.
+struct IgnorePolicy {
+    repository_root: Option<PathBuf>,
+    git_exclude: Option<PathBuf>,
+    git_global: Option<PathBuf>,
+}
+
+/// Walk the tree under `root`, honoring Git's ignore sources and the configured
+/// `ignore` globs, yielding one [`SourceFile`] per file, symlink, and directory.
+/// Paths are relative to `root`, sorted.
 ///
 /// Hidden entries are *not* skipped: a dot-directory like `.github/` is part of
 /// the graph. The lone exception is VCS metadata ([`VCS_DIRS`]), pruned from
 /// traversal — `.git/` would otherwise flood the graph with internal state.
 ///
-/// Repository `.gitignore` rules from the graph root through the Git root prune
-/// the walk. Nested `.gitignore` files also apply to their subtrees. The user's
-/// global excludes and the per-clone `.git/info/exclude` do not apply.
+/// Repository `.gitignore` rules from the graph root through the repository
+/// root prune the walk. Nested `.gitignore` files also apply to their subtrees.
+/// In Git repositories, the effective `.git/info/exclude` and
+/// `core.excludesFile` sources apply with Git's precedence.
 ///
 /// The walk does not follow symlinks: a symlink is a leaf node at its own path,
 /// never traversed through. Its relationship to its target is carried by the
@@ -79,11 +90,8 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
 
     let mut files = Vec::new();
 
-    // Repository `.gitignore` files are shared project state, including files
-    // between the graph root and Git root. Machine-local global excludes and
-    // `.git/info/exclude` remain disabled so they cannot silently change a
-    // shared lockfile between checkouts.
-    let walker = filesystem_walker(root);
+    let policy = resolve_ignore_policy(root)?;
+    let walker = filesystem_walker(root, &policy);
 
     for entry in walker {
         let entry = entry?;
@@ -136,13 +144,31 @@ pub fn walk(root: &Path, ignore: &[String]) -> Result<Vec<SourceFile>> {
     Ok(files)
 }
 
-fn filesystem_walker(root: &Path) -> Walk {
-    WalkBuilder::new(root)
+fn filesystem_walker(root: &Path, policy: &IgnorePolicy) -> Walk {
+    let mut builder = WalkBuilder::new(root);
+    builder
         .follow_links(false)
         .hidden(false)
         .ignore(false)
+        // The effective Git paths are added explicitly below. `ignore` 0.4's
+        // built-in global resolver does not read repository-local Git config.
         .git_global(false)
-        .git_exclude(false)
+        .git_exclude(false);
+
+    if let Some(repository_root) = &policy.repository_root {
+        builder.current_dir(repository_root);
+    }
+    // Explicit ignore files have the lowest precedence and later files win.
+    // Git's order is repository `.gitignore`, info/exclude, global excludes,
+    // so add the global file first and info/exclude second.
+    if let Some(path) = policy.git_global.as_ref().filter(|path| path.is_file()) {
+        let _ = builder.add_ignore(path);
+    }
+    if let Some(path) = policy.git_exclude.as_ref().filter(|path| path.is_file()) {
+        let _ = builder.add_ignore(path);
+    }
+
+    builder
         .filter_entry(|entry| {
             // With the hidden filter off, dot-directories are walked. Prune VCS
             // metadata explicitly so it never enters the graph. `.git` can be a
@@ -159,12 +185,12 @@ fn filesystem_walker(root: &Path) -> Walk {
 /// Report the ignore sources configured for the filesystem walk and the
 /// repository `.gitignore` files it can consult.
 pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
-    let repository_root = repository_root(root);
+    let policy = resolve_ignore_policy(root)?;
     let mut files = Vec::new();
 
-    if let Some(repository_root) = &repository_root {
+    if let Some(repository_root) = &policy.repository_root {
         files = parent_gitignore_files(root, repository_root);
-        for entry in filesystem_walker(root) {
+        for entry in filesystem_walker(root, &policy) {
             let entry = entry?;
             if entry.file_type().is_some_and(|kind| kind.is_dir()) {
                 let candidate = entry.path().join(".gitignore");
@@ -179,7 +205,7 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
 
     Ok(IgnoreSources {
         gitignore: IgnoreSource {
-            enabled: repository_root.is_some(),
+            enabled: policy.repository_root.is_some(),
             files: files.clone(),
         },
         dot_ignore: IgnoreSource {
@@ -187,13 +213,105 @@ pub fn ignore_sources(root: &Path) -> Result<IgnoreSources> {
             files: Vec::new(),
         },
         git_exclude: IgnoreSource {
-            enabled: false,
+            enabled: policy.git_exclude.is_some(),
             files: Vec::new(),
         },
         git_global: IgnoreSource {
-            enabled: false,
+            enabled: policy.git_global.is_some(),
             files: Vec::new(),
         },
+    })
+}
+
+fn resolve_ignore_policy(root: &Path) -> Result<IgnorePolicy> {
+    let repository_root = repository_root(root);
+    let Some(git_root) = repository_root
+        .as_ref()
+        .filter(|candidate| candidate.join(".git").exists())
+    else {
+        return Ok(IgnorePolicy {
+            repository_root,
+            git_exclude: None,
+            git_global: None,
+        });
+    };
+
+    let git_exclude = git_path(git_root, &["rev-parse", "--git-path", "info/exclude"])?;
+    let configured_global = git_optional_path(
+        git_root,
+        &["config", "-z", "--path", "--get", "core.excludesFile"],
+    )?;
+    let git_global = configured_global
+        .or_else(ignore::gitignore::gitconfig_excludes_path)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                git_root.join(path)
+            }
+        });
+
+    Ok(IgnorePolicy {
+        repository_root,
+        git_exclude: Some(git_exclude),
+        git_global,
+    })
+}
+
+fn git_path(root: &Path, args: &[&str]) -> Result<PathBuf> {
+    let output = run_git(root, args)?;
+    if !output.status.success() {
+        bail!(
+            "git {} failed for {}: {}",
+            args.join(" "),
+            root.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    output_path(root, &output.stdout, b'\n')
+}
+
+fn git_optional_path(root: &Path, args: &[&str]) -> Result<Option<PathBuf>> {
+    let output = run_git(root, args)?;
+    if output.status.success() {
+        return output_path(root, &output.stdout, b'\0').map(Some);
+    }
+    if output.status.code() == Some(1) {
+        return Ok(None);
+    }
+    bail!(
+        "git {} failed for {}: {}",
+        args.join(" "),
+        root.display(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    )
+}
+
+fn run_git(root: &Path, args: &[&str]) -> Result<Output> {
+    Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to run git for {}", root.display()))
+}
+
+fn output_path(root: &Path, bytes: &[u8], terminator: u8) -> Result<PathBuf> {
+    let bytes = bytes.strip_suffix(&[terminator]).unwrap_or(bytes);
+    let bytes = if terminator == b'\n' {
+        bytes.strip_suffix(b"\r").unwrap_or(bytes)
+    } else {
+        bytes
+    };
+    let text = std::str::from_utf8(bytes).context("git returned a non-UTF-8 path")?;
+    if text.is_empty() {
+        bail!("git returned an empty path for {}", root.display());
+    }
+    let path = PathBuf::from(text);
+    Ok(if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
     })
 }
 
@@ -271,6 +389,24 @@ mod tests {
         assert!(status.success());
     }
 
+    fn assert_git_ignores(root: &Path, path: &str) {
+        let status = Command::new("git")
+            .args(["check-ignore", "-q", path])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success(), "Git must ignore the fixture {path}");
+    }
+
+    fn git_ignores(root: &Path, path: &str) -> bool {
+        Command::new("git")
+            .args(["check-ignore", "-q", path])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    }
+
     #[test]
     fn walks_all_files_sorted() {
         let dir = TempDir::new().unwrap();
@@ -342,7 +478,7 @@ mod tests {
     #[test]
     fn respects_gitignore() {
         let dir = TempDir::new().unwrap();
-        fs::create_dir(dir.path().join(".git")).unwrap();
+        init_git(dir.path());
         fs::write(dir.path().join(".gitignore"), "vendor/\n").unwrap();
         fs::write(dir.path().join("index.md"), "i").unwrap();
         let vendor = dir.path().join("vendor");
@@ -377,17 +513,155 @@ mod tests {
     }
 
     #[test]
-    fn per_clone_git_exclude_does_not_prune_the_walk() {
+    fn git_info_exclude_matches_git_discovery() {
         let repo = TempDir::new().unwrap();
         init_git(repo.path());
         fs::write(repo.path().join(".git/info/exclude"), "local.md\n").unwrap();
         fs::write(repo.path().join("local.md"), "local").unwrap();
+        fs::write(repo.path().join("keep.md"), "keep").unwrap();
+
+        assert_git_ignores(repo.path(), "local.md");
 
         let files = walk(repo.path(), &[]).unwrap();
         assert!(
-            files.iter().any(|file| file.path == "local.md"),
-            "machine-local excludes must not change the graph"
+            !files.iter().any(|file| file.path == "local.md"),
+            "drft must omit the path Git excludes"
         );
+        assert!(files.iter().any(|file| file.path == "keep.md"));
+    }
+
+    #[test]
+    fn git_info_exclude_matches_git_with_a_separate_git_dir() {
+        let fixture = TempDir::new().unwrap();
+        let repo = fixture.path().join("repo");
+        let git_dir = fixture.path().join("metadata");
+        fs::create_dir(&repo).unwrap();
+        let status = Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .arg("--separate-git-dir")
+            .arg(&git_dir)
+            .arg(&repo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        fs::write(git_dir.join("info/exclude"), "local.md\n").unwrap();
+        fs::write(repo.join("local.md"), "local").unwrap();
+        fs::write(repo.join("keep.md"), "keep").unwrap();
+
+        assert_git_ignores(&repo, "local.md");
+
+        let files = walk(&repo, &[]).unwrap();
+        assert!(!files.iter().any(|file| file.path == "local.md"));
+        assert!(files.iter().any(|file| file.path == "keep.md"));
+    }
+
+    #[test]
+    fn effective_core_excludes_file_matches_git_discovery() {
+        let fixture = TempDir::new().unwrap();
+        let repo = fixture.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        init_git(&repo);
+        let excludes = fixture.path().join("effective-ignore");
+        fs::write(&excludes, "machine-only.md\n").unwrap();
+        let status = Command::new("git")
+            .args(["config", "--local", "core.excludesFile"])
+            .arg(&excludes)
+            .current_dir(&repo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        fs::write(repo.join("machine-only.md"), "machine").unwrap();
+        fs::write(repo.join("keep.md"), "keep").unwrap();
+
+        assert_git_ignores(&repo, "machine-only.md");
+
+        let files = walk(&repo, &[]).unwrap();
+        assert!(!files.iter().any(|file| file.path == "machine-only.md"));
+        assert!(files.iter().any(|file| file.path == "keep.md"));
+    }
+
+    #[test]
+    fn included_core_excludes_file_matches_git_discovery() {
+        let fixture = TempDir::new().unwrap();
+        let repo = fixture.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        init_git(&repo);
+        let excludes = fixture.path().join("included-ignore");
+        fs::write(&excludes, "included-only.md\n").unwrap();
+        let included_config = fixture.path().join("included-config");
+        fs::write(
+            &included_config,
+            format!("[core]\nexcludesFile = {}\n", excludes.display()),
+        )
+        .unwrap();
+        let status = Command::new("git")
+            .args(["config", "--local", "include.path"])
+            .arg(&included_config)
+            .current_dir(&repo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        fs::write(repo.join("included-only.md"), "included").unwrap();
+        fs::write(repo.join("keep.md"), "keep").unwrap();
+
+        assert_git_ignores(&repo, "included-only.md");
+
+        let files = walk(&repo, &[]).unwrap();
+        assert!(!files.iter().any(|file| file.path == "included-only.md"));
+        assert!(files.iter().any(|file| file.path == "keep.md"));
+    }
+
+    #[test]
+    fn git_ignore_source_precedence_matches_git() {
+        let fixture = TempDir::new().unwrap();
+        let repo = fixture.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        init_git(&repo);
+
+        let paths = [
+            "global-ignore-info-negate.md",
+            "info-ignore-repository-negate.md",
+            "global-negate-info-ignore.md",
+            "info-negate-repository-ignore.md",
+        ];
+        for path in paths {
+            fs::write(repo.join(path), path).unwrap();
+        }
+
+        let excludes = fixture.path().join("effective-ignore");
+        fs::write(
+            &excludes,
+            "global-ignore-info-negate.md\n!global-negate-info-ignore.md\n",
+        )
+        .unwrap();
+        let status = Command::new("git")
+            .args(["config", "--local", "core.excludesFile"])
+            .arg(&excludes)
+            .current_dir(&repo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        fs::write(
+            repo.join(".git/info/exclude"),
+            "!global-ignore-info-negate.md\ninfo-ignore-repository-negate.md\nglobal-negate-info-ignore.md\n!info-negate-repository-ignore.md\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join(".gitignore"),
+            "!info-ignore-repository-negate.md\ninfo-negate-repository-ignore.md\n",
+        )
+        .unwrap();
+
+        let files = walk(&repo, &[]).unwrap();
+        for path in paths {
+            let drft_ignores = !files.iter().any(|file| file.path == path);
+            assert_eq!(
+                drft_ignores,
+                git_ignores(&repo, path),
+                "drft and Git disagree for {path}"
+            );
+        }
     }
 
     #[test]
@@ -409,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn ignore_report_names_repository_files_and_disabled_sources() {
+    fn ignore_report_names_repository_files_and_enabled_git_sources() {
         let outer = TempDir::new().unwrap();
         init_git(outer.path());
         fs::write(outer.path().join(".gitignore"), "outside.md\n").unwrap();
@@ -425,8 +699,8 @@ mod tests {
         );
         assert!(report.gitignore.enabled);
         assert!(!report.dot_ignore.enabled);
-        assert!(!report.git_exclude.enabled);
-        assert!(!report.git_global.enabled);
+        assert!(report.git_exclude.enabled);
+        assert!(report.git_global.enabled);
     }
 
     #[test]
@@ -473,8 +747,7 @@ mod tests {
     fn dot_dirs_are_walked_but_vcs_dirs_are_pruned() {
         let dir = TempDir::new().unwrap();
         // A real version-control store: pruned, contents and all.
-        fs::create_dir(dir.path().join(".git")).unwrap();
-        fs::write(dir.path().join(".git").join("HEAD"), "ref: x").unwrap();
+        init_git(dir.path());
         // An ordinary dot-directory: part of the graph.
         fs::create_dir(dir.path().join(".github")).unwrap();
         fs::write(dir.path().join(".github").join("ci.yml"), "y").unwrap();

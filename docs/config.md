@@ -25,11 +25,15 @@ Untracked has one consequence worth stating: because drft honors the committed `
 ignore = ["target/**", "drafts/**"]
 ```
 
-The `fs` graph walks every file under the graph root, including dot-directories like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are pruned. `ignore` removes paths from that walk by glob; drft also respects `.gitignore` automatically. There is no `include` — the graph is everything under the root minus what `ignore` and repository `.gitignore` files remove. drft reads `.gitignore` files from the graph root through the Git root, plus nested files under the graph root. It excludes its own `drft.lock` from the graph.
+The `fs` graph walks every file under the graph root, including dot-directories like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are pruned. `ignore` removes paths from that walk by glob. There is no `include`: the graph is everything under the root minus configured globs and the active repository ignore sources. It excludes its own `drft.lock` from the graph.
 
-drft reads the working-tree contents of each repository `.gitignore`, matching Git. An uncommitted edit to one therefore affects discovery. Outside a Git or Jujutsu repository, drft does not consult `.gitignore` files.
+In a Git repository, discovery applies the same three pattern sources as Git, in the same precedence order: repository `.gitignore` files, the per-clone `.git/info/exclude`, and the effective `core.excludesFile`. drft reads `.gitignore` files from the graph root through the repository root, plus nested files under the graph root. It asks Git to resolve machine-local configuration, so repository-local overrides and included configuration select the same global excludes file that Git uses.
 
-Other ignore sources do not change the graph: drft disregards `.ignore`, the per-clone `.git/info/exclude`, and global excludes. Run `drft config --show-ignores` to list the repository `.gitignore` files drft consults and confirm which source classes are enabled. Add `--format json` for structured output. The command only reads configuration and ignore policy; it does not build the graph or update `drft.lock`.
+Machine-local sources can make graph membership differ between clones. A path ignored through either source stays out of the local graph and out of a newly written lockfile, just as it stays out of Git's untracked working-tree surface. Use repository `.gitignore` or configured `ignore` globs when every clone needs the same exclusion.
+
+In a native Jujutsu repository without a Git working tree, repository `.gitignore` files still apply and the two Git-only sources do not. Outside a Git or Jujutsu repository, drft does not consult repository ignore files. `.ignore` files never affect discovery.
+
+Run `drft config --show-ignores` to list the repository `.gitignore` files drft consults and confirm which source classes are enabled. Add `--format json` for structured output. The command only reads configuration and ignore policy; it does not build the graph or update `drft.lock`.
 
 This top-level `ignore` is a **discovery** filter: matching paths never become nodes, so nothing links to them and nothing is validated against them. To keep files in the graph (so your links to them resolve and stay drift-tracked) but skip _validating_ them, use the rule-level `ignore` instead — see [rules](rules/README.md).
 
