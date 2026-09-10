@@ -4,9 +4,12 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+## 0.19.1 (2026-09-10)
+
 ### Fixed
 
 - **Discovery follows Git's effective ignore sources** (#111). Untracked paths excluded through `.git/info/exclude` or the effective `core.excludesFile` stay out of the graph, alongside paths excluded through repository `.gitignore` files. Repository, per-clone, and global patterns retain Git's precedence. `drft config --show-ignores` reports both machine-local source classes as enabled in Git repositories; `.ignore` remains disabled.
+- **Wrong-base causes identify the matching occurrence lines** (#123). When an unresolved bare path would resolve from the graph root, its cause identifies the source lines carrying the selected spelling while preserving the aggregated finding and complete occurrence list.
 
 ## 0.19.0 (2026-09-07)
 
