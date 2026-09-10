@@ -1049,11 +1049,18 @@ fn resolve_lock_node(
 /// resolved without touching the filesystem, so symlink node identities are
 /// preserved. Returns `None` when the path resolves outside `graph_root`.
 fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
-    let candidate = Path::new(arg);
-    let abs = if candidate.is_absolute() {
-        candidate.to_path_buf()
+    // `canonicalize` yields verbatim paths on Windows. Once joined to that kind
+    // of root, `/` is no longer recognized as a separator, so normalize the
+    // user-facing spelling before joining and resolving `.`/`..` components.
+    let candidate = if cfg!(windows) {
+        std::path::PathBuf::from(arg.replace('/', "\\"))
     } else {
-        root.join(candidate)
+        std::path::PathBuf::from(arg)
+    };
+    let abs = if candidate.is_absolute() {
+        candidate
+    } else {
+        root.join(&candidate)
     };
     let abs = drft::util::normalize_relative_path(&abs.to_string_lossy());
     let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
