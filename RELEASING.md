@@ -3,7 +3,7 @@
 ## The process
 
 1. **Review the release range** from the latest version tag through remote `main`. Confirm that the changelog covers every user-visible change and that the release version does not already exist in GitHub Releases, crates.io, or npm.
-2. **Verify publishing prerequisites**. Confirm that the repository has a `CARGO_REGISTRY_TOKEN` Actions secret and that npm trusted publishing names this repository and `publish.yml`. Do not expose the secret value. Stop before tagging if either prerequisite cannot be established.
+2. **Recheck publishing setup only when the evidence calls for it**. If the most recent release published successfully to crates.io and npm through an unchanged `publish.yml`, that is sufficient evidence for an ordinary release. Inspect the repository or package settings before tagging only when there is no such prior publish, the workflow or publishing identity changed, or the last publish had an authentication failure. Never expose secret values.
 3. **Bump the version** in `Cargo.toml` and update the `drft-cli` entry in `Cargo.lock`. `Cargo.toml` is the version source for both registries; do not bump the checked-in npm manifest.
 4. **Update `CHANGELOG.md`** with the new version and date.
 5. **Open a PR** from a release branch such as `release/v0.x.x`. Main is protected.
