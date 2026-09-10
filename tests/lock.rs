@@ -967,6 +967,7 @@ fn a_rebuild_over_an_unreadable_lockfile_says_its_drops_are_unlisted() {
 /// An escaping symlink is a node in the graph but has no hash and no outbound
 /// edge, so it is never a lock entry — the same `locked 0 nodes` a directory used
 /// to give with no explanation.
+#[cfg(unix)]
 #[test]
 fn locking_a_path_with_nothing_to_snapshot_says_why() {
     let dir = TempDir::new().unwrap();

@@ -197,21 +197,45 @@ pub fn write(root: &Path, lock: &Lock) -> Result<()> {
     let content = lock.to_toml()?;
     let lock_path = layout::lock_path(root);
     let state_dir = layout::state_dir(root);
-    let mut temporary = tempfile::Builder::new()
-        .prefix("lock.toml.")
-        .tempfile_in(&state_dir)
-        .with_context(|| {
-            format!(
-                "failed to create a temporary lock in {}",
-                state_dir.display()
-            )
-        })?;
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("lock.toml.");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o666));
+    }
+
+    #[cfg(unix)]
+    let existing_permissions = match std::fs::metadata(&lock_path) {
+        Ok(metadata) => Some(metadata.permissions()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {}", lock_path.display()));
+        }
+    };
+
+    let mut temporary = builder.tempfile_in(&state_dir).with_context(|| {
+        format!(
+            "failed to create a temporary lock in {}",
+            state_dir.display()
+        )
+    })?;
     temporary.write_all(content.as_bytes()).with_context(|| {
         format!(
             "failed to write a temporary lock in {}",
             state_dir.display()
         )
     })?;
+    #[cfg(unix)]
+    if let Some(permissions) = existing_permissions {
+        temporary
+            .as_file()
+            .set_permissions(permissions)
+            .with_context(|| {
+                format!("failed to preserve permissions for {}", lock_path.display())
+            })?;
+    }
     temporary
         .persist(&lock_path)
         .map_err(|error| error.error)
@@ -313,6 +337,35 @@ mod tests {
         assert_eq!(
             read(dir.path(), &mut Hints::default()).unwrap().unwrap(),
             lock
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_uses_normal_creation_permissions_and_preserves_existing_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join(layout::STATE_DIR)).unwrap();
+        let reference = dir.path().join("reference");
+        std::fs::write(&reference, "reference").unwrap();
+        let ordinary_mode = std::fs::metadata(reference).unwrap().permissions().mode() & 0o777;
+        let lock = Lock::from_composed(&compose(&GraphSet::new(vec![fs_fragment(&[(
+            "a.md", "b3:a",
+        )])])));
+
+        write(dir.path(), &lock).unwrap();
+        let path = layout::lock_path(dir.path());
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            ordinary_mode
+        );
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+        write(dir.path(), &lock).unwrap();
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o640
         );
     }
 
