@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "drft-cli"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "base64",
