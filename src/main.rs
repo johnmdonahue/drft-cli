@@ -1057,11 +1057,42 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
     } else {
         std::path::PathBuf::from(arg)
     };
-    let abs = if candidate.is_absolute() {
-        candidate
-    } else {
-        root.join(&candidate)
-    };
+
+    // Keep a relative operand relative while resolving it. On Windows,
+    // `canonicalize` gives `root` and `graph_root` verbatim prefixes. Joining
+    // first and round-tripping that path through a string makes the prefix and
+    // separators part of lexical normalization, which can prevent
+    // `strip_prefix` from recognizing the graph root. Stripping the two
+    // canonical paths first leaves only ordinary relative components.
+    if !candidate.is_absolute() {
+        let mut parts = Vec::new();
+        for component in root.strip_prefix(graph_root).ok()?.components() {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::Normal(part) => parts.push(part.to_os_string()),
+                _ => return None,
+            }
+        }
+        for component in candidate.components() {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    parts.pop()?;
+                }
+                std::path::Component::Normal(part) => parts.push(part.to_os_string()),
+                std::path::Component::Prefix(_) | std::path::Component::RootDir => return None,
+            }
+        }
+        let key = parts
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+            .replace('\\', "/");
+        return (!key.is_empty()).then_some(key);
+    }
+
+    let abs = candidate;
     let abs = drft::util::normalize_relative_path(&abs.to_string_lossy());
     let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
     let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
