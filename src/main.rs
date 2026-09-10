@@ -546,8 +546,24 @@ fn run_config_show_ignores(
                 writeln!(output, "repository .gitignore: disabled (no repository)")?;
             }
             writeln!(output, ".ignore: disabled")?;
-            writeln!(output, ".git/info/exclude: disabled")?;
-            writeln!(output, "global excludes: disabled")?;
+            writeln!(
+                output,
+                ".git/info/exclude: {}",
+                if report.git_exclude.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            )?;
+            writeln!(
+                output,
+                "global excludes: {}",
+                if report.git_global.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            )?;
             write_stdout(&output, UsageOutputMode::Text, invocation)?;
         }
         OutputFormat::Json => {

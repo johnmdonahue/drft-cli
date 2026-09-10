@@ -14,6 +14,20 @@ fn nested_fixture() -> (TempDir, std::path::PathBuf) {
         .unwrap();
     assert!(status.success());
     fs::write(repo.path().join(".gitignore"), "/project/ignored.md\n").unwrap();
+    fs::write(
+        repo.path().join(".git/info/exclude"),
+        "/project/local-only.md\n",
+    )
+    .unwrap();
+    let global_ignore = repo.path().join("effective-ignore");
+    fs::write(&global_ignore, "/project/global-only.md\n").unwrap();
+    let status = Command::new("git")
+        .args(["config", "--local", "core.excludesFile"])
+        .arg(&global_ignore)
+        .current_dir(repo.path())
+        .status()
+        .unwrap();
+    assert!(status.success());
 
     let root = repo.path().join("project");
     fs::create_dir_all(root.join("docs")).unwrap();
@@ -24,13 +38,27 @@ fn nested_fixture() -> (TempDir, std::path::PathBuf) {
     .unwrap();
     fs::write(root.join("keep.md"), "# Keep\n").unwrap();
     fs::write(root.join("ignored.md"), "# Ignored\n").unwrap();
+    fs::write(root.join("local-only.md"), "# Local\n").unwrap();
+    fs::write(root.join("global-only.md"), "# Global\n").unwrap();
     fs::write(root.join("docs/.gitignore"), "draft.md\n").unwrap();
     (repo, root)
 }
 
 #[test]
-fn nodes_honor_repository_gitignore_above_graph_root() {
-    let (_repo, root) = nested_fixture();
+fn nodes_honor_gits_effective_ignore_sources_above_graph_root() {
+    let (repo, root) = nested_fixture();
+    for path in [
+        "project/ignored.md",
+        "project/local-only.md",
+        "project/global-only.md",
+    ] {
+        let status = Command::new("git")
+            .args(["check-ignore", "-q", path])
+            .current_dir(repo.path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "Git must ignore the fixture {path}");
+    }
     let output = drft_bin()
         .args([
             "-C",
@@ -55,7 +83,12 @@ fn nodes_honor_repository_gitignore_above_graph_root() {
         .map(|node| node["id"].as_str().unwrap())
         .collect();
     assert!(ids.contains(&"keep.md"), "got: {ids:?}");
-    assert!(!ids.contains(&"ignored.md"), "got: {ids:?}");
+    for path in ["ignored.md", "local-only.md", "global-only.md"] {
+        assert!(
+            !ids.contains(&path),
+            "drft indexed Git-ignored {path}: {ids:?}"
+        );
+    }
 }
 
 #[test]
@@ -86,8 +119,8 @@ fn show_ignores_reports_sources_without_touching_the_lock() {
         json["gitignore"]["files"],
         serde_json::json!(["../.gitignore", "docs/.gitignore"])
     );
-    assert_eq!(json["git_exclude"]["enabled"], false);
-    assert_eq!(json["git_global"]["enabled"], false);
+    assert_eq!(json["git_exclude"]["enabled"], true);
+    assert_eq!(json["git_global"]["enabled"], true);
     assert_eq!(json["dot_ignore"]["enabled"], false);
     assert_eq!(fs::read_to_string(lock).unwrap(), "sentinel\n");
 }
@@ -102,7 +135,7 @@ fn show_ignores_text_names_enabled_and_disabled_sources() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "repository .gitignore: enabled\n  files:\n    ../.gitignore\n    docs/.gitignore\n.ignore: disabled\n.git/info/exclude: disabled\nglobal excludes: disabled\n"
+        "repository .gitignore: enabled\n  files:\n    ../.gitignore\n    docs/.gitignore\n.ignore: disabled\n.git/info/exclude: enabled\nglobal excludes: enabled\n"
     );
     assert!(output.stderr.is_empty());
 }

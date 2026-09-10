@@ -155,7 +155,12 @@ fn operational(command: &Commands, example: &'static str) -> Operational {
         }
         Commands::Config { .. } => {
             record.role = "inspect-configuration";
-            record.reads = vec!["drft.toml", "repository-.gitignore"];
+            record.reads = vec![
+                "drft.toml",
+                "repository-.gitignore",
+                ".git/info/exclude",
+                "core.excludesFile",
+            ];
             record.controls.push(semantics(
                 "show_ignores",
                 "inspection-mode",
@@ -785,6 +790,15 @@ mod tests {
             command(&guide, "config")["syntax"]["constraints"],
             json!([
                 {"kind":"requires_one_of","subject":"command","related":["show_ignores"]}
+            ])
+        );
+        assert_eq!(
+            command(&guide, "config")["reads"],
+            json!([
+                "drft.toml",
+                "repository-.gitignore",
+                ".git/info/exclude",
+                "core.excludesFile"
             ])
         );
         for (name, operand) in [
