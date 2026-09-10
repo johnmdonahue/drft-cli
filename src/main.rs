@@ -26,6 +26,9 @@ use clap::Parser;
 use std::fmt::Write as _;
 use std::path::Path;
 
+#[cfg(windows)]
+use std::ffi::{OsStr, OsString};
+
 use cli::{Cli, ColorChoice, Commands, Depth, Direction, OutputFormat};
 use config::{Config, RuleSeverity};
 use policy::{ExitStatus, OutputMode};
@@ -1092,11 +1095,84 @@ fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
         return (!key.is_empty()).then_some(key);
     }
 
-    let abs = candidate;
-    let abs = drft::util::normalize_relative_path(&abs.to_string_lossy());
-    let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
-    let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
-    let key = rel.to_string_lossy().replace('\\', "/");
+    #[cfg(windows)]
+    {
+        windows_absolute_graph_key(&candidate, graph_root)
+    }
+    #[cfg(not(windows))]
+    {
+        let abs = drft::util::normalize_relative_path(&candidate.to_string_lossy());
+        let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
+        let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
+        let key = rel.to_string_lossy().replace('\\', "/");
+        (!key.is_empty()).then_some(key)
+    }
+}
+
+#[cfg(windows)]
+#[derive(PartialEq)]
+enum WindowsPrefix {
+    Disk(u8),
+    Unc(String, String),
+    Verbatim(String),
+    Device(String),
+}
+
+/// Compare ordinary and verbatim spellings of one absolute Windows path
+/// without canonicalizing the operand. The operand may name a deleted lock
+/// entry, so resolution must remain lexical and must not require it to exist.
+#[cfg(windows)]
+fn windows_absolute_graph_key(candidate: &Path, graph_root: &Path) -> Option<String> {
+    fn folded(part: &OsStr) -> String {
+        part.to_string_lossy().to_ascii_lowercase()
+    }
+
+    fn split(path: &Path) -> Option<(WindowsPrefix, Vec<OsString>)> {
+        use std::path::{Component, Prefix};
+
+        let mut components = path.components();
+        let prefix = match components.next()? {
+            Component::Prefix(prefix) => match prefix.kind() {
+                Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => {
+                    WindowsPrefix::Disk(drive.to_ascii_uppercase())
+                }
+                Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => {
+                    WindowsPrefix::Unc(folded(server), folded(share))
+                }
+                Prefix::Verbatim(value) => WindowsPrefix::Verbatim(folded(value)),
+                Prefix::DeviceNS(value) => WindowsPrefix::Device(folded(value)),
+            },
+            _ => return None,
+        };
+        if !matches!(components.next(), Some(Component::RootDir)) {
+            return None;
+        }
+
+        let mut parts = Vec::new();
+        for component in components {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    parts.pop()?;
+                }
+                Component::Normal(part) => parts.push(part.to_os_string()),
+                Component::Prefix(_) | Component::RootDir => return None,
+            }
+        }
+        Some((prefix, parts))
+    }
+
+    let (candidate_prefix, candidate_parts) = split(candidate)?;
+    let (root_prefix, root_parts) = split(graph_root)?;
+    if candidate_prefix != root_prefix || !candidate_parts.starts_with(&root_parts) {
+        return None;
+    }
+
+    let key = candidate_parts[root_parts.len()..]
+        .iter()
+        .map(|part| part.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
     (!key.is_empty()).then_some(key)
 }
 

@@ -27,11 +27,28 @@ pub fn has_config_marker(root: &Path) -> Result<bool> {
 }
 
 pub fn current_config_exists(root: &Path) -> Result<bool> {
+    validate_state_dir(root)?;
     occupied(&config_path(root))
 }
 
 pub fn current_lock_exists(root: &Path) -> Result<bool> {
+    validate_state_dir(root)?;
     occupied(&lock_path(root))
+}
+
+/// Require project state to live in a real directory beneath the graph root.
+/// Following a `.drft` symlink would let a checkout redirect config reads and
+/// lock writes outside the selected project.
+pub fn validate_state_dir(root: &Path) -> Result<()> {
+    let path = state_dir(root);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
+        Ok(_) => bail!(
+            "unsafe drft state path: `{STATE_DIR}` must be a directory within the project, not a symlink or other file"
+        ),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
+    }
 }
 
 /// Reject every legacy or conflicting layout before a command reads or writes
@@ -39,6 +56,7 @@ pub fn current_lock_exists(root: &Path) -> Result<bool> {
 /// dangling symlinks, so migration guidance never treats an unsafe destination
 /// as available.
 pub fn reject_legacy(root: &Path) -> Result<()> {
+    validate_state_dir(root)?;
     let current_config = occupied(&config_path(root))?;
     let current_lock = occupied(&lock_path(root))?;
     let legacy_config = occupied(&root.join(LEGACY_CONFIG_FILE))?;
@@ -142,5 +160,16 @@ mod tests {
         std::os::unix::fs::symlink("missing", dir.path().join(LEGACY_LOCK_FILE)).unwrap();
         let error = reject_legacy(dir.path()).unwrap_err().to_string();
         assert!(error.contains("`drft.lock` to `.drft/lock.toml`"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_cannot_stand_in_for_the_state_directory() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        std::os::unix::fs::symlink(outside.path(), state_dir(dir.path())).unwrap();
+
+        let error = reject_legacy(dir.path()).unwrap_err().to_string();
+        assert!(error.contains("`.drft` must be a directory within the project"));
     }
 }

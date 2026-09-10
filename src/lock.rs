@@ -194,6 +194,7 @@ pub fn read(root: &Path, hints: &mut Hints) -> Result<Option<Lock>> {
 
 /// Write `.drft/lock.toml` atomically (temp file + rename).
 pub fn write(root: &Path, lock: &Lock) -> Result<()> {
+    layout::validate_state_dir(root)?;
     let content = lock.to_toml()?;
     let lock_path = layout::lock_path(root);
     let state_dir = layout::state_dir(root);

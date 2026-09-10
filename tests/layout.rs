@@ -249,3 +249,73 @@ fn discovery_keeps_the_project_directory_as_graph_root_and_lock_location() {
             .contains("path = \"doc.md\"")
     );
 }
+
+#[test]
+fn absolute_operands_match_a_canonicalized_graph_root() {
+    let dir = TempDir::new().unwrap();
+    let home = TempDir::new().unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
+    let document = dir.path().join("doc.md");
+    fs::write(&document, "# Doc\n").unwrap();
+    let child = dir.path().join("child");
+    fs::create_dir(&child).unwrap();
+
+    // `-C` canonicalizes its operand. Keep the ordinary spelling on Windows to
+    // exercise its non-verbatim/verbatim prefix equivalence; elsewhere use the
+    // canonical spelling so this test stays about graph-root matching rather
+    // than an ancestor-directory symlink such as macOS's `/var`.
+    let native = if cfg!(windows) {
+        document
+    } else {
+        fs::canonicalize(document).unwrap()
+    }
+    .to_str()
+    .unwrap()
+    .to_owned();
+    let forward = native.replace('\\', "/");
+    for operand in [native, forward] {
+        let output = run(&child, home.path(), &["lock", &operand]);
+        assert!(
+            output.status.success(),
+            "operand={operand:?}, stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_state_directory_cannot_redirect_init_or_lock_writes() {
+    let project = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let home = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(outside.path(), project.path().join(".drft")).unwrap();
+
+    let init = run(project.path(), home.path(), &["init"]);
+    assert_eq!(init.status.code(), Some(2));
+    assert!(init.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&init.stderr)
+            .contains("`.drft` must be a directory within the project")
+    );
+    assert!(!outside.path().join("config.toml").exists());
+
+    fs::write(
+        outside.path().join("config.toml"),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
+    fs::write(project.path().join("doc.md"), "# Doc\n").unwrap();
+    let lock = run(project.path(), home.path(), &["lock", "--all"]);
+    assert_eq!(lock.status.code(), Some(2));
+    assert!(lock.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&lock.stderr)
+            .contains("`.drft` must be a directory within the project")
+    );
+    assert!(!outside.path().join("lock.toml").exists());
+}
