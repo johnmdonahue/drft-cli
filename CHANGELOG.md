@@ -4,6 +4,8 @@ All notable changes to drft are documented here.
 
 ## Unreleased
 
+## 0.20.0 (2026-09-10)
+
 ### Breaking changes
 
 - **Project configuration and baselines live under `.drft/`** (#177). Move root-level `drft.toml` to `.drft/config.toml` and `drft.lock` to `.drft/lock.toml` without changing their contents. drft reads only the new paths. If it finds either legacy file, it exits 2 before parsing configuration, building the graph, recording usage, or writing output. A destination that already exists is a conflict; drft selects neither file and never overwrites one. `drft init` creates `.drft/config.toml` and performs no migration.
