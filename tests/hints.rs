@@ -11,7 +11,7 @@ use tempfile::TempDir;
 #[test]
 fn json_documents_always_carry_a_hints_key() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     for command in [
@@ -40,7 +40,7 @@ fn json_documents_always_carry_a_hints_key() {
 fn graph_json_keeps_a_bare_jgf_root_and_hints_on_stderr() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!(
             "{}[rules]\nnot-a-rule = \"error\"\n",
             common::DEFAULT_CONFIG
@@ -78,7 +78,7 @@ fn graph_json_keeps_a_bare_jgf_root_and_hints_on_stderr() {
 fn unknown_rule_hints_with_the_config_key_as_locus() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!(
             "{}[rules]\nstale-nodes = \"error\"\n",
             common::DEFAULT_CONFIG
@@ -115,7 +115,11 @@ fn unknown_rule_hints_with_the_config_key_as_locus() {
 #[test]
 fn zero_match_selector_hints_without_failing() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -146,7 +150,7 @@ fn zero_match_selector_hints_without_failing() {
 #[test]
 fn hints_do_not_downgrade_the_empty_lock_guard() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -163,7 +167,7 @@ fn hints_do_not_downgrade_the_empty_lock_guard() {
 #[test]
 fn large_projection_hints_on_rendered_size() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     // Enough nodes to push the rendered projection past the threshold. Each file
     // carries frontmatter so its node metadata, not just its key, has weight.
     for i in 0..400 {
@@ -217,9 +221,9 @@ fn large_projection_hints_on_rendered_size() {
 #[test]
 fn unparseable_lock_hints_and_check_still_runs() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
-    fs::write(dir.path().join("drft.lock"), "not valid toml {{{").unwrap();
+    fs::write(common::lock_path(dir.path()), "not valid toml {{{").unwrap();
 
     let output = drft_bin()
         .args([
@@ -240,7 +244,7 @@ fn unparseable_lock_hints_and_check_still_runs() {
         .iter()
         .find(|h| h["name"] == "unparseable-lock")
         .expect("expected an unparseable-lock hint");
-    assert_eq!(hint["locus"], "drft.lock");
+    assert_eq!(hint["locus"], ".drft/lock.toml");
     assert!(hint["next"].as_str().unwrap().contains("--all"));
 }
 
@@ -258,7 +262,11 @@ fn unparseable_lock_hints_and_check_still_runs() {
 fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
     for format in [vec![], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+        fs::write(
+            common::config_path(dir.path()),
+            common::MARKDOWN_ONLY_CONFIG,
+        )
+        .unwrap();
         for name in ["a.md", "b.md", "c.md"] {
             fs::write(dir.path().join(name), "# Note").unwrap();
         }
@@ -270,7 +278,7 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
         assert!(baseline.status.success());
 
         let corrupt = "not valid toml {{{";
-        fs::write(dir.path().join("drft.lock"), corrupt).unwrap();
+        fs::write(common::lock_path(dir.path()), corrupt).unwrap();
 
         let mut args = vec!["-C", dir.path().to_str().unwrap()];
         args.extend(format.iter().copied());
@@ -282,7 +290,7 @@ fn a_scoped_lock_refuses_to_replace_an_unparseable_baseline() {
             "{format:?} should refuse rather than truncate the baseline"
         );
         assert_eq!(
-            fs::read_to_string(dir.path().join("drft.lock")).unwrap(),
+            fs::read_to_string(common::lock_path(dir.path())).unwrap(),
             corrupt,
             "{format:?} rewrote a lockfile it could not read"
         );
@@ -323,7 +331,7 @@ fn errors_deliver_earlier_config_hints_once() {
     for format in [vec!["--color", "never"], vec!["--format", "json"]] {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            common::config_path(dir.path()),
             format!(
                 "{}[rules]\nnot-a-rule = \"error\"\n",
                 common::MARKDOWN_ONLY_CONFIG
@@ -368,7 +376,11 @@ fn errors_deliver_earlier_config_hints_once() {
 #[test]
 fn small_projection_raises_no_hint() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -391,7 +403,11 @@ fn small_projection_raises_no_hint() {
 #[test]
 fn a_repeated_selector_hints_once() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::write(dir.path().join("index.md"), "# Index").unwrap();
 
     let output = drft_bin()
@@ -417,7 +433,7 @@ fn a_repeated_selector_hints_once() {
 #[test]
 fn large_projection_next_fits_the_command() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     for i in 0..400 {
         fs::write(
             dir.path().join(format!("note-{i:03}.md")),
@@ -453,7 +469,7 @@ fn large_projection_next_fits_the_command() {
 #[test]
 fn unresolved_edge_names_its_cause_not_a_hint() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
     fs::write(dir.path().join("lib.rs"), "// root file").unwrap();
     // Two spellings aggregate onto one missing target. The explicitly relative
@@ -519,7 +535,7 @@ fn unresolved_edge_names_its_cause_not_a_hint() {
 fn a_metadata_only_frontmatter_graph_is_silent_and_still_reads_metadata() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
@@ -578,7 +594,7 @@ fn a_metadata_only_frontmatter_graph_is_silent_and_still_reads_metadata() {
 fn declared_edge_keys_that_match_nothing_raise_a_hint() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"source\"]\n",
     )
     .unwrap();
@@ -639,7 +655,7 @@ fn declared_edge_keys_that_match_nothing_raise_a_hint() {
 fn declared_edge_keys_that_match_raise_no_hint() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -675,7 +691,7 @@ fn declared_edge_keys_that_match_raise_no_hint() {
 fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.mdx\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -727,7 +743,7 @@ fn a_graph_whose_globs_reach_no_file_says_so_rather_than_blaming_the_keys() {
 fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
     )
     .unwrap();
@@ -776,7 +792,11 @@ fn a_target_carrying_a_newline_stays_on_one_line_of_text_output() {
 #[test]
 fn a_lock_report_keeps_one_node_on_one_line() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::write(dir.path().join("we\nird.md"), "# W\n").unwrap();
 
     let output = drft_bin()
@@ -802,7 +822,11 @@ fn a_lock_report_keeps_one_node_on_one_line() {
 #[test]
 fn a_not_found_error_keeps_both_halves_on_one_line() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::MARKDOWN_ONLY_CONFIG).unwrap();
+    fs::write(
+        common::config_path(dir.path()),
+        common::MARKDOWN_ONLY_CONFIG,
+    )
+    .unwrap();
     fs::create_dir(dir.path().join("sub")).unwrap();
     fs::write(dir.path().join("sub").join("we\nird.md"), "# W\n").unwrap();
 

@@ -89,7 +89,7 @@ pub fn filtered_out(
 /// edge's `source → target`.
 pub fn push_metadata_lines(lines: &mut Vec<String>, metadata: &Map<String, Value>) {
     for (ns, value) in metadata {
-        // The namespace comes from a graph name in `drft.toml`, so it is authored
+        // The namespace comes from a graph name in `.drft/config.toml`, so it is authored
         // content like the keys below it. Escaping the key and not its header
         // still prints one node as two blocks.
         lines.push(format!("  {}", crate::util::one_line(ns)));

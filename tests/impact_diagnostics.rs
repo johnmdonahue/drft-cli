@@ -35,7 +35,7 @@ fn graph(edges: &[(&str, &str)], files: &[&str]) -> Graph {
 fn config() -> Config {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\n",
     )
     .unwrap();
@@ -240,7 +240,7 @@ fn construction_is_global_at_every_direction_and_depth_and_uses_check_policy() {
     ] {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            common::config_path(dir.path()),
             format!("[rules]\nunreadable-frontmatter = {rule}\n"),
         )
         .unwrap();
@@ -280,3 +280,4 @@ fn same_rule_subject_uses_target_tiebreak() {
         vec![("source", Some("a")), ("source", Some("z"))]
     );
 }
+mod common;

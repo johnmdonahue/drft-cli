@@ -9,7 +9,7 @@ use tempfile::TempDir;
 /// frontmatter, one with a `purpose` key and one without.
 fn fixture() -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "# Index, no frontmatter").unwrap();
 
     let docs = dir.path().join("docs");
@@ -82,7 +82,7 @@ fn exact_path_projects_one_node() {
 #[test]
 fn exact_extensionless_path_is_not_replaced_by_markdown() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("guide"), "extensionless").unwrap();
     fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
 
@@ -93,7 +93,7 @@ fn exact_extensionless_path_is_not_replaced_by_markdown() {
 #[test]
 fn missing_extensionless_path_suggests_markdown_without_selecting_it() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("guide.md"), "# Markdown").unwrap();
 
     let output = drft_bin()
@@ -107,7 +107,7 @@ fn missing_extensionless_path_suggests_markdown_without_selecting_it() {
 #[test]
 fn cwd_relative_miss_does_not_fall_through_to_the_graph_root() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("README.md"), "# Root").unwrap();
     let sub = dir.path().join("docs");
     fs::create_dir(&sub).unwrap();
@@ -139,7 +139,7 @@ fn bare_directory_selects_subtree() {
     );
 }
 
-/// A glob pattern matches node keys with the same vocabulary as `drft.toml` —
+/// A glob pattern matches node keys with the same vocabulary as `.drft/config.toml` —
 /// `*` stays within a path component, so `docs/*.md` excludes the nested file.
 #[test]
 fn glob_pattern_matches_node_keys() {
@@ -160,13 +160,7 @@ fn all_returns_all_nodes() {
     let dir = fixture();
     let v = nodes_json(dir.path(), &[]);
     let keys = ids(&v);
-    for path in [
-        "index.md",
-        "docs/a.md",
-        "docs/b.md",
-        "docs/sub/c.md",
-        "drft.toml",
-    ] {
+    for path in ["index.md", "docs/a.md", "docs/b.md", "docs/sub/c.md"] {
         assert!(keys.iter().any(|k| k == path), "missing node {path}");
     }
 }
@@ -178,13 +172,9 @@ fn namespace_filters_node_set_and_metadata() {
     let dir = fixture();
     let v = nodes_json(dir.path(), &["--all", "--namespace", "frontmatter"]);
     let keys = ids(&v);
-    // index.md and drft.toml have no frontmatter block, so they drop out.
+    // index.md has no frontmatter block, so it drops out.
     assert!(
         !keys.iter().any(|k| k == "index.md"),
-        "no frontmatter → dropped"
-    );
-    assert!(
-        !keys.iter().any(|k| k == "drft.toml"),
         "no frontmatter → dropped"
     );
     // The docs remain, restricted to their @frontmatter block (no @fs).
@@ -373,7 +363,7 @@ fn text_format_is_the_default_and_separates_nodes() {
 #[test]
 fn directory_selector_is_not_shadowed_by_a_sibling_md_file() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("docs.md"), "# Docs, the file").unwrap();
     let docs = dir.path().join("docs");
     fs::create_dir_all(&docs).unwrap();

@@ -39,7 +39,7 @@ fn assert_closed_pipe(dir: &Path, args: &[&str]) {
 fn read_outputs_survive_a_closed_pipe() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!(
             "{}\n[rules]\nunresolved-edge = \"error\"\ndetached-node = \"off\"\n",
             common::MARKDOWN_ONLY_CONFIG
@@ -92,7 +92,7 @@ fn check_json_envelope_clean() {
     // Silence detached-node so we exercise the clean envelope shape; index and
     // setup link each other via markdown, so their edges resolve cleanly.
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!(
             "{}[rules]\ndetached-node = \"off\"\n",
             common::DEFAULT_CONFIG

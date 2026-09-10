@@ -11,7 +11,7 @@ const MD_CONFIG: &str = "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**
 #[test]
 fn clean_graph_has_no_unresolved_or_errors() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [faq](faq.md)",
@@ -42,7 +42,7 @@ fn clean_graph_has_no_unresolved_or_errors() {
 #[test]
 fn broken_link_warns() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(
         dir.path().join("index.md"),
         "[setup](setup.md) and [missing](gone.md)",
@@ -75,7 +75,7 @@ fn broken_link_warns() {
 #[test]
 fn broken_link_json_shape() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[missing](gone.md)").unwrap();
 
     let output = drft_bin()
@@ -114,7 +114,7 @@ fn broken_link_json_shape() {
 fn broken_link_error_severity_exits_1() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!("{MD_CONFIG}[rules]\nunresolved-edge = \"error\"\n"),
     )
     .unwrap();
@@ -137,7 +137,7 @@ fn broken_link_error_severity_exits_1() {
 #[test]
 fn detached_node_warns_by_default() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
@@ -160,7 +160,7 @@ fn detached_node_warns_by_default() {
 fn detached_node_ignore_glob() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[rules.detached-node]\nignore = [\"orphan.md\"]\n",
     )
     .unwrap();
@@ -179,7 +179,7 @@ fn detached_node_ignore_glob() {
     assert!(output.status.success());
 }
 
-/// Running without drft.toml fails with exit 2.
+/// Running without `.drft/config.toml` fails with exit 2.
 #[test]
 fn no_config_exits_with_error() {
     let dir = TempDir::new().unwrap();
@@ -192,7 +192,7 @@ fn no_config_exits_with_error() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("no drft.toml found"),
+        stderr.contains("no .drft/config.toml found"),
         "expected config error, got: {stderr}"
     );
     assert_eq!(output.status.code(), Some(2), "expected exit code 2");
@@ -206,7 +206,7 @@ fn no_config_exits_with_error() {
 #[test]
 fn a_missing_lockfile_reports_no_baseline() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -216,7 +216,7 @@ fn a_missing_lockfile_reports_no_baseline() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("no-baseline"), "stdout={stdout:?}");
-    assert!(stdout.contains("drft.lock"), "stdout={stdout:?}");
+    assert!(stdout.contains(".drft/lock.toml"), "stdout={stdout:?}");
 }
 
 /// A lockfile with no entries is the same fact as no lockfile: nothing to compare
@@ -224,10 +224,10 @@ fn a_missing_lockfile_reports_no_baseline() {
 #[test]
 fn an_empty_lockfile_reports_no_baseline() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
-    fs::write(dir.path().join("drft.lock"), "node = []\n").unwrap();
+    fs::write(common::lock_path(dir.path()), "node = []\n").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
@@ -244,7 +244,7 @@ fn an_empty_lockfile_reports_no_baseline() {
 fn no_baseline_is_promotable_to_error() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!("{MD_CONFIG}\n[rules]\nno-baseline = \"error\"\n"),
     )
     .unwrap();
@@ -267,7 +267,7 @@ fn no_baseline_is_promotable_to_error() {
 #[test]
 fn a_node_absent_from_the_lockfile_is_reported() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
     fs::write(dir.path().join("orphan.md"), "# Orphan").unwrap();
@@ -279,14 +279,14 @@ fn a_node_absent_from_the_lockfile_is_reported() {
     assert!(lock.status.success());
 
     // Drop orphan.md's own entry, leaving every other entry intact.
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let lockfile = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     let mut parts = lockfile.split("[[node]]");
     let head = parts.next().unwrap().to_string();
     let kept: Vec<&str> = parts
         .filter(|block| !block.trim_start().starts_with("path = \"orphan.md\""))
         .collect();
     fs::write(
-        dir.path().join("drft.lock"),
+        common::lock_path(dir.path()),
         format!("{head}[[node]]{}", kept.join("[[node]]")),
     )
     .unwrap();
@@ -315,7 +315,7 @@ fn a_node_absent_from_the_lockfile_is_reported() {
 #[test]
 fn a_fully_locked_graph_has_no_unlocked_node() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::create_dir(dir.path().join("docs")).unwrap();
     fs::create_dir(dir.path().join("docs").join("deep")).unwrap();
     fs::write(dir.path().join("docs").join("a.md"), "# A").unwrap();
@@ -346,7 +346,7 @@ fn a_fully_locked_graph_has_no_unlocked_node() {
 #[test]
 fn an_unlocked_node_subsumes_its_new_edges() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("b.md"), "# B").unwrap();
 
@@ -381,8 +381,8 @@ fn a_graph_with_nothing_lockable_reports_no_baseline_nothing() {
     // an `ignore` inside one is a config error that exits 2 with empty stdout, and
     // an assertion on absent output would pass without testing anything.
     fs::write(
-        dir.path().join("drft.toml"),
-        "ignore = [\"**/*.md\", \"drft.toml\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
+        common::config_path(dir.path()),
+        "ignore = [\"**/*.md\"]\n\n[graphs.md]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
     fs::create_dir(dir.path().join("empty")).unwrap();
@@ -411,7 +411,7 @@ fn a_graph_with_nothing_lockable_reports_no_baseline_nothing() {
 #[test]
 fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), MD_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), MD_CONFIG).unwrap();
     fs::write(dir.path().join("index.md"), "[setup](setup.md)").unwrap();
     fs::write(dir.path().join("setup.md"), "# Setup").unwrap();
 
@@ -422,14 +422,14 @@ fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
     assert!(lock.status.success());
 
     // Drop setup.md's own entry, leaving index.md's locked edge to it intact.
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let lockfile = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     let mut parts = lockfile.split("[[node]]");
     let head = parts.next().unwrap().to_string();
     let kept: Vec<&str> = parts
         .filter(|block| !block.trim_start().starts_with("path = \"setup.md\""))
         .collect();
     fs::write(
-        dir.path().join("drft.lock"),
+        common::lock_path(dir.path()),
         format!("{head}[[node]]{}", kept.join("[[node]]")),
     )
     .unwrap();
@@ -460,7 +460,7 @@ fn an_unlocked_target_of_a_locked_edge_does_not_claim_it_is_unchecked() {
 fn silencing_unlocked_node_restores_the_new_edges_it_subsumes() {
     let dir = TempDir::new().unwrap();
     let config = MD_CONFIG.to_string();
-    fs::write(dir.path().join("drft.toml"), &config).unwrap();
+    fs::write(common::config_path(dir.path()), &config).unwrap();
     fs::write(dir.path().join("a.md"), "# A").unwrap();
     fs::write(dir.path().join("b.md"), "# B").unwrap();
 
@@ -484,7 +484,7 @@ fn silencing_unlocked_node_restores_the_new_edges_it_subsumes() {
     assert!(!subsumed.contains("new-edge"), "{subsumed}");
 
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!("{config}\n[rules]\nunlocked-node = \"off\"\n"),
     )
     .unwrap();
@@ -505,7 +505,7 @@ fn silencing_unlocked_node_restores_the_new_edges_it_subsumes() {
 fn subsumption_does_not_downgrade_a_more_severe_finding() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!("{MD_CONFIG}\n[rules]\nnew-edge = \"error\"\n"),
     )
     .unwrap();
@@ -543,7 +543,7 @@ fn the_new_rule_names_are_built_in() {
     for rule in ["unlocked-node", "no-baseline"] {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            common::config_path(dir.path()),
             format!("{MD_CONFIG}\n[rules]\n{rule} = \"off\"\n"),
         )
         .unwrap();
@@ -569,13 +569,13 @@ fn the_new_rule_names_are_built_in() {
 fn an_empty_lockfile_still_gates() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         format!("{MD_CONFIG}\n[rules]\nunlocked-node = \"error\"\n"),
     )
     .unwrap();
     fs::write(dir.path().join("a.md"), "[b](b.md)").unwrap();
     fs::write(dir.path().join("b.md"), "# B").unwrap();
-    fs::write(dir.path().join("drft.lock"), "node = []\n").unwrap();
+    fs::write(common::lock_path(dir.path()), "node = []\n").unwrap();
 
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
@@ -590,7 +590,7 @@ fn an_empty_lockfile_still_gates() {
     assert!(stdout.contains("error[unlocked-node]: a.md"), "{stdout}");
 
     // An absent lockfile is the ordinary pre-lock state and stays quiet.
-    fs::remove_file(dir.path().join("drft.lock")).unwrap();
+    fs::remove_file(common::lock_path(dir.path())).unwrap();
     let absent = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()

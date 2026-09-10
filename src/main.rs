@@ -8,6 +8,7 @@ use drft::edges;
 use drft::graphs;
 use drft::hints::{Hint, Hints};
 use drft::impact;
+use drft::layout;
 use drft::lock;
 use drft::nodes;
 use drft::projection;
@@ -24,6 +25,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::fmt::Write as _;
 use std::path::Path;
+
+#[cfg(windows)]
+use std::ffi::{OsStr, OsString};
 
 use cli::{Cli, ColorChoice, Commands, Depth, Direction, OutputFormat};
 use config::{Config, RuleSeverity};
@@ -348,7 +352,7 @@ fn try_main(hints: &mut Hints, invocation: &mut Invocation) -> Result<i32> {
 
     let covered = usage_command(&cli.command);
     let loaded = if let Some(command) = covered {
-        let graph_root = find_graph_root(&root);
+        let graph_root = find_graph_root(&root)?;
         let config = load_config(&graph_root, hints)?;
         invocation.activate(
             config.usage_enabled,
@@ -525,7 +529,7 @@ fn run_config_show_ignores(
     format: OutputFormat,
     invocation: &mut Invocation,
 ) -> Result<i32> {
-    let graph_root = find_graph_root(root);
+    let graph_root = find_graph_root(root)?;
     Config::load(&graph_root)?;
     let report = sources::fs::ignore_sources(&graph_root)?;
 
@@ -579,12 +583,17 @@ fn run_config_show_ignores(
 }
 
 fn run_init(root: &Path, _invocation: &mut Invocation) -> Result<i32> {
-    let config_path = root.join("drft.toml");
-    if config_path.exists() {
-        anyhow::bail!("drft.toml already exists");
+    layout::reject_legacy(root)?;
+    let config_path = layout::config_path(root);
+    if layout::current_config_exists(root)? {
+        anyhow::bail!(".drft/config.toml already exists");
     }
 
-    let content = r#"# drft.toml
+    let state_dir = layout::state_dir(root);
+    std::fs::create_dir_all(&state_dir)
+        .with_context(|| format!("failed to create {}", state_dir.display()))?;
+
+    let content = r#"# .drft/config.toml
 
 # The graph root is this directory. fs walks every file under it, except
 # .gitignore matches and these globs.
@@ -618,7 +627,7 @@ edge_keys = ["sources"]
     Ok(ExitStatus::Success.code())
 }
 
-/// Snapshot the composed graph into `drft.lock`: node content hashes and each
+/// Snapshot the composed graph into `.drft/lock.toml`: node content hashes and each
 /// node's outbound edge target hashes. With paths, lock only those nodes (their
 /// bytes and their outbound edge targets), merging into the existing lockfile;
 /// with `--all`, lock every node.
@@ -684,7 +693,7 @@ fn run_lock(
                     "replaced-unreadable-lock",
                     "could not be read, so the entries this rebuild discarded are not listed",
                 )
-                .at("drft.lock")
+                .at(layout::LOCK_FILE)
                 .with_next("compare against the previous lockfile in version control"),
             );
         }
@@ -729,7 +738,7 @@ fn run_lock(
     // can be promoted to an error.
     if read.is_none() && lock::exists(graph_root) {
         anyhow::bail!(
-            "drft.lock exists but could not be parsed, so locking named paths \
+            ".drft/lock.toml exists but could not be parsed, so locking named paths \
              would replace a baseline drft cannot read with just those paths, \
              dropping the rest without saying so. Restore the file from version \
              control, or run `drft lock --all` to rebuild it from the current \
@@ -866,7 +875,7 @@ fn run_lock(
 ///
 /// `lock` printed nothing at all until this landed, so a caller could not tell a
 /// lock that covered five files from one that covered none without reading
-/// `drft.lock` by hand. The count is what makes the difference observable; naming
+/// `.drft/lock.toml` by hand. The count makes the difference observable; naming
 /// the nodes makes a scoped lock's exact coverage visible at the moment it happens
 /// rather than at the next `check`.
 fn report_lock(
@@ -890,7 +899,7 @@ fn report_lock(
             ProjectionOptions {
                 count: locked.len() + dropped.len(),
                 unit: "nodes",
-                next: "redirect stdout — drft.lock records the same set",
+                next: "redirect stdout — .drft/lock.toml records the same set",
                 max_bytes: None,
                 controls: "",
             },
@@ -914,7 +923,7 @@ fn report_lock(
             // Name the nodes for a scoped lock, count them for `--all`.
             //
             // The names make a scoped lock's exact coverage visible. `--all`
-            // resolves nothing, so its listing would be a copy of `drft.lock` and,
+            // resolves nothing, so its listing would copy `.drft/lock.toml` and,
             // on a large graph, thousands of lines of it. `dropped` is always
             // named: it is never long, and an entry leaving the baseline is the
             // half worth reading.
@@ -1043,17 +1052,156 @@ fn resolve_lock_node(
 /// resolved without touching the filesystem, so symlink node identities are
 /// preserved. Returns `None` when the path resolves outside `graph_root`.
 fn graph_key(root: &Path, graph_root: &Path, arg: &str) -> Option<String> {
-    let candidate = Path::new(arg);
-    let abs = if candidate.is_absolute() {
-        candidate.to_path_buf()
+    // `canonicalize` yields verbatim paths on Windows. Once joined to that kind
+    // of root, `/` is no longer recognized as a separator, so normalize the
+    // user-facing spelling before joining and resolving `.`/`..` components.
+    let candidate = if cfg!(windows) {
+        std::path::PathBuf::from(arg.replace('/', "\\"))
     } else {
-        root.join(candidate)
+        std::path::PathBuf::from(arg)
     };
-    let abs = drft::util::normalize_relative_path(&abs.to_string_lossy());
-    let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
-    let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
-    let key = rel.to_string_lossy().replace('\\', "/");
-    (!key.is_empty()).then_some(key)
+
+    // Keep a relative operand relative while resolving it. On Windows,
+    // `canonicalize` gives `root` and `graph_root` verbatim prefixes. Joining
+    // first and round-tripping that path through a string makes the prefix and
+    // separators part of lexical normalization, which can prevent
+    // `strip_prefix` from recognizing the graph root. Stripping the two
+    // canonical paths first leaves only ordinary relative components.
+    if !candidate.is_absolute() {
+        let mut parts = Vec::new();
+        for component in root.strip_prefix(graph_root).ok()?.components() {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::Normal(part) => parts.push(part.to_os_string()),
+                _ => return None,
+            }
+        }
+        for component in candidate.components() {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    parts.pop()?;
+                }
+                std::path::Component::Normal(part) => parts.push(part.to_os_string()),
+                std::path::Component::Prefix(_) | std::path::Component::RootDir => return None,
+            }
+        }
+        let key = parts
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+            .replace('\\', "/");
+        return (!key.is_empty()).then_some(key);
+    }
+
+    #[cfg(windows)]
+    {
+        windows_absolute_graph_key(&candidate, graph_root)
+    }
+    #[cfg(not(windows))]
+    {
+        let abs = drft::util::normalize_relative_path(&candidate.to_string_lossy());
+        let graph_root = drft::util::normalize_relative_path(&graph_root.to_string_lossy());
+        let rel = Path::new(&abs).strip_prefix(&graph_root).ok()?;
+        let key = rel.to_string_lossy().replace('\\', "/");
+        (!key.is_empty()).then_some(key)
+    }
+}
+
+#[cfg(windows)]
+#[derive(PartialEq)]
+enum WindowsPrefix {
+    Disk(u8),
+    Unc(String, String),
+    Verbatim(String),
+    Device(String),
+}
+
+/// Compare ordinary and verbatim spellings of one absolute Windows path
+/// without canonicalizing the operand. The operand may name a deleted lock
+/// entry, so resolution must remain lexical and must not require it to exist.
+#[cfg(windows)]
+fn windows_absolute_graph_key(candidate: &Path, graph_root: &Path) -> Option<String> {
+    fn folded(part: &OsStr) -> String {
+        part.to_string_lossy().to_ascii_lowercase()
+    }
+
+    fn split(path: &Path) -> Option<(WindowsPrefix, Vec<OsString>)> {
+        use std::path::{Component, Prefix};
+
+        let mut components = path.components();
+        let prefix = match components.next()? {
+            Component::Prefix(prefix) => match prefix.kind() {
+                Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => {
+                    WindowsPrefix::Disk(drive.to_ascii_uppercase())
+                }
+                Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => {
+                    WindowsPrefix::Unc(folded(server), folded(share))
+                }
+                Prefix::Verbatim(value) => WindowsPrefix::Verbatim(folded(value)),
+                Prefix::DeviceNS(value) => WindowsPrefix::Device(folded(value)),
+            },
+            _ => return None,
+        };
+        if !matches!(components.next(), Some(Component::RootDir)) {
+            return None;
+        }
+
+        let mut parts = Vec::new();
+        for component in components {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    parts.pop()?;
+                }
+                Component::Normal(part) => parts.push(part.to_os_string()),
+                Component::Prefix(_) | Component::RootDir => return None,
+            }
+        }
+        Some((prefix, parts))
+    }
+
+    let (root_prefix, root_parts) = split(graph_root)?;
+    let compare = |path: &Path| {
+        let (candidate_prefix, candidate_parts) = split(path)?;
+        if candidate_prefix != root_prefix || !candidate_parts.starts_with(&root_parts) {
+            return None;
+        }
+        let key = candidate_parts[root_parts.len()..]
+            .iter()
+            .map(|part| part.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        (!key.is_empty()).then_some(key)
+    };
+
+    if let Some(key) = compare(candidate) {
+        return Some(key);
+    }
+
+    // Canonicalizing `-C` can expand an 8.3 ancestor name even after equivalent
+    // disk prefixes have been normalized. Resolve the nearest existing ancestor
+    // to the same spelling, but never canonicalize the leaf: it may be a symlink
+    // node or a removed lock entry. If directories were removed too, retain them
+    // as a lexical suffix beneath the first ancestor that still exists.
+    let mut ancestor = candidate.parent()?.to_path_buf();
+    let mut suffix = vec![candidate.file_name()?.to_os_string()];
+    loop {
+        match std::fs::canonicalize(&ancestor) {
+            Ok(mut resolved) => {
+                for part in suffix.iter().rev() {
+                    resolved.push(part);
+                }
+                return compare(&resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                suffix.push(ancestor.file_name()?.to_os_string());
+                ancestor = ancestor.parent()?.to_path_buf();
+            }
+            Err(_) => return None,
+        }
+    }
 }
 
 fn run_graph(
@@ -1378,7 +1526,7 @@ fn resolve_selectors(
 /// Resolve one selector to matching node keys.
 ///
 /// A glob selector matches its pattern against node keys, graph-root-relative like
-/// `drft.toml`'s `files`/`ignore`; an empty match is a legitimate query result. A
+/// `.drft/config.toml`'s `files`/`ignore`; an empty match is a legitimate query result. A
 /// selector with no glob metacharacters is resolved cwd-aware: an exact file
 /// resolves to itself, and a bare directory expands to its recursive subtree
 /// (`docs/` ⇒ `docs/**`) — the same set the glob spelling names, so there is no
@@ -1472,7 +1620,7 @@ fn has_glob_meta(selector: &str) -> bool {
 }
 
 /// Match one glob pattern against the composed graph's node keys, graph-root-
-/// relative like `drft.toml`'s `files`/`ignore`. Node keys iterate sorted, so the
+/// relative like `.drft/config.toml`'s `files`/`ignore`. Node keys iterate sorted, so the
 /// result is sorted; an empty match is a legitimate reader result.
 fn glob_match_keys(composed: &drft::model::Graph, pattern: &str) -> Result<Vec<String>> {
     let set = drft::config::compile_globs(std::slice::from_ref(&pattern.to_string()))?
@@ -1692,16 +1840,18 @@ fn run_check(
     Ok(policy::check_status(&findings).code())
 }
 
-/// Walk up from `start` to find the nearest ancestor directory with `drft.toml`.
+/// Walk up from `start` to find the nearest ancestor directory with a current or
+/// legacy config marker. A nearer legacy config stops with migration guidance
+/// instead of falling through to a current config farther up.
 /// If none found, returns `start`.
-fn find_graph_root(start: &Path) -> std::path::PathBuf {
+fn find_graph_root(start: &Path) -> Result<std::path::PathBuf> {
     let mut current = start.to_path_buf();
     loop {
-        if current.join("drft.toml").exists() {
-            return current;
+        if layout::has_config_marker(&current)? {
+            return Ok(current);
         }
         if !current.pop() {
-            return start.to_path_buf();
+            return Ok(start.to_path_buf());
         }
     }
 }

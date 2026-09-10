@@ -1,23 +1,34 @@
 ---
-purpose: configure the walk, graphs, and rules through drft.toml
+purpose: configure the walk, graphs, and rules through .drft/config.toml
 sources:
   - ../src/config.rs
   - ../src/cli.rs
+  - ../src/layout.rs
+  - ../src/lock.rs
+  - ../src/sources/fs.rs
 ---
 
 # Configuration
 
-`drft.toml` in the graph root configures the walk, the graphs, and the rules. The directory containing `drft.toml` is the graph root; nested `drft.toml` files found while walking are ordinary files on disk, not graph boundaries.
+`.drft/config.toml` configures the walk, the graphs, and the rules. Its parent project directory is the graph root. drft walks up to the nearest project containing either the current config or a legacy config marker. Every `.drft` directory and its descendants are reserved project state and stay outside filesystem graphs.
 
 ## Committing the config and lockfile
 
-drft has no setup mode and no flag for this. Whether `drft.toml` and `drft.lock` are tracked is your decision, expressed the ordinary way — by what your `.gitignore` says and whether your CI runs `drft check`. The two shapes it produces:
+drft has no setup mode and no flag for this. Whether `.drft/config.toml` and `.drft/lock.toml` are tracked is your decision, expressed through `.gitignore` and whether CI runs `drft check`. Common shapes include:
 
 **Tracked.** The graph and its reviewed baseline are shared, `drft check` in CI gates on drift, and staleness is a claim the repository makes to everyone who clones it. This is the right default for a team that has adopted drft together.
 
+**Tracked config, untracked baseline.** The graph definition is shared, while each working tree keeps its own reviewed state. Ignore only `.drft/lock.toml`.
+
 **Untracked.** A clone gets no graph, nothing gates, and staleness is a fact about one working tree. Use it to run drft on a repository whose owners have not adopted it, or when drft is an authoring aid you reach for while writing rather than a check the project enforces. This repository is the second case; its `.gitignore` names both files with a comment saying so.
 
-Untracked has one consequence worth stating: because drft honors the committed `.gitignore`, a `drft.toml` ignored there is also outside its own graph. That is usually what you want — nothing links to the config by path — but it means `drft nodes` will not list it.
+Tracking never changes graph membership. drft prunes `.drft` structurally, so neither configuration, baselines, temporary lock writes, nor future project state appear in `drft nodes` or a generated lock.
+
+## Legacy root-level files
+
+drft does not read root-level `drft.toml` or `drft.lock`. If either file exists at the selected graph root, repository-dependent commands exit 2 before parsing configuration, building the graph, recording usage, or writing output. The error names each manual move to `.drft/config.toml` or `.drft/lock.toml`.
+
+Create `.drft` and move each legacy file without changing its contents. If a destination already exists, reconcile the two files manually; drft selects neither and never overwrites one. `drft init` applies the same checks to its requested directory and performs no migration.
 
 ## ignore
 
@@ -25,7 +36,7 @@ Untracked has one consequence worth stating: because drft honors the committed `
 ignore = ["target/**", "drafts/**"]
 ```
 
-The `fs` graph walks every file under the graph root, including dot-directories like `.github/` — only version-control stores (`.git`, `.hg`, `.svn`, `.jj`) are pruned. `ignore` removes paths from that walk by glob. There is no `include`: the graph is everything under the root minus configured globs and the active repository ignore sources. It excludes its own `drft.lock` from the graph.
+The `fs` graph walks every file under the graph root, including dot-directories like `.github/`. It prunes version-control stores (`.git`, `.hg`, `.svn`, `.jj`) and every `.drft` state directory. `ignore` removes paths from that walk by glob. There is no `include`: the graph is everything under the root minus reserved state, configured globs, and active repository ignore sources.
 
 In a Git repository, discovery applies the same three pattern sources as Git, in the same precedence order: repository `.gitignore` files, the per-clone `.git/info/exclude`, and the effective `core.excludesFile`. drft reads `.gitignore` files from the graph root through the repository root, plus nested files under the graph root. It asks Git to resolve machine-local configuration, so repository-local overrides and included configuration select the same global excludes file that Git uses.
 
@@ -33,7 +44,7 @@ Machine-local sources can make graph membership differ between clones. A path ig
 
 In a native Jujutsu repository without a Git working tree, repository `.gitignore` files still apply and the two Git-only sources do not. Outside a Git or Jujutsu repository, drft does not consult repository ignore files. `.ignore` files never affect discovery.
 
-Run `drft config --show-ignores` to list the repository `.gitignore` files drft consults and confirm which source classes are enabled. Add `--format json` for structured output. The command only reads configuration and ignore policy; it does not build the graph or update `drft.lock`.
+Run `drft config --show-ignores` to list the repository `.gitignore` files drft consults and confirm which source classes are enabled. Add `--format json` for structured output. The command only reads configuration and ignore policy; it does not build the graph or update `.drft/lock.toml`.
 
 This top-level `ignore` is a **discovery** filter: matching paths never become nodes, so nothing links to them and nothing is validated against them. To keep files in the graph (so your links to them resolve and stay drift-tracked) but skip _validating_ them, use the rule-level `ignore` instead — see [rules](rules/README.md).
 

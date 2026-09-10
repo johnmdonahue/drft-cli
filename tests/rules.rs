@@ -8,7 +8,7 @@ use tempfile::TempDir;
 #[test]
 fn directory_links_resolve() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     fs::create_dir(dir.path().join("guides")).unwrap();
     fs::write(dir.path().join("guides/intro.md"), "# Intro").unwrap();
     fs::write(
@@ -39,7 +39,7 @@ fn directory_links_resolve() {
 fn ignore_glob_suppresses_diagnostics() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[rules.detached-node]\nignore = [\"README.md\"]\n",
     )
     .unwrap();
@@ -68,7 +68,7 @@ fn ignore_glob_suppresses_diagnostics() {
 #[test]
 fn fragments_are_checked_against_the_targets_anchors() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("owners.md"),
         "# Owners\n\n## synthetic-console\n\nAna.\n\n## synthetic-edge\n\nBo.\n",
@@ -111,7 +111,7 @@ fn fragments_are_checked_against_the_targets_anchors() {
 #[test]
 fn a_fragment_into_an_unread_target_is_not_flagged() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("lib.rs"), "pub fn go() {}\n").unwrap();
     fs::write(
         dir.path().join("guide.md"),
@@ -136,7 +136,7 @@ fn a_fragment_into_an_unread_target_is_not_flagged() {
 #[test]
 fn anchors_and_fragments_match_what_a_browser_resolves() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("target.md"),
         "---\npurpose: a single-key block\n---\n\n\
@@ -185,7 +185,7 @@ fn anchors_and_fragments_match_what_a_browser_resolves() {
 #[test]
 fn an_unreadable_frontmatter_block_reaches_check() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     // A bare scalar between fences: claimed as a block, carries no keys.
     fs::write(
         dir.path().join("bad.md"),
@@ -227,7 +227,7 @@ fn unreadable_frontmatter_severity_is_configurable() {
 
     let promoted =
         format!("{DEFAULT_CONFIG}\n[rules.unreadable-frontmatter]\nseverity = \"error\"\n");
-    fs::write(dir.path().join("drft.toml"), &promoted).unwrap();
+    fs::write(common::config_path(dir.path()), &promoted).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
@@ -249,7 +249,7 @@ fn unreadable_frontmatter_severity_is_configurable() {
 
     let silenced =
         format!("{DEFAULT_CONFIG}\n[rules.unreadable-frontmatter]\nseverity = \"off\"\n");
-    fs::write(dir.path().join("drft.toml"), &silenced).unwrap();
+    fs::write(common::config_path(dir.path()), &silenced).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
@@ -266,7 +266,7 @@ fn unreadable_frontmatter_severity_is_configurable() {
 #[test]
 fn invalid_utf8_is_reported_once_by_matching_text_graphs() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     let bytes = b"title: \xff\n";
     fs::write(dir.path().join("bad.md"), bytes).unwrap();
 
@@ -334,7 +334,7 @@ fn invalid_utf8_is_reported_once_by_matching_text_graphs() {
 #[test]
 fn invalid_utf8_outside_text_graph_scope_is_not_reported() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), DEFAULT_CONFIG).unwrap();
     fs::write(dir.path().join("image.bin"), b"\xff\x00\xfe").unwrap();
 
     let output = drft_bin()
@@ -355,7 +355,7 @@ fn unreadable_text_severity_is_configurable() {
     fs::write(dir.path().join("bad.md"), b"\xff").unwrap();
 
     let promoted = format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nseverity = \"error\"\n");
-    fs::write(dir.path().join("drft.toml"), promoted).unwrap();
+    fs::write(common::config_path(dir.path()), promoted).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
@@ -365,7 +365,7 @@ fn unreadable_text_severity_is_configurable() {
     assert!(!String::from_utf8_lossy(&output.stderr).contains("unknown-rule"));
 
     let silenced = format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nseverity = \"off\"\n");
-    fs::write(dir.path().join("drft.toml"), silenced).unwrap();
+    fs::write(common::config_path(dir.path()), silenced).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
@@ -374,7 +374,7 @@ fn unreadable_text_severity_is_configurable() {
 
     let rule_ignored =
         format!("{DEFAULT_CONFIG}\n[rules.unreadable-text]\nignore = [\"bad.md\"]\n");
-    fs::write(dir.path().join("drft.toml"), rule_ignored).unwrap();
+    fs::write(common::config_path(dir.path()), rule_ignored).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()
@@ -385,7 +385,7 @@ fn unreadable_text_severity_is_configurable() {
     );
 
     let globally_ignored = format!("{DEFAULT_CONFIG}\n[rules]\nignore = [\"bad.md\"]\n");
-    fs::write(dir.path().join("drft.toml"), globally_ignored).unwrap();
+    fs::write(common::config_path(dir.path()), globally_ignored).unwrap();
     let output = drft_bin()
         .args(["-C", dir.path().to_str().unwrap(), "check"])
         .output()

@@ -51,7 +51,7 @@ pub fn run(
         // different and correct.
         findings.push(Finding::warn(
             "no-baseline",
-            "drft.lock",
+            crate::layout::LOCK_FILE,
             Vec::new(),
             "no usable baseline, so no file is checked for drift",
         ));
@@ -149,6 +149,11 @@ mod tests {
     use crate::model::{Edge, GraphSet, Node};
     use serde_json::json;
 
+    fn config_path(root: &std::path::Path) -> std::path::PathBuf {
+        std::fs::create_dir_all(crate::layout::state_dir(root)).unwrap();
+        crate::layout::config_path(root)
+    }
+
     fn fs_node() -> Node {
         node("b3:x")
     }
@@ -184,7 +189,7 @@ mod tests {
     fn config_promotes_to_error() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nunresolved-edge = \"error\"\n",
         )
         .unwrap();
@@ -201,7 +206,7 @@ mod tests {
     fn config_off_silences_rule() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nunresolved-edge = \"off\"\n",
         )
         .unwrap();
@@ -229,7 +234,7 @@ mod tests {
 
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules]\nignore = [\"vendor/**\"]\n",
         )
         .unwrap();
@@ -257,7 +262,7 @@ mod tests {
     fn ignore_glob_drops_subject() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("drft.toml"),
+            config_path(dir.path()),
             "[rules.unresolved-edge]\nignore = [\"index.md\"]\n",
         )
         .unwrap();

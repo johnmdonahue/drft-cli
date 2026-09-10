@@ -47,7 +47,7 @@ pub enum LinkPolicy {
 /// Resolution that yields the empty string becomes `.` — the graph root's own
 /// spelling. `..` from `docs/a.md` and `.` from `a.md` both name the root, which
 /// normalizes to `""`, and an edge to `""` is a node reference the graph does not
-/// contain: it would reach `drft.lock` and the JGF export as a dangling one.
+/// contain: it would reach `.drft/lock.toml` and the JGF export as a dangling one.
 ///
 /// `.` rather than the literal, because the literal collides. `..` from
 /// `docs/a.md` names the root and `../..` names one level above it — two

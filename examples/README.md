@@ -1,6 +1,6 @@
 # Examples
 
-Sample projects for manual testing and learning drft. Each is its own graph with a `drft.toml`.
+Sample projects for manual testing and learning drft. Each is its own graph with a `.drft/config.toml`.
 
 | Example                              | What it demonstrates                   |
 | ------------------------------------ | -------------------------------------- |

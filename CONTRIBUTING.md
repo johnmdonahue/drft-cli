@@ -53,7 +53,7 @@ cargo test scenario_5         # specific test
 
 ## Examples
 
-See the `examples/` directory for sample projects used in manual testing. Each is its own graph with a `drft.toml`. Apply the synthetic fixture naming rule from the testing section.
+See the `examples/` directory for sample projects used in manual testing. Each is its own graph with a `.drft/config.toml`. Apply the synthetic fixture naming rule from the testing section.
 
 ## Codebase structure
 

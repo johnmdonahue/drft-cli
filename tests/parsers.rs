@@ -84,7 +84,7 @@ fn frontmatter_edge_targets(dir: &Path, source: &str) -> Vec<String> {
 fn frontmatter_sources_create_edges() {
     let dir = TempDir::new().unwrap();
     // Declare the markdown and frontmatter graphs.
-    fs::write(dir.path().join("drft.toml"), common::DEFAULT_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), common::DEFAULT_CONFIG).unwrap();
     fs::write(
         dir.path().join("analysis.md"),
         "---\nsources:\n  - ./data/notes.md\n---\n\n# Analysis\n",
@@ -105,7 +105,7 @@ fn frontmatter_sources_create_edges() {
         .output()
         .unwrap();
 
-    let lockfile = fs::read_to_string(dir.path().join("drft.lock")).unwrap();
+    let lockfile = fs::read_to_string(common::lock_path(dir.path())).unwrap();
     assert!(lockfile.contains("analysis.md"));
     assert!(lockfile.contains("data/notes.md"));
 
@@ -134,7 +134,7 @@ fn frontmatter_sources_create_edges() {
 fn frontmatter_line_survives_a_multiline_code_span() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -162,7 +162,7 @@ fn frontmatter_line_survives_a_multiline_code_span() {
 fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -194,7 +194,7 @@ fn frontmatter_line_survives_a_code_span_taller_than_two_lines() {
 fn a_block_the_mask_recovered_by_fusing_lines_is_reported() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -241,7 +241,7 @@ fn a_block_the_mask_recovered_by_fusing_lines_is_reported() {
 fn a_value_after_a_span_closes_is_reported_with_its_block() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"note\"]\n",
     )
     .unwrap();
@@ -278,7 +278,7 @@ fn a_value_after_a_span_closes_is_reported_with_its_block() {
 fn a_value_continued_at_column_zero_mints_no_target() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -311,7 +311,7 @@ fn a_value_continued_at_column_zero_mints_no_target() {
 fn an_unreadable_block_is_still_withheld_from_the_markdown_graph() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -383,7 +383,7 @@ fn an_unreadable_block_is_still_withheld_from_the_markdown_graph() {
 fn the_reported_silent_drop_is_a_finding() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -418,7 +418,7 @@ fn the_reported_silent_drop_is_a_finding() {
 fn frontmatter_edge_keys_scope_edges_without_hiding_broken_sources() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -457,7 +457,7 @@ fn frontmatter_edge_keys_scope_edges_without_hiding_broken_sources() {
 fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -502,7 +502,7 @@ fn a_byte_order_mark_does_not_cost_a_file_its_frontmatter() {
 fn a_byte_order_mark_is_still_hashed() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
@@ -567,7 +567,7 @@ fn a_byte_order_mark_is_still_hashed() {
 fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
@@ -609,7 +609,7 @@ fn a_byte_order_mark_does_not_fabricate_a_setext_anchor() {
 fn a_mark_on_a_file_with_no_frontmatter_still_costs_it_its_headings() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
@@ -642,7 +642,7 @@ fn a_mark_on_a_file_with_no_frontmatter_still_costs_it_its_headings() {
 fn more_than_one_leading_mark_is_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -682,7 +682,7 @@ fn more_than_one_leading_mark_is_stripped() {
 fn only_marks_are_stripped() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -722,7 +722,7 @@ fn only_marks_are_stripped() {
 fn a_mark_does_not_shift_the_line_a_span_corrects() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -757,7 +757,7 @@ edge_keys = [\"sources\"]
 /// `target.md` its `sources` entry names.
 fn scoped_fixture(block: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), SCOPED_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), SCOPED_CONFIG).unwrap();
     fs::write(dir.path().join("doc.md"), block).unwrap();
     fs::write(dir.path().join("target.md"), "# Target\n").unwrap();
     // A second resolvable file, so a fixture can put a hostile value beside a
@@ -797,7 +797,7 @@ fn a_folded_scalar_opening_with_a_code_span_keeps_its_edge_and_metadata() {
     let block = "---\nderives_from:\n  - ./target.md\nnote: >-\n  `alpha` one two three four five six seven eight nine ten eleven twelve\n  second line of the folded block\n---\nbody\n";
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"derives_from\"]\n",
     )
     .unwrap();
@@ -982,7 +982,7 @@ fn a_span_inside_a_declared_value_does_not_cost_it_the_edge() {
 #[test]
 fn a_span_inside_one_list_value_does_not_cost_it_the_edge() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), SCOPED_CONFIG).unwrap();
+    fs::write(common::config_path(dir.path()), SCOPED_CONFIG).unwrap();
     fs::write(
         dir.path().join("doc.md"),
         "---\nsources:\n  - ./other.md\n  - target.md`x`\n---\nbody\n",
@@ -1190,7 +1190,7 @@ fn a_crlf_document_reports_the_files_line() {
 fn prose_under_a_declared_key_is_reported_rather_than_dropped() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -1220,7 +1220,7 @@ fn prose_under_a_declared_key_is_reported_rather_than_dropped() {
 fn a_declared_value_naming_a_directory_resolves() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -1259,7 +1259,7 @@ fn a_declared_value_naming_a_directory_resolves() {
 fn a_markdown_link_value_is_diagnosed_rather_than_unwrapped() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n",
     )
     .unwrap();
@@ -1289,7 +1289,7 @@ fn a_markdown_link_value_is_diagnosed_rather_than_unwrapped() {
 fn an_impact_record_carrying_a_newline_stays_on_one_line() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.frontmatter]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
     )
     .unwrap();
@@ -1337,7 +1337,7 @@ fn an_impact_record_carrying_a_newline_stays_on_one_line() {
 fn an_impact_record_escapes_the_via_as_well_as_the_location() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n\n[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
     )
     .unwrap();
@@ -1387,7 +1387,7 @@ fn an_impact_record_escapes_the_via_as_well_as_the_location() {
 fn the_markdown_builder_draws_no_edge_for_an_anchor_only_link() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n[rules.detached-node]\nseverity = \"off\"\n",
     )
     .unwrap();
@@ -1415,7 +1415,7 @@ fn the_markdown_builder_draws_no_edge_for_an_anchor_only_link() {
 fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         "[graphs.fm]\nparser = \"frontmatter\"\nfiles = [\"**/*.md\"]\nedge_keys = [\"sources\"]\n[rules.detached-node]\nseverity = \"off\"\n",
     )
     .unwrap();
@@ -1482,7 +1482,7 @@ fn the_frontmatter_builder_draws_an_edge_for_a_fragment_only_value() {
 fn no_command_splits_a_record_across_lines() {
     let dir = TempDir::new().unwrap();
     fs::write(
-        dir.path().join("drft.toml"),
+        common::config_path(dir.path()),
         // The graph name reaches text output as the `@namespace` header. The
         // second graph declares a key nothing uses, which is what raises a hint —
         // without one, every hint render site is unreachable and untested.

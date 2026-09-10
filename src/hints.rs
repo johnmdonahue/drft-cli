@@ -1,7 +1,7 @@
 //! `hints` — a run-level advisory channel.
 //!
 //! A hint is a statement about the *invocation* rather than about any item in
-//! its result: an unknown rule name in `drft.toml`, a selector that matched
+//! its result: an unknown rule name in `.drft/config.toml`, a selector that matched
 //! nothing, a projection large enough to crowd out the task it was meant to
 //! ground. Findings describe the graph; hints describe the run that read it.
 //!
@@ -260,7 +260,7 @@ mod tests {
     }
 
     /// A hint message interpolates config values — a graph name, a declared key —
-    /// so it can carry whatever `drft.toml` carries, and so can the remedy.
+    /// so it can carry whatever `.drft/config.toml` carries, and so can the remedy.
     /// Escaping the locus alone left the same hint splitting across lines.
     #[test]
     fn a_message_and_a_next_carrying_newlines_stay_on_their_own_lines() {

@@ -26,7 +26,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a drft.toml config file
+    /// Create a .drft/config.toml config file
     Init,
 
     /// Inspect configuration-derived behavior
@@ -36,7 +36,7 @@ pub enum Commands {
         show_ignores: bool,
     },
 
-    /// Snapshot the current state to drft.lock
+    /// Snapshot the current state to .drft/lock.toml
     #[command(group(clap::ArgGroup::new("scope").args(["paths", "all"]).required(true).multiple(true)))]
     Lock {
         /// Lock these paths and their outbound edges (at least one required, or --all)

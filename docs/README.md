@@ -9,7 +9,7 @@ drft is a drift checker for linked files, built for LLMs and humans working in t
 ## Reference
 
 - [Installed-binary guidance](guide.md) — the edit workflow and versioned command contract from `drft guide`
-- [Configuration](config.md) — `drft.toml`: `ignore`, `[graphs.*]`, `[rules.*]`, and whether to commit the config and lockfile at all
+- [Configuration](config.md) — `.drft/config.toml`: `ignore`, `[graphs.*]`, `[rules.*]`, and whether to commit the config and lockfile at all
 - [Parsers](parsers/README.md) — how parsers extract links and metadata
 - [Rules](rules/README.md) — the drift and structural findings `drft check` emits
 - [Reading the graph](reading.md) — the `nodes`, `edges`, and `graph` read verbs, the `hints` advisory channel, and grounding an agent on graph metadata

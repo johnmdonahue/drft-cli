@@ -48,7 +48,7 @@ fn read_failure_advice_survives_diagnostic_policy_and_read_commands() {
         ] {
             let dir = TempDir::new().unwrap();
             fs::write(
-                dir.path().join("drft.toml"),
+                common::config_path(dir.path()),
                 format!("{CONFIG}\n[rules.{rule}]\n{policy}\n"),
             )
             .unwrap();
@@ -82,7 +82,7 @@ fn overlapping_graphs_partition_the_same_failed_file_independently() {
     for bytes in [&b"---\nsources: [\n---\n"[..], &b"\xff"[..]] {
         let dir = TempDir::new().unwrap();
         fs::write(
-            dir.path().join("drft.toml"),
+            common::config_path(dir.path()),
             format!(
                 "{CONFIG}
 [graphs.mixed]
@@ -129,7 +129,7 @@ files = ['bad.md']
 #[test]
 fn walked_exclusions_do_not_become_failed_candidates() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("drft.toml"), "ignore = ['bad.md']\n[graphs.fm]\nparser = 'frontmatter'\nfiles = ['*.md']\nedge_keys = ['sources']\n").unwrap();
+    fs::write(common::config_path(dir.path()), "ignore = ['bad.md']\n[graphs.fm]\nparser = 'frontmatter'\nfiles = ['*.md']\nedge_keys = ['sources']\n").unwrap();
     fs::write(dir.path().join("bad.md"), b"\xff").unwrap();
     fs::create_dir(dir.path().join("folder.md")).unwrap();
     #[cfg(unix)]

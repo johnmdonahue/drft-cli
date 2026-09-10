@@ -32,7 +32,7 @@ fn nested_fixture() -> (TempDir, std::path::PathBuf) {
     let root = repo.path().join("project");
     fs::create_dir_all(root.join("docs")).unwrap();
     fs::write(
-        root.join("drft.toml"),
+        common::config_path(&root),
         "[graphs.markdown]\nparser = \"markdown\"\nfiles = [\"**/*.md\"]\n",
     )
     .unwrap();
@@ -94,7 +94,7 @@ fn nodes_honor_gits_effective_ignore_sources_above_graph_root() {
 #[test]
 fn show_ignores_reports_sources_without_touching_the_lock() {
     let (_repo, root) = nested_fixture();
-    let lock = root.join("drft.lock");
+    let lock = common::lock_path(&root);
     fs::write(&lock, "sentinel\n").unwrap();
 
     let output = drft_bin()

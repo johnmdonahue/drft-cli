@@ -6,7 +6,7 @@ When one file derives from another — a doc from code, a summary from its sourc
 
 Whether a flagged derivation still holds is a reading, not something a linter can settle, so drft surfaces it for review rather than asserting it's broken. `drft impact <file>` lists what to review before an edit. `drft nodes <path>` reads a file's declared metadata so an agent can orient without opening it. `drft check` reports drift; `drft lock` records that a change was reviewed.
 
-Each `drft.toml` declares one graph; run drft from anywhere inside the tree and it walks up to the nearest config.
+Each `.drft/config.toml` defines one graph root; run drft from anywhere inside the tree and it walks up to the nearest config.
 
 ## Install
 
@@ -24,7 +24,7 @@ Run `drft guide` for the installed binary's edit workflow and command contracts,
 ## Quick start
 
 ```bash
-drft init                 # create a drft.toml
+drft init                 # create a .drft/config.toml
 drft check                # validate the graph
 drft lock --all           # snapshot every file's hash as the baseline
 drft check                # now detects staleness too
@@ -34,7 +34,7 @@ drft check                # now detects staleness too
 
 drft builds a **set of independent graphs** and merges them by path:
 
-- **`fs`** — walks the tree under the root (minus `ignore` and active repository ignore sources), typing each file, symlink, and directory as a node and hashing the ones with content. This is the identity space.
+- **`fs`** — walks the tree under the root (minus `.drft`, version-control metadata, `ignore`, and active repository ignore sources), typing each file, symlink, and directory as a node and hashing the ones with content. This is the identity space.
 - **`markdown`** — link edges from `[text](path)` body links, plus the `#fragment` anchors each file answers to.
 - **`frontmatter`** — edges from frontmatter values, plus the parsed frontmatter block as node metadata. Paths resolve relative to the declaring file, as its markdown links do. `edge_keys = ["sources"]` names the keys whose values are derivations; every other field is metadata only.
 
@@ -50,7 +50,7 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 
 | Command                      | What it does                                                   |
 | ---------------------------- | -------------------------------------------------------------- |
-| `drft init`                  | Create a default `drft.toml`                                   |
+| `drft init`                  | Create a default `.drft/config.toml`                           |
 | `drft guide`                 | Describe the installed binary's workflow and command contracts |
 | `drft config --show-ignores` | Inspect the filesystem ignore sources                          |
 | `drft graph`                 | Render the composed graph as text or JGF (`--raw` for the set) |
@@ -58,7 +58,7 @@ All rules default to `warn`. Override to `error` for CI enforcement or `off` to 
 | `drft edges`                 | Project edges (matched on source) by path, subtree, or glob    |
 | `drft impact`                | Show what depends on given files, sorted by review priority    |
 | `drft check`                 | Compare the graph against the lockfile for drift               |
-| `drft lock`                  | Snapshot hashes to `drft.lock` for staleness tracking          |
+| `drft lock`                  | Snapshot hashes to `.drft/lock.toml` for staleness tracking    |
 
 `drft lock src/lib.rs docs/guide.md` locks those nodes and their outbound edges, merging into the existing lockfile. A lock asserts the locked state was reviewed, so scope it to what you actually read: a bulk lock also clears staleness you never looked at, including someone else's unfinished work. Paths all resolve before anything is written, so a typo fails the command rather than leaving a partial lock behind. The command reports what it wrote — `locked 2 nodes` and the names — so a lock that covered nothing is distinguishable from one that covered the files you meant.
 
@@ -70,7 +70,7 @@ All commands accept `--format json`; `init` emits no success document. Run `drft
 
 ## Configuration
 
-`drft.toml` in the directory root:
+`.drft/config.toml` under the project root:
 
 ```toml
 ignore = ["target/**"] # remove from the walk (also respects Git ignore sources)
